@@ -29,23 +29,23 @@ public sealed class CapturePipeline
         _output = new float[_converter.MaxOutputFrames * track.Channels];
     }
 
-    /// <summary>Packets received so far.</summary>
+    /// <summary>Packets holding audio received so far.</summary>
     public long Packets => Volatile.Read(ref _packets);
 
     /// <summary>Has the signature of <see cref="CaptureDataAvailableHandler"/>.</summary>
     public void OnPacket(ReadOnlySpan<byte> buffer, AudioClientBufferFlags flags, long devicePosition, long qpcPosition)
     {
+        var inputFrames = buffer.Length / _converter.BlockAlign;
+        if (inputFrames == 0)
+        {
+            return;
+        }
+
         Volatile.Write(ref _packets, _packets + 1);
         if (_timeline.IsFrozen)
         {
             // Stopping and resuming happen with this source still delivering: what it delivers then has no place.
             _nextIsExact = true;
-            return;
-        }
-
-        var inputFrames = buffer.Length / _converter.BlockAlign;
-        if (inputFrames == 0)
-        {
             return;
         }
 

@@ -44,8 +44,16 @@ public class DeviceCaptureTests(ITestOutputHelper output)
         output.WriteLine($"Format: {source.Format}, device: {source.DeviceName}");
         output.WriteLine($"Packets: {stamps.Count}");
 
+        // The format the device really reports must be one the converter can read.
+        Assert.NotNull(new AudioFormatConverter(source.Format, InternalFormat.SystemChannels));
+
         lock (lock_)
         {
+            var empty = stamps.Count(entry => entry.Bytes == 0);
+            var unstamped = stamps.Count(entry => entry.Bytes > 0 && entry.Stamp <= 0);
+            output.WriteLine($"Empty packets: {empty}, holding audio without a stamp: {unstamped}");
+            Assert.Equal(0, unstamped);
+
             var valid = stamps.Where(entry => entry.Stamp > 0).ToList();
             output.WriteLine($"With a stamp: {valid.Count}");
             if (valid.Count == 0)

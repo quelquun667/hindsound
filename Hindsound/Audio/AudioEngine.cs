@@ -91,7 +91,7 @@ public sealed class AudioEngine : IDisposable
     private bool _started;
     private bool _paused;
     private bool _watching;
-    private bool _exclusionFailed;
+    private bool _exclusionDiedEarly;
     private bool _wantsRetry;
     private int _ticksSinceRetry;
     private bool _disposed;
@@ -142,6 +142,7 @@ public sealed class AudioEngine : IDisposable
         _micTrack = null;
         _started = true;
         _paused = false;
+        _exclusionDiedEarly = false;
         StartWatching();
         await RefreshSourcesAsync().ConfigureAwait(false);
         _tick.Change(_tickInterval, _tickInterval);
@@ -221,8 +222,8 @@ public sealed class AudioEngine : IDisposable
 
     /// <summary>
     /// Copies the last <paramref name="duration"/> of both sources, ending at the same instant and aligned, or what
-    /// there is if there is less. Takes no lock the audio threads wait on. Copying 5:00 of both sources takes tens
-    /// of milliseconds, so call it from a background thread.
+    /// there is if there is less. Takes no lock the audio threads wait on. Copying 5:00 of both sources takes about
+    /// 150 ms and 173 MB until the result is released, so call it from a background thread.
     /// </summary>
     public AudioSnapshot Snapshot(TimeSpan duration)
     {
@@ -391,11 +392,11 @@ public sealed class AudioEngine : IDisposable
 
     private async Task<OpenSource?> TryOpenAsync(AudioFlow flow, string deviceId, string? requestedId)
     {
-        var exclude = flow == AudioFlow.System && requestedId is null && !_exclusionFailed;
+        // A failure to open may come from the device being swapped, so the exclusion gets another try next time.
+        var exclude = flow == AudioFlow.System && requestedId is null && !_exclusionDiedEarly;
         var opened = await TryOpenOnceAsync(flow, deviceId, exclude).ConfigureAwait(false);
         if (opened is null && exclude)
         {
-            _exclusionFailed = true;
             opened = await TryOpenOnceAsync(flow, deviceId, false).ConfigureAwait(false);
         }
 
@@ -446,7 +447,7 @@ public sealed class AudioEngine : IDisposable
             // The exclusion started but never delivered anything: it does not work here, so use the classic loopback.
             if (open.ExcludesOwnProcess && open.Pipeline.Packets == 0)
             {
-                _exclusionFailed = true;
+                _exclusionDiedEarly = true;
             }
         }
 

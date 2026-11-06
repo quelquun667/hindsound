@@ -358,6 +358,42 @@ public class AudioEngineTests
     }
 
     [Fact]
+    public async Task A_missing_device_is_looked_for_again_without_any_notification()
+    {
+        using var rig = new AudioTestRig(micEnabled: false, tick: TimeSpan.FromMilliseconds(20));
+        rig.Factory.SystemDevice = null;
+        var capturing = new TaskCompletionSource();
+        rig.Engine.StatusChanged += status =>
+        {
+            if (status.Activity == CaptureActivity.Capturing)
+            {
+                capturing.TrySetResult();
+            }
+        };
+        await rig.Engine.StartAsync();
+        Assert.Equal(CaptureActivity.NoDevice, rig.Engine.Status.Activity);
+
+        rig.Factory.SystemDevice = "speakers";
+
+        await capturing.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task A_failed_exclusion_is_tried_again_at_the_next_opening()
+    {
+        using var rig = new AudioTestRig(micEnabled: false);
+        rig.Factory.FailExclusion = true;
+        await rig.Engine.StartAsync();
+        Assert.False(rig.SystemSource.Request.ExcludeOwnProcess);
+
+        rig.Factory.FailExclusion = false;
+        rig.Factory.SystemDevice = "headset";
+        await rig.Engine.RefreshDevicesAsync();
+
+        Assert.True(rig.SystemSource.Request.ExcludeOwnProcess);
+    }
+
+    [Fact]
     public async Task Unplugging_everything_keeps_the_buffer_and_comes_back_by_itself()
     {
         using var rig = new AudioTestRig(micEnabled: false);

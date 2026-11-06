@@ -105,7 +105,7 @@ internal sealed class AudioTestRig : IDisposable
 
     private readonly long _epoch;
 
-    public AudioTestRig(double bufferSeconds = 60, bool micEnabled = true, string? systemDeviceId = null)
+    public AudioTestRig(double bufferSeconds = 60, bool micEnabled = true, string? systemDeviceId = null, TimeSpan? tick = null)
     {
         _epoch = Clock.Ticks;
         Engine = new AudioEngine(
@@ -113,7 +113,7 @@ internal sealed class AudioTestRig : IDisposable
             Factory,
             Watcher,
             () => Clock.Ticks,
-            TimeSpan.FromHours(1));
+            tick ?? TimeSpan.FromHours(1));
     }
 
     public FakeClock Clock { get; } = new();
