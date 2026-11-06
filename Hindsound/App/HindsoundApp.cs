@@ -1047,16 +1047,17 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private void OpenClipsFolder()
     {
         var folder = SettingsMapping.ToExportOptions(_settings).OutputFolder;
-        try
+        OpenOffLoop(folder, () =>
         {
-            Directory.CreateDirectory(folder);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-        {
-            _journal.Write("clips folder: " + ex.Message);
-        }
-
-        OpenWithShell(folder);
+            try
+            {
+                Directory.CreateDirectory(folder);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+                _journal.Write("clips folder: " + ex.Message);
+            }
+        });
     }
 
     private void OnNotificationClicked()
@@ -1080,7 +1081,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         }
         else
         {
-            OpenWithShell(folder);
+            OpenOffLoop(folder);
         }
     }
 
@@ -1319,17 +1320,29 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         }
     }
 
-    private bool OpenWithShell(string target)
+    // A sleeping network drive or a slow shell can take many seconds: the shortcuts must not wait behind it.
+    private void OpenOffLoop(string target, Action? first = null) => OffLoop.Start(() =>
+    {
+        first?.Invoke();
+        OpenWithShell(target);
+    }, ex => _journal.Write($"could not open {target}: {ex}"));
+
+    private void OpenWithShell(string target)
     {
         const int largestShellError = 32;
-        var result = Native.ShellExecuteW(0, null, target, null, null, Native.SW_SHOWNORMAL);
-        if (result > largestShellError)
+
+        // Off screen nothing is ever shown, a folder least of all.
+        if (_options.Offscreen)
         {
-            return true;
+            _journal.Write($"off the loop, on thread {Environment.CurrentManagedThreadId}, not the loop's: {target} would open now");
+            return;
         }
 
-        _journal.Write($"could not open {target}: shell error {result}");
-        return false;
+        var result = Native.ShellExecuteW(0, null, target, null, null, Native.SW_SHOWNORMAL);
+        if (result <= largestShellError)
+        {
+            _journal.Write($"could not open {target}: shell error {result}");
+        }
     }
 
     // ---------------------------------------------------------------- self-test
