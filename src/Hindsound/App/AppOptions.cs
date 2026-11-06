@@ -45,6 +45,9 @@ internal sealed record AppOptions(
     /// <summary><c>--no-hotkeys</c>: no global shortcut is registered in this run, whatever the settings file says, so a press never reaches it and it holds no combination. The app sees shortcuts that work. The file keeps its own value.</summary>
     public bool NoHotkeys { get; init; }
 
+    /// <summary>The Windows startup entry, for a run that may touch it. A test run with its own settings file never does, for reading either.</summary>
+    public Settings.IRunKey? RunKey() => SettingsPath is null ? new Settings.RegistryRunKey() : null;
+
     /// <summary>What the shortcuts of this run go through.</summary>
     public Input.IHotkeyNative NewHotkeyLayer() => NoHotkeys ? new Input.UnregisteredHotkeys() : new Input.Win32HotkeyNative();
 

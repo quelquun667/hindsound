@@ -248,17 +248,16 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         TellAboutSettings(start.Notice);
     }
 
-    // A test run with its own settings file never touches the registry, for reading either.
     private bool? ReadRunKey()
     {
-        if (_options.SettingsPath is not null)
+        if (_options.RunKey() is not { } runKey)
         {
             return null;
         }
 
         try
         {
-            return new StartupRegistration(new RegistryRunKey()).IsEnabled();
+            return new StartupRegistration(runKey).IsEnabled();
         }
         catch (Exception ex)
         {
@@ -398,18 +397,17 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         }
     }
 
-    // A test run with its own settings file never touches the registry. A refusal changes the setting back, so the switch
-    // in the window, drawn from that same object, shows the truth at its next refresh.
+    // A refusal changes the setting back, so the switch in the window, drawn from that same object, shows the truth at its next refresh.
     private void ApplyStartupRegistration()
     {
-        if (_options.SettingsPath is not null)
+        if (_options.RunKey() is not { } runKey)
         {
             return;
         }
 
         try
         {
-            if (!StartupSwitch.Apply(_settings.General, new RegistryRunKey()))
+            if (!StartupSwitch.Apply(_settings.General, runKey))
             {
                 _journal.Write($"startup registration: Windows refused the change, it now says {_settings.General.StartWithWindows}");
                 TellAboutSettings(SettingsNotice.StartupNotChanged);
