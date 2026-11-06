@@ -146,33 +146,137 @@ internal static class TrayIconShape
     }
 }
 
+/// <summary>
+/// Which calls keep the icon in the notification area, and whether it is there. The calls are handed in, as a message and
+/// its flags: tested without any shell.
+/// </summary>
+internal sealed class TrayPresence(Func<uint, uint, bool> call)
+{
+    public const uint AddFlags = Native.NIF_MESSAGE | Native.NIF_ICON | Native.NIF_TIP;
+    public const uint ModifyFlags = Native.NIF_ICON | Native.NIF_TIP;
+
+    private bool _closed;
+
+    /// <summary>The icon was seen in the shell at least once and not deleted since: leaving has to delete it.</summary>
+    public bool Added { get; private set; }
+
+    /// <summary>
+    /// NIM_ADD refuses an icon that already exists: TaskbarCreated can come after an add that went through, and a busy
+    /// Explorer can time out on one and still do it. NIM_MODIFY then tells whether the icon is there. True if it is.
+    /// </summary>
+    public bool Add()
+    {
+        if (_closed || (!call(Native.NIM_ADD, AddFlags) && !call(Native.NIM_MODIFY, AddFlags)))
+        {
+            return false;
+        }
+
+        Added = true;
+        call(Native.NIM_SETVERSION, 0);
+        return true;
+    }
+
+    /// <summary>Tells the shell what changed. An icon it does not know, or no longer knows, gets added. True if it is there.</summary>
+    public bool Update() => !_closed && ((Added && call(Native.NIM_MODIFY, ModifyFlags)) || Add());
+
+    /// <summary>The last call: nothing brings the icon back after this.</summary>
+    public void Close()
+    {
+        if (Added)
+        {
+            call(Native.NIM_DELETE, 0);
+            Added = false;
+        }
+
+        _closed = true;
+    }
+}
+
+/// <summary>
+/// An icon refused by the shell, as at the opening of a session, when Explorer is not ready yet: when to try again and what
+/// to write about it. Without an icon there is no way to quit with the mouse. Pure: tested without any window.
+/// </summary>
+internal sealed class TrayAddRetry
+{
+    public const int DelayMs = 2000;
+    public const int MaxTries = 60; // 2 min
+
+    private bool _failureWritten;
+    private bool _armed;
+    private int _tries;
+
+    /// <summary>Takes the result of a call. Returns what the journal gets: one line at the failure, one at the success, nothing else.</summary>
+    public string? Note(bool there)
+    {
+        if (there)
+        {
+            _tries = 0;
+            if (!_failureWritten)
+            {
+                return null;
+            }
+
+            _failureWritten = false;
+            return "the tray icon is there now";
+        }
+
+        if (_failureWritten)
+        {
+            return null;
+        }
+
+        _failureWritten = true;
+        return $"the tray icon could not be added: trying again every {DelayMs / 1000} s, {MaxTries} times";
+    }
+
+    /// <summary>Whether to arm the next try now. The caller has <see cref="Fired"/> called when it runs.</summary>
+    public bool ShouldArm(bool there)
+    {
+        if (there || _armed || _tries >= MaxTries)
+        {
+            return false;
+        }
+
+        _armed = true;
+        _tries++;
+        return true;
+    }
+
+    public void Fired() => _armed = false;
+}
+
 /// <summary>The notification-area icon, drawn by the code, and its native menu.</summary>
-internal sealed unsafe class TrayIcon(nint hwnd, uint callbackMessage) : IDisposable
+internal sealed unsafe class TrayIcon : IDisposable
 {
     private const uint IconId = 1;
 
+    private readonly nint _hwnd;
+    private readonly uint _callbackMessage;
+    private readonly TrayPresence _presence;
     private nint _icon;
-    private bool _added;
     private string _tip = "Hindsound";
 
-    /// <summary>Adds the icon, or adds it again after Explorer restarted.</summary>
+    public TrayIcon(nint hwnd, uint callbackMessage)
+    {
+        _hwnd = hwnd;
+        _callbackMessage = callbackMessage;
+        _presence = new TrayPresence(Call);
+    }
+
+    /// <summary>Adds the icon, or adds it again after Explorer restarted. True if the icon is there.</summary>
     public bool Add(TrayState state, uint accent, string tip)
     {
         Replace(state, accent);
         _tip = tip;
-        var data = Data(Native.NIF_MESSAGE | Native.NIF_ICON | Native.NIF_TIP);
-        _added = Native.Shell_NotifyIconW(Native.NIM_ADD, &data) != 0;
-        data.Version = Native.NOTIFYICON_VERSION_4;
-        Native.Shell_NotifyIconW(Native.NIM_SETVERSION, &data);
-        return _added;
+        return _presence.Add();
     }
 
-    public void Update(TrayState state, uint accent, string tip)
+    /// <summary>Shows what changed, and adds the icon if it is not there. True if the icon is there.</summary>
+    public bool Update(TrayState state, uint accent, string tip)
     {
         Replace(state, accent);
         _tip = tip;
-        var data = Data(Native.NIF_ICON | Native.NIF_TIP);
-        Native.Shell_NotifyIconW(Native.NIM_MODIFY, &data);
+        return _presence.Update();
     }
 
     /// <summary>Returns the chosen command. Runs only on the user's own right click on the icon.</summary>
@@ -192,22 +296,16 @@ internal sealed unsafe class TrayIcon(nint hwnd, uint callbackMessage) : IDispos
         }
 
         // Without being the foreground window, the menu would not close on an outside click.
-        Native.SetForegroundWindow(hwnd);
-        var command = Native.TrackPopupMenuEx(menu, Native.TPM_RETURNCMD | Native.TPM_RIGHTBUTTON | Native.TPM_NONOTIFY, x, y, hwnd, 0);
-        Native.PostMessageW(hwnd, Native.WM_NULL, 0, 0);
+        Native.SetForegroundWindow(_hwnd);
+        var command = Native.TrackPopupMenuEx(menu, Native.TPM_RETURNCMD | Native.TPM_RIGHTBUTTON | Native.TPM_NONOTIFY, x, y, _hwnd, 0);
+        Native.PostMessageW(_hwnd, Native.WM_NULL, 0, 0);
         Native.DestroyMenu(menu);
         return (TrayCommand)command;
     }
 
     public void Dispose()
     {
-        if (_added)
-        {
-            var data = Data(0);
-            Native.Shell_NotifyIconW(Native.NIM_DELETE, &data);
-            _added = false;
-        }
-
+        _presence.Close();
         if (_icon != 0)
         {
             Native.DestroyIcon(_icon);
@@ -215,17 +313,18 @@ internal sealed unsafe class TrayIcon(nint hwnd, uint callbackMessage) : IDispos
         }
     }
 
-    private Native.NOTIFYICONDATAW Data(uint flags)
+    private bool Call(uint message, uint flags)
     {
         Native.NOTIFYICONDATAW data = default;
         data.Size = (uint)sizeof(Native.NOTIFYICONDATAW);
-        data.Hwnd = hwnd;
+        data.Hwnd = _hwnd;
         data.Id = IconId;
         data.Flags = flags;
-        data.CallbackMessage = callbackMessage;
+        data.CallbackMessage = _callbackMessage;
         data.Icon = _icon;
+        data.Version = Native.NOTIFYICON_VERSION_4;
         _tip.AsSpan(0, Math.Min(_tip.Length, 127)).CopyTo(new Span<char>(data.Tip, 127));
-        return data;
+        return Native.Shell_NotifyIconW(message, &data) != 0;
     }
 
     private void Replace(TrayState state, uint accent)

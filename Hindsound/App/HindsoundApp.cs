@@ -60,6 +60,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private bool _micCheckArmed;
     private TrayState _trayState = TrayState.Active;
     private string _trayTip = "Hindsound";
+    private readonly TrayAddRetry _trayRetry = new();
     private bool _quitting;
     private readonly LeaveFlow _leave = new();
     private readonly SessionEndBlock _sessionEndBlock = new();
@@ -128,16 +129,13 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
         _tray = new TrayIcon(_loop.Hwnd, UiLoop.TrayCallbackMessage);
         _loop.TrayMessage = OnTrayMessage;
-        _loop.TaskbarCreated = () => _tray.Add(_trayState, Accent, _trayTip);
+        _loop.TaskbarCreated = () => NoteTray(_tray.Add(_trayState, Accent, _trayTip));
         _loop.SessionEnding = OnSessionEnding;
         _loop.SessionEndAsked = OnSessionEndAsked;
         _loop.SessionKept = TakeBackSessionEndReason;
         _loop.CloseAsked = AskToLeave;
         _loop.ShowAsked = OnShowAsked;
-        if (!_tray.Add(_trayState, Accent, _trayTip))
-        {
-            _journal.Write("the tray icon could not be added");
-        }
+        NoteTray(_tray.Add(_trayState, Accent, _trayTip));
 
         _canShowNotices = true;
         ShowNextNotice();
@@ -358,7 +356,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         ApplyStartupRegistration();
         ApplyHotkeys();
         ApplyEngineOptions();
-        _tray.Update(_trayState, Accent, _trayTip);
+        UpdateTray();
         _window?.Screen.ReplaceSettings(_settings);
         _window?.Screen.SetHotkeyResults(_hotkeyResults);
         _window?.SetIcon(Accent);
@@ -943,7 +941,27 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             _journal.Write($"tray: {state}, {tip}");
             _trayState = state;
             _trayTip = tip;
-            _tray.Update(state, Accent, tip);
+            UpdateTray();
+        }
+    }
+
+    private void UpdateTray() => NoteTray(_tray.Update(_trayState, Accent, _trayTip));
+
+    // Without its icon the app can't be quit with the mouse, and Explorer may not be ready at the opening of a session.
+    private void NoteTray(bool there)
+    {
+        if (_trayRetry.Note(there) is { } line)
+        {
+            _journal.Write(line);
+        }
+
+        if (_trayRetry.ShouldArm(there))
+        {
+            _loop.After(TrayAddRetry.DelayMs, () =>
+            {
+                _trayRetry.Fired();
+                UpdateTray();
+            });
         }
     }
 
@@ -1139,7 +1157,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         TrySaveSettings();
         if ((change & SettingsChange.Accent) != 0)
         {
-            _tray.Update(_trayState, Accent, _trayTip);
+            UpdateTray();
             _window?.SetIcon(Accent);
         }
 
