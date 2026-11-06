@@ -65,6 +65,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private readonly SessionEndBlock _sessionEndBlock = new();
     private TimeSpan _clipsLimit = QueuedClipsLimit;
     private int _copying;
+    private readonly LatestLoad<AudioChoices> _choices;
 
     private ClipResult? _lastClip;
     private DateTime _lastClipTime;
@@ -81,7 +82,13 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         _pending = new PendingNotices(journal.Write);
         _pretendGameUntilMs = options.SelfTestGameSeconds is { } game ? NowMs + (long)(game * 1000) : 0;
         _saver = new ClipSaver(openMp3: OpenMp3);
+        _choices = new LatestLoad<AudioChoices>(
+            work => _loop.Post(work),
+            lists => _window?.Screen.SetChoices(lists.Outputs, lists.Mics, lists.Apps),
+            ex => _journal.Write("listing the audio choices: " + ex));
     }
+
+    private sealed record AudioChoices(List<AudioDeviceChoice> Outputs, List<AudioDeviceChoice> Mics, List<AudioAppChoice> Apps);
 
     // The saver falls back to WAV without saying why: the reason is kept here.
     private IAudioFileWriter OpenMp3(string path, int channels, int bitrateKbps)
@@ -1139,13 +1146,13 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     }
 
     // Listing devices touches audio objects, which belong off the loop's thread. It opens nothing: no microphone starts.
-    private void LoadChoices() => _ = Task.Run(() =>
+    private void LoadChoices() => _choices.Start(() =>
     {
         var outputs = WasapiCaptureSourceFactory.ListDevices(AudioFlow.System).Select(d => new AudioDeviceChoice(d.Id, d.Name)).ToList();
         var mics = WasapiCaptureSourceFactory.ListDevices(AudioFlow.Mic).Select(d => new AudioDeviceChoice(d.Id, d.Name)).ToList();
         var apps = WasapiCaptureSourceFactory.ListApps().Select(a => new AudioAppChoice(a.ExeName, a.Name)).ToList();
         _journal.Write($"choices listed: {outputs.Count} outputs, {mics.Count} mics, {apps.Count} apps");
-        _loop.Post(() => _window?.Screen.SetChoices(outputs, mics, apps));
+        return new AudioChoices(outputs, mics, apps);
     });
 
     private LastClipInfo? LastClipShown() =>
@@ -1154,6 +1161,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private void OnSettingsClosed()
     {
         _window = null;
+        _choices.Forget();
         _journal.Write("settings window closed, " + Journal.Memory());
 
         // The window's objects are small and many: a full collection a moment later gives them back.
