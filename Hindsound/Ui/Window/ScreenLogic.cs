@@ -248,6 +248,27 @@ internal sealed class MicMeter
     }
 }
 
+/// <summary>What a key held down may do: move and type, but never save, toggle or open again.</summary>
+internal static class KeyRepeat
+{
+    private const long RepeatBit = 1L << 30;
+
+    /// <summary>Bit 30 of a key message: the key was already down.</summary>
+    public static bool FromLParam(nint lParam) => ((long)lParam & RepeatBit) != 0;
+
+    /// <param name="vk">The virtual key.</param>
+    /// <param name="inField">The focus is on a text field: holding a key there types.</param>
+    public static bool Acts(uint vk, bool inField) => vk switch
+    {
+        Vk.Left or Vk.Right or Vk.Up or Vk.Down or Vk.PageUp or Vk.PageDown or Vk.Home or Vk.End or Vk.Back => true,
+        Vk.Tab or Vk.Enter or Vk.Escape => false,
+        _ => inField,
+    };
+
+    /// <summary>A repeat that does nothing is still taken from Windows if the key itself means something here.</summary>
+    public static bool Swallowed(uint vk) => vk is Vk.Tab or Vk.Enter or Vk.Escape or Vk.Space;
+}
+
 /// <summary>Turns the wheel deltas of Windows into notches. A touchpad sends small deltas that only count together.</summary>
 internal static class WheelNotches
 {

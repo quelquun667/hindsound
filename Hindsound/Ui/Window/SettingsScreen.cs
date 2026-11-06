@@ -404,12 +404,22 @@ internal sealed partial class SettingsScreen
     /// <summary>A key went down. Returns false if nothing here wanted it, so Windows can do what it does with it.</summary>
     /// <param name="vk">The virtual key.</param>
     /// <param name="modifiers">The modifiers held, as <see cref="HotkeyGesture"/> flags.</param>
-    public bool Key(uint vk, uint modifiers)
+    /// <param name="repeat">The key was already down: this is Windows repeating it.</param>
+    public bool Key(uint vk, uint modifiers, bool repeat = false)
     {
         if (_capture.Listening)
         {
-            CaptureKey(vk, modifiers);
+            if (!repeat)
+            {
+                CaptureKey(vk, modifiers);
+            }
+
             return true;
+        }
+
+        if (repeat && !KeyRepeat.Acts(vk, Focus is TextField))
+        {
+            return KeyRepeat.Swallowed(vk);
         }
 
         if (_popup is { } popup)

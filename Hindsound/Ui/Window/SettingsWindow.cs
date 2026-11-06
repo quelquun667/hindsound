@@ -415,7 +415,7 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
             case WindowNative.WM_KEYDOWN:
             case WindowNative.WM_SYSKEYDOWN:
                 _swallowSystemKeyUp = Screen.Listening;
-                if (Screen.Key((uint)wParam, Modifiers()))
+                if (Screen.Key((uint)wParam, Modifiers(), KeyRepeat.FromLParam(lParam)))
                 {
                     return 0;
                 }
@@ -603,7 +603,7 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
         switch (message)
         {
             case WindowNative.WM_KEYDOWN when (uint)wParam is Vk.Tab or Vk.Enter or Vk.Escape:
-                Screen.Key((uint)wParam, Modifiers());
+                Screen.Key((uint)wParam, Modifiers(), KeyRepeat.FromLParam(lParam));
                 return 0;
             case WindowNative.WM_KEYDOWN when wParam == 'A' && Modifiers() == HotkeyGesture.ModControl:
                 WindowNative.SendMessageW(_edit, WindowNative.EM_SETSEL, 0, -1);
