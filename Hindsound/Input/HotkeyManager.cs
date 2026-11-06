@@ -71,23 +71,60 @@ public sealed class HotkeyManager : IDisposable
         return Sync();
     }
 
-    /// <summary>Handles a pressed shortcut id; returns true if it is one of ours.</summary>
+    /// <summary>
+    /// Handles a pressed shortcut id; returns true if it is one of ours. <see cref="Pressed"/> is raised on the calling
+    /// thread, each subscriber on its own: one that throws is logged and does not stop the next, and nothing
+    /// propagates to the caller.
+    /// </summary>
     public bool Dispatch(int id)
     {
-        HotkeyAction action;
-        lock (_idLock)
+        if (!TryGetAction(id, out var action))
         {
-            if (!_byId.TryGetValue(id, out action))
-            {
-                return false;
-            }
+            return false;
         }
 
-        Pressed?.Invoke(action);
+        RaisePressed(action);
         return true;
     }
 
-    private void OnNativePressed(int id) => Dispatch(id);
+    private bool TryGetAction(int id, out HotkeyAction action)
+    {
+        lock (_idLock)
+        {
+            return _byId.TryGetValue(id, out action);
+        }
+    }
+
+    // The id is resolved here, on the hotkey thread, while it is still known; the handlers run on the thread pool so
+    // that a slow one never keeps the message loop from reading the next press.
+    private void OnNativePressed(int id)
+    {
+        if (TryGetAction(id, out var action))
+        {
+            ThreadPool.QueueUserWorkItem(static state => state.Manager.RaisePressed(state.Action), (Manager: this, Action: action), preferLocal: false);
+        }
+    }
+
+    private void RaisePressed(HotkeyAction action)
+    {
+        var handlers = Pressed;
+        if (handlers is null)
+        {
+            return;
+        }
+
+        foreach (var handler in handlers.GetInvocationList().Cast<Action<HotkeyAction>>())
+        {
+            try
+            {
+                handler(action);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceError("Hindsound hotkey handler failed: " + ex);
+            }
+        }
+    }
 
     public void Dispose()
     {

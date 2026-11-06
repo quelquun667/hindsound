@@ -170,6 +170,22 @@ public class HotkeyManagerTests
     }
 
     [Fact]
+    public void AHandlerThatThrows_DoesNotPropagate_AndTheNextOneStillGetsThePress()
+    {
+        var native = new FakeNative();
+        using var m = new HotkeyManager(native);
+        m.Apply(Keys());
+        var received = new List<HotkeyAction>();
+        m.Pressed += _ => throw new InvalidOperationException("a broken subscriber");
+        m.Pressed += received.Add;
+
+        var handled = m.Dispatch(native.Registered.Keys.Single());
+
+        Assert.True(handled);
+        Assert.Equal([HotkeyAction.SaveDefault], received);
+    }
+
+    [Fact]
     public void Dispose_ReleasesEverything()
     {
         var native = new FakeNative();
