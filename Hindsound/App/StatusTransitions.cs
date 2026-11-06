@@ -1,5 +1,6 @@
 using Hindsound.Audio;
 using Hindsound.Input;
+using Hindsound.Settings;
 using Hindsound.Ui;
 
 namespace Hindsound.App;
@@ -179,6 +180,14 @@ internal static class StatusTransitions
         HotkeyStatus.InUse or HotkeyStatus.Duplicate => "Save hotkey is taken",
         _ => "Save hotkey doesn't work",
     };
+
+    /// <summary>"Capture on", with the length and the keys of now: the settings are read again while it waits for its turn.</summary>
+    public static NotificationContent CaptureOnNow(AppSettings settings, IReadOnlyList<HotkeyResult> hotkeys) =>
+        NotificationStates.CaptureOn(settings.BufferSeconds, settings.Hotkeys.SaveDefault, SaveHotkeyProblem(hotkeys));
+
+    /// <summary>What to show of something that waited: only "Capture on" names settings that may have changed.</summary>
+    public static NotificationContent Fresh(NotificationContent waited, AppSettings settings, IReadOnlyList<HotkeyResult> hotkeys) =>
+        waited.Kind == NotificationKind.CaptureOn ? CaptureOnNow(settings, hotkeys) : waited;
 
     /// <summary>
     /// The icon and its tip, from everything that is true now, so that nothing stays out of date. The tip names the first

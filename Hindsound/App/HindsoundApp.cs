@@ -561,7 +561,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         switch (notice)
         {
             case StatusNotice.CaptureOn:
-                ShowStatus(NotificationStates.CaptureOn(_settings.BufferSeconds, _settings.Hotkeys.SaveDefault, StatusTransitions.SaveHotkeyProblem(_hotkeyResults)), TakePauseScreen());
+                ShowStatus(StatusTransitions.CaptureOnNow(_settings, _hotkeyResults), TakePauseScreen());
                 break;
             case StatusNotice.Paused:
                 ShowStatus(NotificationStates.Paused(), TakePauseScreen());
@@ -851,7 +851,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
                     _notices.PushedAside(onScreen, _lastStatus);
                 }
 
-                PresentNow(next, decision.ClickThrough);
+                PresentNow(StatusTransitions.Fresh(next, _settings, _hotkeyResults), decision.ClickThrough);
                 return;
             }
 
@@ -960,7 +960,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         var (state, covers) = Surface();
         if (FullscreenPolicy.BackOnDesktop(state, covers) && _pending.TakeNext(NowMs) is { } next)
         {
-            Present(next, clickThrough: false);
+            Present(StatusTransitions.Fresh(next, _settings, _hotkeyResults), clickThrough: false);
             RefreshTray();
         }
     }
