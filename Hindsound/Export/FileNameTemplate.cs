@@ -45,18 +45,58 @@ public static class FileNameTemplate
     }
 
     /// <summary>
-    /// Returns the full paths for one clip, one per suffix, such that none of them exists yet. If the plain name is
-    /// taken, " (2)", " (3)"... is added before the suffix, the same number for every file of the clip.
+    /// Reserves the full paths for one clip, one per suffix: each path is created empty with
+    /// <see cref="FileMode.CreateNew"/>, so no other save, in this process or another, can get the same one. If a
+    /// path is taken, what this attempt created is removed and " (2)", " (3)"... is added before the suffix, the same
+    /// number for every file of the clip. The caller owns the returned files and writes into them (an encoder may
+    /// open an empty file); it removes them if the save fails.
     /// </summary>
     /// <param name="suffixes">One entry per file, for example <c>""</c> or <c>"_system"</c> and <c>"_mic"</c>.</param>
     /// <param name="extension">With the dot, for example <c>.mp3</c>.</param>
+    /// <exception cref="IOException">The folder cannot be written (anything other than "the file exists").</exception>
     public static string[] ReserveUniquePaths(string folder, string baseName, IReadOnlyList<string> suffixes, string extension)
     {
         for (var attempt = 1; ; attempt++)
         {
             var stem = attempt == 1 ? baseName : $"{baseName} ({attempt})";
             var paths = suffixes.Select(s => Path.Combine(folder, stem + s + extension)).ToArray();
-            if (!paths.Any(File.Exists)) return paths;
+            if (TryCreateAll(paths)) return paths;
+        }
+    }
+
+    /// <summary>Creates every path, or none: false if one of them already exists (what was created is removed).</summary>
+    private static bool TryCreateAll(string[] paths)
+    {
+        var created = 0;
+        try
+        {
+            for (; created < paths.Length; created++)
+            {
+                try
+                {
+                    new FileStream(paths[created], FileMode.CreateNew, FileAccess.Write, FileShare.None).Dispose();
+                }
+                catch (IOException) when (File.Exists(paths[created]))
+                {
+                    RemoveCreated(paths, created);
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        catch
+        {
+            RemoveCreated(paths, created);
+            throw;
+        }
+    }
+
+    private static void RemoveCreated(string[] paths, int count)
+    {
+        for (var i = 0; i < count; i++)
+        {
+            try { File.Delete(paths[i]); } catch (Exception) { /* best effort */ }
         }
     }
 

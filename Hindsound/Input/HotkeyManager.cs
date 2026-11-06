@@ -71,23 +71,60 @@ public sealed class HotkeyManager : IDisposable
         return Sync();
     }
 
-    /// <summary>Handles a pressed shortcut id; returns true if it is one of ours.</summary>
+    /// <summary>
+    /// Handles a pressed shortcut id; returns true if it is one of ours. <see cref="Pressed"/> is raised on the calling
+    /// thread, each subscriber on its own: one that throws is logged and does not stop the next, and nothing
+    /// propagates to the caller.
+    /// </summary>
     public bool Dispatch(int id)
     {
-        HotkeyAction action;
-        lock (_idLock)
+        if (!TryGetAction(id, out var action))
         {
-            if (!_byId.TryGetValue(id, out action))
-            {
-                return false;
-            }
+            return false;
         }
 
-        Pressed?.Invoke(action);
+        RaisePressed(action);
         return true;
     }
 
-    private void OnNativePressed(int id) => Dispatch(id);
+    private bool TryGetAction(int id, out HotkeyAction action)
+    {
+        lock (_idLock)
+        {
+            return _byId.TryGetValue(id, out action);
+        }
+    }
+
+    // The id is resolved here, on the hotkey thread, while it is still known; the handlers run on the thread pool so
+    // that a slow one never keeps the message loop from reading the next press.
+    private void OnNativePressed(int id)
+    {
+        if (TryGetAction(id, out var action))
+        {
+            ThreadPool.QueueUserWorkItem(static state => state.Manager.RaisePressed(state.Action), (Manager: this, Action: action), preferLocal: false);
+        }
+    }
+
+    private void RaisePressed(HotkeyAction action)
+    {
+        var handlers = Pressed;
+        if (handlers is null)
+        {
+            return;
+        }
+
+        foreach (var handler in handlers.GetInvocationList().Cast<Action<HotkeyAction>>())
+        {
+            try
+            {
+                handler(action);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceError("Hindsound hotkey handler failed: " + ex);
+            }
+        }
+    }
 
     public void Dispose()
     {
@@ -106,43 +143,200 @@ public sealed class HotkeyManager : IDisposable
         _native.Dispose();
     }
 
+    private sealed record Wish(HotkeyAction Action, HotkeyGesture Gesture, string Text);
+
+    /// <summary>
+    /// Brings the registered shortcuts to the wanted ones without ever losing one that works:
+    /// removed and invalid ones are settled first; a shortcut that appears twice in the settings is flagged (the one
+    /// already in place keeps it); then the changes are tried again as long as one succeeds, because a shortcut freed
+    /// by one action can be what another one waits for (shifting keys); last, a ring of actions that hold each
+    /// other's wanted keys (swapping two keys) is exchanged in one step, and put back if any of them fails.
+    /// </summary>
     private List<HotkeyResult> Sync()
     {
-        var results = new List<HotkeyResult>();
+        var results = new Dictionary<HotkeyAction, HotkeyResult>();
+        var wishes = new List<Wish>();
         foreach (var action in Actions)
         {
             _wanted.TryGetValue(action, out var text);
-            results.Add(SyncOne(action, text));
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                Release(action);
+                results[action] = new HotkeyResult(action, null, HotkeyStatus.NotSet, null);
+            }
+            else if (!HotkeyGesture.TryParse(text, out var gesture))
+            {
+                // Keep whatever worked before: a typo must not silently kill a working shortcut.
+                results[action] = new HotkeyResult(action, text, HotkeyStatus.Invalid, HotkeyResult.InvalidMessage);
+            }
+            else if (_suspended)
+            {
+                results[action] = new HotkeyResult(action, gesture.ToString(), HotkeyStatus.Suspended, null);
+            }
+            else
+            {
+                wishes.Add(new Wish(action, gesture, gesture.ToString()));
+            }
         }
 
-        return results;
+        wishes = FlagDuplicates(wishes, results);
+
+        var pending = new List<Wish>();
+        foreach (var wish in wishes)
+        {
+            if (_active.TryGetValue(wish.Action, out var current) && current.Gesture == wish.Gesture)
+            {
+                results[wish.Action] = new HotkeyResult(wish.Action, wish.Text, HotkeyStatus.Registered, null);
+            }
+            else
+            {
+                pending.Add(wish);
+            }
+        }
+
+        var timedOut = false;
+        bool progress;
+        do
+        {
+            progress = false;
+            foreach (var wish in pending.ToList())
+            {
+                var outcome = TryBind(wish.Action, wish.Gesture);
+                if (outcome == HotkeyRegistration.Refused)
+                {
+                    continue;
+                }
+
+                pending.Remove(wish);
+                progress = true;
+                results[wish.Action] = outcome == HotkeyRegistration.Registered
+                    ? new HotkeyResult(wish.Action, wish.Text, HotkeyStatus.Registered, null)
+                    : Unavailable(wish);
+                timedOut |= outcome == HotkeyRegistration.TimedOut;
+            }
+        }
+        while (progress && pending.Count > 0 && !timedOut);
+
+        if (timedOut)
+        {
+            // The hotkey thread is stuck: do not wait for it again once per remaining action.
+            foreach (var wish in pending)
+            {
+                results[wish.Action] = Unavailable(wish);
+            }
+
+            pending.Clear();
+        }
+        else
+        {
+            var ring = FindRing(pending);
+            if (ring.Count > 1 && TryExchange(ring))
+            {
+                foreach (var wish in ring)
+                {
+                    pending.Remove(wish);
+                    results[wish.Action] = new HotkeyResult(wish.Action, wish.Text, HotkeyStatus.Registered, null);
+                }
+            }
+        }
+
+        foreach (var wish in pending)
+        {
+            results[wish.Action] = new HotkeyResult(wish.Action, wish.Text, HotkeyStatus.InUse, HotkeyResult.InUseMessage);
+        }
+
+        return Actions.Select(a => results[a]).ToList();
     }
 
-    private HotkeyResult SyncOne(HotkeyAction action, string? text)
+    private static HotkeyResult Unavailable(Wish wish) =>
+        new(wish.Action, wish.Text, HotkeyStatus.Unavailable, HotkeyResult.UnavailableMessage);
+
+    /// <summary>
+    /// Two actions asking for the same combination cannot both have it. The one that holds it already keeps it,
+    /// otherwise the first in the enum order; the others are reported as <see cref="HotkeyStatus.Duplicate"/> and keep
+    /// whatever they had.
+    /// </summary>
+    private List<Wish> FlagDuplicates(List<Wish> wishes, Dictionary<HotkeyAction, HotkeyResult> results)
     {
-        if (string.IsNullOrWhiteSpace(text))
+        var kept = new List<Wish>();
+        foreach (var group in wishes.GroupBy(w => w.Gesture))
+        {
+            var members = group.ToList();
+            var winner = members.FirstOrDefault(w => _active.TryGetValue(w.Action, out var current) && current.Gesture == w.Gesture)
+                ?? members[0];
+            kept.Add(winner);
+            foreach (var loser in members.Where(w => w != winner))
+            {
+                results[loser.Action] = new HotkeyResult(loser.Action, loser.Text, HotkeyStatus.Duplicate, HotkeyResult.DuplicateMessage);
+            }
+        }
+
+        return kept.OrderBy(w => w.Action).ToList();
+    }
+
+    /// <summary>
+    /// The actions that wait for each other: each wants a combination another one of them holds right now, so no
+    /// order of single changes can satisfy them. Anything that waits on something outside (another app) is left out.
+    /// </summary>
+    private List<Wish> FindRing(List<Wish> pending)
+    {
+        var ring = pending.ToList();
+        bool removed;
+        do
+        {
+            removed = ring.RemoveAll(w => !ring.Any(o => o != w && _active.TryGetValue(o.Action, out var held) && held.Gesture == w.Gesture)) > 0;
+        }
+        while (removed);
+
+        return ring;
+    }
+
+    /// <summary>
+    /// Releases every action of the ring, registers the wanted combinations, and if any one is refused puts every
+    /// previous registration back, so the exchange is all or nothing.
+    /// </summary>
+    private bool TryExchange(List<Wish> ring)
+    {
+        var previous = ring.ToDictionary(w => w.Action, w => _active[w.Action].Gesture);
+        foreach (var wish in ring)
+        {
+            Release(wish.Action);
+        }
+
+        var bound = new List<HotkeyAction>();
+        var ok = true;
+        foreach (var wish in ring)
+        {
+            if (TryBind(wish.Action, wish.Gesture) != HotkeyRegistration.Registered)
+            {
+                ok = false;
+                break;
+            }
+
+            bound.Add(wish.Action);
+        }
+
+        if (ok)
+        {
+            return true;
+        }
+
+        foreach (var action in bound)
         {
             Release(action);
-            return new HotkeyResult(action, null, HotkeyStatus.NotSet, null);
         }
 
-        if (!HotkeyGesture.TryParse(text, out var gesture))
+        foreach (var wish in ring)
         {
-            // Keep whatever worked before: a typo must not silently kill a working shortcut.
-            return new HotkeyResult(action, text, HotkeyStatus.Invalid, HotkeyResult.InvalidMessage);
+            TryBind(wish.Action, previous[wish.Action]);
         }
 
-        var canonical = gesture.ToString();
-        if (_suspended)
-        {
-            return new HotkeyResult(action, canonical, HotkeyStatus.Suspended, null);
-        }
+        return false;
+    }
 
-        if (_active.TryGetValue(action, out var current) && current.Gesture == gesture)
-        {
-            return new HotkeyResult(action, canonical, HotkeyStatus.Registered, null);
-        }
-
+    /// <summary>Registers a combination for the action; the action's old one is released only once the new one is in place.</summary>
+    private HotkeyRegistration TryBind(HotkeyAction action, HotkeyGesture gesture)
+    {
         var id = _nextId++;
         // The id must be known before registering: a press can arrive on the hotkey thread right after.
         lock (_idLock)
@@ -150,19 +344,21 @@ public sealed class HotkeyManager : IDisposable
             _byId[id] = action;
         }
 
-        if (!_native.Register(id, gesture.Modifiers, gesture.VirtualKey))
+        var outcome = _native.TryRegister(id, gesture.Modifiers, gesture.VirtualKey);
+        if (outcome != HotkeyRegistration.Registered)
         {
             lock (_idLock)
             {
                 _byId.Remove(id);
             }
 
-            return new HotkeyResult(action, canonical, HotkeyStatus.InUse, HotkeyResult.InUseMessage);
+            // A timeout is not another app holding the combination, and the native layer left nothing registered.
+            return outcome;
         }
 
         Release(action);
         _active[action] = (id, gesture);
-        return new HotkeyResult(action, canonical, HotkeyStatus.Registered, null);
+        return HotkeyRegistration.Registered;
     }
 
     private void Release(HotkeyAction action)

@@ -197,9 +197,9 @@ public sealed class ClipSaver
 
     private (IReadOnlyList<string> Paths, bool Rescued, bool FellBack) WriteTracks(List<Track> tracks, ExportOptions options, string baseName, CancellationToken cancellationToken)
     {
-        var folder = ExpandFolder(options.OutputFolder);
         try
         {
+            var folder = ExpandFolder(options.OutputFolder);
             var (paths, fellBack) = WriteWithFallback(folder, tracks, options, baseName, cancellationToken);
             return (paths, false, fellBack);
         }
@@ -231,19 +231,19 @@ public sealed class ClipSaver
         return (WriteInto(folder, tracks, ExportFormat.Wav, options, baseName, cancellationToken), false);
     }
 
-    /// <summary>Writes every track into the folder, or none: a failure removes what was written.</summary>
+    /// <summary>Writes every track into the folder, or none: a failure removes the files this call reserved.</summary>
     private string[] WriteInto(string folder, List<Track> tracks, ExportFormat format, ExportOptions options, string baseName, CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(folder);
         var extension = format == ExportFormat.Mp3 ? ".mp3" : ".wav";
+        // The paths are created here, empty, and belong to this call alone: cleaning up on failure removes only them,
+        // never a file another save wrote.
         var paths = FileNameTemplate.ReserveUniquePaths(folder, baseName, tracks.Select(t => t.Suffix).ToArray(), extension);
 
-        var created = new List<string>();
         try
         {
             for (var i = 0; i < tracks.Count; i++)
             {
-                created.Add(paths[i]);
                 using var writer = format == ExportFormat.Mp3
                     ? _openMp3(paths[i], tracks[i].Source.Channels, options.Mp3BitrateKbps)
                     : Encoders.OpenWav(paths[i], tracks[i].Source.Channels);
@@ -252,7 +252,7 @@ public sealed class ClipSaver
         }
         catch
         {
-            foreach (var path in created)
+            foreach (var path in paths)
             {
                 try { File.Delete(path); } catch (Exception) { /* best effort */ }
             }
@@ -298,8 +298,21 @@ public sealed class ClipSaver
         }
     }
 
-    private static string ExpandFolder(string folder) =>
-        string.IsNullOrWhiteSpace(folder) ? ExportOptions.DefaultOutputFolder() : Environment.ExpandEnvironmentVariables(folder.Trim());
+    /// <summary>
+    /// The full path of the output folder. A folder that is still relative after the expansion (an unknown
+    /// <c>%VARIABLE%</c> is left as typed, "clips" or "C:clips" depend on the current directory) is invalid: the
+    /// clip would land where nobody looks. The ArgumentException sends the clip to the rescue folder.
+    /// </summary>
+    private static string ExpandFolder(string folder)
+    {
+        if (string.IsNullOrWhiteSpace(folder)) return Path.GetFullPath(ExportOptions.DefaultOutputFolder());
+
+        var expanded = Environment.ExpandEnvironmentVariables(folder.Trim());
+        if (!Path.IsPathFullyQualified(expanded))
+            throw new ArgumentException($"The output folder '{expanded}' is not a full path.", nameof(folder));
+
+        return Path.GetFullPath(expanded);
+    }
 
     private static bool IsStorageFailure(Exception ex) =>
         ex is IOException or UnauthorizedAccessException or NotSupportedException or SecurityException

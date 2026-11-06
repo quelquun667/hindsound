@@ -41,17 +41,19 @@ public static class Encoders
 
     /// <summary>
     /// Opens a 16-bit PCM WAV file at <see cref="Audio.InternalFormat.SampleRate"/>.
-    /// Never overwrites: fails if the file already exists.
+    /// Never overwrites: fails if the file already exists and holds data. An empty file is accepted: it is the
+    /// reservation made by <see cref="FileNameTemplate.ReserveUniquePaths"/>.
     /// </summary>
     public static IAudioFileWriter OpenWav(string path, int channels)
     {
         ValidateChannels(channels);
-        return Open(path, channels, stream => new WaveFileWriter(stream, new WaveFormat(Audio.InternalFormat.SampleRate, 16, channels)));
+        return Open(path, channels, FileAccess.Write, stream => new WaveFileWriter(stream, new WaveFormat(Audio.InternalFormat.SampleRate, 16, channels)));
     }
 
     /// <summary>
     /// Opens an MP3 file (constant bitrate) at <see cref="Audio.InternalFormat.SampleRate"/>.
-    /// Never overwrites: fails if the file already exists.
+    /// Never overwrites: fails if the file already exists and holds data. An empty file is accepted: it is the
+    /// reservation made by <see cref="FileNameTemplate.ReserveUniquePaths"/>.
     /// </summary>
     /// <param name="bitrateKbps">128, 192 or 320.</param>
     public static IAudioFileWriter OpenMp3(string path, int channels, int bitrateKbps)
@@ -60,7 +62,7 @@ public static class Encoders
         if (bitrateKbps is not (128 or 192 or 320))
             throw new ArgumentOutOfRangeException(nameof(bitrateKbps), bitrateKbps, "The MP3 bitrate must be 128, 192 or 320 kbps.");
 
-        return Open(path, channels, stream => new LameMP3FileWriter(stream, new WaveFormat(Audio.InternalFormat.SampleRate, 16, channels), bitrateKbps));
+        return Open(path, channels, FileAccess.ReadWrite, stream => new LameMP3FileWriter(stream, new WaveFormat(Audio.InternalFormat.SampleRate, 16, channels), bitrateKbps));
     }
 
     /// <summary>Writes a whole buffer as WAV.</summary>
@@ -83,9 +85,19 @@ public static class Encoders
             throw new ArgumentOutOfRangeException(nameof(channels), channels, "Only mono and stereo are supported.");
     }
 
-    private static PcmFileWriter Open(string path, int channels, Func<Stream, Stream> createEncoder)
+    // The MP3 file is opened for reading too: LAME fills in its Info/LAME header frame, at the start of the file, by
+    // reading and rewriting it when the file is closed. With a write-only stream that frame stays an empty placeholder
+    // (zeros): 24 ms of silence at the start and no encoder delay information (measured: 3.048 s decoded for 3.000 s,
+    // 3.024 s with the header, and a player that reads the header trims the delay).
+    private static PcmFileWriter Open(string path, int channels, FileAccess access, Func<Stream, Stream> createEncoder)
     {
-        var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        var stream = new FileStream(path, FileMode.OpenOrCreate, access, FileShare.None);
+        if (stream.Length > 0)
+        {
+            stream.Dispose();
+            throw new IOException($"The file '{path}' already exists.");
+        }
+
         try
         {
             return new PcmFileWriter(stream, createEncoder(stream), channels);

@@ -260,6 +260,45 @@ public sealed class ClipSaverTests : IDisposable
         Assert.Equal(firstBytes, File.ReadAllBytes(first.PrimaryPath));
     }
 
+    [Theory]
+    [InlineData(@"%HINDSOUND_NOPE_4F2A%\clips")] // unknown variable: left as typed
+    [InlineData("clips")] // relative: would depend on the current directory
+    [InlineData(@"C:clips")] // relative to the current directory of drive C
+    public void An_output_folder_that_is_not_a_full_path_sends_the_clip_to_the_rescue_folder(string folder)
+    {
+        var options = Wav(o => o with { OutputFolder = folder });
+
+        var result = Saver().Save(new AudioSnapshot(Signals.Sine(300, 0.3, 0.5), []), options, "Game");
+
+        Assert.True(result.Rescued);
+        Assert.Equal(RescueFolder, Path.GetDirectoryName(result.PrimaryPath));
+        Assert.True(File.Exists(result.PrimaryPath));
+    }
+
+    [Fact]
+    public async Task Two_saves_at_the_same_moment_get_distinct_files_and_both_exist()
+    {
+        // Same clock, same folder, started together: the reviewer saw false rescues and vanished files.
+        const int Pairs = 60;
+        var snapshot = new AudioSnapshot(Signals.Sine(300, 0.3, 0.1), []);
+        for (var pair = 0; pair < Pairs; pair++)
+        {
+            var options = Wav(o => o with { OutputFolder = _root.Combine("race", pair.ToString()) });
+            using var barrier = new Barrier(2);
+            var tasks = Enumerable.Range(0, 2).Select(_ => Task.Run(() =>
+            {
+                barrier.SignalAndWait();
+                return Saver().Save(snapshot, options, "Game");
+            })).ToArray();
+            var results = await Task.WhenAll(tasks);
+
+            Assert.All(results, r => Assert.False(r.Rescued));
+            Assert.Equal(2, results.Select(r => r.PrimaryPath).Distinct().Count());
+            Assert.All(results, r => Assert.True(File.Exists(r.PrimaryPath)));
+            Assert.All(results, r => Assert.Equal(TimeSpan.FromSeconds(0.1), Signals.ReadWav(r.PrimaryPath).Duration));
+        }
+    }
+
     [Fact]
     public void An_empty_snapshot_is_refused()
     {
@@ -383,44 +422,67 @@ public sealed class ClipSaverTests : IDisposable
     }
 
     [Fact]
-    public void Encoding_five_minutes_of_stereo_to_mp3_is_timed()
+    public void Encoding_five_minutes_of_stereo_to_mp3_stays_in_a_few_buffers()
     {
-        // 5:00 of PC audio with a microphone: the full buffer of the app. The numbers go to the test output.
-        var random = new Random(7);
-        var frames = 48000 * 300;
-        var system = new float[frames * 2];
-        for (var i = 0; i < frames; i++)
-        {
-            var t = (double)i / 48000;
-            var value = (float)(0.15 * Math.Sin(2 * Math.PI * 220 * t) + 0.1 * Math.Sin(2 * Math.PI * 1760 * t) + 0.05 * (random.NextDouble() - 0.5));
-            system[2 * i] = value;
-            system[2 * i + 1] = value * 0.8f;
-        }
-
-        var mic = new float[frames];
-        for (var i = 0; i < frames; i++) mic[i] = (float)(0.1 * Math.Sin(2 * Math.PI * 330 * i / 48000.0) * (0.5 + 0.5 * Math.Sin(i / 20000.0)));
-        var snapshot = new AudioSnapshot(system, mic);
+        // 5:00 of PC audio with a microphone: the full buffer of the app, saved as MP3 with loudness normalization.
+        // The promise is that memory does not grow with the length of the clip: under 2 MB allocated for 5 minutes.
+        var snapshot = RepeatedSecond(300);
 
         var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var timer = Stopwatch.StartNew();
+        var result = Saver().Save(snapshot, new ExportOptions { Format = ExportFormat.Mp3, Mp3BitrateKbps = 192, OutputFolder = OutputFolder }, "mp3");
+        timer.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        _output.WriteLine($"5:00 stereo + mic, loudness normalization, MP3 192 kbps: {timer.Elapsed.TotalSeconds:F1} s, {result.SizeBytes / 1e6:F1} MB, {allocated} bytes allocated");
+
+        Assert.True(allocated < 2_000_000, $"The save allocated {allocated} bytes; the clip must not be copied whole.");
+        Assert.Equal(TimeSpan.FromMinutes(5), result.Duration);
+        using var reader = new Mp3FileReader(result.PrimaryPath);
+        Assert.InRange(reader.TotalTime.TotalSeconds, 299.9, 299.9 + 0.2);
+    }
+
+    [Fact]
+    public void Encoding_thirty_seconds_without_normalization_to_mp3_and_wav_is_timed()
+    {
+        var snapshot = RepeatedSecond(30);
+
         var mp3 = Stopwatch.StartNew();
-        var mp3Result = Saver().Save(snapshot, new ExportOptions { Format = ExportFormat.Mp3, Mp3BitrateKbps = 192, OutputFolder = OutputFolder }, "mp3");
+        var mp3Result = Saver().Save(snapshot, new ExportOptions { Format = ExportFormat.Mp3, Mp3BitrateKbps = 192, Normalization = NormalizationMode.Off, OutputFolder = OutputFolder }, "plain");
         mp3.Stop();
-        _output.WriteLine($"5:00 MP3 save allocated {GC.GetAllocatedBytesForCurrentThread() - allocatedBefore} bytes");
-
-        var plain = Stopwatch.StartNew();
-        Saver().Save(snapshot, new ExportOptions { Format = ExportFormat.Mp3, Mp3BitrateKbps = 192, Normalization = NormalizationMode.Off, OutputFolder = OutputFolder }, "plain");
-        plain.Stop();
-
         var wav = Stopwatch.StartNew();
         var wavResult = Saver().Save(snapshot, Wav(), "wav");
         wav.Stop();
 
-        _output.WriteLine($"5:00 stereo + mic, loudness normalization, MP3 192 kbps: {mp3.Elapsed.TotalSeconds:F1} s, {mp3Result.SizeBytes / 1e6:F1} MB");
-        _output.WriteLine($"5:00 stereo + mic, no normalization, MP3 192 kbps: {plain.Elapsed.TotalSeconds:F1} s");
-        _output.WriteLine($"5:00 stereo + mic, no normalization, WAV: {wav.Elapsed.TotalSeconds:F1} s, {wavResult.SizeBytes / 1e6:F1} MB");
+        _output.WriteLine($"0:30 stereo + mic, no normalization, MP3 192 kbps: {mp3.Elapsed.TotalSeconds:F2} s, {mp3Result.SizeBytes / 1e6:F2} MB");
+        _output.WriteLine($"0:30 stereo + mic, no normalization, WAV: {wav.Elapsed.TotalSeconds:F2} s, {wavResult.SizeBytes / 1e6:F2} MB");
+        Assert.Equal(TimeSpan.FromSeconds(30), wavResult.Duration);
+        Assert.Equal(TimeSpan.FromSeconds(30), mp3Result.Duration);
+    }
 
-        using var reader = new Mp3FileReader(mp3Result.PrimaryPath);
-        Assert.InRange(reader.TotalTime.TotalSeconds, 299.9, 300.2);
-        Assert.Equal(TimeSpan.FromMinutes(5), wavResult.Duration);
+    /// <summary>One second of music-like signal (two tones and noise) computed once, then repeated: PC audio plus microphone.</summary>
+    private static AudioSnapshot RepeatedSecond(int seconds)
+    {
+        const int Rate = 48000;
+        var random = new Random(7);
+        var systemSecond = new float[Rate * 2];
+        var micSecond = new float[Rate];
+        for (var i = 0; i < Rate; i++)
+        {
+            var t = (double)i / Rate;
+            var value = (float)(0.15 * Math.Sin(2 * Math.PI * 220 * t) + 0.1 * Math.Sin(2 * Math.PI * 1760 * t) + 0.05 * (random.NextDouble() - 0.5));
+            systemSecond[2 * i] = value;
+            systemSecond[2 * i + 1] = value * 0.8f;
+            micSecond[i] = (float)(0.1 * Math.Sin(2 * Math.PI * 330 * t) * (0.5 + 0.5 * Math.Sin(2 * Math.PI * t)));
+        }
+
+        var system = new float[systemSecond.Length * seconds];
+        var mic = new float[micSecond.Length * seconds];
+        for (var s = 0; s < seconds; s++)
+        {
+            systemSecond.CopyTo(system, s * systemSecond.Length);
+            micSecond.CopyTo(mic, s * micSecond.Length);
+        }
+
+        return new AudioSnapshot(system, mic);
     }
 }
