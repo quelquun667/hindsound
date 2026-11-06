@@ -1,0 +1,18 @@
+# .NET build output
+bin/
+obj/
+publish/
+artifacts/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Local render cache
+.cache/
+
+# Windows
+Thumbs.db
+Desktop.ini
