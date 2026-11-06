@@ -76,6 +76,8 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
     private const uint MeterIntervalMs = 100;
     private const nint EditId = 100;
 
+    // A window gets its messages on the thread that made it: one on another thread must not take them from it.
+    [ThreadStatic]
     private static SettingsWindow? _current;
     private static bool _classRegistered;
 
