@@ -55,6 +55,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private AudioEngineStatus? _lastStatus;
     private bool _engineFailed;
     private readonly MicLossWatch _micWatch = new();
+    private readonly CaptureOnReminder _captureOnReminder = new();
     private bool _micCheckArmed;
     private TrayState _trayState = TrayState.Active;
     private string _trayTip = "Hindsound";
@@ -550,7 +551,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             _journal.Write($"recorded app {app}: {(status.SourceAppMissing ? "not running" : "running")}, captured as {status.SystemDeviceName ?? "(nothing)"}");
         }
 
-        var notice = StatusTransitions.Decide(_lastStatus, status);
+        var notice = _captureOnReminder.Adjust(StatusTransitions.Decide(_lastStatus, status), status);
         var micNotice = _micWatch.Note(status, NowMs);
         _lastStatus = status;
         _engineFailed = false;
@@ -899,6 +900,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         var leftEdge = string.Equals(_settings.General.NotificationPosition, "left", StringComparison.OrdinalIgnoreCase);
         _notification.Present(content, new NotificationPlacement(area, dpi, clickThrough, leftEdge), Accent);
         _notices.Shown(content);
+        _captureOnReminder.Shown(content.Kind);
     }
 
     private void OnNotificationFinished()

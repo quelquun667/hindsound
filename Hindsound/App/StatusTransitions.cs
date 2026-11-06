@@ -86,6 +86,36 @@ internal sealed class MicLossWatch
     }
 }
 
+/// <summary>
+/// "Capture on" is promised at every launch and after every pause (PLAN section 7), but a device that arrives only says
+/// "device changed", which the Notifications setting can hide. So until the reminder has really been shown, that news is the
+/// reminder. Pure: tested without any window.
+/// </summary>
+internal sealed class CaptureOnReminder
+{
+    private bool _due = true;
+
+    /// <summary>What to tell about a new status, instead of what <see cref="StatusTransitions.Decide"/> said.</summary>
+    public StatusNotice Adjust(StatusNotice notice, AudioEngineStatus status)
+    {
+        if (status.Activity == CaptureActivity.Paused)
+        {
+            _due = true;
+        }
+
+        return notice == StatusNotice.DeviceChanged && _due ? StatusNotice.CaptureOn : notice;
+    }
+
+    /// <summary>A notification has reached the screen.</summary>
+    public void Shown(NotificationKind kind)
+    {
+        if (kind == NotificationKind.CaptureOn)
+        {
+            _due = false;
+        }
+    }
+}
+
 /// <summary>From two successive engine statuses to what the user sees. Pure: tested without any window.</summary>
 internal static class StatusTransitions
 {
