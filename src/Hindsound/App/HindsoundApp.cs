@@ -335,6 +335,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         {
             ReadSettingsAgain();
             ShowNextNotice();
+            RefreshTray();
         }
         catch (Exception ex)
         {
@@ -970,7 +971,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     /// <summary>Called whenever one of the things the icon says has changed.</summary>
     private void RefreshTray()
     {
-        var (state, tip) = StatusTransitions.TrayOf(_lastStatus, _hotkeyResults, _pending.ImportantClipWaiting, _engineFailed, _leave.Waiting);
+        var (state, tip) = StatusTransitions.TrayOf(_lastStatus, _hotkeyResults, _pending.ImportantClipWaiting, _engineFailed, _leave.Waiting, _settingsFile.StillOnDefaults);
         if (state != _trayState || tip != _trayTip)
         {
             _journal.Write($"tray: {state}, {tip}");
@@ -1224,6 +1225,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         }
 
         StartupSwitch.ApplyThenSave((change & SettingsChange.Startup) != 0, ApplyStartupRegistration, TrySaveSettings);
+        RefreshTray();
         if ((change & SettingsChange.Accent) != 0)
         {
             UpdateTray();

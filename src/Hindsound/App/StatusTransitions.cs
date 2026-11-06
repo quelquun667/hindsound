@@ -121,6 +121,7 @@ internal sealed class CaptureOnReminder
 internal static class StatusTransitions
 {
     public const string ClosingTip = "Hindsound - finishing a clip, then closing";
+    public const string OnDefaultsProblem = "Settings file not read: defaults, mic off";
 
     public static StatusNotice Decide(AudioEngineStatus? previous, AudioEngineStatus next)
     {
@@ -198,17 +199,19 @@ internal static class StatusTransitions
     /// <param name="importantClipWaiting">The user has yet to hear about a clip that went wrong.</param>
     /// <param name="engineFailed">The engine could not start, so no status will come.</param>
     /// <param name="closingAfterClip">Quit was asked for and a clip is still being written: that comes before any problem, the app is on its way out.</param>
-    public static (TrayState State, string Tip) TrayOf(AudioEngineStatus? status, IReadOnlyList<HotkeyResult> hotkeys, bool importantClipWaiting, bool engineFailed = false, bool closingAfterClip = false)
+    /// <param name="onDefaults">The settings file could not be read: the defaults run, without the microphone. Clips still get saved, but not as the user set them.</param>
+    public static (TrayState State, string Tip) TrayOf(AudioEngineStatus? status, IReadOnlyList<HotkeyResult> hotkeys, bool importantClipWaiting, bool engineFailed = false, bool closingAfterClip = false, bool onDefaults = false)
     {
         var activity = engineFailed ? CaptureActivity.NoDevice : status?.Activity ?? CaptureActivity.Stopped;
         var refused = RefusedSave(hotkeys);
         var problem = activity == CaptureActivity.NoDevice ? "No audio device"
             : refused is not null ? Describe(refused)
             : importantClipWaiting ? "A clip has a problem"
+            : onDefaults ? OnDefaultsProblem
             : status is { Activity: CaptureActivity.Capturing, MicEnabled: true, MicCapturing: false } ? "Microphone not captured"
             : hotkeys.FirstOrDefault(result => !result.Ok) is { } other ? Describe(other)
             : null;
-        var state = refused is not null || importantClipWaiting ? TrayState.Error : TrayStateOf(activity);
+        var state = refused is not null || importantClipWaiting || onDefaults ? TrayState.Error : TrayStateOf(activity);
         return (state, closingAfterClip ? ClosingTip : problem is null ? "Hindsound" : "Hindsound - " + problem);
     }
 
