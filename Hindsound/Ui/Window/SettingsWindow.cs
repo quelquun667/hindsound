@@ -104,6 +104,12 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
     private float _editSize;
     private bool _closed;
 
+    /// <summary>On the screen under the mouse, or off screen, where no screen counts.</summary>
+    public SettingsWindow(AppSettings settings, ISettingsBackend backend, Func<float> readMicPeak, bool firstRun, bool offscreen, Action closed)
+        : this(settings, backend, readMicPeak, firstRun, offscreen, offscreen ? default : ForegroundWindow.CursorScreen(), closed)
+    {
+    }
+
     public SettingsWindow(AppSettings settings, ISettingsBackend backend, Func<float> readMicPeak, bool firstRun, bool offscreen, ScreenInfo screen, Action closed)
     {
         Closed = closed;
