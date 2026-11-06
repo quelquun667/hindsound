@@ -4,6 +4,21 @@ using Hindsound.Ui;
 
 namespace Hindsound.Tests.App;
 
+public class SecondLaunchTests
+{
+    [Fact]
+    public void A_plain_launch_wakes_the_running_instance()
+    {
+        Assert.True(Program.WakesTheFirstInstance(AppOptions.Parse([])));
+    }
+
+    [Fact]
+    public void A_run_with_its_own_settings_never_does()
+    {
+        Assert.False(Program.WakesTheFirstInstance(AppOptions.Parse(["--settings", "test.json", "--offscreen"])));
+    }
+}
+
 public class SlowSaveOptionTests
 {
     [Fact]

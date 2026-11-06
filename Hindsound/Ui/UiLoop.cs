@@ -10,6 +10,10 @@ namespace Hindsound.Ui;
 internal sealed unsafe class UiLoop : IDisposable
 {
     public const uint TrayCallbackMessage = Native.WM_APP + 3;
+
+    /// <summary>What a second launch sends to the running instance: the user is looking for the app.</summary>
+    public const uint ShowMessage = Native.WM_APP + 4;
+
     private const string ClassName = "HindsoundMessages";
     private const uint PostedWork = Native.WM_APP + 1;
 
@@ -65,6 +69,27 @@ internal sealed unsafe class UiLoop : IDisposable
     /// <summary>Windows had asked, and the session goes on after all.</summary>
     public Action? SessionKept { get; set; }
 
+    /// <summary>A second launch of the app asks to be seen.</summary>
+    public Action? ShowAsked { get; set; }
+
+    /// <summary>
+    /// From a second launch: tells the running instance to show itself, and lets it come to the foreground, a right this
+    /// process has because the user just started it. False if no running instance could be told.
+    /// </summary>
+    public static bool WakeRunningInstance()
+    {
+        var running = Native.FindWindowW(ClassName, null);
+        if (running == 0)
+        {
+            return false;
+        }
+
+        uint processId;
+        Native.GetWindowThreadProcessId(running, &processId);
+        Native.AllowSetForegroundWindow(processId);
+        return Native.PostMessageW(running, ShowMessage, 0, 0) != 0;
+    }
+
     /// <summary>Runs the action on the loop's thread, soon. Safe from any thread.</summary>
     public void Post(Action action)
     {
@@ -118,6 +143,10 @@ internal sealed unsafe class UiLoop : IDisposable
 
             case TrayCallbackMessage:
                 TrayMessage?.Invoke((uint)(lParam & 0xFFFF), wParam);
+                return 0;
+
+            case ShowMessage:
+                ShowAsked?.Invoke();
                 return 0;
 
             case Native.WM_QUERYENDSESSION:

@@ -133,6 +133,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         _loop.SessionEndAsked = OnSessionEndAsked;
         _loop.SessionKept = TakeBackSessionEndReason;
         _loop.CloseAsked = AskToLeave;
+        _loop.ShowAsked = OnShowAsked;
         if (!_tray.Add(_trayState, Accent, _trayTip))
         {
             _journal.Write("the tray icon could not be added");
@@ -1069,6 +1070,14 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         {
             _loop.After(ProbeStepMs, () => _window?.ProbePicture(Path.ChangeExtension(_journal.Path, ".firstrun.png")));
         }
+    }
+
+    // A second launch: the user is looking for the app, and the icon may be hidden.
+    private void OnShowAsked()
+    {
+        _journal.Write("a second launch asks to see the app");
+        ReloadSettingsIfChanged();
+        OpenSettings(firstRun: false);
     }
 
     // Listing devices touches audio objects, which belong off the loop's thread. It opens nothing: no microphone starts.

@@ -92,6 +92,22 @@ public class UiLoopTests
     }
 
     [Fact]
+    public void The_message_of_a_second_launch_is_passed_on()
+    {
+        var asked = 0;
+
+        var ended = LoopEnds(loop =>
+        {
+            loop.ShowAsked = () => asked++;
+            Native.PostMessageW(loop.Hwnd, UiLoop.ShowMessage, 0, 0);
+            loop.After(100, loop.Quit);
+        });
+
+        Assert.True(ended);
+        Assert.Equal(1, asked);
+    }
+
+    [Fact]
     public void The_question_of_the_session_end_is_passed_on()
     {
         var asked = 0;

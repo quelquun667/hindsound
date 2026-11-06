@@ -191,6 +191,9 @@ internal static unsafe partial class Native
     [LibraryImport(U)] public static partial int CloseClipboard();
     [LibraryImport(U, StringMarshalling = StringMarshalling.Utf16)] public static partial int ShutdownBlockReasonCreate(nint hwnd, string reason);
     [LibraryImport(U)] public static partial int ShutdownBlockReasonDestroy(nint hwnd);
+    [LibraryImport(U, StringMarshalling = StringMarshalling.Utf16)] public static partial nint FindWindowW(string cls, string? title);
+    [LibraryImport(U)] public static partial uint GetWindowThreadProcessId(nint hwnd, uint* processId);
+    [LibraryImport(U)] public static partial int AllowSetForegroundWindow(uint processId);
 
     [LibraryImport("shcore.dll")] public static partial int GetDpiForMonitor(nint monitor, int type, uint* x, uint* y);
 
