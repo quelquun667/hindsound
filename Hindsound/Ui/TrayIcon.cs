@@ -291,6 +291,7 @@ internal sealed unsafe class TrayIcon : IDisposable
     private readonly uint _callbackMessage;
     private readonly TrayPresence _presence;
     private nint _icon;
+    private int _iconSize;
     private string _tip = "Hindsound";
 
     public TrayIcon(nint hwnd, uint callbackMessage)
@@ -315,6 +316,20 @@ internal sealed unsafe class TrayIcon : IDisposable
         _tip = tip;
         return _presence.Update();
     }
+
+    /// <summary>The size of the icon now in the tray, in pixels.</summary>
+    public int IconSize => _iconSize;
+
+    /// <summary>The scale of the main screen changed since the icon was drawn. The notification area lives on that screen.</summary>
+    public bool IconIsStale => IsStale(_iconSize, MainScreenDpi());
+
+    /// <summary>Whether an icon of that size is the wrong one at that DPI.</summary>
+    public static bool IsStale(int iconSize, uint dpi) => iconSize != SmallSizeAt(dpi);
+
+    // GetSystemMetrics stays at the scale the process started with, and the shell would blur the icon to fit.
+    public static int SmallSizeAt(uint dpi) => Native.GetSystemMetricsForDpi(Native.SM_CXSMICON, dpi);
+
+    public static int BigSizeAt(uint dpi) => Native.GetSystemMetricsForDpi(Native.SM_CXICON, dpi);
 
     /// <summary>Returns the chosen command. Runs only on the user's own right click on the icon.</summary>
     public TrayCommand ShowMenu(int x, int y, IReadOnlyList<TrayMenuItem> items)
@@ -366,18 +381,43 @@ internal sealed unsafe class TrayIcon : IDisposable
 
     private void Replace(TrayState state, uint accent)
     {
-        var fresh = CreateIcon(state, accent);
+        var size = SmallSizeAt(MainScreenDpi());
+        var fresh = CreateIcon(state, accent, size);
         if (_icon != 0)
         {
             Native.DestroyIcon(_icon);
         }
 
         _icon = fresh;
+        _iconSize = size;
     }
 
-    internal static nint CreateIcon(TrayState state, uint accent)
+    private static uint MainScreenDpi()
     {
-        var size = Native.GetSystemMetrics(Native.SM_CXSMICON);
+        var main = Native.MonitorFromPoint(default, Native.MONITOR_DEFAULTTOPRIMARY);
+        uint dpi = 96, dpiY;
+        Native.GetDpiForMonitor(main, 0, &dpi, &dpiY);
+        return dpi == 0 ? 96 : dpi;
+    }
+
+    /// <summary>The width of an icon in pixels, as Windows has it.</summary>
+    internal static int WidthOf(nint icon)
+    {
+        Native.ICONINFO info;
+        if (Native.GetIconInfo(icon, &info) == 0)
+        {
+            return 0;
+        }
+
+        Native.BITMAP bitmap = default;
+        Native.GetObjectW(info.Color, sizeof(Native.BITMAP), &bitmap);
+        Native.DeleteObject(info.Color);
+        Native.DeleteObject(info.Mask);
+        return bitmap.Width;
+    }
+
+    internal static nint CreateIcon(TrayState state, uint accent, int size)
+    {
         var composed = TrayIconShape.Compose(state, size, accent);
 
         Native.BITMAPINFOHEADER info = default;

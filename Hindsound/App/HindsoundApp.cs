@@ -131,6 +131,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         _tray = new TrayIcon(_loop.Hwnd, UiLoop.TrayCallbackMessage);
         _loop.TrayMessage = OnTrayMessage;
         _loop.TaskbarCreated = () => NoteTray(_tray.Add(_trayState, Accent, _trayTip));
+        _loop.ScaleMayHaveChanged = OnScaleMayHaveChanged;
         _loop.SessionEnding = OnSessionEnding;
         _loop.SessionEndAsked = OnSessionEndAsked;
         _loop.SessionKept = TakeBackSessionEndReason;
@@ -952,6 +953,16 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         }
     }
 
+    private void OnScaleMayHaveChanged()
+    {
+        var stale = _tray.IconIsStale;
+        _journal.Write($"the display scale may have changed: the tray icon is {_tray.IconSize} px, a new one is needed {stale}");
+        if (stale)
+        {
+            UpdateTray();
+        }
+    }
+
     private void UpdateTray() => NoteTray(_tray.Update(_trayState, Accent, _trayTip));
 
     // Without its icon the app can't be quit with the mouse, and Explorer may not be ready at the opening of a session.
@@ -1250,8 +1261,10 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         steps.Add(() => Key(window.EditHwnd, Vk.Tab));
         steps.Add(() => window.ProbeDpiChange(144));
         steps.Add(() => seen.Add("client at 144 dpi=" + window.ClientSizeText()));
+        steps.Add(() => seen.Add("icons at 144 dpi=" + window.IconWidths()));
         steps.Add(() => window.ProbeDpiChange(96));
         steps.Add(() => seen.Add("client at 96 dpi=" + window.ClientSizeText()));
+        steps.Add(() => seen.Add("icons at 96 dpi=" + window.IconWidths()));
         steps.Add(() => window.Screen.ShowSection(Section.Hotkeys));
         steps.Add(() => window.ProbePicture(Path.ChangeExtension(_journal.Path, ".hotkeys.png")));
         var at = 0;

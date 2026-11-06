@@ -55,6 +55,12 @@ internal sealed unsafe class UiLoop : IDisposable
     public Action? TaskbarCreated { get; set; }
 
     /// <summary>
+    /// Something says the display scale may have changed. A hidden window can get any of these, and Explorer also sends
+    /// TaskbarCreated: whoever listens checks what it really needs.
+    /// </summary>
+    public Action? ScaleMayHaveChanged { get; set; }
+
+    /// <summary>
     /// Windows is ending the session, or an installer or the Restart Manager wants this app closed (ENDSESSION_CLOSEAPP).
     /// In that second case Windows goes on and nothing ends the process for us: <see cref="Run"/> ends right after this.
     /// </summary>
@@ -89,6 +95,14 @@ internal sealed unsafe class UiLoop : IDisposable
         Native.AllowSetForegroundWindow(processId);
         return Native.PostMessageW(running, ShowMessage, 0, 0) != 0;
     }
+
+    /// <summary>Whether a message says the display scale may have changed. A WM_SETTINGCHANGE for anything else does not.</summary>
+    public static bool MeansScaleChange(uint message, nuint wParam) => message switch
+    {
+        Native.WM_DPICHANGED or Native.WM_DISPLAYCHANGE => true,
+        Native.WM_SETTINGCHANGE => wParam is Native.SPI_SETLOGICALDPIOVERRIDE or Native.SPI_SETNONCLIENTMETRICS or Native.SPI_SETICONMETRICS,
+        _ => false,
+    };
 
     /// <summary>Runs the action on the loop's thread, soon. Safe from any thread.</summary>
     public void Post(Action action)
@@ -197,6 +211,11 @@ internal sealed unsafe class UiLoop : IDisposable
                 {
                     TaskbarCreated?.Invoke();
                     return 0;
+                }
+
+                if (MeansScaleChange(message, wParam))
+                {
+                    ScaleMayHaveChanged?.Invoke();
                 }
 
                 return Native.DefWindowProcW(hwnd, message, wParam, lParam);
