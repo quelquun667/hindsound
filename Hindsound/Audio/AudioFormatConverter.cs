@@ -1,7 +1,5 @@
-using System.Buffers.Binary;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using NAudio.Dsp;
 using NAudio.Wave;
 
 namespace Hindsound.Audio;
@@ -33,8 +31,7 @@ public sealed class AudioFormatConverter
     private readonly float[]? _mix;
     private readonly float[] _decoded;
     private readonly float[]? _mixed;
-    private readonly WdlResampler? _resampler;
-    private readonly int _resampledCapacityFrames;
+    private readonly Resampler? _resampler;
 
     /// <param name="format">The format of the packets, as reported by the capture.</param>
     /// <param name="outputChannels">1 for mono, 2 for interleaved stereo.</param>
@@ -53,26 +50,13 @@ public sealed class AudioFormatConverter
         _decoded = new float[MaxInputFrames * _inputChannels];
 
         var needsResampling = format.SampleRate != InternalFormat.SampleRate;
-        var outputFrames = needsResampling
-            ? (int)Math.Ceiling((double)MaxInputFrames * InternalFormat.SampleRate / format.SampleRate) + 64
-            : MaxInputFrames;
-        MaxOutputFrames = outputFrames;
-        _resampledCapacityFrames = outputFrames;
-
         if (needsResampling)
         {
             _mixed = new float[MaxInputFrames * outputChannels];
-            _resampler = new WdlResampler();
-            _resampler.SetMode(true, 2, false);
-            _resampler.SetFilterParms();
-            _resampler.SetFeedMode(true);
-            _resampler.SetRates(format.SampleRate, InternalFormat.SampleRate);
-
-            // Run the largest packet through once, so the resampler's own buffers are grown here and not in the callback.
-            var warmUp = new float[outputFrames * outputChannels];
-            Resample(MaxInputFrames, warmUp);
-            _resampler.Reset();
+            _resampler = new Resampler(format.SampleRate, InternalFormat.SampleRate, outputChannels, MaxInputFrames);
         }
+
+        MaxOutputFrames = _resampler?.MaxOutputFrames ?? MaxInputFrames;
     }
 
     /// <summary>The largest number of bytes <see cref="Convert"/> accepts in one call.</summary>
@@ -104,15 +88,7 @@ public sealed class AudioFormatConverter
         }
 
         WriteFrames(input, frames, silent, _mixed!);
-        return Resample(frames, output);
-    }
-
-    private int Resample(int frames, Span<float> output)
-    {
-        var wanted = _resampler!.ResamplePrepare(frames, _outputChannels, out var target);
-        var usable = Math.Min(frames, wanted);
-        _mixed.AsSpan(0, usable * _outputChannels).CopyTo(target);
-        return _resampler.ResampleOut(output, usable, _resampledCapacityFrames, _outputChannels);
+        return _resampler.Process(_mixed.AsSpan(0, frames * _outputChannels), output);
     }
 
     private void WriteFrames(ReadOnlySpan<byte> input, int frames, bool silent, Span<float> target)
