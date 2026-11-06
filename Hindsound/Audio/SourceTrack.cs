@@ -128,7 +128,15 @@ public sealed class SourceTrack
         while (to.Position < end)
         {
             var slice = chunk.AsSpan(0, (int)Math.Min(chunk.Length, end - to.Position));
-            from.CopyTo(to.Position, slice);
+            from.CopyTo(to.Position, slice, out var firstHeld);
+
+            // The writer got there first, which it does at once on a full buffer: that audio is gone, not silent.
+            if (firstHeld > to.Position)
+            {
+                to.RestartAt(firstHeld);
+                continue;
+            }
+
             to.Write(slice);
         }
     }

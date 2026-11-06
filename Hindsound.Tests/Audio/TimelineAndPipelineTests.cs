@@ -519,3 +519,61 @@ public class SnapshotTruthTests
         Assert.Equal(0f, snapshot.System[4000]);
     }
 }
+
+[Collection(nameof(TimingSensitive))]
+public class ResizeUnderAWriterAtFullSpeedTests
+{
+    [Fact]
+    public void A_resize_overtaken_by_the_writer_holds_only_real_audio()
+    {
+        var track = new SourceTrack(1, 1000, 0);
+        var stop = false;
+        var written = 0L;
+        var writer = new Thread(() =>
+        {
+            var packet = new float[480];
+            var frame = 0L;
+            while (!Volatile.Read(ref stop))
+            {
+                for (var i = 0; i < packet.Length; i++)
+                {
+                    packet[i] = Ramp.Value(frame + i);
+                }
+
+                track.Append(frame, packet, exact: false);
+                frame += packet.Length;
+                Volatile.Write(ref written, frame);
+            }
+        });
+
+        writer.Start();
+        var stored = new float[10_000];
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            while (clock.Elapsed.TotalSeconds < 2)
+            {
+                // Full, so the oldest frames are the ones being overwritten when the copy to the larger buffer starts.
+                track.Resize(1000);
+                var filled = Volatile.Read(ref written);
+                Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref written) > filled + 60_000, TimeSpan.FromSeconds(30)));
+                track.Resize(400_000);
+
+                var oldest = track.OldestFrame;
+                var lost = track.CopyWindow(oldest, stored);
+                for (var i = lost; i < stored.Length; i++)
+                {
+                    if (stored[i] != Ramp.ThroughBuffer(oldest + i))
+                    {
+                        Assert.Fail($"Frame {oldest + i} is wrong: {stored[i]}");
+                    }
+                }
+            }
+        }
+        finally
+        {
+            Volatile.Write(ref stop, true);
+            writer.Join();
+        }
+    }
+}

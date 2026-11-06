@@ -14,7 +14,7 @@ namespace Hindsound.Audio;
 public sealed class RingBuffer
 {
     private readonly short[] _data;
-    private readonly long _firstPosition;
+    private long _firstPosition;
 
     // Published after the samples are in place: every position below it can be read.
     private long _position;
@@ -44,6 +44,16 @@ public sealed class RingBuffer
 
     /// <summary>Absolute position of the oldest sample still held.</summary>
     public long OldestPosition => Math.Max(_firstPosition, Position - _data.Length);
+
+    /// <summary>
+    /// Forgets everything and starts again at <paramref name="position"/>. Only for a buffer no reader can see yet.
+    /// </summary>
+    internal void RestartAt(long position)
+    {
+        _firstPosition = position;
+        _position = position;
+        _overwriteLimit = position;
+    }
 
     /// <summary>Appends samples. Allocates nothing. If there are more than the capacity, only the last ones are kept.</summary>
     public void Write(ReadOnlySpan<float> samples)
