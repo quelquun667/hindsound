@@ -335,20 +335,22 @@ public sealed class ClipSaverTests : IDisposable
     // ---------------------------------------------------------------- async, MP3 end to end
 
     [Fact]
-    public async Task SaveAsync_does_the_work_on_another_thread()
+    public async Task SaveAsync_returns_at_once_while_the_work_goes_on_in_the_background()
     {
-        var callerThread = Environment.CurrentManagedThreadId;
-        var workerThread = -1;
+        // The work stops at the clock (called once the audio is rendered) until the test lets it go.
+        // If SaveAsync did the work on the caller's thread, it would wait here (up to 10 s) and come back finished.
+        using var gate = new ManualResetEventSlim(false);
         var saver = new ClipSaver(RescueFolder, () =>
         {
-            workerThread = Environment.CurrentManagedThreadId;
+            gate.Wait(TimeSpan.FromSeconds(10));
             return Moment;
         });
 
-        var result = await saver.SaveAsync(new AudioSnapshot(Signals.Sine(300, 0.3, 0.5), []), Wav(), "x");
+        var task = saver.SaveAsync(new AudioSnapshot(Signals.Sine(300, 0.3, 0.5), []), Wav(), "x");
 
-        Assert.NotEqual(-1, workerThread);
-        Assert.NotEqual(callerThread, workerThread);
+        Assert.False(task.IsCompleted);
+        gate.Set();
+        var result = await task;
         Assert.True(File.Exists(result.PrimaryPath));
     }
 
