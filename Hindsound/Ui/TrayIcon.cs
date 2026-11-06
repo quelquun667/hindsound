@@ -61,6 +61,56 @@ internal static class TrayIconShape
         TrayState.Paused => NotificationPalette.Muted,
         _ => NotificationPalette.Hot,
     };
+
+    /// <summary>The dark plate under the shape. Without it, a lime or white icon vanishes on a light taskbar.</summary>
+    public const uint PlateColor = NotificationPalette.Fill;
+
+    /// <summary>The finished icon: the shape, inset on its rounded plate, as ARGB with straight alpha.</summary>
+    public static uint[] Compose(TrayState state, int size, uint accent)
+    {
+        var inset = Math.Max(2, size / 8);
+        var inner = size - 2 * inset;
+        var shape = Coverage(state, inner);
+        var rgb = ColorOf(state, accent);
+        var radius = Math.Max(2, size / 6);
+        var pixels = new uint[size * size];
+        for (var y = 0; y < size; y++)
+        {
+            for (var x = 0; x < size; x++)
+            {
+                var plate = PlateCoverage(x, y, size, radius);
+                if (plate <= 0)
+                {
+                    continue;
+                }
+
+                var inShape = x >= inset && x < inset + inner && y >= inset && y < inset + inner;
+                var amount = inShape ? shape[(y - inset) * inner + x - inset] : 0;
+                pixels[y * size + x] = ((uint)(plate * 255) << 24) | Blend(PlateColor, rgb, amount);
+            }
+        }
+
+        return pixels;
+    }
+
+    private static float PlateCoverage(int x, int y, int size, int radius)
+    {
+        var cornerX = Math.Max(radius - (x + 0.5f), x + 0.5f - (size - radius));
+        var cornerY = Math.Max(radius - (y + 0.5f), y + 0.5f - (size - radius));
+        if (cornerX <= 0 || cornerY <= 0)
+        {
+            return 1;
+        }
+
+        return Pixels.Clamp(radius + 0.5f - MathF.Sqrt(cornerX * cornerX + cornerY * cornerY));
+    }
+
+    private static uint Blend(uint from, uint to, float amount)
+    {
+        uint Channel(int shift) =>
+            (uint)MathF.Round(((from >> shift) & 0xFF) * (1 - amount) + ((to >> shift) & 0xFF) * amount) << shift;
+        return Channel(16) | Channel(8) | Channel(0);
+    }
 }
 
 /// <summary>The notification-area icon, drawn by the code, and its native menu.</summary>
@@ -162,8 +212,7 @@ internal sealed unsafe class TrayIcon(nint hwnd, uint callbackMessage) : IDispos
     internal static nint CreateIcon(TrayState state, uint accent)
     {
         var size = Native.GetSystemMetrics(Native.SM_CXSMICON);
-        var coverage = TrayIconShape.Coverage(state, size);
-        var rgb = TrayIconShape.ColorOf(state, accent);
+        var composed = TrayIconShape.Compose(state, size, accent);
 
         Native.BITMAPINFOHEADER info = default;
         info.Size = (uint)sizeof(Native.BITMAPINFOHEADER);
@@ -174,10 +223,10 @@ internal sealed unsafe class TrayIcon(nint hwnd, uint callbackMessage) : IDispos
         void* bits;
         var color = Native.CreateDIBSection(0, &info, 0, &bits, 0, 0);
         var pixels = (uint*)bits;
-        for (var i = 0; i < coverage.Length; i++)
+        for (var i = 0; i < composed.Length; i++)
         {
             // An icon's alpha is not premultiplied.
-            pixels[i] = ((uint)(coverage[i] * 255) << 24) | rgb;
+            pixels[i] = composed[i];
         }
 
         var maskSize = (size + 15) / 16 * 2 * size;
