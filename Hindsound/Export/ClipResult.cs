@@ -6,6 +6,7 @@ namespace Hindsound.Export;
 /// <param name="SizeBytes">Total size of the file(s) on disk.</param>
 /// <param name="IsSilent">The clip never goes above -60 dBFS.</param>
 /// <param name="Bars">The 24 bars of the notification, from 0 to 1, the most recent last.</param>
+/// <param name="FellBackToWav">MP3 was asked for but the encoder failed, so the file(s) are WAV.</param>
 /// <param name="Rescued">The output folder was not writable, so the file(s) are in the rescue folder.</param>
 public sealed record ClipResult(
     IReadOnlyList<string> Paths,
@@ -13,7 +14,8 @@ public sealed record ClipResult(
     long SizeBytes,
     bool IsSilent,
     IReadOnlyList<float> Bars,
-    bool Rescued)
+    bool Rescued,
+    bool FellBackToWav = false)
 {
     /// <summary>The first file: the whole clip in mix mode, the PC audio track in multitrack mode.</summary>
     public string PrimaryPath => Paths[0];

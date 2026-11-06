@@ -401,9 +401,11 @@ public sealed class ClipSaverTests : IDisposable
         for (var i = 0; i < frames; i++) mic[i] = (float)(0.1 * Math.Sin(2 * Math.PI * 330 * i / 48000.0) * (0.5 + 0.5 * Math.Sin(i / 20000.0)));
         var snapshot = new AudioSnapshot(system, mic);
 
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
         var mp3 = Stopwatch.StartNew();
         var mp3Result = Saver().Save(snapshot, new ExportOptions { Format = ExportFormat.Mp3, Mp3BitrateKbps = 192, OutputFolder = OutputFolder }, "mp3");
         mp3.Stop();
+        _output.WriteLine($"5:00 MP3 save allocated {GC.GetAllocatedBytesForCurrentThread() - allocatedBefore} bytes");
 
         var plain = Stopwatch.StartNew();
         Saver().Save(snapshot, new ExportOptions { Format = ExportFormat.Mp3, Mp3BitrateKbps = 192, Normalization = NormalizationMode.Off, OutputFolder = OutputFolder }, "plain");
