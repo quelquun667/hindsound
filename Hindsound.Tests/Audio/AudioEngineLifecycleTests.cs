@@ -11,6 +11,7 @@ namespace Hindsound.Tests.Audio;
 internal sealed class TrackedSource(CaptureRequest request, TrackingFactory owner) : ICaptureSource
 {
     private int _disposed;
+    private int _started;
 
     public CaptureRequest Request { get; } = request;
 
@@ -24,7 +25,12 @@ internal sealed class TrackedSource(CaptureRequest request, TrackingFactory owne
 
     public event Action<Exception?>? Stopped;
 
-    public void Start() => owner.OnStart?.Invoke(this);
+    public void Start()
+    {
+        Volatile.Write(ref _started, 1);
+        owner.Started(Request.Flow);
+        owner.OnStart?.Invoke(this);
+    }
 
     public void Stop()
     {
@@ -36,7 +42,7 @@ internal sealed class TrackedSource(CaptureRequest request, TrackingFactory owne
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
         {
-            owner.Closed();
+            owner.Closed(Request.Flow, Volatile.Read(ref _started) == 1);
         }
     }
 
@@ -55,6 +61,8 @@ internal sealed class TrackingFactory : ICaptureSourceFactory
     private int _maxLive;
     private int _openCalls;
     private int _resolveCalls;
+    private int _maxRunning;
+    private readonly int[] _running = new int[2];
 
     public Action<TrackedSource>? OnStart { get; set; }
 
@@ -67,6 +75,9 @@ internal sealed class TrackingFactory : ICaptureSourceFactory
     public int Live => Volatile.Read(ref _live);
 
     public int MaxLive => Volatile.Read(ref _maxLive);
+
+    /// <summary>The most captures started and not yet closed on one side at any moment.</summary>
+    public int MaxRunningPerSide => Volatile.Read(ref _maxRunning);
 
     /// <summary>Calls to open, including those that are stuck.</summary>
     public int OpenCalls => Volatile.Read(ref _openCalls);
@@ -103,7 +114,23 @@ internal sealed class TrackingFactory : ICaptureSourceFactory
         return source;
     }
 
-    public void Closed() => Interlocked.Decrement(ref _live);
+    public void Started(AudioFlow flow)
+    {
+        var running = Interlocked.Increment(ref _running[(int)flow]);
+        int seen;
+        while (running > (seen = Volatile.Read(ref _maxRunning)) && Interlocked.CompareExchange(ref _maxRunning, running, seen) != seen)
+        {
+        }
+    }
+
+    public void Closed(AudioFlow flow, bool started)
+    {
+        Interlocked.Decrement(ref _live);
+        if (started)
+        {
+            Interlocked.Decrement(ref _running[(int)flow]);
+        }
+    }
 }
 
 internal static class Eventually
@@ -520,12 +547,14 @@ public class StuckDeviceTests
         try
         {
             Assert.Equal(CaptureActivity.NoDevice, engine.Status.Activity);
-            await Eventually.True(() => factory.Live == 0, "the capture is closed");
+            Assert.False(engine.Status.SystemCapturing);
         }
         finally
         {
             release.Set();
         }
+
+        await Eventually.True(() => factory.Live == 0, "the capture is closed once its start is over");
     }
 
     [Fact]
@@ -837,5 +866,110 @@ public class TogglePauseTests
 
         Assert.Equal(CaptureActivity.Stopped, await rig.Engine.TogglePauseAsync());
         Assert.Empty(rig.Factory.Opened);
+    }
+}
+
+[Collection(nameof(TimingSensitive))]
+public class CommandStressTests
+{
+    [Fact]
+    public async Task All_commands_together_leave_no_double_capture_no_error_and_nothing_open()
+    {
+        var factory = new TrackingFactory();
+        var watcher = new FakeWatcher();
+        var engine = new AudioEngine(new AudioEngineOptions(TimeSpan.FromSeconds(2)), factory, watcher, tickInterval: TimeSpan.FromMilliseconds(5));
+        var errors = new ConcurrentQueue<Exception>();
+        using var stop = new CancellationTokenSource();
+        var commands = 0;
+
+        async Task Commander(int seed)
+        {
+            var random = new Random(seed);
+            while (!stop.IsCancellationRequested)
+            {
+                try
+                {
+                    Interlocked.Increment(ref commands);
+                    await (random.Next(10) switch
+                    {
+                        0 => engine.StartAsync(),
+                        1 => engine.StopAsync(),
+                        2 => engine.PauseAsync(),
+                        3 => engine.ResumeAsync(),
+                        4 => engine.ResizeBufferAsync(TimeSpan.FromSeconds(1 + random.Next(3))),
+                        5 => engine.SetDevicesAsync(null, null, random.Next(2) == 0),
+                        6 => engine.SetDevicesAsync("device", "device", true),
+                        7 => engine.RefreshDevicesAsync(),
+                        8 => engine.TogglePauseAsync(),
+                        _ => engine.StartAsync(),
+                    });
+                }
+                catch (Exception exception)
+                {
+                    errors.Enqueue(exception);
+                }
+            }
+        }
+
+        var deaths = Task.Run(() =>
+        {
+            var random = new Random(77);
+            var samples = new float[960];
+            while (!stop.IsCancellationRequested)
+            {
+                try
+                {
+                    factory.Latest?.Deliver(samples.AsSpan(0, factory.Latest.Format.Channels * 480), 0);
+                    if (random.Next(50) == 0)
+                    {
+                        factory.Latest?.Die(new COMException("gone"));
+                    }
+
+                    if (random.Next(30) == 0)
+                    {
+                        watcher.Raise();
+                    }
+                }
+                catch (Exception exception)
+                {
+                    errors.Enqueue(exception);
+                }
+
+                Thread.Sleep(1);
+            }
+        });
+
+        var snapshots = Task.Run(() =>
+        {
+            while (!stop.IsCancellationRequested)
+            {
+                try
+                {
+                    var snapshot = engine.Snapshot(TimeSpan.FromSeconds(1));
+                    _ = engine.Status;
+                    if (snapshot.Mic.Length != 0 && snapshot.System.Length != 0 && snapshot.Mic.Length * 2 != snapshot.System.Length)
+                    {
+                        throw new InvalidOperationException($"Lengths apart: {snapshot.Mic.Length} and {snapshot.System.Length}");
+                    }
+                }
+                catch (Exception exception)
+                {
+                    errors.Enqueue(exception);
+                }
+            }
+        });
+
+        var commanders = Enumerable.Range(1, 4).Select(seed => Task.Run(() => Commander(seed))).ToArray();
+        await Task.Delay(TimeSpan.FromSeconds(3));
+        stop.Cancel();
+        await Task.WhenAll(commanders.Append(deaths).Append(snapshots)).WaitAsync(TimeSpan.FromSeconds(30));
+        await engine.StopAsync().WaitAsync(TimeSpan.FromSeconds(30));
+        await Eventually.True(() => factory.Live == 0, "nothing left open");
+        await Task.Run(engine.Dispose).WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.True(commands > 100, $"Only {commands} commands");
+        Assert.Empty(errors);
+
+        Assert.Equal(1, factory.MaxRunningPerSide);
     }
 }

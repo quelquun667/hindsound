@@ -468,17 +468,22 @@ public sealed class AudioEngine : IDisposable
     /// <summary>
     /// Runs a call into the device layer, which may never come back, off this thread and for a limited time. Past the
     /// limit, or on a stop, the engine goes on without it, and <paramref name="onLate"/> takes care of a late result.
-    /// While one is stuck the same call is not tried again, so retries do not use up threads.
+    /// While one is stuck the same call is not tried again, so retries do not use up threads, and two captures never
+    /// run side by side. <paramref name="afterGivingUp"/> runs once the call is over, or at once if it never ran.
     /// </summary>
-    private async Task<(bool Finished, T? Result)> CallBoundedAsync<T>(string name, Func<Task<T>> call, Action<T>? onLate = null)
+    private async Task<(bool Finished, T? Result)> CallBoundedAsync<T>(string name, Func<Task<T>> call, Action<T>? onLate = null, Action? afterGivingUp = null)
     {
         var abort = Volatile.Read(ref _abortOpenings).Token;
+        bool skip;
         lock (_stuckCalls)
         {
-            if (abort.IsCancellationRequested || _stuckCalls.Contains(name))
-            {
-                return (false, default);
-            }
+            skip = abort.IsCancellationRequested || _stuckCalls.Contains(name);
+        }
+
+        if (skip)
+        {
+            afterGivingUp?.Invoke();
+            return (false, default);
         }
 
         var running = Task.Run(call);
@@ -497,11 +502,6 @@ public sealed class AudioEngine : IDisposable
             _ = running.ContinueWith(
                 finished =>
                 {
-                    lock (_stuckCalls)
-                    {
-                        _stuckCalls.Remove(name);
-                    }
-
                     if (finished.IsCompletedSuccessfully)
                     {
                         onLate?.Invoke(finished.Result);
@@ -509,6 +509,12 @@ public sealed class AudioEngine : IDisposable
                     else
                     {
                         Debug.WriteLine($"{name} failed late: {finished.Exception?.GetBaseException().Message}");
+                    }
+
+                    afterGivingUp?.Invoke();
+                    lock (_stuckCalls)
+                    {
+                        _stuckCalls.Remove(name);
                     }
                 },
                 CancellationToken.None,
@@ -743,16 +749,22 @@ public sealed class AudioEngine : IDisposable
             source.Stopped += exception => OnSourceStopped(open, exception);
 
             var started = source;
-            var (finished, _) = await CallBoundedAsync($"start {flow}", () =>
-            {
-                started.Start();
-                return Task.FromResult(true);
-            }).ConfigureAwait(false);
+            var (finished, _) = await CallBoundedAsync(
+                $"start {flow}",
+                () =>
+                {
+                    if (!open.Closing)
+                    {
+                        started.Start();
+                    }
+
+                    return Task.FromResult(true);
+                },
+                afterGivingUp: () => DisposeQuietly(started)).ConfigureAwait(false);
             if (!finished)
             {
                 open.Closing = true;
                 source.PacketAvailable -= pipeline.OnPacket;
-                _ = Task.Run(() => DisposeQuietly(started));
                 return null;
             }
 
