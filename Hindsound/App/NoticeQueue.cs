@@ -136,6 +136,21 @@ internal sealed class NoticeQueue
         }
     }
 
+    /// <summary>
+    /// A lasting notice is about to replace the status on screen. A status that must reach the user comes back after it,
+    /// unless it has stopped being true or a newer one already waits.
+    /// </summary>
+    /// <param name="shown">What is on screen.</param>
+    /// <param name="status">The last status of the engine, if any.</param>
+    public void PushedAside(NotificationContent shown, AudioEngineStatus? status)
+    {
+        var mustReachTheUser = RankOf(shown.Kind) == NoticeRank.Ordinary && PendingNotices.IsImportantStatus(shown.Kind);
+        if (mustReachTheUser && _ordinary is null && (status is null || !StatusTransitions.HasCeased(shown.Kind, status)))
+        {
+            _ordinary = shown;
+        }
+    }
+
     public void Shown(NotificationContent content) => _onScreen = content;
 
     /// <summary>The notification has left the screen.</summary>

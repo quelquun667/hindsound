@@ -846,6 +846,11 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             {
                 _notices.Remove(next);
                 _noticeRetry.Shown();
+                if (lasting && _notification.Showing is { } onScreen)
+                {
+                    _notices.PushedAside(onScreen, _lastStatus);
+                }
+
                 PresentNow(next, decision.ClickThrough);
                 return;
             }
