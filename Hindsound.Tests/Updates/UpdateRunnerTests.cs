@@ -36,8 +36,8 @@ public class UpdateRunnerTests
     [Fact]
     public void TheCommandLineIsExact()
     {
-        Assert.Equal(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/WAITEXIT=60"], UpdateRunner.SetupArguments(restartApp: false));
-        Assert.Equal(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/WAITEXIT=60", "/RESTARTAPP"], UpdateRunner.SetupArguments(restartApp: true));
+        Assert.Equal(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/WAITEXIT=330"], UpdateRunner.SetupArguments(restartApp: false));
+        Assert.Equal(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/WAITEXIT=330", "/RESTARTAPP"], UpdateRunner.SetupArguments(restartApp: true));
     }
 
     [Theory]

@@ -33,7 +33,7 @@ internal sealed class UpdateRunner(UpdateStateStore store, string folder, Action
 {
     public static IReadOnlyList<string> SetupArguments(bool restartApp)
     {
-        List<string> arguments = ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/WAITEXIT=60"];
+        List<string> arguments = ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/WAITEXIT=330"];
         if (restartApp)
         {
             arguments.Add("/RESTARTAPP");
