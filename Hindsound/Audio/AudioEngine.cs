@@ -111,6 +111,11 @@ public sealed class AudioEngine : IDisposable
     private readonly TimeSpan _tickInterval;
     private readonly TimeSpan _openLimit;
     private readonly HashSet<string> _stuckCalls = [];
+    private readonly Lock _publishGate = new();
+
+    private bool _publishWanted;
+    private bool _publishRunning;
+    private List<TaskCompletionSource> _publishWaiters = [];
 
     private CancellationTokenSource _abortOpenings = new();
     private int _stopsWaiting;
@@ -158,7 +163,7 @@ public sealed class AudioEngine : IDisposable
 
     /// <summary>
     /// Raised when the status changes, and about once a second while the buffered time grows. Comes on a thread pool
-    /// thread: marshal to the interface thread.
+    /// thread: marshal to the interface thread. One event at a time, in order, and the last one tells the last state.
     /// </summary>
     public event Action<AudioEngineStatus>? StatusChanged;
 
@@ -189,7 +194,9 @@ public sealed class AudioEngine : IDisposable
     public Task StopAsync()
     {
         AbortOpenings();
-        return RunCommandAsync(StopCoreAsync);
+
+        // A listener may be waiting for a thread that is itself waiting for this stop.
+        return RunCommandAsync(StopCoreAsync, waitForListeners: false);
     }
 
     /// <summary>Stops capturing but keeps the buffer, which can still be saved. The paused time will not exist in it.</summary>
@@ -327,7 +334,7 @@ public sealed class AudioEngine : IDisposable
         return samples;
     }
 
-    private async Task RunCommandAsync(Func<Task> command)
+    private async Task RunCommandAsync(Func<Task> command, bool waitForListeners = true)
     {
         // The turn is taken on the caller's thread, so commands run in the order they were asked for.
         await _commands.WaitAsync().ConfigureAwait(false);
@@ -340,7 +347,11 @@ public sealed class AudioEngine : IDisposable
             _commands.Release();
         }
 
-        Publish();
+        var delivered = RequestPublish();
+        if (waitForListeners)
+        {
+            await delivered.ConfigureAwait(false);
+        }
     }
 
     // From the moment a stop is asked for, nothing waits for a device any more: the commands ahead of it give up
@@ -699,7 +710,7 @@ public sealed class AudioEngine : IDisposable
         }
     }
 
-    private void OnTick() => Publish();
+    private void OnTick() => RequestPublish();
 
     // Stops the sources and lines both tracks up on the frame where time stopped.
     private async Task EndCaptureAsync()
@@ -785,18 +796,66 @@ public sealed class AudioEngine : IDisposable
             (system?.MemoryBytes ?? 0) + (mic?.MemoryBytes ?? 0));
     }
 
-    private void Publish()
+    // Asks for the status to be sent. One thread at a time sends, and it reads the status only when its turn comes:
+    // whatever the order of the requests, handlers never overlap and the last event is always the last state.
+    // The task ends once a status at least as new as this request has been through the handlers.
+    private Task RequestPublish()
     {
-        var status = BuildStatus();
-        if (status == _lastPublished)
+        var delivered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_publishGate)
         {
-            return;
+            _publishWanted = true;
+            _publishWaiters.Add(delivered);
+            if (_publishRunning)
+            {
+                return delivered.Task;
+            }
+
+            _publishRunning = true;
         }
 
-        // Once the buffer is full this stops firing, and only real changes get through.
-        _lastPublished = status;
+        ThreadPool.QueueUserWorkItem(_ => PublishWhileWanted());
+        return delivered.Task;
+    }
+
+    private void PublishWhileWanted()
+    {
+        while (true)
+        {
+            List<TaskCompletionSource> waiters;
+            lock (_publishGate)
+            {
+                if (!_publishWanted)
+                {
+                    _publishRunning = false;
+                    return;
+                }
+
+                _publishWanted = false;
+                waiters = _publishWaiters;
+                _publishWaiters = [];
+            }
+
+            Publish();
+            foreach (var waiter in waiters)
+            {
+                waiter.TrySetResult();
+            }
+        }
+    }
+
+    private void Publish()
+    {
         try
         {
+            var status = BuildStatus();
+            if (status == _lastPublished)
+            {
+                return;
+            }
+
+            // Once the buffer is full this stops firing, and only real changes get through.
+            _lastPublished = status;
             StatusChanged?.Invoke(status);
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)

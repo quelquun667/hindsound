@@ -276,6 +276,90 @@ public class SourceFailureTests
 }
 
 [Collection(nameof(TimingSensitive))]
+public class StatusEventTests
+{
+    [Fact]
+    public async Task After_a_stop_the_last_event_says_stopped_even_with_a_tick_under_way()
+    {
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var armed = 0;
+        var ticks = 1_000_000_000L;
+        long Clock()
+        {
+            if (Interlocked.Exchange(ref armed, 0) == 1)
+            {
+                entered.Set();
+                release.Wait();
+            }
+
+            return Interlocked.Add(ref ticks, 1000);
+        }
+
+        var factory = new TrackingFactory();
+        using var engine = new AudioEngine(new AudioEngineOptions(TimeSpan.FromSeconds(2), MicEnabled: false), factory, new FakeWatcher(), Clock, TimeSpan.FromMilliseconds(10));
+        var published = new ConcurrentQueue<CaptureActivity>();
+        engine.StatusChanged += status => published.Enqueue(status.Activity);
+        await engine.StartAsync();
+
+        // The next read of the clock comes from a tick building its status: it has read "Capturing" already.
+        Volatile.Write(ref armed, 1);
+        Assert.True(entered.Wait(TimeSpan.FromSeconds(10)));
+        var stop = engine.StopAsync();
+        await Eventually.True(() => engine.Status.Activity == CaptureActivity.Stopped, "the stop has run");
+        await Task.Delay(50);
+
+        release.Set();
+        await stop;
+        await Eventually.True(() => published.LastOrDefault() == CaptureActivity.Stopped, "the event for the stop");
+        await Task.Delay(100);
+
+        Assert.Equal(CaptureActivity.Stopped, published.Last());
+        Assert.Equal(CaptureActivity.Stopped, engine.Status.Activity);
+    }
+
+    [Fact]
+    public async Task Status_handlers_never_overlap_and_the_last_event_is_the_last_state()
+    {
+        using var rig = new AudioTestRig();
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var inside = 0;
+        var overlaps = 0;
+        var calls = 0;
+        var last = (int)CaptureActivity.Stopped;
+        rig.Engine.StatusChanged += status =>
+        {
+            if (Interlocked.Increment(ref inside) > 1)
+            {
+                Interlocked.Increment(ref overlaps);
+            }
+
+            if (Interlocked.Increment(ref calls) == 1)
+            {
+                entered.Set();
+                release.Wait(TimeSpan.FromSeconds(10));
+            }
+
+            Volatile.Write(ref last, (int)status.Activity);
+            Interlocked.Decrement(ref inside);
+        };
+
+        var start = rig.Engine.StartAsync();
+        Assert.True(entered.Wait(TimeSpan.FromSeconds(10)));
+        var pause = rig.Engine.PauseAsync();
+        await Eventually.True(() => rig.Engine.Status.Activity == CaptureActivity.Paused, "the pause has run");
+        await Task.Delay(100);
+
+        release.Set();
+        await Task.WhenAll(start, pause);
+
+        Assert.Equal(0, Volatile.Read(ref overlaps));
+        await Eventually.True(() => Volatile.Read(ref last) == (int)CaptureActivity.Paused, "the last event");
+    }
+}
+
+[Collection(nameof(TimingSensitive))]
 public class ResolverFailureTests
 {
     private static AudioEngine SystemOnly(TrackingFactory factory, TimeSpan tick) =>
