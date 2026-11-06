@@ -1,6 +1,6 @@
 namespace Hindsound.Audio;
 
-/// <summary>The one format audio is stored in between capture and export: 32-bit float at 48 kHz.</summary>
+/// <summary>The format audio is captured and exported in: 48 kHz. The buffer stores it as 16-bit samples.</summary>
 public static class InternalFormat
 {
     public const int SampleRate = 48000;
@@ -12,8 +12,8 @@ public static class InternalFormat
     public const int MicChannels = 1;
 
     /// <summary>Memory used per second of buffer by the PC audio source.</summary>
-    public const int SystemBytesPerSecond = SampleRate * SystemChannels * sizeof(float);
+    public const int SystemBytesPerSecond = SampleRate * SystemChannels * sizeof(short);
 
     /// <summary>Memory used per second of buffer by the microphone source.</summary>
-    public const int MicBytesPerSecond = SampleRate * MicChannels * sizeof(float);
+    public const int MicBytesPerSecond = SampleRate * MicChannels * sizeof(short);
 }
