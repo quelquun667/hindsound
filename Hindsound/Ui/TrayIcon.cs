@@ -159,7 +159,7 @@ internal sealed unsafe class TrayIcon(nint hwnd, uint callbackMessage) : IDispos
         _icon = fresh;
     }
 
-    private static nint CreateIcon(TrayState state, uint accent)
+    internal static nint CreateIcon(TrayState state, uint accent)
     {
         var size = Native.GetSystemMetrics(Native.SM_CXSMICON);
         var coverage = TrayIconShape.Coverage(state, size);

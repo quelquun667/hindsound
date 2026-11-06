@@ -3,6 +3,7 @@ using Hindsound.Export;
 using Hindsound.Input;
 using Hindsound.Settings;
 using Hindsound.Ui;
+using Hindsound.Ui.Window;
 
 namespace Hindsound.App;
 
@@ -10,12 +11,15 @@ namespace Hindsound.App;
 /// The wiring: the message loop, the tray icon, the shortcuts, the engine and the clip path. Everything here runs on the
 /// thread of the message loop, unless it says otherwise, and every other thread comes back through <see cref="UiLoop.Post"/>.
 /// </summary>
-internal sealed class HindsoundApp : IClipBackend
+internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 {
     private const int CatchUpPollMs = 500;
     private const int CatchUpTries = 60; // 30 s
     private const int SnapshotReleaseDelayMs = 500;
     private const int SelfTestExitDelayMs = 3300;
+    private const int ProbeStepMs = 300;
+    private const int ProbeAfterCloseMs = 10_000;
+    private static readonly TimeSpan MeterWindow = TimeSpan.FromMilliseconds(80);
     private static readonly TimeSpan QueuedClipsLimit = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan EngineStopLimit = TimeSpan.FromSeconds(5);
 
@@ -23,6 +27,7 @@ internal sealed class HindsoundApp : IClipBackend
     private readonly Journal _journal;
     private readonly SettingsStore _store;
     private readonly ClipSaver _saver;
+    private readonly IAudioAppList _audioApps = new EmptyAudioAppList();
 
     private UiLoop _loop = null!;
     private TrayIcon _tray = null!;
@@ -33,12 +38,17 @@ internal sealed class HindsoundApp : IClipBackend
 
     private AppSettings _settings = new();
     private DateTime _settingsWritten;
+    private AudioEngineOptions? _engineOptions;
+    private SettingsWindow? _window;
+    private bool _firstRun;
+    private IReadOnlyList<HotkeyResult> _hotkeyResults = [];
     private AudioEngineStatus? _lastStatus;
     private TrayState _trayState = TrayState.Active;
     private string _trayTip = "Hindsound";
     private bool _quitting;
 
     private ClipResult? _lastClip;
+    private DateTime _lastClipTime;
     private TimeSpan _lastRequested;
     private int _catchUpGeneration;
 
@@ -95,6 +105,17 @@ internal sealed class HindsoundApp : IClipBackend
         _journal.Write($"ready, before the capture: {Journal.Memory()}");
         StartEngine();
 
+        // Only when there was no settings file: the file now exists, so this happens once.
+        if ((_firstRun || _options.ForceFirstRun) && !_options.SelfTestSave)
+        {
+            OpenSettings(firstRun: true);
+        }
+
+        if (_options.SettingsProbe)
+        {
+            _loop.After(ProbeStepMs, RunSettingsProbe);
+        }
+
         if (_options.ExitAfterSeconds is { } seconds)
         {
             _loop.After((int)Math.Min(seconds * 1000, int.MaxValue), _loop.Quit);
@@ -121,6 +142,7 @@ internal sealed class HindsoundApp : IClipBackend
         _settings = _store.Load();
         if (_store.LastStatus == SettingsLoadStatus.Missing)
         {
+            _firstRun = true;
             TrySaveSettings();
         }
 
@@ -151,7 +173,7 @@ internal sealed class HindsoundApp : IClipBackend
         }
     }
 
-    /// <summary>Until the settings window exists, the file is edited by hand: a change counts at the next press or menu.</summary>
+    /// <summary>The file can still be edited by hand: a change counts at the next press or menu.</summary>
     private void ReloadSettingsIfChanged()
     {
         var written = SettingsFileTime();
@@ -161,26 +183,34 @@ internal sealed class HindsoundApp : IClipBackend
         }
 
         _settingsWritten = written;
-        var previous = SettingsMapping.ToEngineOptions(_settings);
         _settings = _store.Load();
         _journal.Write($"settings read again ({_store.LastStatus})");
         ApplyStartupRegistration();
         ApplyHotkeys();
-        var next = SettingsMapping.ToEngineOptions(_settings);
-        if (_engine is { } engine)
-        {
-            if (previous with { BufferDuration = next.BufferDuration } != next)
-            {
-                Watch(engine.SetDevicesAsync(next.SystemDeviceId, next.MicDeviceId, next.MicEnabled), "changing the devices");
-            }
+        ApplyEngineOptions();
+        _tray.Update(_trayState, Accent, _trayTip);
+        _window?.Screen.ReplaceSettings(_settings);
+    }
 
-            if (previous.BufferDuration != next.BufferDuration)
-            {
-                Watch(engine.ResizeBufferAsync(next.BufferDuration), "resizing the buffer");
-            }
+    /// <summary>Tells the engine what changed since it was last told, and nothing else.</summary>
+    private void ApplyEngineOptions()
+    {
+        var next = SettingsMapping.ToEngineOptions(_settings);
+        if (_engine is not { } engine || _engineOptions is not { } previous)
+        {
+            return;
         }
 
-        _tray.Update(_trayState, Accent, _trayTip);
+        _engineOptions = next;
+        if (previous with { BufferDuration = next.BufferDuration } != next)
+        {
+            Watch(engine.SetDevicesAsync(next.SystemDeviceId, next.MicDeviceId, next.MicEnabled), "changing the devices");
+        }
+
+        if (previous.BufferDuration != next.BufferDuration)
+        {
+            Watch(engine.ResizeBufferAsync(next.BufferDuration), "resizing the buffer");
+        }
     }
 
     // A test run with its own settings file never touches the registry; and a setting that is off and was never on
@@ -231,8 +261,14 @@ internal sealed class HindsoundApp : IClipBackend
             return;
         }
 
+        NoteHotkeys(_hotkeys.Apply(_settings.Hotkeys));
+    }
+
+    private void NoteHotkeys(IReadOnlyList<HotkeyResult> results)
+    {
+        _hotkeyResults = results;
         var problem = string.Empty;
-        foreach (var result in _hotkeys.Apply(_settings.Hotkeys))
+        foreach (var result in results)
         {
             if (result.Status != HotkeyStatus.NotSet)
             {
@@ -279,6 +315,7 @@ internal sealed class HindsoundApp : IClipBackend
     private void StartEngine()
     {
         var options = SettingsMapping.ToEngineOptions(_settings);
+        _engineOptions = options;
         _journal.Write($"engine: buffer {options.BufferDuration}, system {options.SystemDeviceId ?? "(default)"}, mic enabled {options.MicEnabled}, mic {options.MicDeviceId ?? "(default)"}");
 
         // Off this thread: the loop is a single-threaded apartment, and the audio objects belong in the thread pool's.
@@ -304,6 +341,9 @@ internal sealed class HindsoundApp : IClipBackend
     private void OnEngineStarted(AudioEngineStatus status)
     {
         OnStatus(status);
+
+        // The window may have changed something while the engine was starting.
+        ApplyEngineOptions();
         _journal.Write($"capture started: {status.Activity}, system {status.SystemDeviceName ?? "(none)"}, mic capturing {status.MicCapturing}, own sounds excluded {status.OwnSoundsExcluded}, {Journal.Memory()}");
         if (_options.SelfTestSave)
         {
@@ -315,6 +355,7 @@ internal sealed class HindsoundApp : IClipBackend
     {
         var notice = StatusTransitions.Decide(_lastStatus, status);
         _lastStatus = status;
+        _window?.Screen.UpdateStatus(status);
         SetTray(StatusTransitions.TrayStateOf(status.Activity), _trayTip);
         switch (notice)
         {
@@ -386,7 +427,9 @@ internal sealed class HindsoundApp : IClipBackend
         }
 
         _lastClip = result;
+        _lastClipTime = DateTime.Now;
         _lastRequested = outcome.Request.Requested;
+        _window?.Screen.SetLastClip(LastClipShown());
         _journal.Write($"clip saved: {string.Join(", ", result.Paths)}, {result.Duration.TotalSeconds:F2} s of {outcome.Request.Requested.TotalSeconds:F0} s, {result.SizeBytes} bytes, silent {result.IsSilent}, rescued {result.Rescued}, fell back to WAV {result.FellBackToWav}, {Journal.Memory()}");
         if (outcome.Request.CopyWanted)
         {
@@ -563,7 +606,7 @@ internal sealed class HindsoundApp : IClipBackend
                 OpenClipsFolder();
                 break;
             case TrayCommand.Settings:
-                OpenSettingsFile();
+                OpenSettings(firstRun: false);
                 break;
             case TrayCommand.Quit:
                 _loop.Quit();
@@ -599,17 +642,195 @@ internal sealed class HindsoundApp : IClipBackend
         }
     }
 
-    /// <summary>For now the settings are the file itself: the settings window comes later.</summary>
-    private void OpenSettingsFile()
+    // ---------------------------------------------------------------- the settings window
+
+    /// <summary>Only one at a time, and only while it is open: closing destroys it, and the memory goes back.</summary>
+    private void OpenSettings(bool firstRun)
     {
-        if (!File.Exists(_store.Path))
+        if (_window is { } open)
         {
-            TrySaveSettings();
+            open.BringBack();
+            return;
         }
 
-        if (!OpenWithShell(_store.Path))
+        var window = new SettingsWindow(_settings, this, ReadMicPeak, firstRun, _options.Offscreen, OnSettingsClosed);
+        _window = window;
+        if (_lastStatus is { } status)
         {
-            Native.ShellExecuteW(0, null, "notepad.exe", "\"" + _store.Path + "\"", null, Native.SW_SHOWNORMAL);
+            window.Screen.UpdateStatus(status);
+        }
+
+        window.Screen.SetLastClip(LastClipShown());
+        window.Screen.SetHotkeyResults(_hotkeyResults);
+        window.SetIcon(Accent);
+        window.Show();
+        LoadChoices();
+        _journal.Write($"settings window opened, first launch {firstRun}, {Journal.Memory()}");
+        if (_options.Offscreen && firstRun)
+        {
+            _loop.After(ProbeStepMs, () => _window?.ProbePicture(Path.ChangeExtension(_journal.Path, ".firstrun.png")));
+        }
+    }
+
+    // Listing devices touches audio objects, which belong off the loop's thread. It opens nothing: no microphone starts.
+    private void LoadChoices() => _ = Task.Run(() =>
+    {
+        var outputs = WasapiCaptureSourceFactory.ListDevices(AudioFlow.System).Select(d => new AudioDeviceChoice(d.Id, d.Name)).ToList();
+        var mics = WasapiCaptureSourceFactory.ListDevices(AudioFlow.Mic).Select(d => new AudioDeviceChoice(d.Id, d.Name)).ToList();
+        var apps = _audioApps.List();
+        _loop.Post(() => _window?.Screen.SetChoices(outputs, mics, apps));
+    });
+
+    private LastClipInfo? LastClipShown() =>
+        _lastClip is { } clip ? new LastClipInfo(clip.Duration, _lastClipTime, clip.SizeBytes) : null;
+
+    private void OnSettingsClosed()
+    {
+        _window = null;
+        _journal.Write("settings window closed, " + Journal.Memory());
+
+        // The window's objects are small and many: a full collection a moment later gives them back.
+        _loop.After(SnapshotReleaseDelayMs, ReleaseWindowMemory);
+    }
+
+    private static void ReleaseWindowMemory() => _ = Task.Run(() =>
+    {
+        GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+        GC.WaitForPendingFinalizers();
+        GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+
+        // What the window touched (its code, the fonts) stays counted until it is let go. Whatever is still in use comes back at once.
+        WindowNative.K32EmptyWorkingSet(Native.GetCurrentProcess());
+    });
+
+    // The level comes from what the capture already holds. If the microphone is off this reads nothing and opens nothing.
+    private float ReadMicPeak()
+    {
+        var engine = _engine;
+        if (engine is null || !_settings.Audio.MicEnabled)
+        {
+            return 0;
+        }
+
+        return MicMeter.Peak(engine.Snapshot(MeterWindow).Mic);
+    }
+
+    void ISettingsBackend.Applied(SettingsChange change)
+    {
+        TrySaveSettings();
+        _settingsWritten = SettingsFileTime();
+        if ((change & SettingsChange.Startup) != 0)
+        {
+            ApplyStartupRegistration();
+        }
+
+        if ((change & SettingsChange.Accent) != 0)
+        {
+            _tray.Update(_trayState, Accent, _trayTip);
+            _window?.SetIcon(Accent);
+        }
+
+        if ((change & (SettingsChange.Buffer | SettingsChange.Devices)) != 0)
+        {
+            ApplyEngineOptions();
+        }
+    }
+
+    void ISettingsBackend.SaveNow() => SaveClip(TimeSpan.FromSeconds(_settings.ClipSeconds));
+
+    void ISettingsBackend.TogglePause() => TogglePause();
+
+    void ISettingsBackend.CopyLast() => CopyLastClip();
+
+    void ISettingsBackend.OpenFolder() => OpenLastClipFolder();
+
+    void ISettingsBackend.ShowTestNotification() => Present(SampleClip.Notification(Accent), clickThrough: false);
+
+    void ISettingsBackend.SuspendHotkeys() => _hotkeys?.Suspend();
+
+    IReadOnlyList<HotkeyResult> ISettingsBackend.ApplyHotkeys(HotkeySettings hotkeys)
+    {
+        var results = _hotkeys?.Apply(hotkeys) ?? [];
+        NoteHotkeys(results);
+        return results;
+    }
+
+    IReadOnlyList<HotkeyResult> ISettingsBackend.ResumeHotkeys()
+    {
+        var results = _hotkeys?.Resume() ?? [];
+        NoteHotkeys(results);
+        return results;
+    }
+
+    // --settings-probe: opens the window off screen, sends it real messages, and writes what it measures. Never takes the focus.
+    private void RunSettingsProbe()
+    {
+        var gdi = WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0);
+        var user = WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1);
+        _journal.Write($"probe: before opening, {Journal.Memory()}, GDI objects {gdi}, USER objects {user}");
+        OpenSettings(firstRun: false);
+        var window = _window!;
+        var hwnd = window.Hwnd;
+        var seen = new List<string>();
+
+        void Key(nint target, uint vk) => Native.PostMessageW(target, WindowNative.WM_KEYDOWN, vk, 0);
+
+        var steps = new List<Action>();
+        steps.AddRange(Enumerable.Repeat<Action>(() => Key(hwnd, Vk.Down), 4));
+        steps.Add(() => Key(hwnd, Vk.Up));
+        steps.AddRange(Enumerable.Repeat<Action>(() => Key(hwnd, Vk.Tab), 5));
+        steps.Add(() => WindowNative.SetWindowTextW(window.EditHwnd, "probe {date}"));
+        steps.Add(() => seen.Add("template=" + _settings.Export.FileNameTemplate));
+        steps.Add(() => window.ProbePicture(Path.ChangeExtension(_journal.Path, ".export.png")));
+        steps.Add(() => Key(window.EditHwnd, Vk.Tab));
+        steps.Add(() => window.ProbeDpiChange(144));
+        steps.Add(() => seen.Add("client at 144 dpi=" + window.ClientSizeText()));
+        steps.Add(() => window.ProbeDpiChange(96));
+        steps.Add(() => seen.Add("client at 96 dpi=" + window.ClientSizeText()));
+        var at = 0;
+        _loop.After(ProbeStepMs, Next);
+
+        void Next()
+        {
+            seen.Add($"{window.Screen.Section}/{window.Screen.FocusId}");
+            if (at < steps.Count)
+            {
+                steps[at++]();
+                _loop.After(ProbeStepMs, Next);
+                return;
+            }
+
+            _journal.Write($"probe: reached {string.Join(" -> ", seen)}");
+            _journal.Write($"probe: open, {Journal.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, {Journal.CpuMilliseconds():F0} ms of CPU so far");
+            window.Close();
+            _loop.After(ProbeAfterCloseMs, AfterClosing);
+        }
+
+        void AfterClosing()
+        {
+            _journal.Write($"probe: 10 s after closing, {Journal.Memory()}, window gone {_window is null}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
+            var cycles = 0;
+            Cycle();
+
+            void Cycle()
+            {
+                if (_window is { } open)
+                {
+                    open.Close();
+                    _loop.After(ProbeStepMs, Cycle);
+                }
+                else if (cycles++ < 3)
+                {
+                    OpenSettings(firstRun: false);
+                    _loop.After(ProbeStepMs, Cycle);
+                }
+                else
+                {
+                    _journal.Write($"probe: after 3 more openings, {Journal.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
+                    _journal.Write($"probe: folder dialog usable {FolderPicker.SelfCheck()}");
+                    _loop.Quit();
+                }
+            }
         }
     }
 
@@ -662,6 +883,7 @@ internal sealed class HindsoundApp : IClipBackend
         }
 
         _quitting = true;
+        Guard(() => _window?.Dispose(), "settings window");
         Guard(() => _tray.Dispose(), "tray");
         Guard(() => _notification.Dispose(), "notification");
         Guard(() => _hotkeys?.Dispose(), "hotkeys");

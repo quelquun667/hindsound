@@ -108,6 +108,9 @@ public sealed class AudioSettings
 
     public string OutputDeviceId { get; set; } = DefaultDevice;
 
+    /// <summary>The name of the exe of the only app to record, or null for the whole PC.</summary>
+    public string? SourceApp { get; set; }
+
     /// <summary>"default", a device id, or "disabled" for no microphone.</summary>
     public string MicDeviceId { get; set; } = DefaultDevice;
 
@@ -123,6 +126,7 @@ public sealed class AudioSettings
     internal void Normalize()
     {
         OutputDeviceId = string.IsNullOrWhiteSpace(OutputDeviceId) ? DefaultDevice : OutputDeviceId;
+        SourceApp = string.IsNullOrWhiteSpace(SourceApp) ? null : SourceApp.Trim();
         MicDeviceId = string.IsNullOrWhiteSpace(MicDeviceId) ? DefaultDevice : MicDeviceId;
         Mode = AppSettings.OneOf(Mode, "mix", "mix", "multitrack");
         SystemGainDb = ClampGain(SystemGainDb);
