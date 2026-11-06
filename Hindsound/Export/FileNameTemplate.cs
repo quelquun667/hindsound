@@ -29,7 +29,7 @@ public static class FileNameTemplate
         if (string.IsNullOrWhiteSpace(template)) template = ExportOptions.DefaultFileNameTemplate;
 
         var cleanApp = Sanitize(app ?? string.Empty);
-        if (cleanApp.Length > MaxAppLength) cleanApp = cleanApp[..MaxAppLength].TrimEnd(' ', '.');
+        if (cleanApp.Length > MaxAppLength) cleanApp = Cut(cleanApp, MaxAppLength).TrimEnd(' ', '.');
         if (cleanApp.Length == 0) cleanApp = UnknownApp;
 
         var name = template
@@ -38,7 +38,7 @@ public static class FileNameTemplate
             .Replace("{time}", now.ToString("HH-mm-ss"), StringComparison.OrdinalIgnoreCase);
 
         name = Sanitize(name);
-        if (name.Length > MaxNameLength) name = name[..MaxNameLength].TrimEnd(' ', '.');
+        if (name.Length > MaxNameLength) name = Cut(name, MaxNameLength).TrimEnd(' ', '.');
         if (name.Length == 0) name = "Hindsound";
         if (ReservedNames.Contains(name)) name = "_" + name;
         return name;
@@ -100,14 +100,32 @@ public static class FileNameTemplate
         }
     }
 
-    /// <summary>Removes the characters Windows forbids in a file name, then trailing spaces and dots.</summary>
+    /// <summary>At most this many chars, without leaving half of a character at the end.</summary>
+    private static string Cut(string text, int length) =>
+        char.IsHighSurrogate(text[length - 1]) ? text[..(length - 1)] : text[..length];
+
+    /// <summary>
+    /// Removes the characters Windows forbids in a file name and any lone surrogate (half of a character, which a window
+    /// title can hold and nothing can show), then trailing spaces and dots.
+    /// </summary>
     internal static string Sanitize(string text)
     {
         var invalid = Path.GetInvalidFileNameChars();
         var builder = new StringBuilder(text.Length);
-        foreach (var c in text)
+        for (var i = 0; i < text.Length; i++)
         {
-            if (Array.IndexOf(invalid, c) < 0) builder.Append(c);
+            var c = text[i];
+            if (char.IsSurrogate(c))
+            {
+                if (i + 1 < text.Length && char.IsSurrogatePair(c, text[i + 1]))
+                {
+                    builder.Append(c).Append(text[++i]);
+                }
+            }
+            else if (Array.IndexOf(invalid, c) < 0)
+            {
+                builder.Append(c);
+            }
         }
 
         return builder.ToString().Trim().TrimEnd('.', ' ');

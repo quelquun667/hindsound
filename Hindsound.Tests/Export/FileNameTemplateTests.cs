@@ -137,4 +137,57 @@ public class FileNameTemplateTests
         Assert.False(File.Exists(folder.Combine("clip_system.wav"))); // attempt 1 was undone
         Assert.True(File.Exists(folder.Combine("clip (2)_system.wav")));
     }
+
+    private const string Emoji = "\U0001F3AE"; // two chars
+
+    [Theory]
+    [InlineData(39)] // the app's own limit of 40 falls in the middle of the emoji
+    [InlineData(40)]
+    public void A_long_app_name_is_never_cut_inside_a_character(int before)
+    {
+        var name = FileNameTemplate.Render("{app}", new string('a', before) + Emoji + "bbb", Moment);
+
+        AssertWholeCharacters(name);
+    }
+
+    [Fact]
+    public void A_long_template_is_never_cut_inside_a_character()
+    {
+        var name = FileNameTemplate.Render(new string('a', 149) + Emoji, null, Moment);
+
+        Assert.Equal(new string('a', 149), name);
+    }
+
+    [Fact]
+    public void A_character_that_fits_stays_whole()
+    {
+        Assert.Equal("a" + Emoji + "b", FileNameTemplate.Render("{app}", "a" + Emoji + "b", Moment));
+        Assert.Equal(new string('a', 38) + Emoji, FileNameTemplate.Render("{app}", new string('a', 38) + Emoji, Moment));
+    }
+
+    [Fact]
+    public void Half_a_character_in_a_title_is_removed()
+    {
+        // Not as test data: an attribute cannot hold half a character.
+        Assert.Equal("ab", FileNameTemplate.Render("{app}", "a\uD83Cb", Moment)); // first half alone
+        Assert.Equal("ab", FileNameTemplate.Render("{app}", "a\uDFAEb", Moment)); // second half alone
+        Assert.Equal("ab", FileNameTemplate.Render("{app}", "a\uDFAE\uD83Cb", Moment)); // the two halves in the wrong order
+        Assert.Equal("a", FileNameTemplate.Render("{app}", "a\uD83C", Moment)); // at the very end
+    }
+
+    private static void AssertWholeCharacters(string name)
+    {
+        for (var i = 0; i < name.Length; i++)
+        {
+            if (char.IsHighSurrogate(name[i]))
+            {
+                Assert.True(i + 1 < name.Length && char.IsLowSurrogate(name[i + 1]), "half a character at " + i);
+                i++;
+            }
+            else
+            {
+                Assert.False(char.IsLowSurrogate(name[i]), "half a character at " + i);
+            }
+        }
+    }
 }
