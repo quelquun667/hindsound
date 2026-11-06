@@ -1,7 +1,7 @@
 using Hindsound.Settings;
 using Hindsound.Ui.Window;
 
-namespace Hindsound.Tests.Window;
+namespace Hindsound.Tests.Ui.Window;
 
 /// <summary>What is written on the accent, and the accent as a colour of text, for every colour that can be chosen.</summary>
 public sealed class AccentTextTests : IDisposable

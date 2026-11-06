@@ -1,7 +1,7 @@
 using Hindsound.Input;
 using Hindsound.Ui.Window;
 
-namespace Hindsound.Tests.Window;
+namespace Hindsound.Tests.Ui.Window;
 
 /// <summary>A key held down, widget by widget: Windows sends the same key again with the repeat bit set.</summary>
 public sealed class SettingsKeyRepeatTests : IDisposable

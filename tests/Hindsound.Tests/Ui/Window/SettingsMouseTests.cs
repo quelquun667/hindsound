@@ -1,7 +1,7 @@
 using Hindsound.Settings;
 using Hindsound.Ui.Window;
 
-namespace Hindsound.Tests.Window;
+namespace Hindsound.Tests.Ui.Window;
 
 /// <summary>The mouse on a page that scrolls, driven as the window would, with no window.</summary>
 public sealed class SettingsMouseTests : IDisposable

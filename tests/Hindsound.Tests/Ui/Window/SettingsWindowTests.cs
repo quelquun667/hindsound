@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using Hindsound.Ui;
 using Hindsound.Ui.Window;
 
-namespace Hindsound.Tests.Window;
+namespace Hindsound.Tests.Ui.Window;
 
 /// <summary>
 /// The real window and its real EDIT, never shown, with messages sent to them directly: nothing reaches the system's

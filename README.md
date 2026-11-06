@@ -184,7 +184,7 @@ dotnet publish src/Hindsound/Hindsound.csproj -p:PublishProfile=win-x64 -m:2
 - The result lands in `src/Hindsound/bin/publish/win-x64/`.
 - A build from source never updates itself.
 
-<!-- TO CONFIRM after the move to src/ and tests/: these commands and paths, and that Hindsound.slnx stays at the root. To add when the installer exists: how to build the Setup. -->
+To build the Setup as well, follow [installer/README.md](installer/README.md).
 
 ## Platforms
 

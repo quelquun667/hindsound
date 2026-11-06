@@ -2,7 +2,7 @@ using Hindsound.Audio;
 using Hindsound.Input;
 using Hindsound.Ui.Window;
 
-namespace Hindsound.Tests.Window;
+namespace Hindsound.Tests.Ui.Window;
 
 public class HotkeyCaptureTests
 {

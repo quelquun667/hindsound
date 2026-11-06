@@ -1,6 +1,6 @@
 using Hindsound.Ui.Window;
 
-namespace Hindsound.Tests.Window;
+namespace Hindsound.Tests.Ui.Window;
 
 /// <summary>What --settings-probe uses to reach a text field, whatever keys are held on the real keyboard.</summary>
 public sealed class ScreenTabToTests

@@ -2,7 +2,7 @@ using Hindsound.Audio;
 using Hindsound.Input;
 using Hindsound.Ui.Window;
 
-namespace Hindsound.Tests.Window;
+namespace Hindsound.Tests.Ui.Window;
 
 /// <summary>The native text box and the keyboard: nothing the app reports may move the keyboard, a game may be holding it.</summary>
 public sealed class SettingsEditFocusTests : IDisposable

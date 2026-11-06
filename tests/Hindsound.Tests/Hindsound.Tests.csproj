@@ -21,7 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Hindsound\Hindsound.csproj" />
+    <ProjectReference Include="..\..\src\Hindsound\Hindsound.csproj" />
   </ItemGroup>
 
 </Project>

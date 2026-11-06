@@ -4,7 +4,7 @@ using Hindsound.Settings;
 using Hindsound.Ui;
 using Hindsound.Ui.Window;
 
-namespace Hindsound.Tests.Window;
+namespace Hindsound.Tests.Ui.Window;
 
 /// <summary>A window with nothing behind it: a real screen and a real hotkey manager over a fake native layer.</summary>
 internal sealed class ScreenRig : IDisposable

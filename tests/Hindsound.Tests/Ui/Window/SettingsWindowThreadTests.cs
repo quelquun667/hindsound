@@ -1,6 +1,6 @@
 using Hindsound.Ui.Window;
 
-namespace Hindsound.Tests.Window;
+namespace Hindsound.Tests.Ui.Window;
 
 /// <summary>The tests of the window run side by side, each on its thread: one window must never take the messages of another.</summary>
 public sealed class SettingsWindowThreadTests

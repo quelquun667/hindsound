@@ -3,7 +3,7 @@ using Hindsound.Input;
 using Hindsound.Settings;
 using Hindsound.Ui.Window;
 
-namespace Hindsound.Tests.Window;
+namespace Hindsound.Tests.Ui.Window;
 
 /// <summary>Everything the window does on the keyboard, driven as the window would, with no window.</summary>
 public sealed class SettingsScreenTests : IDisposable

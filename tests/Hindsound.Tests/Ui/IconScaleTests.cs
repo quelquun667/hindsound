@@ -1,4 +1,4 @@
-using Hindsound.Tests.Window;
+using Hindsound.Tests.Ui.Window;
 using Hindsound.Ui;
 using Hindsound.Ui.Window;
 

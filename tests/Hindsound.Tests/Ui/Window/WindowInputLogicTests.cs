@@ -1,6 +1,6 @@
 using Hindsound.Ui.Window;
 
-namespace Hindsound.Tests.Window;
+namespace Hindsound.Tests.Ui.Window;
 
 /// <summary>The small decisions the window only plugs in, with no window.</summary>
 public class WindowInputLogicTests

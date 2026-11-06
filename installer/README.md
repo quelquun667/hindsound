@@ -20,7 +20,7 @@ Expand-Archive "$tools\inno.zip" "$tools\inno" -Force
 # 2. The app: Hindsound.exe and libmp3lame.64.dll next to it
 $version = '0.1.0'
 $publish = "$env:TEMP\hindsound-publish"
-dotnet publish Hindsound/Hindsound.csproj -p:PublishProfile=win-x64 "-p:PublishDir=$publish\" "-p:Version=$version" -m:2
+dotnet publish src/Hindsound/Hindsound.csproj -p:PublishProfile=win-x64 "-p:PublishDir=$publish\" "-p:Version=$version" -m:2
 
 # 3. The Setup
 & "$tools\inno\tools\ISCC.exe" /Q "/DMyAppVersion=$version" "/DPublishDir=$publish" "/O$env:TEMP\hindsound-setup" installer\Hindsound.iss
@@ -30,7 +30,7 @@ Measured: exe 17.66 MB, DLL 1.03 MB, Setup 8.23 MB, 7 s for step 3.
 
 `LICENSE` and `THIRD-PARTY-NOTICES.md` are taken from the root of the repo, each only if it exists.
 
-`Hindsound/Assets/icon.ico` holds 16, 20, 24, 32, 48, 64 and 128 px as 32-bit BMP, and 256 px as PNG, from the final logo.
+`src/Hindsound/Assets/icon.ico` holds 16, 20, 24, 32, 48, 64 and 128 px as 32-bit BMP, and 256 px as PNG, from the final logo.
 
 ## How the app uses it
 
@@ -91,7 +91,7 @@ the next Windows session, through the Run value if the user has it.
 To check that a release has none of it, save the preprocessed script: add `#expr SaveToFile("<file>")` at the end of a copy
 of `Hindsound.iss` in this folder, and compile it with `ISCC /O-`. `--settings` must not appear in it.
 
-The app of a trial comes from a scratch copy of `Hindsound/` where `App/Program.cs` differs in two lines: the same mutex
+The app of a trial comes from a scratch copy of `src/Hindsound/` where `App/Program.cs` differs in two lines: the same mutex
 name, and `options = options.SettingsPath is null ? options with { SettingsPath = @"<TrialRoot>\settings.json" } : options;`
 after `AppOptions.Parse`. So it can never start on the real settings, and no other Hindsound on the PC can disturb it.
 Publish it twice, with `-p:Version=1.0.0` and `-p:Version=1.0.1`, and compile each with:

@@ -4,7 +4,7 @@ using Hindsound.Settings;
 using Hindsound.Ui;
 using Hindsound.Ui.Window;
 
-namespace Hindsound.Tests.Window;
+namespace Hindsound.Tests.Ui.Window;
 
 /// <summary>"Start with Windows" turned on, and Windows refuses: the file and the switch must both say what is really true.</summary>
 public sealed class StartupRefusedTests
