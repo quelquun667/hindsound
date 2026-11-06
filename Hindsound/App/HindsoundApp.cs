@@ -350,7 +350,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     /// <summary>Tells the engine what changed since it was last told, and nothing else.</summary>
     private void ApplyEngineOptions()
     {
-        var next = SettingsMapping.ToEngineOptions(_settings);
+        var next = SettingsMapping.ToEngineOptions(_settings, _options);
         if (_engine is not { } engine || _engineOptions is not { } previous)
         {
             return;
@@ -474,7 +474,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
     private void StartEngine()
     {
-        var options = SettingsMapping.ToEngineOptions(_settings);
+        var options = SettingsMapping.ToEngineOptions(_settings, _options);
         _engineOptions = options;
         _journal.Write($"engine: buffer {options.BufferDuration}, system {options.SystemDeviceId ?? "(default)"}, app {options.SourceApp ?? "(whole PC)"}, mic enabled {options.MicEnabled}, mic {options.MicDeviceId ?? "(default)"}");
 

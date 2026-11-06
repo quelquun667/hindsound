@@ -30,6 +30,9 @@ internal sealed record AppOptions(
     /// <summary><c>--selftest-fail card|reload|run</c>: throws at that point, to check on the real exe that the app survives it or leaves cleanly.</summary>
     public string? SelfTestFail { get; init; }
 
+    /// <summary><c>--no-mic</c>: the microphone stays off whatever the settings file says, at the start and at every read of the file. The file keeps its own value.</summary>
+    public bool NoMic { get; init; }
+
     public const string FailCard = "card", FailReload = "reload", FailRun = "run";
 
     /// <summary>Unknown or incomplete options are ignored: the app is started by Windows, nobody could read an error.</summary>
@@ -67,6 +70,9 @@ internal sealed record AppOptions(
                     break;
                 case "--selftest-save":
                     options = options with { SelfTestSave = true };
+                    break;
+                case "--no-mic":
+                    options = options with { NoMic = true };
                     break;
                 case "--offscreen":
                     options = options with { Offscreen = true };
