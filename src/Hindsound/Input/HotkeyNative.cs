@@ -23,7 +23,6 @@ public enum HotkeyRegistration
     TimedOut,
 }
 
-/// <summary>The Win32 side of the shortcuts, so tests can replace it.</summary>
 /// <summary><c>--no-hotkeys</c>: says yes to every shortcut and registers none. Nothing on the keyboard can reach this run.</summary>
 public sealed class UnregisteredHotkeys : IHotkeyNative
 {
@@ -40,6 +39,7 @@ public sealed class UnregisteredHotkeys : IHotkeyNative
     }
 }
 
+/// <summary>The Win32 side of the shortcuts, so tests can replace it.</summary>
 public interface IHotkeyNative : IDisposable
 {
     /// <summary>Raised with the id of a pressed shortcut, on the native layer's own thread.</summary>
