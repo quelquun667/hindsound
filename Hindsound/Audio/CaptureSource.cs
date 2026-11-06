@@ -16,7 +16,9 @@ public enum AudioFlow
 /// <param name="Flow">Which side.</param>
 /// <param name="DeviceId">The endpoint, from <see cref="ICaptureSourceFactory.ResolveDevice"/>.</param>
 /// <param name="ExcludeOwnProcess">For the PC sound: leave this app's own sounds out. Only possible on the default output.</param>
-public sealed record CaptureRequest(AudioFlow Flow, string DeviceId, bool ExcludeOwnProcess);
+/// <param name="TargetProcessId">Capture only this process and its children, rather than an endpoint.</param>
+/// <param name="TargetName">The name to show for that process.</param>
+public sealed record CaptureRequest(AudioFlow Flow, string DeviceId, bool ExcludeOwnProcess, int? TargetProcessId = null, string? TargetName = null);
 
 /// <summary>An audio capture that can be started once, separated from the hardware so the engine can be tested.</summary>
 public interface ICaptureSource : IDisposable
@@ -113,6 +115,40 @@ public sealed class WasapiCaptureSourceFactory : ICaptureSourceFactory
         }
     }
 
+    /// <summary>
+    /// The applications to offer: those with an audio session on the default output, without this app. The sessions
+    /// come from the audio API and the names from the process list: nothing here opens a handle to any application.
+    /// </summary>
+    public static IReadOnlyList<AudioAppInfo> ListApps()
+    {
+        try
+        {
+            using var enumerator = new MMDeviceEnumerator();
+            if (!enumerator.HasDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia))
+            {
+                return [];
+            }
+
+            using var device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+            var sessions = device.AudioSessionManager.Sessions;
+            var found = new List<(int ProcessId, string? DisplayName)>();
+            for (var i = 0; i < sessions.Count; i++)
+            {
+                var session = sessions[i];
+                if (!session.IsSystemSoundsSession)
+                {
+                    found.Add(((int)session.GetProcessID, session.DisplayName));
+                }
+            }
+
+            return AudioAppList.Build(found, new ToolHelpProcessSnapshot().Take(), Environment.ProcessId);
+        }
+        catch (Exception exception) when (IsAudioFailure(exception) || exception is System.ComponentModel.Win32Exception)
+        {
+            return [];
+        }
+    }
+
     public string? ResolveDevice(AudioFlow flow, string? requestedId)
     {
         try
@@ -141,6 +177,21 @@ public sealed class WasapiCaptureSourceFactory : ICaptureSourceFactory
 
     public async Task<ICaptureSource> OpenAsync(CaptureRequest request)
     {
+        if (request.TargetProcessId is { } target)
+        {
+            if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
+            {
+                throw new PlatformNotSupportedException("Process loopback needs Windows 10 version 2004 or later.");
+            }
+
+            var appRecorder = await new WasapiRecorderBuilder()
+                .WithProcessLoopback((uint)target, ProcessLoopbackMode.IncludeTargetProcessTree)
+                .WithFormat(WaveFormat.CreateIeeeFloatWaveFormat(InternalFormat.SampleRate, InternalFormat.SystemChannels))
+                .BuildAsync()
+                .ConfigureAwait(false);
+            return new CaptureSource(appRecorder, request.TargetName);
+        }
+
         using var enumerator = new MMDeviceEnumerator();
         using var device = enumerator.GetDevice(request.DeviceId);
         var name = device.FriendlyName;
@@ -173,6 +224,9 @@ public sealed class WasapiCaptureSourceFactory : ICaptureSourceFactory
     private static bool IsAudioFailure(Exception exception) =>
         exception is System.Runtime.InteropServices.COMException or CoreAudioException or InvalidOperationException or ArgumentException or UnauthorizedAccessException;
 }
+
+/// <summary>An application that can be captured on its own: its exe name for the settings, its name for the user.</summary>
+public sealed record AudioAppInfo(string ExeName, string Name);
 
 /// <summary>An audio endpoint: its id for the settings, its name for the user.</summary>
 public sealed record AudioDeviceInfo(string Id, string Name);

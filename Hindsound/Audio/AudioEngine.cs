@@ -28,6 +28,8 @@ public enum CaptureActivity
 /// <param name="OwnSoundsExcluded">This app's sounds stay out of the buffer. False on a specific output, or on old Windows.</param>
 /// <param name="Buffered">How much audio can be saved right now.</param>
 /// <param name="MemoryBytes">Memory held by the buffers.</param>
+/// <param name="SourceApp">The one application asked for instead of the whole PC, if any.</param>
+/// <param name="SourceAppMissing">That application is not running: nothing is wrong, the PC side is silent until it comes back.</param>
 public sealed record AudioEngineStatus(
     CaptureActivity Activity,
     bool SystemCapturing,
@@ -37,17 +39,21 @@ public sealed record AudioEngineStatus(
     string? MicDeviceName,
     bool OwnSoundsExcluded,
     TimeSpan Buffered,
-    long MemoryBytes);
+    long MemoryBytes,
+    string? SourceApp = null,
+    bool SourceAppMissing = false);
 
 /// <param name="BufferDuration">How much past audio to keep.</param>
 /// <param name="MicEnabled">Capture the microphone.</param>
 /// <param name="SystemDeviceId">An output to capture, or null for the system default (which keeps this app's sounds out).</param>
 /// <param name="MicDeviceId">A microphone, or null for the system default.</param>
+/// <param name="SourceApp">Capture only this application, by exe name such as "Discord.exe". Null is the whole PC. Takes precedence over <paramref name="SystemDeviceId"/>.</param>
 public sealed record AudioEngineOptions(
     TimeSpan BufferDuration,
     bool MicEnabled = true,
     string? SystemDeviceId = null,
-    string? MicDeviceId = null);
+    string? MicDeviceId = null,
+    string? SourceApp = null);
 
 /// <summary>
 /// Keeps the last minutes of the PC sound and the microphone in memory, aligned with each other, and hands them
@@ -82,7 +88,7 @@ public sealed class AudioEngine : IDisposable
     // Commands other than a stop give listeners this long to see the result, then get on with it.
     private static readonly TimeSpan ListenerWaitLimit = TimeSpan.FromSeconds(1);
 
-    private sealed class OpenSource(ICaptureSource source, CapturePipeline pipeline, string deviceId, bool excludesOwnProcess, bool exclusionWanted, long openedAtTicks)
+    private sealed class OpenSource(ICaptureSource source, CapturePipeline pipeline, string deviceId, bool excludesOwnProcess, bool exclusionWanted, long openedAtTicks, int? targetProcessId)
     {
         private volatile bool _dead;
         private volatile bool _closing;
@@ -95,6 +101,9 @@ public sealed class AudioEngine : IDisposable
         /// <summary>The settings asked for the exclusion when this was opened, even if it fell back on the classic loopback.</summary>
         public bool ExclusionWanted { get; } = exclusionWanted;
         public long OpenedAtTicks { get; } = openedAtTicks;
+
+        /// <summary>The application captured, if this captures one and not the whole PC.</summary>
+        public int? TargetProcessId { get; } = targetProcessId;
 
         /// <summary>It ended by itself. Set from the capture thread.</summary>
         public bool Dead
@@ -113,6 +122,7 @@ public sealed class AudioEngine : IDisposable
 
     private readonly ICaptureSourceFactory _factory;
     private readonly IDeviceWatcher _watcher;
+    private readonly IProcessSnapshot _processes;
     private readonly Func<long>? _clock;
     private readonly SemaphoreSlim _commands = new(1, 1);
     private readonly Timer _tick;
@@ -128,6 +138,7 @@ public sealed class AudioEngine : IDisposable
 
     private CancellationTokenSource _abortOpenings = new();
     private int _stopsWaiting;
+    private volatile bool _appMissing;
     private AudioEngineOptions _options;
     private CaptureTimeline _timeline;
     private SourceTrack? _systemTrack;
@@ -149,13 +160,15 @@ public sealed class AudioEngine : IDisposable
     /// <param name="clock">Current time in 100 ns units, on the clock of the packet stamps. For tests.</param>
     /// <param name="tickInterval">How often the buffered time is reported and a missing device is looked for again.</param>
     /// <param name="openLimit">How long a device gets to answer before it counts as missing. A later answer is thrown away.</param>
+    /// <param name="processes">Lists the running processes, to find the application to capture. By default, the real list.</param>
     public AudioEngine(
         AudioEngineOptions options,
         ICaptureSourceFactory? factory = null,
         IDeviceWatcher? watcher = null,
         Func<long>? clock = null,
         TimeSpan? tickInterval = null,
-        TimeSpan? openLimit = null)
+        TimeSpan? openLimit = null,
+        IProcessSnapshot? processes = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         _options = options;
@@ -165,6 +178,7 @@ public sealed class AudioEngine : IDisposable
         _timeline = new CaptureTimeline(clock);
         _tickInterval = tickInterval ?? DefaultTick;
         _openLimit = openLimit ?? DefaultOpenLimit;
+        _processes = processes ?? new ToolHelpProcessSnapshot();
         _tick = new Timer(_ => OnTick());
         _retry = new Timer(_ => QueueRefresh());
         _watcher.DevicesChanged += QueueRefresh;
@@ -194,6 +208,7 @@ public sealed class AudioEngine : IDisposable
         _paused = false;
         _exclusionDiedEarly = false;
         _quickDeaths = 0;
+        _appMissing = false;
         StartWatching();
         _tick.Change(_tickInterval, _tickInterval);
         await RefreshSourcesAsync().ConfigureAwait(false);
@@ -280,6 +295,18 @@ public sealed class AudioEngine : IDisposable
             Volatile.Write(ref _micTrack, null);
         }
 
+        await RefreshSourcesAsync().ConfigureAwait(false);
+    });
+
+    /// <summary>
+    /// Captures one application instead of the whole PC, or the whole PC again with null. An application that is not
+    /// running is not an error: <see cref="AudioEngineStatus.SourceAppMissing"/> says so, its silence is kept in place
+    /// like any other, and the capture attaches by itself when the application starts.
+    /// </summary>
+    /// <param name="exeName">The exe name, such as "Discord.exe". Takes precedence over the chosen output.</param>
+    public Task SetSourceAppAsync(string? exeName) => RunCommandAsync(async () =>
+    {
+        _options = _options with { SourceApp = exeName };
         await RefreshSourcesAsync().ConfigureAwait(false);
     });
 
@@ -533,9 +560,10 @@ public sealed class AudioEngine : IDisposable
     private static bool IsLive(OpenSource? open) => open is { Dead: false };
 
     // With nothing to capture from, time stops on the timeline, as in a pause.
+    // An application that is not running is different: the capture is on and hears silence, so time goes on.
     private void SettleTimeline()
     {
-        if (!IsLive(_system) && !IsLive(_mic))
+        if (!IsLive(_system) && !IsLive(_mic) && !_appMissing)
         {
             FreezeTimeline();
         }
@@ -550,8 +578,75 @@ public sealed class AudioEngine : IDisposable
 
     private void CancelRetry() => _retry.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
 
+    private string? WantedApp => string.IsNullOrWhiteSpace(_options.SourceApp) ? null : _options.SourceApp;
+
+    private async Task RefreshAppSourceAsync(string app)
+    {
+        var open = _system;
+        var (known, target) = await FindAppAsync(app).ConfigureAwait(false);
+        if (!known)
+        {
+            if (open is { Dead: true })
+            {
+                await CloseFlowAsync(AudioFlow.System).ConfigureAwait(false);
+            }
+
+            return;
+        }
+
+        // Same process, same capture: another instance starting later does not pull it away.
+        var id = "app:" + app;
+        if (target is not null && IsLive(open) && open!.TargetProcessId == target && string.Equals(open.DeviceId, id, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        await CloseFlowAsync(AudioFlow.System).ConfigureAwait(false);
+        NoteAppPresence(target);
+        if (target is not null)
+        {
+            _system = await TryOpenOnceAsync(new CaptureRequest(AudioFlow.System, id, false, target, app), exclusionWanted: false).ConfigureAwait(false);
+        }
+    }
+
+    // The track exists from now on, so a clip made while the application is away holds its silence, and its length.
+    private void NoteAppPresence(int? target)
+    {
+        _appMissing = target is null;
+        if (_appMissing)
+        {
+            EnsureTrack(AudioFlow.System);
+        }
+    }
+
+    private async Task<(bool Known, int? Target)> FindAppAsync(string app)
+    {
+        try
+        {
+            return await CallBoundedAsync<int?>(
+                "process list",
+                () => Task.FromResult(SourceAppFinder.FindCaptureTarget(_processes.Take(), app))).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (IsCaptureFailure(exception))
+        {
+            Debug.WriteLine($"Could not list the processes: {exception.Message}");
+            return (false, null);
+        }
+    }
+
     private async Task RefreshSourceAsync(AudioFlow flow)
     {
+        if (flow == AudioFlow.System)
+        {
+            if (WantedApp is { } app)
+            {
+                await RefreshAppSourceAsync(app).ConfigureAwait(false);
+                return;
+            }
+
+            _appMissing = false;
+        }
+
         var open = flow == AudioFlow.System ? _system : _mic;
         var wanted = flow == AudioFlow.System || _options.MicEnabled;
         var requestedId = flow == AudioFlow.System ? _options.SystemDeviceId : _options.MicDeviceId;
@@ -611,10 +706,10 @@ public sealed class AudioEngine : IDisposable
         // A failure to open may come from the device being swapped, so the exclusion gets another try next time.
         var wanted = WantsExclusion(flow, requestedId);
         var exclude = wanted && !_exclusionDiedEarly;
-        var opened = await TryOpenOnceAsync(flow, deviceId, exclude, wanted).ConfigureAwait(false);
+        var opened = await TryOpenOnceAsync(new CaptureRequest(flow, deviceId, exclude), wanted).ConfigureAwait(false);
         if (opened is null && exclude)
         {
-            opened = await TryOpenOnceAsync(flow, deviceId, false, wanted).ConfigureAwait(false);
+            opened = await TryOpenOnceAsync(new CaptureRequest(flow, deviceId, false), wanted).ConfigureAwait(false);
         }
 
         return opened;
@@ -623,20 +718,21 @@ public sealed class AudioEngine : IDisposable
     // No specific output chosen means leaving this app's sounds out, even if the chosen one is also the default device.
     private static bool WantsExclusion(AudioFlow flow, string? requestedId) => flow == AudioFlow.System && requestedId is null;
 
-    private async Task<OpenSource?> TryOpenOnceAsync(AudioFlow flow, string deviceId, bool exclude, bool exclusionWanted)
+    private async Task<OpenSource?> TryOpenOnceAsync(CaptureRequest request, bool exclusionWanted)
     {
+        var flow = request.Flow;
         ICaptureSource? source = null;
         try
         {
-            var request = new CaptureRequest(flow, deviceId, exclude);
-            (_, source) = await CallBoundedAsync($"open {flow} {exclude}", () => _factory.OpenAsync(request), DisposeQuietly).ConfigureAwait(false);
+            var call = $"open {flow} exclude={request.ExcludeOwnProcess} app={request.TargetProcessId is not null}";
+            (_, source) = await CallBoundedAsync(call, () => _factory.OpenAsync(request), DisposeQuietly).ConfigureAwait(false);
             if (source is null)
             {
                 return null;
             }
 
             var pipeline = new CapturePipeline(source.Format, EnsureTrack(flow), _timeline);
-            var open = new OpenSource(source, pipeline, deviceId, exclude, exclusionWanted, _timeline.NowTicks);
+            var open = new OpenSource(source, pipeline, request.DeviceId, request.ExcludeOwnProcess, exclusionWanted, _timeline.NowTicks, request.TargetProcessId);
             source.PacketAvailable += pipeline.OnPacket;
             source.Stopped += exception => OnSourceStopped(open, exception);
 
@@ -734,7 +830,19 @@ public sealed class AudioEngine : IDisposable
             return;
         }
 
-        await CloseFlowAsync(open == _system ? AudioFlow.System : AudioFlow.Mic).ConfigureAwait(false);
+        var flow = open == _system ? AudioFlow.System : AudioFlow.Mic;
+        await CloseFlowAsync(flow).ConfigureAwait(false);
+
+        // An application that closed is not a failure: time goes on while it is away.
+        if (flow == AudioFlow.System && WantedApp is { } app)
+        {
+            var (known, target) = await FindAppAsync(app).ConfigureAwait(false);
+            if (known)
+            {
+                NoteAppPresence(target);
+            }
+        }
+
         SettleTimeline();
         ArmRetry(Math.Min(++_quickDeaths, MaxTicksBetweenRetries));
     }
@@ -777,6 +885,7 @@ public sealed class AudioEngine : IDisposable
     private async Task EndCaptureAsync()
     {
         // Both stop delivering as soon as this is called, so a device slow to close adds no silence to the buffer.
+        _appMissing = false;
         var closing = Task.WhenAll(CloseFlowAsync(AudioFlow.System), CloseFlowAsync(AudioFlow.Mic));
         FreezeTimeline();
         await closing.ConfigureAwait(false);
@@ -833,9 +942,10 @@ public sealed class AudioEngine : IDisposable
         var mic = Volatile.Read(ref _micTrack);
         var openSystem = IsLive(_system) ? _system : null;
         var openMic = IsLive(_mic) ? _mic : null;
+        var appMissing = _appMissing;
         var activity = !_started ? CaptureActivity.Stopped
             : _paused ? CaptureActivity.Paused
-            : openSystem is null && openMic is null ? CaptureActivity.NoDevice
+            : openSystem is null && openMic is null && !appMissing ? CaptureActivity.NoDevice
             : CaptureActivity.Capturing;
 
         var buffered = TimeSpan.Zero;
@@ -854,7 +964,9 @@ public sealed class AudioEngine : IDisposable
             openMic?.Source.DeviceName,
             openSystem?.ExcludesOwnProcess ?? false,
             buffered,
-            (system?.MemoryBytes ?? 0) + (mic?.MemoryBytes ?? 0));
+            (system?.MemoryBytes ?? 0) + (mic?.MemoryBytes ?? 0),
+            WantedApp,
+            appMissing);
     }
 
     // Asks for the status to be sent. One thread at a time sends, and it reads the status only when its turn comes:

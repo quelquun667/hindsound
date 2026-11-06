@@ -117,15 +117,16 @@ internal sealed class AudioTestRig : IDisposable
 
     private readonly long _epoch;
 
-    public AudioTestRig(double bufferSeconds = 60, bool micEnabled = true, string? systemDeviceId = null, TimeSpan? tick = null)
+    public AudioTestRig(double bufferSeconds = 60, bool micEnabled = true, string? systemDeviceId = null, TimeSpan? tick = null, string? sourceApp = null, IProcessSnapshot? processes = null)
     {
         _epoch = Clock.Ticks;
         Engine = new AudioEngine(
-            new AudioEngineOptions(TimeSpan.FromSeconds(bufferSeconds), micEnabled, systemDeviceId),
+            new AudioEngineOptions(TimeSpan.FromSeconds(bufferSeconds), micEnabled, systemDeviceId, SourceApp: sourceApp),
             Factory,
             Watcher,
             () => Clock.Ticks,
-            tick ?? TimeSpan.FromHours(1));
+            tick ?? TimeSpan.FromHours(1),
+            processes: processes);
     }
 
     public FakeClock Clock { get; } = new();
