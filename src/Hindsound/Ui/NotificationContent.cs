@@ -213,7 +213,7 @@ internal static class NotificationStates
         new(kind, title, body, [], stripe, visual, color, NoBars);
 
     private static NotificationContent Problem(NotificationKind kind, string title, string body) =>
-        Icon(kind, title, body, NotificationPalette.Hot, NotificationVisual.Triangle, NotificationPalette.Hot);
+        Icon(kind, title, body, NotificationPalette.Hot, NotificationVisual.Triangle, NotificationPalette.Hot) with { ClickOpensSettings = true };
 }
 
 /// <summary>Turns the 24 values of <see cref="ClipResult.Bars"/> into the 24 columns drawn.</summary>
