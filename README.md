@@ -26,7 +26,10 @@ paste into a Discord message.
 **Status:** early development. No version is published yet, but you can [build it from source](#build-from-source) today.
 It has been tried on one Windows 11 PC. Not tried for real yet: pasting a clip into the Discord app, recording only a real
 game or Discord, the notification in real games in exclusive fullscreen, the settings window with a real mouse and on a
-second screen, unplugging a headset, Windows 10, and the windows of the Setup and its uninstaller.
+second screen, typing a hotkey and the Browse button, changing the audio output, a damaged settings file with Start with
+Windows on, the tray menu on a second screen, a taskbar on the left or right, a change of display scale, unplugging a
+headset, Windows 10, and the windows of the Setup and its uninstaller. The build and release workflows in `.github` have
+not run on GitHub yet.
 
 ## Features
 
@@ -55,9 +58,11 @@ second screen, unplugging a headset, Windows 10, and the windows of the Setup an
 
 ## Requirements
 
-- 64-bit Windows, version 10 2004 or later: that is what the capture code asks for. The status at the top of this page says
-  what has been tried.
-- About 58 MB of RAM for the audio, or 87 MB with the microphone. See [Memory](#memory).
+- 64-bit Windows, version 10 2004 or later: that is what the capture code asks for. Only Windows 11 has been tried.
+  Recording one application may need a newer build of Windows 10 than 2004; this has not been checked. The status at the top
+  of this page says what has been tried.
+- About 62 MB of RAM for the whole app with a 5:00 buffer and no microphone, 94 MB with it. The audio alone is 58 MB, or
+  87 MB with the microphone. See [Memory](#memory).
 - To build it: the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). To run it: nothing else, .NET comes with it.
 
 ## Installation
@@ -152,12 +157,13 @@ Everything Hindsound writes:
 1. Start Hindsound. A notification says `Capture on` and how much it keeps. It does so at every launch.
 2. Something happens that you want to keep. Press `Ctrl+Shift+F10`.
 3. A notification says `Clip saved (0:30)` and `Copied. Paste Ctrl V`.
-4. In Discord, click the message box, press `Ctrl+V`, and send.
+4. In Discord, click the message box and press `Ctrl+V`. (Pasting into the Discord app has not been tried yet, see Status at the top of this page.)
 
 Good to know:
 
-- **File names** look like `Hindsound_Discord_2026-11-06_21-14-03.mp3`. The `Discord` part is the title of the active window
-  when you pressed the hotkey, or `Unknown` if it has none.
+- **File names** look like `Hindsound_general - Discord_2026-11-06_21-14-03.mp3`. The app part is the title of the active
+  window when you pressed the hotkey, cleaned and cut at 40 characters, so it can be longer than the name of the app. It is
+  `Unknown` if there is none.
 - **A short start:** if Hindsound started 12 seconds ago, you get those 12 seconds: `Clip saved (0:12 of 0:30)`.
 - **In exclusive fullscreen,** you hear a short sound instead of seeing the notification, because a window over the game
   could throw it out of fullscreen. The notification shows when you are back on the desktop, within 30 seconds for a normal
@@ -236,7 +242,8 @@ The whole app with 5:00 kept, measured on one PC on 2026-11-06:
 | Mic off, working set with the memory full | About 85 MB (extrapolated, not measured) |
 | Mic on, private memory | 94 MB |
 
-Saving takes more, only while the clip is written, with both sources on: 17 MB for 30 seconds, 173 MB for 5:00.
+Saving takes more while the clip is written, with both sources on. By calculation, not measured: 17 MB for a 30 second
+clip, 173 MB for a 5:00 clip.
 
 ## Recording other people
 
@@ -244,7 +251,7 @@ Recording a call or a voice chat without telling the other people can be illegal
 
 The `Capture on` notification at each launch reminds you, not the people in the call. Telling the group is up to you.
 
-### Your game
+## Your game
 
 Hindsound does not touch your game. It injects nothing, sets no hook, and opens no handle to the game. The `{app}` part of a
 file name comes only from the title of the active window. With `Record` set to one application, Hindsound looks for it in a
@@ -272,8 +279,8 @@ public.
 ## Roadmap
 
 - The first release, with the Setup
-- Automatic updates
-- Mac and Linux versions, with no date yet
+
+Ideas, with no date: automatic updates, Mac and Linux versions.
 
 ## License
 
