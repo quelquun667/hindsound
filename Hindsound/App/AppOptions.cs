@@ -10,6 +10,7 @@ namespace Hindsound.App;
 /// <param name="DumpNotificationsFolder"><c>--dump-notifications folder</c>: writes each state as a BMP file, shows nothing, and leaves.</param>
 /// <param name="DumpSettingsFolder"><c>--dump-settings folder</c>: writes each page of the settings window as a PNG file, shows nothing, and leaves.</param>
 /// <param name="SettingsProbe"><c>--settings-probe</c>: opens the settings window, sends it keys, measures the memory, and leaves.</param>
+/// <param name="ForceFirstRun"><c>--first-run</c>: opens the first-launch card even though a settings file exists.</param>
 internal sealed record AppOptions(
     string? SettingsPath = null,
     double? ExitAfterSeconds = null,
@@ -17,7 +18,8 @@ internal sealed record AppOptions(
     bool Offscreen = false,
     string? DumpNotificationsFolder = null,
     string? DumpSettingsFolder = null,
-    bool SettingsProbe = false)
+    bool SettingsProbe = false,
+    bool ForceFirstRun = false)
 {
     /// <summary><c>--scale n</c>: the scale of <c>--dump-settings</c>, 1 for 100 %, 1.5 for 150 %.</summary>
     public double DumpScale { get; init; } = 1;
@@ -71,6 +73,9 @@ internal sealed record AppOptions(
                     }
 
                     i++;
+                    break;
+                case "--first-run":
+                    options = options with { ForceFirstRun = true };
                     break;
                 case "--settings-probe":
                     options = options with { SettingsProbe = true };

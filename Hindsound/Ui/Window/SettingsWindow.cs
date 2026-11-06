@@ -56,6 +56,7 @@ internal static unsafe partial class WindowNative
     [LibraryImport(U)] public static partial nint CallWindowProcW(nint proc, nint hwnd, uint msg, nuint wParam, nint lParam);
     [LibraryImport(U)] public static partial int GetClientRect(nint hwnd, Native.RECT* rect);
     [LibraryImport(U)] public static partial uint GetGuiResources(nint process, uint flags);
+    [LibraryImport(U)] public static partial int PrintWindow(nint hwnd, nint dc, uint flags);
     [LibraryImport(G)] public static partial int BitBlt(nint dest, int x, int y, int w, int h, nint source, int sx, int sy, uint op);
     [LibraryImport(G)] public static partial nint CreateSolidBrush(uint color);
     [LibraryImport(G)] public static partial uint SetBkColor(nint dc, uint color);
@@ -95,6 +96,7 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
     private bool _trackingLeave;
     private bool _meterOn;
     private bool _editVisible;
+    private bool _swallowSystemKeyUp;
     private (Face Face, float Size, uint Dpi) _editFontKey;
     private Box _editBox;
     private float _editSize;
@@ -176,6 +178,15 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
         Native.GetWindowRect(_hwnd, &now);
         Native.RECT rect = new() { Left = now.Left, Top = now.Top, Right = now.Left + size.Cx, Bottom = now.Top + size.Cy };
         WindowNative.SendMessageW(_hwnd, WindowNative.WM_DPICHANGED, dpi | ((nuint)dpi << 16), (nint)(&rect));
+    }
+
+    /// <summary>What Windows would show, children included, from the window itself: for <c>--settings-probe</c>, which never shows it.</summary>
+    public void ProbePicture(string path)
+    {
+        const uint clientOnlyFullContent = 3;
+        using var picture = new GdiCanvas(_canvas.Width, _canvas.Height, Scale);
+        WindowNative.PrintWindow(_hwnd, picture.Dc, clientOnlyFullContent);
+        PngFile.Write(path, picture.Bits, picture.Width, picture.Height);
     }
 
     public string ClientSizeText()
@@ -400,6 +411,7 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
 
             case WindowNative.WM_KEYDOWN:
             case WindowNative.WM_SYSKEYDOWN:
+                _swallowSystemKeyUp = Screen.Listening;
                 if (Screen.Key((uint)wParam, Modifiers()))
                 {
                     return 0;
@@ -410,7 +422,9 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
             case WindowNative.WM_KEYUP:
             case WindowNative.WM_SYSKEYUP:
                 Screen.KeyUp((uint)wParam, Modifiers());
-                return message == WindowNative.WM_KEYUP ? 0 : Native.DefWindowProcW(hwnd, message, wParam, lParam);
+
+                // An Alt typed for a hotkey must not open the window menu when it comes up.
+                return message == WindowNative.WM_KEYUP || _swallowSystemKeyUp ? 0 : Native.DefWindowProcW(hwnd, message, wParam, lParam);
 
             case WindowNative.WM_SYSCHAR:
                 return Screen.Listening ? 0 : Native.DefWindowProcW(hwnd, message, wParam, lParam);

@@ -106,7 +106,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         StartEngine();
 
         // Only when there was no settings file: the file now exists, so this happens once.
-        if (_firstRun && !_options.SelfTestSave)
+        if ((_firstRun || _options.ForceFirstRun) && !_options.SelfTestSave)
         {
             OpenSettings(firstRun: true);
         }
@@ -665,6 +665,11 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         window.SetIcon(Accent);
         window.Show();
         LoadChoices();
+        _journal.Write($"settings window opened, first launch {firstRun}, {Journal.Memory()}");
+        if (_options.Offscreen && firstRun)
+        {
+            _loop.After(ProbeStepMs, () => _window?.ProbePicture(Path.ChangeExtension(_journal.Path, ".firstrun.png")));
+        }
     }
 
     // Listing devices touches audio objects, which belong off the loop's thread. It opens nothing: no microphone starts.
@@ -776,6 +781,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         steps.AddRange(Enumerable.Repeat<Action>(() => Key(hwnd, Vk.Tab), 5));
         steps.Add(() => WindowNative.SetWindowTextW(window.EditHwnd, "probe {date}"));
         steps.Add(() => seen.Add("template=" + _settings.Export.FileNameTemplate));
+        steps.Add(() => window.ProbePicture(Path.ChangeExtension(_journal.Path, ".export.png")));
         steps.Add(() => Key(window.EditHwnd, Vk.Tab));
         steps.Add(() => window.ProbeDpiChange(144));
         steps.Add(() => seen.Add("client at 144 dpi=" + window.ClientSizeText()));
