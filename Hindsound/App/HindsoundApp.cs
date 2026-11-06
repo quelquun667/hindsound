@@ -734,16 +734,18 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
         if (decision.CatchUpLater)
         {
+            _journal.Write($"notification {content.Kind} waits for the desktop: {content.Title} / {content.Body}");
             _pending.AddStatus(content, NowMs);
             ArmPendingPoll();
+            RefreshTray();
         }
     }
 
     private unsafe (UserNotificationState State, bool Covers) Surface()
     {
-        if (NowMs < _pretendGameUntilMs)
+        if (_options.SelfTestGameSeconds is not null)
         {
-            return (UserNotificationState.RunningD3dFullScreen, true);
+            return NowMs < _pretendGameUntilMs ? (UserNotificationState.RunningD3dFullScreen, true) : (UserNotificationState.AcceptsNotifications, false);
         }
 
         int raw;

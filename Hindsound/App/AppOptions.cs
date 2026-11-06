@@ -30,7 +30,7 @@ internal sealed record AppOptions(
     /// <summary><c>--selftest-fail card|reload|run</c>: throws at that point, to check on the real exe that the app survives it or leaves cleanly.</summary>
     public string? SelfTestFail { get; init; }
 
-    /// <summary><c>--selftest-game seconds</c>: for that long after the start, the app behaves as if a game held the screen in exclusive full screen, to check what waits for the desktop on the real exe.</summary>
+    /// <summary><c>--selftest-game seconds</c>: the app sees no real screen state: for that long after the start, a game in exclusive full screen; then the plain desktop. To check what waits for the desktop on the real exe, whatever the PC is doing.</summary>
     public double? SelfTestGameSeconds { get; init; }
 
     /// <summary><c>--selftest-clip-gone</c>: after the self-test clip, asks for a copy of a last clip whose files are not there. The clipboard is never reached.</summary>
