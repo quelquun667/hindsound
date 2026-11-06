@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build
+        run: dotnet build Hindsound.slnx -c Release
+
+      # A hosted runner has no audio device, hence the filter. It is also a shared machine: the tests that
+      # measure allocations or hold a real-time pace can be sensitive to its load. Rerun before suspecting
+      # the code, and look at the test that failed if it fails twice.
+      - name: Test
+        run: dotnet test Hindsound.slnx -c Release --no-build --filter "Category!=Device"
+
+      - name: Test the release scripts
+        run: ./tools/release/test-release-scripts.ps1

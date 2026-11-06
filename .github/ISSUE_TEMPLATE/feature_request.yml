@@ -1,0 +1,20 @@
+name: Feature request
+description: Something Hindsound could do.
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you are trying to do
+      description: The situation, and what gets in your way today.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you would like
+      description: How it could work.
+    validations:
+      required: true
