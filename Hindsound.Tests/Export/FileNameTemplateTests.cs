@@ -112,4 +112,29 @@ public class FileNameTemplateTests
 
         Assert.Equal([folder.Combine("clip (2)_system.wav"), folder.Combine("clip (2)_mic.wav")], paths);
     }
+
+    [Fact]
+    public void The_reserved_paths_exist_so_nobody_else_can_take_them()
+    {
+        using var folder = new TempFolder();
+
+        var first = FileNameTemplate.ReserveUniquePaths(folder.Path, "clip", ["_system", "_mic"], ".wav");
+        var second = FileNameTemplate.ReserveUniquePaths(folder.Path, "clip", ["_system", "_mic"], ".wav");
+
+        Assert.All(first, p => Assert.True(File.Exists(p)));
+        Assert.Equal([folder.Combine("clip (2)_system.wav"), folder.Combine("clip (2)_mic.wav")], second);
+        Assert.Equal(4, Directory.GetFiles(folder.Path).Length);
+    }
+
+    [Fact]
+    public void A_taken_second_file_releases_the_first_one_it_had_created()
+    {
+        using var folder = new TempFolder();
+        File.WriteAllText(folder.Combine("clip_mic.wav"), "x");
+
+        FileNameTemplate.ReserveUniquePaths(folder.Path, "clip", ["_system", "_mic"], ".wav");
+
+        Assert.False(File.Exists(folder.Combine("clip_system.wav"))); // attempt 1 was undone
+        Assert.True(File.Exists(folder.Combine("clip (2)_system.wav")));
+    }
 }

@@ -231,19 +231,19 @@ public sealed class ClipSaver
         return (WriteInto(folder, tracks, ExportFormat.Wav, options, baseName, cancellationToken), false);
     }
 
-    /// <summary>Writes every track into the folder, or none: a failure removes what was written.</summary>
+    /// <summary>Writes every track into the folder, or none: a failure removes the files this call reserved.</summary>
     private string[] WriteInto(string folder, List<Track> tracks, ExportFormat format, ExportOptions options, string baseName, CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(folder);
         var extension = format == ExportFormat.Mp3 ? ".mp3" : ".wav";
+        // The paths are created here, empty, and belong to this call alone: cleaning up on failure removes only them,
+        // never a file another save wrote.
         var paths = FileNameTemplate.ReserveUniquePaths(folder, baseName, tracks.Select(t => t.Suffix).ToArray(), extension);
 
-        var created = new List<string>();
         try
         {
             for (var i = 0; i < tracks.Count; i++)
             {
-                created.Add(paths[i]);
                 using var writer = format == ExportFormat.Mp3
                     ? _openMp3(paths[i], tracks[i].Source.Channels, options.Mp3BitrateKbps)
                     : Encoders.OpenWav(paths[i], tracks[i].Source.Channels);
@@ -252,7 +252,7 @@ public sealed class ClipSaver
         }
         catch
         {
-            foreach (var path in created)
+            foreach (var path in paths)
             {
                 try { File.Delete(path); } catch (Exception) { /* best effort */ }
             }

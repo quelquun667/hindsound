@@ -261,6 +261,30 @@ public sealed class ClipSaverTests : IDisposable
     }
 
     [Fact]
+    public async Task Two_saves_at_the_same_moment_get_distinct_files_and_both_exist()
+    {
+        // Same clock, same folder, started together: the reviewer saw false rescues and vanished files.
+        const int Pairs = 60;
+        var snapshot = new AudioSnapshot(Signals.Sine(300, 0.3, 0.1), []);
+        for (var pair = 0; pair < Pairs; pair++)
+        {
+            var options = Wav(o => o with { OutputFolder = _root.Combine("race", pair.ToString()) });
+            using var barrier = new Barrier(2);
+            var tasks = Enumerable.Range(0, 2).Select(_ => Task.Run(() =>
+            {
+                barrier.SignalAndWait();
+                return Saver().Save(snapshot, options, "Game");
+            })).ToArray();
+            var results = await Task.WhenAll(tasks);
+
+            Assert.All(results, r => Assert.False(r.Rescued));
+            Assert.Equal(2, results.Select(r => r.PrimaryPath).Distinct().Count());
+            Assert.All(results, r => Assert.True(File.Exists(r.PrimaryPath)));
+            Assert.All(results, r => Assert.Equal(TimeSpan.FromSeconds(0.1), Signals.ReadWav(r.PrimaryPath).Duration));
+        }
+    }
+
+    [Fact]
     public void An_empty_snapshot_is_refused()
     {
         Assert.Throws<ArgumentException>(() => Saver().Save(new AudioSnapshot([], []), Wav(), null));
