@@ -1,15 +1,27 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
+  <!--
+    No interface framework: Win32 and GDI by P/Invoke (Hindsound/Ui). Measured on 06/11/2026: 14 MB exe and 16 MB of RAM,
+    against 133 MB and 81 to 96 MB with WPF. The publish settings live in Properties/PublishProfiles/win-x64.pubxml,
+    so Hindsound.Tests keeps building this project as an ordinary one.
+  -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <UseWPF>true</UseWPF>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <StartupObject>Hindsound.App.Program</StartupObject>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NAudio" Version="3.3.0" />
+    <InternalsVisibleTo Include="Hindsound.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NAudio.Wasapi" Version="3.3.0" />
     <PackageReference Include="NAudio.Lame" Version="2.1.0" />
   </ItemGroup>
 
