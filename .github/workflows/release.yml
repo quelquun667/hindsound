@@ -50,7 +50,7 @@ jobs:
       - name: Build the Setup
         run: |
           $iscc = ./tools/release/get-iscc.ps1 -Destination "$env:RUNNER_TEMP/inno"
-          & $iscc /Q "/DAppVersion=$env:VERSION" "/DSourceDir=$env:RUNNER_TEMP/publish" "/O$env:RUNNER_TEMP/out" "/FHindsound-$env:VERSION-Setup" installer/Hindsound.iss
+          & $iscc /Q "/DMyAppVersion=$env:VERSION" "/DPublishDir=$env:RUNNER_TEMP/publish" "/O$env:RUNNER_TEMP/out" "/FHindsound-$env:VERSION-Setup" installer/Hindsound.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Write the update manifest
