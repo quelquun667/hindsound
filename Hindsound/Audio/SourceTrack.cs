@@ -1,3 +1,7 @@
+using System.Runtime.CompilerServices;
+
+[assembly: InternalsVisibleTo("Hindsound.Tests")]
+
 namespace Hindsound.Audio;
 
 /// <summary>
@@ -29,6 +33,9 @@ public sealed class SourceTrack
     }
 
     public int Channels { get; }
+
+    /// <summary>What writers wait on. For a test that proves readers do not.</summary>
+    internal Lock WriteGate => _writeGate;
 
     /// <summary>Memory held by the samples.</summary>
     public long MemoryBytes => Volatile.Read(ref _ring).MemoryBytes;

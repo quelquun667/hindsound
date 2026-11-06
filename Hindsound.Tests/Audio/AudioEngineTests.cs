@@ -680,8 +680,7 @@ public class SnapshotBlockingTests(ITestOutputHelper output)
     private const int BufferFrames = 5 * 60 * InternalFormat.SampleRate;
     private const int PacketFrames = 480;
 
-    [Fact]
-    public void A_full_snapshot_does_not_hold_up_the_audio_thread()
+    private static (SourceTrack System, SourceTrack Mic) FullTracks()
     {
         var system = new SourceTrack(2, BufferFrames, 0);
         var mic = new SourceTrack(1, BufferFrames, 0);
@@ -689,69 +688,104 @@ public class SnapshotBlockingTests(ITestOutputHelper output)
         var micPacket = new float[PacketFrames];
         Array.Fill(systemPacket, 0.25f);
         Array.Fill(micPacket, 0.25f);
-
-        long frame = 0;
-        while (frame < BufferFrames)
+        for (long frame = 0; frame < BufferFrames; frame += PacketFrames)
         {
             system.Append(frame, systemPacket, exact: false);
             mic.Append(frame, micPacket, exact: false);
-            frame += PacketFrames;
         }
 
-        // The audio thread, at a realistic pace: two sources, a packet each every few milliseconds.
+        return (system, mic);
+    }
+
+    // Proved by logic and not by timing: with the writers' gate held, a writer cannot get through and a copy still ends.
+    [Fact]
+    public void A_full_snapshot_does_not_hold_up_the_audio_thread()
+    {
+        var (system, mic) = FullTracks();
+        using var held = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var holder = new Thread(() =>
+        {
+            lock (system.WriteGate)
+            lock (mic.WriteGate)
+            {
+                held.Set();
+                release.Wait();
+            }
+        });
+        holder.Start();
+        Assert.True(held.Wait(TimeSpan.FromSeconds(30)));
+
+        var writer = Task.Run(() => system.Append(BufferFrames, new float[PacketFrames * 2], exact: false));
+        try
+        {
+            Assert.False(writer.Wait(100), "The gate is not what writers wait on");
+
+            var copy = Task.Run(() => AudioSnapshot.CopyFrom(system, mic, 0, BufferFrames));
+            Assert.True(copy.Wait(TimeSpan.FromSeconds(60)), "A copy waited for the writers' gate");
+            Assert.Equal(BufferFrames, copy.Result.Mic.Length);
+            Assert.Equal(BufferFrames * 2, copy.Result.System.Length);
+        }
+        finally
+        {
+            release.Set();
+            holder.Join();
+            writer.Wait();
+        }
+    }
+
+    // A writer at the pace of real audio, whatever the copy takes on this machine. How much a copy loses depends on how
+    // long it took, so that is worked out from how far the writer got, and what it loses is exactly the head.
+    [Fact]
+    public void A_full_snapshot_loses_exactly_what_the_writer_overtook()
+    {
+        var (system, mic) = FullTracks();
+        var stored = SampleCodec.ToFloat(SampleCodec.ToShort(0.25f));
+        var capacity = (long)BufferFrames + SourceTrack.SlackFrames;
         var stop = false;
-        var snapshotRunning = false;
-        var worstDuring = 0L;
-        var worstOutside = 0L;
-        var writesDuring = 0;
+        var written = (long)BufferFrames;
         var writer = new Thread(() =>
         {
+            var systemPacket = new float[PacketFrames * 2];
+            var micPacket = new float[PacketFrames];
+            Array.Fill(systemPacket, 0.25f);
+            Array.Fill(micPacket, 0.25f);
+            var clock = Stopwatch.StartNew();
+            var frame = (long)BufferFrames;
             while (!Volatile.Read(ref stop))
             {
-                var during = Volatile.Read(ref snapshotRunning);
-                var started = Stopwatch.GetTimestamp();
-                system.Append(frame, systemPacket, exact: false);
-                mic.Append(frame, micPacket, exact: false);
-                var elapsed = Stopwatch.GetTimestamp() - started;
-                frame += PacketFrames;
-                if (during)
+                var due = BufferFrames + (long)(clock.Elapsed.TotalMilliseconds * 48);
+                while (frame + PacketFrames <= due)
                 {
-                    worstDuring = Math.Max(worstDuring, elapsed);
-                    writesDuring++;
-                }
-                else
-                {
-                    worstOutside = Math.Max(worstOutside, elapsed);
+                    system.Append(frame, systemPacket, exact: false);
+                    mic.Append(frame, micPacket, exact: false);
+                    frame += PacketFrames;
+                    Volatile.Write(ref written, frame);
                 }
 
                 Thread.Sleep(1);
             }
         });
-        writer.Priority = ThreadPriority.AboveNormal;
         writer.Start();
 
-        var longestSnapshot = 0.0;
+        var systemCopy = new float[BufferFrames * 2];
+        var micCopy = new float[BufferFrames];
+        var lostFrames = 0L;
         try
         {
-            Thread.Sleep(200);
             for (var round = 0; round < 6; round++)
             {
-                Volatile.Write(ref snapshotRunning, true);
-                var clock = Stopwatch.StartNew();
-                var end = Math.Min(system.EndFrame, mic.EndFrame);
-                var start = end - BufferFrames;
-                var systemCopy = GC.AllocateUninitializedArray<float>(BufferFrames * 2);
-                var micCopy = GC.AllocateUninitializedArray<float>(BufferFrames);
+                var before = Volatile.Read(ref written);
+                var start = Math.Min(system.EndFrame, mic.EndFrame) - BufferFrames;
                 var systemReal = system.CopyFrames(start, systemCopy);
                 var micReal = mic.CopyFrames(start, micCopy);
-                clock.Stop();
-                Volatile.Write(ref snapshotRunning, false);
-                longestSnapshot = Math.Max(longestSnapshot, clock.Elapsed.TotalMilliseconds);
+                var after = Volatile.Read(ref written);
 
-                // Nothing was overtaken: the slack is more than the copy takes.
-                Assert.Equal(systemCopy.Length, systemReal);
-                Assert.Equal(micCopy.Length, micReal);
-                Thread.Sleep(100);
+                var fewest = Math.Max(0, before - capacity - start);
+                var most = Math.Max(0, after + PacketFrames - capacity - start);
+                lostFrames += AssertOnlyTheHeadIsLost(systemCopy, 2, systemReal, stored, fewest, most);
+                lostFrames += AssertOnlyTheHeadIsLost(micCopy, 1, micReal, stored, fewest, most);
+                Thread.Sleep(20);
             }
         }
         finally
@@ -760,15 +794,15 @@ public class SnapshotBlockingTests(ITestOutputHelper output)
             writer.Join();
         }
 
-        var worstDuringMs = worstDuring * 1000.0 / Stopwatch.Frequency;
-        var worstOutsideMs = worstOutside * 1000.0 / Stopwatch.Frequency;
-        output.WriteLine($"Longest 5:00 snapshot: {longestSnapshot:F1} ms (allocation and copy)");
-        output.WriteLine($"Worst audio write during a snapshot: {worstDuringMs:F3} ms, over {writesDuring} writes");
-        output.WriteLine($"Worst audio write outside a snapshot: {worstOutsideMs:F3} ms");
+        output.WriteLine($"Frames overtaken in 6 full copies of both sources: {lostFrames}");
+    }
 
-        Assert.True(writesDuring > 0, "The writer never ran during a snapshot");
-
-        // The bound is what a WASAPI buffer of 100 ms can bear, with room for a loaded machine.
-        Assert.True(worstDuringMs < 50, $"The audio thread was held up {worstDuringMs:F1} ms");
+    private static long AssertOnlyTheHeadIsLost(float[] copy, int channels, int real, float stored, long fewest, long most)
+    {
+        var lost = (copy.Length - real) / channels;
+        Assert.InRange(lost, fewest, most);
+        Assert.Equal(-1, copy.AsSpan(0, lost * channels).IndexOfAnyExcept(0f));
+        Assert.Equal(-1, copy.AsSpan(lost * channels).IndexOfAnyExcept(stored));
+        return lost;
     }
 }
