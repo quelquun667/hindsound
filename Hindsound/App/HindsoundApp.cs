@@ -152,7 +152,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
         if (_options.SelfTestFail == AppOptions.FailRun)
         {
-            // Long enough for the capture to be running, which is the case this is about.
+            // Long enough for the capture to be running, which is the case this is about; and a thread that never ends,
+            // like a capture stuck in the driver: only leaving through Environment.Exit gets past it.
+            new Thread(() => Thread.Sleep(Timeout.Infinite)) { IsBackground = false }.Start();
             Thread.Sleep(SelfTestFailDelayMs);
             throw new InvalidOperationException("--selftest-fail " + AppOptions.FailRun);
         }
