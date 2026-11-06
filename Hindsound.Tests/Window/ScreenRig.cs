@@ -111,6 +111,14 @@ internal sealed class FakeHost : IWindowHost
 
     public void HideEdit() => EditVisible = false;
 
+    /// <summary>The window is the foreground one. The tests that care turn it off.</summary>
+    public bool IsForeground { get; set; } = true;
+
+    /// <summary>How many times the screen asked for the keyboard.</summary>
+    public int FocusRequests { get; private set; }
+
+    public void FocusEdit() => FocusRequests++;
+
     public void CaptureMouse() => MouseHeld = true;
 
     public void ReleaseMouse() => MouseHeld = false;

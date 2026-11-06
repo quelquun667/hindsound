@@ -342,8 +342,14 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
             _editVisible = true;
             Native.ShowWindow(_edit, _offscreen ? WindowNative.SW_SHOWNOACTIVATE : WindowNative.SW_SHOW);
         }
+    }
 
-        if (!_offscreen)
+    // Off screen for a test, the window never counts as the foreground one, so it never asks for the keyboard.
+    public bool IsForeground => !_offscreen && _hwnd != 0 && Native.GetForegroundWindow() == _hwnd;
+
+    public void FocusEdit()
+    {
+        if (_edit != 0)
         {
             WindowNative.SetFocus(_edit);
         }
@@ -366,7 +372,9 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
         {
             _editVisible = false;
             Native.ShowWindow(_edit, Native.SW_HIDE);
-            if (!_offscreen)
+
+            // In the background the keyboard is not ours to move. Coming back, WM_ACTIVATE gives it to the window.
+            if (IsForeground)
             {
                 WindowNative.SetFocus(_hwnd);
             }
@@ -833,6 +841,12 @@ internal static unsafe class SettingsDump
         }
 
         public void HideEdit()
+        {
+        }
+
+        public bool IsForeground => false;
+
+        public void FocusEdit()
         {
         }
 

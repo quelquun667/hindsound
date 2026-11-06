@@ -248,6 +248,12 @@ internal sealed class MicMeter
     }
 }
 
+/// <summary>When the native text box may take the keyboard. WM_SETFOCUS gives it back when the window returns to the foreground.</summary>
+internal static class EditFocus
+{
+    public static bool Wanted(bool wasVisible, bool foreground) => !wasVisible && foreground;
+}
+
 /// <summary>What a key held down may do: move and type, but never save, toggle or open again.</summary>
 internal static class KeyRepeat
 {

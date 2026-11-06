@@ -42,7 +42,7 @@ internal interface IWindowHost
 {
     void Invalidate();
 
-    /// <summary>Puts the native text box over a field and gives it the keyboard.</summary>
+    /// <summary>Puts the native text box over a field, without touching the keyboard.</summary>
     /// <param name="box">Where, on the window.</param>
     /// <param name="text">The text to put in, if <paramref name="resetText"/>.</param>
     /// <param name="face">Its font.</param>
@@ -51,6 +51,12 @@ internal interface IWindowHost
     void ShowEdit(Box box, string text, Face face, float size, bool resetText);
 
     void HideEdit();
+
+    /// <summary>This window is the foreground one. Otherwise it must not move the keyboard: a game or a menu may hold it.</summary>
+    bool IsForeground { get; }
+
+    /// <summary>Gives the keyboard to the native text box.</summary>
+    void FocusEdit();
 
     void CaptureMouse();
 
@@ -380,10 +386,17 @@ internal sealed partial class SettingsScreen
     {
         if (Focus is TextField field && OnScreen(field, out var box))
         {
+            var wasVisible = _editId is not null;
             var reset = _forceEditText || _editId != field.Id;
             _host.ShowEdit(box, field.State.Draft, field.Face, field.Size, reset);
             _editId = field.Id;
             _forceEditText = false;
+
+            // This runs on every piece of news from the app. Only the box appearing may ask for the keyboard.
+            if (EditFocus.Wanted(wasVisible, _host.IsForeground))
+            {
+                _host.FocusEdit();
+            }
         }
         else if (_editId is not null)
         {
