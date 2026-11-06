@@ -65,7 +65,7 @@ internal sealed class FakeCanvas : ICanvas
     public void FillRound(Box box, float radius, uint rgb) => LastRoundFill = rgb;
     public void Frame(Box box, float radius, uint fill, uint border) { }
     public void Ring(Box box, float radius, float thickness, uint rgb) { }
-    public void Stroke(float ax, float ay, float bx, float by, float width, uint rgb) => StrokeColors.Add(rgb);
+    public void Stroke(float ax, float ay, float bx, float by, float width, uint rgb) => Strokes.Add((width, rgb));
     public void Glow(Box box, float sigma, float opacity, uint rgb) { }
 
     public void Text(string text, Face face, float size, float x, float top, uint rgb)
@@ -84,7 +84,7 @@ internal sealed class FakeCanvas : ICanvas
     /// <summary>The colour each text was last drawn in.</summary>
     public Dictionary<string, uint> TextColors { get; } = [];
 
-    public List<uint> StrokeColors { get; } = [];
+    public List<(float Width, uint Rgb)> Strokes { get; } = [];
 
     public uint? NotificationAccent { get; private set; }
 

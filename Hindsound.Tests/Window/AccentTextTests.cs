@@ -208,7 +208,10 @@ public sealed class AccentTextTests : IDisposable
 
         rig.Screen.Paint(canvas);
 
-        Assert.Contains(expected, canvas.StrokeColors);
+        // Two strokes of this width: the arrow of the list on that step has a thinner line.
+        var mark = canvas.Strokes.Where(s => s.Width == 2).ToList();
+        Assert.Equal(2, mark.Count);
+        Assert.All(mark, s => Assert.Equal(expected, s.Rgb));
     }
 
     private (FakeCanvas Canvas, uint Accent) PaintThePrompt(string hex, bool hovered)
