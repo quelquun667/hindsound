@@ -50,7 +50,10 @@ internal sealed unsafe class UiLoop : IDisposable
     /// <summary>Explorer started again: the tray icon has to be added again.</summary>
     public Action? TaskbarCreated { get; set; }
 
-    /// <summary>Windows is ending the session and will end the process after this returns.</summary>
+    /// <summary>
+    /// Windows is ending the session, or an installer or the Restart Manager wants this app closed (ENDSESSION_CLOSEAPP).
+    /// In that second case Windows goes on and nothing ends the process for us: <see cref="Run"/> ends right after this.
+    /// </summary>
     public Action? SessionEnding { get; set; }
 
     /// <summary>Runs the action on the loop's thread, soon. Safe from any thread.</summary>
@@ -114,7 +117,14 @@ internal sealed unsafe class UiLoop : IDisposable
             case Native.WM_ENDSESSION:
                 if (wParam != 0)
                 {
-                    SessionEnding?.Invoke();
+                    try
+                    {
+                        SessionEnding?.Invoke();
+                    }
+                    finally
+                    {
+                        Quit();
+                    }
                 }
 
                 return 0;
