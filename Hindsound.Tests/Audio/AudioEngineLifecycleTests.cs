@@ -737,3 +737,73 @@ public class ListenerDeadlockTests
         }
     }
 }
+
+public class LoopbackChoiceTests
+{
+    [Fact]
+    public async Task Choosing_the_default_output_by_name_goes_to_classic_loopback()
+    {
+        using var rig = new AudioTestRig();
+        await rig.Engine.StartAsync();
+        Assert.True(rig.SystemSource.Request.ExcludeOwnProcess);
+
+        await rig.Engine.SetDevicesAsync("speakers", null, true);
+
+        Assert.False(rig.SystemSource.Request.ExcludeOwnProcess);
+        Assert.False(rig.Engine.Status.OwnSoundsExcluded);
+    }
+
+    [Fact]
+    public async Task Going_back_to_the_system_default_excludes_our_sounds_again()
+    {
+        using var rig = new AudioTestRig(systemDeviceId: "speakers");
+        await rig.Engine.StartAsync();
+        Assert.False(rig.SystemSource.Request.ExcludeOwnProcess);
+
+        await rig.Engine.SetDevicesAsync(null, null, true);
+
+        Assert.True(rig.SystemSource.Request.ExcludeOwnProcess);
+        Assert.True(rig.Engine.Status.OwnSoundsExcluded);
+    }
+
+    [Fact]
+    public async Task A_fallback_on_the_classic_loopback_is_not_reopened_by_every_refresh()
+    {
+        using var rig = new AudioTestRig(micEnabled: false);
+        rig.Factory.FailExclusion = true;
+        await rig.Engine.StartAsync();
+        var fallback = rig.SystemSource;
+
+        await rig.Engine.RefreshDevicesAsync();
+
+        Assert.Same(fallback, rig.SystemSource);
+        Assert.False(fallback.Disposed);
+    }
+
+    [Fact]
+    public async Task Going_back_to_the_default_tries_a_failed_exclusion_again()
+    {
+        using var rig = new AudioTestRig(micEnabled: false);
+        rig.Factory.FailExclusion = true;
+        await rig.Engine.StartAsync();
+        await rig.Engine.SetDevicesAsync("speakers", null, false);
+
+        rig.Factory.FailExclusion = false;
+        await rig.Engine.SetDevicesAsync(null, null, false);
+
+        Assert.True(rig.SystemSource.Request.ExcludeOwnProcess);
+    }
+
+    [Fact]
+    public async Task Naming_the_default_microphone_does_not_reopen_it()
+    {
+        using var rig = new AudioTestRig();
+        await rig.Engine.StartAsync();
+        var mic = rig.MicSource;
+
+        await rig.Engine.SetDevicesAsync(null, "headset-mic", true);
+
+        Assert.Same(mic, rig.MicSource);
+        Assert.False(mic.Disposed);
+    }
+}

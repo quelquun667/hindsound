@@ -82,7 +82,7 @@ public sealed class AudioEngine : IDisposable
     // Commands other than a stop give listeners this long to see the result, then get on with it.
     private static readonly TimeSpan ListenerWaitLimit = TimeSpan.FromSeconds(1);
 
-    private sealed class OpenSource(ICaptureSource source, CapturePipeline pipeline, string deviceId, bool excludesOwnProcess, long openedAtTicks)
+    private sealed class OpenSource(ICaptureSource source, CapturePipeline pipeline, string deviceId, bool excludesOwnProcess, bool exclusionWanted, long openedAtTicks)
     {
         private volatile bool _dead;
         private volatile bool _closing;
@@ -91,6 +91,9 @@ public sealed class AudioEngine : IDisposable
         public CapturePipeline Pipeline { get; } = pipeline;
         public string DeviceId { get; } = deviceId;
         public bool ExcludesOwnProcess { get; } = excludesOwnProcess;
+
+        /// <summary>The settings asked for the exclusion when this was opened, even if it fell back on the classic loopback.</summary>
+        public bool ExclusionWanted { get; } = exclusionWanted;
         public long OpenedAtTicks { get; } = openedAtTicks;
 
         /// <summary>It ended by itself. Set from the capture thread.</summary>
@@ -553,7 +556,7 @@ public sealed class AudioEngine : IDisposable
             return;
         }
 
-        if (IsLive(open) && open!.DeviceId == deviceId)
+        if (IsLive(open) && open!.DeviceId == deviceId && open.ExclusionWanted == WantsExclusion(flow, requestedId))
         {
             return;
         }
@@ -594,17 +597,21 @@ public sealed class AudioEngine : IDisposable
     private async Task<OpenSource?> TryOpenAsync(AudioFlow flow, string deviceId, string? requestedId)
     {
         // A failure to open may come from the device being swapped, so the exclusion gets another try next time.
-        var exclude = flow == AudioFlow.System && requestedId is null && !_exclusionDiedEarly;
-        var opened = await TryOpenOnceAsync(flow, deviceId, exclude).ConfigureAwait(false);
+        var wanted = WantsExclusion(flow, requestedId);
+        var exclude = wanted && !_exclusionDiedEarly;
+        var opened = await TryOpenOnceAsync(flow, deviceId, exclude, wanted).ConfigureAwait(false);
         if (opened is null && exclude)
         {
-            opened = await TryOpenOnceAsync(flow, deviceId, false).ConfigureAwait(false);
+            opened = await TryOpenOnceAsync(flow, deviceId, false, wanted).ConfigureAwait(false);
         }
 
         return opened;
     }
 
-    private async Task<OpenSource?> TryOpenOnceAsync(AudioFlow flow, string deviceId, bool exclude)
+    // No specific output chosen means leaving this app's sounds out, even if the chosen one is also the default device.
+    private static bool WantsExclusion(AudioFlow flow, string? requestedId) => flow == AudioFlow.System && requestedId is null;
+
+    private async Task<OpenSource?> TryOpenOnceAsync(AudioFlow flow, string deviceId, bool exclude, bool exclusionWanted)
     {
         ICaptureSource? source = null;
         try
@@ -617,7 +624,7 @@ public sealed class AudioEngine : IDisposable
             }
 
             var pipeline = new CapturePipeline(source.Format, EnsureTrack(flow), _timeline);
-            var open = new OpenSource(source, pipeline, deviceId, exclude, _timeline.NowTicks);
+            var open = new OpenSource(source, pipeline, deviceId, exclude, exclusionWanted, _timeline.NowTicks);
             source.PacketAvailable += pipeline.OnPacket;
             source.Stopped += exception => OnSourceStopped(open, exception);
 
