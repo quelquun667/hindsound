@@ -64,15 +64,37 @@ public sealed class AudioEngine : IDisposable
     public const int StalledAfterFrames = InternalFormat.SampleRate / 5;
 
     private static readonly TimeSpan DefaultTick = TimeSpan.FromSeconds(1);
-    private const int TicksBetweenRetries = 3;
 
-    private sealed class OpenSource(ICaptureSource source, CapturePipeline pipeline, string deviceId, bool excludesOwnProcess)
+    // The longest wait before looking again for a device, in ticks. A source that keeps dying waits 1, 2, then this.
+    private const int MaxTicksBetweenRetries = 3;
+
+    // A source that ran this long was working: its death is an event, not a device refusing to capture.
+    private static readonly long StableAfterTicks = TimeSpan.FromSeconds(5).Ticks;
+
+    private sealed class OpenSource(ICaptureSource source, CapturePipeline pipeline, string deviceId, bool excludesOwnProcess, long openedAtTicks)
     {
+        private volatile bool _dead;
+        private volatile bool _closing;
+
         public ICaptureSource Source { get; } = source;
         public CapturePipeline Pipeline { get; } = pipeline;
         public string DeviceId { get; } = deviceId;
         public bool ExcludesOwnProcess { get; } = excludesOwnProcess;
-        public bool Dead { get; set; }
+        public long OpenedAtTicks { get; } = openedAtTicks;
+
+        /// <summary>It ended by itself. Set from the capture thread.</summary>
+        public bool Dead
+        {
+            get => _dead;
+            set => _dead = value;
+        }
+
+        /// <summary>The engine is ending it: whatever it reports now needs no answer.</summary>
+        public bool Closing
+        {
+            get => _closing;
+            set => _closing = value;
+        }
     }
 
     private readonly ICaptureSourceFactory _factory;
@@ -80,6 +102,7 @@ public sealed class AudioEngine : IDisposable
     private readonly Func<long>? _clock;
     private readonly SemaphoreSlim _commands = new(1, 1);
     private readonly Timer _tick;
+    private readonly Timer _retry;
     private readonly TimeSpan _tickInterval;
 
     private AudioEngineOptions _options;
@@ -92,8 +115,8 @@ public sealed class AudioEngine : IDisposable
     private bool _paused;
     private bool _watching;
     private bool _exclusionDiedEarly;
-    private bool _wantsRetry;
-    private int _ticksSinceRetry;
+    private int _quickDeaths;
+    private int _refreshQueued;
     private bool _disposed;
     private AudioEngineStatus? _lastPublished;
 
@@ -117,6 +140,7 @@ public sealed class AudioEngine : IDisposable
         _timeline = new CaptureTimeline(clock);
         _tickInterval = tickInterval ?? DefaultTick;
         _tick = new Timer(_ => OnTick());
+        _retry = new Timer(_ => QueueRefresh());
         _watcher.DevicesChanged += QueueRefresh;
     }
 
@@ -143,6 +167,7 @@ public sealed class AudioEngine : IDisposable
         _started = true;
         _paused = false;
         _exclusionDiedEarly = false;
+        _quickDeaths = 0;
         StartWatching();
         await RefreshSourcesAsync().ConfigureAwait(false);
         _tick.Change(_tickInterval, _tickInterval);
@@ -159,7 +184,7 @@ public sealed class AudioEngine : IDisposable
         _tick.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
         _started = false;
         _paused = false;
-        _wantsRetry = false;
+        CancelRetry();
         EndCapture();
         return Task.CompletedTask;
     });
@@ -170,7 +195,7 @@ public sealed class AudioEngine : IDisposable
         if (_started && !_paused)
         {
             _paused = true;
-            _wantsRetry = false;
+            CancelRetry();
             EndCapture();
         }
 
@@ -247,6 +272,7 @@ public sealed class AudioEngine : IDisposable
         _watcher.DevicesChanged -= QueueRefresh;
         _watcher.Dispose();
         _tick.Dispose();
+        _retry.Dispose();
         _commands.Dispose();
     }
 
@@ -347,11 +373,24 @@ public sealed class AudioEngine : IDisposable
         await RefreshSourceAsync(AudioFlow.System).ConfigureAwait(false);
         await RefreshSourceAsync(AudioFlow.Mic).ConfigureAwait(false);
 
-        var missing = _system is null || (_options.MicEnabled && _mic is null);
-        _wantsRetry = missing;
+        if (!IsLive(_system) || (_options.MicEnabled && !IsLive(_mic)))
+        {
+            ArmRetry(MaxTicksBetweenRetries);
+        }
+        else
+        {
+            CancelRetry();
+        }
 
-        // With nothing to capture from, time stops on the timeline, as in a pause.
-        if (_system is null && _mic is null)
+        SettleTimeline();
+    }
+
+    private static bool IsLive(OpenSource? open) => open is { Dead: false };
+
+    // With nothing to capture from, time stops on the timeline, as in a pause.
+    private void SettleTimeline()
+    {
+        if (!IsLive(_system) && !IsLive(_mic))
         {
             FreezeTimeline();
         }
@@ -360,6 +399,11 @@ public sealed class AudioEngine : IDisposable
             _timeline.Resume();
         }
     }
+
+    // One shot, and nothing runs until it fires, so a device that keeps failing costs no CPU.
+    private void ArmRetry(int ticks) => _retry.Change(_tickInterval * ticks, Timeout.InfiniteTimeSpan);
+
+    private void CancelRetry() => _retry.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
 
     private async Task RefreshSourceAsync(AudioFlow flow)
     {
@@ -410,7 +454,7 @@ public sealed class AudioEngine : IDisposable
         {
             source = await _factory.OpenAsync(new CaptureRequest(flow, deviceId, exclude)).ConfigureAwait(false);
             var pipeline = new CapturePipeline(source.Format, EnsureTrack(flow), _timeline);
-            var open = new OpenSource(source, pipeline, deviceId, exclude);
+            var open = new OpenSource(source, pipeline, deviceId, exclude, _timeline.NowTicks);
             source.PacketAvailable += pipeline.OnPacket;
             source.Stopped += exception => OnSourceStopped(open, exception);
             source.Start();
@@ -439,31 +483,75 @@ public sealed class AudioEngine : IDisposable
     private void OnSourceStopped(OpenSource open, Exception? exception)
     {
         // Runs on the capture thread, which is ending: the new capture is opened from elsewhere.
+        if (open.Closing)
+        {
+            return;
+        }
+
         open.Dead = true;
+        var reopenNow = _timeline.NowTicks - open.OpenedAtTicks >= StableAfterTicks;
         if (exception is not null)
         {
             Debug.WriteLine($"Capture stopped: {exception.Message}");
 
             // The exclusion started but never delivered anything: it does not work here, so use the classic loopback.
+            // That is a different capture and not the same one again, and it can happen only once per start.
             if (open.ExcludesOwnProcess && open.Pipeline.Packets == 0)
             {
+                reopenNow |= !_exclusionDiedEarly;
                 _exclusionDiedEarly = true;
             }
         }
 
-        // A capture the engine is closing is no longer current, and a clean stop of it needs nothing more.
-        if (exception is not null || open == _system || open == _mic)
+        if (!_disposed)
         {
-            QueueRefresh();
+            _ = RunQuietlyAsync(() => OnSourceDeathAsync(open, reopenNow));
         }
+    }
+
+    // A source that dies straight after opening would otherwise be reopened as fast as the machine can go, so it
+    // waits, longer each time. Status says so meanwhile: the source no longer counts as capturing.
+    private async Task OnSourceDeathAsync(OpenSource open, bool reopenNow)
+    {
+        // A refresh got there first, or the engine closed it.
+        if (open != _system && open != _mic)
+        {
+            return;
+        }
+
+        if (reopenNow)
+        {
+            _quickDeaths = 0;
+            await RefreshSourcesAsync().ConfigureAwait(false);
+            return;
+        }
+
+        if (open == _system)
+        {
+            CloseSource(ref _system);
+        }
+        else
+        {
+            CloseSource(ref _mic);
+        }
+
+        SettleTimeline();
+        ArmRetry(Math.Min(++_quickDeaths, MaxTicksBetweenRetries));
     }
 
     private void QueueRefresh()
     {
-        if (!_disposed)
+        // One waiting refresh does the work of any number of them: they must not pile up behind a slow device.
+        if (_disposed || Interlocked.Exchange(ref _refreshQueued, 1) == 1)
         {
-            _ = RunQuietlyAsync(RefreshSourcesAsync);
+            return;
         }
+
+        _ = RunQuietlyAsync(() =>
+        {
+            Volatile.Write(ref _refreshQueued, 0);
+            return RefreshSourcesAsync();
+        });
     }
 
     private async Task RunQuietlyAsync(Func<Task> command)
@@ -483,16 +571,7 @@ public sealed class AudioEngine : IDisposable
         }
     }
 
-    private void OnTick()
-    {
-        if (_wantsRetry && ++_ticksSinceRetry >= TicksBetweenRetries)
-        {
-            _ticksSinceRetry = 0;
-            QueueRefresh();
-        }
-
-        Publish();
-    }
+    private void OnTick() => Publish();
 
     // Stops the sources and lines both tracks up on the frame where time stopped.
     private void EndCapture()
@@ -519,6 +598,7 @@ public sealed class AudioEngine : IDisposable
             return;
         }
 
+        closing.Closing = true;
         closing.Source.PacketAvailable -= closing.Pipeline.OnPacket;
         try
         {
@@ -543,8 +623,8 @@ public sealed class AudioEngine : IDisposable
     {
         var system = Volatile.Read(ref _systemTrack);
         var mic = Volatile.Read(ref _micTrack);
-        var openSystem = _system;
-        var openMic = _mic;
+        var openSystem = IsLive(_system) ? _system : null;
+        var openMic = IsLive(_mic) ? _mic : null;
         var activity = !_started ? CaptureActivity.Stopped
             : _paused ? CaptureActivity.Paused
             : openSystem is null && openMic is null ? CaptureActivity.NoDevice
