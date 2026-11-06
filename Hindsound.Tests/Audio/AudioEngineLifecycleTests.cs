@@ -276,6 +276,50 @@ public class SourceFailureTests
 }
 
 [Collection(nameof(TimingSensitive))]
+public class ResolverFailureTests
+{
+    private static AudioEngine SystemOnly(TrackingFactory factory, TimeSpan tick) =>
+        new(new AudioEngineOptions(TimeSpan.FromSeconds(2), MicEnabled: false), factory, new FakeWatcher(), tickInterval: tick);
+
+    [Fact]
+    public async Task A_resolver_that_throws_at_start_means_no_device_and_the_retries_go_on()
+    {
+        var failing = true;
+        var factory = new TrackingFactory
+        {
+            Resolve = _ => Volatile.Read(ref failing) ? throw new UnauthorizedAccessException("E_ACCESSDENIED") : "device",
+        };
+        using var engine = SystemOnly(factory, TimeSpan.FromMilliseconds(20));
+
+        await engine.StartAsync();
+
+        Assert.Equal(CaptureActivity.NoDevice, engine.Status.Activity);
+        Volatile.Write(ref failing, false);
+        await Eventually.True(() => engine.Status.Activity == CaptureActivity.Capturing, "capturing, with no other command");
+    }
+
+    [Fact]
+    public async Task A_resolver_that_throws_leaves_a_working_capture_alone()
+    {
+        var failing = false;
+        var factory = new TrackingFactory
+        {
+            Resolve = _ => Volatile.Read(ref failing) ? throw new UnauthorizedAccessException("E_ACCESSDENIED") : "device",
+        };
+        using var engine = SystemOnly(factory, TimeSpan.FromHours(1));
+        await engine.StartAsync();
+        var source = factory.Latest;
+
+        Volatile.Write(ref failing, true);
+        await engine.RefreshDevicesAsync();
+
+        Assert.Equal(CaptureActivity.Capturing, engine.Status.Activity);
+        Assert.Same(source, factory.Latest);
+        Assert.Equal(1, factory.Live);
+    }
+}
+
+[Collection(nameof(TimingSensitive))]
 public class StuckDeviceTests
 {
     // Far above what a call in these tests takes, far below the ten seconds a stuck call would be given.

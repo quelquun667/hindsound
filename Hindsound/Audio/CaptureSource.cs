@@ -171,7 +171,7 @@ public sealed class WasapiCaptureSourceFactory : ICaptureSourceFactory
     private static DataFlow DataFlowOf(AudioFlow flow) => flow == AudioFlow.Mic ? DataFlow.Capture : DataFlow.Render;
 
     private static bool IsAudioFailure(Exception exception) =>
-        exception is System.Runtime.InteropServices.COMException or CoreAudioException or InvalidOperationException or ArgumentException;
+        exception is System.Runtime.InteropServices.COMException or CoreAudioException or InvalidOperationException or ArgumentException or UnauthorizedAccessException;
 }
 
 /// <summary>An audio endpoint: its id for the settings, its name for the user.</summary>

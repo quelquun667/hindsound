@@ -181,8 +181,8 @@ public sealed class AudioEngine : IDisposable
         _exclusionDiedEarly = false;
         _quickDeaths = 0;
         StartWatching();
-        await RefreshSourcesAsync().ConfigureAwait(false);
         _tick.Change(_tickInterval, _tickInterval);
+        await RefreshSourcesAsync().ConfigureAwait(false);
     });
 
     /// <summary>Stops capturing. The buffer can still be saved, until the next <see cref="StartAsync"/>.</summary>
@@ -524,9 +524,18 @@ public sealed class AudioEngine : IDisposable
 
     private async Task<(bool Known, string? DeviceId)> ResolveDeviceAsync(AudioFlow flow, string? requestedId)
     {
-        return await CallBoundedAsync(
-            $"resolve {flow}",
-            () => Task.FromResult(_factory.ResolveDevice(flow, requestedId))).ConfigureAwait(false);
+        try
+        {
+            return await CallBoundedAsync(
+                $"resolve {flow}",
+                () => Task.FromResult(_factory.ResolveDevice(flow, requestedId))).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (IsCaptureFailure(exception))
+        {
+            // A device that cannot be looked up is a state like any other, and the retries go on.
+            Debug.WriteLine($"Could not look up the {flow} device: {exception.Message}");
+            return (false, null);
+        }
     }
 
     private async Task<OpenSource?> TryOpenAsync(AudioFlow flow, string deviceId, string? requestedId)
