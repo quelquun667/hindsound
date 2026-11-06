@@ -3,10 +3,10 @@ namespace Hindsound.Ui;
 /// <summary>What the icon tells at a glance. Each state has its own shape, not only its own colour.</summary>
 public enum TrayState
 {
-    /// <summary>An H in three bars.</summary>
+    /// <summary>The H of the logo: two stems and the wave between them.</summary>
     Active,
 
-    /// <summary>The H loses its crossbar: two bars, the pause sign.</summary>
+    /// <summary>The H loses its wave: two stems, the pause sign.</summary>
     Paused,
 
     /// <summary>The triangle of the error notifications.</summary>
@@ -108,24 +108,22 @@ internal static class TrayMenu
 /// <summary>The shapes of the icon, as coverage from 0 to 1. Pure: tested without any window.</summary>
 internal static class TrayIconShape
 {
-    public static float[] Coverage(TrayState state, int size)
+    public static float[] Coverage(TrayState state, int size) => state switch
+    {
+        TrayState.Active => TrayIconMark.Coverage(withWave: true, size),
+        TrayState.Paused => TrayIconMark.Coverage(withWave: false, size),
+        _ => Triangle(size),
+    };
+
+    private static float[] Triangle(int size)
     {
         var coverage = new float[size * size];
-        var bar = Math.Max(2, size / 5);
-        var middleTop = (size - bar) / 2;
         var scale = size / 24f;
         for (var y = 0; y < size; y++)
         {
             for (var x = 0; x < size; x++)
             {
-                var side = x < bar || x >= size - bar;
-                var middle = y >= middleTop && y < middleTop + bar;
-                coverage[y * size + x] = state switch
-                {
-                    TrayState.Active => side || middle ? 1 : 0,
-                    TrayState.Paused => side ? 1 : 0,
-                    _ => Pixels.Clamp(0.5f - NotificationIcons.Distance(NotificationVisual.Triangle, (x + 0.5f) / scale, (y + 0.5f) / scale) * scale),
-                };
+                coverage[y * size + x] = Pixels.Clamp(0.5f - NotificationIcons.Distance(NotificationVisual.Triangle, (x + 0.5f) / scale, (y + 0.5f) / scale) * scale);
             }
         }
 
@@ -422,6 +420,35 @@ internal sealed unsafe class TrayIcon : IDisposable
         Native.DeleteObject(info.Color);
         Native.DeleteObject(info.Mask);
         return bitmap.Width;
+    }
+
+    /// <summary>The pixels of a square icon, as Windows has them, in ARGB.</summary>
+    internal static uint[] PixelsOf(nint icon)
+    {
+        var size = WidthOf(icon);
+        Native.ICONINFO info;
+        if (size == 0 || Native.GetIconInfo(icon, &info) == 0)
+        {
+            return [];
+        }
+
+        Native.BITMAPINFOHEADER header = default;
+        header.Size = (uint)sizeof(Native.BITMAPINFOHEADER);
+        header.Width = size;
+        header.Height = -size;
+        header.Planes = 1;
+        header.BitCount = 32;
+        var pixels = new uint[size * size];
+        var dc = Native.CreateCompatibleDC(0);
+        fixed (uint* bits = pixels)
+        {
+            Native.GetDIBits(dc, info.Color, 0, (uint)size, bits, &header, 0);
+        }
+
+        Native.DeleteDC(dc);
+        Native.DeleteObject(info.Color);
+        Native.DeleteObject(info.Mask);
+        return pixels;
     }
 
     internal static nint CreateIcon(TrayState state, uint accent, int size)

@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The tray icon and the title bar show the new logo, an H with a wave: drawn pixel by pixel at the tray sizes, in the accent color; two gray stems when paused.
 - A left click or Enter on the tray icon opens the settings, and so does launching the app a second time.
 - Quit waits for a clip being written, 5 minutes at most: the icon says so, and a second Quit leaves at once.
 

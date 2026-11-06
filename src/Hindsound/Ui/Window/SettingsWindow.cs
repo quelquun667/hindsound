@@ -209,7 +209,7 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
         return $"{client.Width}x{client.Height}, bitmap {_canvas.Width}x{_canvas.Height}";
     }
 
-    /// <summary>The icon of the title bar: the same H as the tray, in the accent colour.</summary>
+    /// <summary>The icons of the title bar: the same mark as the tray, in the accent colour.</summary>
     public void SetIcon(uint accent)
     {
         const nuint small = 0, big = 1;
@@ -229,6 +229,14 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
         const nuint small = 0, big = 1;
         return (TrayIcon.WidthOf(WindowNative.SendMessageW(_hwnd, WindowNative.WM_GETICON, small, 0)),
             TrayIcon.WidthOf(WindowNative.SendMessageW(_hwnd, WindowNative.WM_GETICON, big, 0)));
+    }
+
+    /// <summary>The pixels of the two icons, as the window itself holds them.</summary>
+    public (uint[] Small, uint[] Big) IconPixels()
+    {
+        const nuint small = 0, big = 1;
+        return (TrayIcon.PixelsOf(WindowNative.SendMessageW(_hwnd, WindowNative.WM_GETICON, small, 0)),
+            TrayIcon.PixelsOf(WindowNative.SendMessageW(_hwnd, WindowNative.WM_GETICON, big, 0)));
     }
 
     private void DestroyIcons()

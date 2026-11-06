@@ -223,6 +223,7 @@ internal static unsafe partial class Native
     [LibraryImport(G)] public static partial nint SelectObject(nint dc, nint obj);
     [LibraryImport(G)] public static partial int DeleteObject(nint obj);
     [LibraryImport(G)] public static partial int GetObjectW(nint obj, int size, void* buffer);
+    [LibraryImport(G)] public static partial int GetDIBits(nint dc, nint bitmap, uint start, uint lines, void* bits, BITMAPINFOHEADER* info, uint usage);
     [LibraryImport(G)] public static partial nint GetStockObject(int index);
     [LibraryImport(G)] public static partial nint CreateBitmap(int w, int h, uint planes, uint bits, void* data);
     [LibraryImport(G, StringMarshalling = StringMarshalling.Utf16)]

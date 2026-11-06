@@ -397,21 +397,21 @@ public class TrayIconShapeTests
     }
 
     [Fact]
-    public void The_active_icon_is_an_H_in_three_bars()
+    public void The_active_icon_is_an_H_with_a_wave()
     {
         var shape = TrayIconShape.Coverage(TrayState.Active, 16);
-        Assert.Equal(1f, shape[0]);
-        Assert.Equal(1f, shape[15]);
+        Assert.Equal(1f, shape[1]);
+        Assert.Equal(1f, shape[14]);
         Assert.Equal(0f, shape[8]);
-        Assert.Equal(1f, shape[7 * 16 + 8]);
+        Assert.Equal(1f, shape[6 * 16 + 7]);
     }
 
     [Fact]
-    public void The_pause_icon_has_no_crossbar()
+    public void The_pause_icon_has_no_wave()
     {
         var shape = TrayIconShape.Coverage(TrayState.Paused, 16);
-        Assert.Equal(1f, shape[0]);
-        Assert.Equal(0f, shape[7 * 16 + 8]);
+        Assert.Equal(1f, shape[1]);
+        Assert.Equal(0f, shape[6 * 16 + 7]);
     }
 
     [Theory]

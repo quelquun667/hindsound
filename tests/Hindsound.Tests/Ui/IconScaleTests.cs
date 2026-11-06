@@ -80,4 +80,30 @@ public class IconScaleTests
         window.ProbeDpiChange(144);
         Assert.Equal((24, 48), window.IconWidths());
     }
+
+    [Fact]
+    public void The_title_bar_icons_show_the_mark_in_the_accent_and_follow_it_and_the_scale()
+    {
+        const uint Other = 0x35D6FF;
+        using var rig = new ScreenRig();
+        var screen = new ScreenInfo(default, default, 96);
+        using var window = new SettingsWindow(rig.Settings, rig.Backend, () => 0, firstRun: false, offscreen: true, screen, () => { });
+
+        window.ProbeDpiChange(96);
+        window.SetIcon(Accent);
+        AssertShows(window, 16, 32, Accent);
+
+        window.SetIcon(Other);
+        AssertShows(window, 16, 32, Other);
+
+        window.ProbeDpiChange(144);
+        AssertShows(window, 24, 48, Other);
+    }
+
+    private static void AssertShows(SettingsWindow window, int small, int big, uint accent)
+    {
+        var (smallPixels, bigPixels) = window.IconPixels();
+        Assert.Equal(TrayIconShape.Compose(TrayState.Active, small, accent), smallPixels);
+        Assert.Equal(TrayIconShape.Compose(TrayState.Active, big, accent), bigPixels);
+    }
 }
