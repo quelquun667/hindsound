@@ -54,10 +54,6 @@ internal abstract class Widget
     public virtual void OnRelease(bool inside)
     {
     }
-
-    public virtual void OnWheel(int notches)
-    {
-    }
 }
 
 /// <summary>Text or a shape that does nothing.</summary>
@@ -84,8 +80,6 @@ internal class Button(string label, Action click) : Widget
     public float FontSize { get; init; } = 14;
 
     public override bool CanFocus => Enabled;
-
-    public void Activate() => click();
 
     public override bool OnKey(uint vk)
     {
