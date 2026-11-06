@@ -63,6 +63,7 @@ internal static class NotificationDump
             ("device", NotificationStates.DeviceChanged("Headset Earphone")),
             ("device-long", NotificationStates.DeviceChanged("Speakers (Realtek High Definition Audio with a very long name)")),
             ("saving", NotificationStates.Saving(thirty)),
+            ("closing", NotificationStates.ClosingAfterClip()),
             ("nothing", NotificationStates.NothingToSave()),
             ("failed", NotificationStates.SaveFailed()),
             ("settings-damaged", NotificationStates.SettingsDamaged(copyKept: true)),

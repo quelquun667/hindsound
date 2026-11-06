@@ -76,6 +76,22 @@ public class UiLoopTests
     }
 
     [Fact]
+    public void A_close_goes_to_its_handler_instead_of_ending_the_loop()
+    {
+        var closes = 0;
+
+        var ended = LoopEnds(loop =>
+        {
+            loop.CloseAsked = () => closes++;
+            Native.PostMessageW(loop.Hwnd, Native.WM_CLOSE, 0, 0);
+            loop.After(300, loop.Quit);
+        });
+
+        Assert.True(ended);
+        Assert.Equal(1, closes);
+    }
+
+    [Fact]
     public void The_question_of_the_session_end_is_passed_on()
     {
         var asked = 0;

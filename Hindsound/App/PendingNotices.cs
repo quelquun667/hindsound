@@ -32,7 +32,7 @@ internal sealed class PendingNotices(Action<string> journal)
 
     /// <summary>A status that must reach the user, whatever the notifications setting says, and even if it has to wait.</summary>
     public static bool IsImportantStatus(NotificationKind kind) =>
-        kind is NotificationKind.CaptureOn or NotificationKind.NoDevice or NotificationKind.MicLost;
+        kind is NotificationKind.CaptureOn or NotificationKind.NoDevice or NotificationKind.MicLost or NotificationKind.ClosingAfterClip;
 
     /// <summary>The last of a kind replaces the one before. An ordinary clip never takes the place of an important one.</summary>
     public void AddClip(NotificationContent content, bool important, long nowMs)

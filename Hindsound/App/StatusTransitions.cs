@@ -89,6 +89,8 @@ internal sealed class MicLossWatch
 /// <summary>From two successive engine statuses to what the user sees. Pure: tested without any window.</summary>
 internal static class StatusTransitions
 {
+    public const string ClosingTip = "Hindsound - finishing a clip, then closing";
+
     public static StatusNotice Decide(AudioEngineStatus? previous, AudioEngineStatus next)
     {
         var from = previous?.Activity ?? CaptureActivity.Stopped;
@@ -156,7 +158,8 @@ internal static class StatusTransitions
     /// <param name="hotkeys">The last results of the shortcuts.</param>
     /// <param name="importantClipWaiting">The user has yet to hear about a clip that went wrong.</param>
     /// <param name="engineFailed">The engine could not start, so no status will come.</param>
-    public static (TrayState State, string Tip) TrayOf(AudioEngineStatus? status, IReadOnlyList<HotkeyResult> hotkeys, bool importantClipWaiting, bool engineFailed = false)
+    /// <param name="closingAfterClip">Quit was asked for and a clip is still being written: that comes before any problem, the app is on its way out.</param>
+    public static (TrayState State, string Tip) TrayOf(AudioEngineStatus? status, IReadOnlyList<HotkeyResult> hotkeys, bool importantClipWaiting, bool engineFailed = false, bool closingAfterClip = false)
     {
         var activity = engineFailed ? CaptureActivity.NoDevice : status?.Activity ?? CaptureActivity.Stopped;
         var refused = RefusedSave(hotkeys);
@@ -167,7 +170,7 @@ internal static class StatusTransitions
             : hotkeys.FirstOrDefault(result => !result.Ok) is { } other ? Describe(other)
             : null;
         var state = refused is not null || importantClipWaiting ? TrayState.Error : TrayStateOf(activity);
-        return (state, problem is null ? "Hindsound" : "Hindsound - " + problem);
+        return (state, closingAfterClip ? ClosingTip : problem is null ? "Hindsound" : "Hindsound - " + problem);
     }
 
     private static string Describe(HotkeyResult result) => $"{result.Gesture}: {result.Message}";

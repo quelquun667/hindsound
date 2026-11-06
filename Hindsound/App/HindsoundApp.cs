@@ -61,6 +61,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private TrayState _trayState = TrayState.Active;
     private string _trayTip = "Hindsound";
     private bool _quitting;
+    private readonly LeaveFlow _leave = new();
     private readonly SessionEndBlock _sessionEndBlock = new();
     private TimeSpan _clipsLimit = QueuedClipsLimit;
     private int _copying;
@@ -131,6 +132,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         _loop.SessionEnding = OnSessionEnding;
         _loop.SessionEndAsked = OnSessionEndAsked;
         _loop.SessionKept = TakeBackSessionEndReason;
+        _loop.CloseAsked = AskToLeave;
         if (!_tray.Add(_trayState, Accent, _trayTip))
         {
             _journal.Write("the tray icon could not be added");
@@ -161,7 +163,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
         if (_options.ExitAfterSeconds is { } seconds)
         {
-            _loop.After((int)Math.Min(seconds * 1000, int.MaxValue), _loop.Quit);
+            _loop.After((int)Math.Min(seconds * 1000, int.MaxValue), AskToLeave);
         }
 
         if (_options.SelfTestFail == AppOptions.FailRun)
@@ -643,15 +645,23 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         _loop.After(SnapshotReleaseDelayMs, ReleaseSnapshotMemory);
         if (outcome.Result is not { } result)
         {
-            var content = outcome.Failure switch
+            try
             {
-                ClipFailure.NothingCaptured => NotificationStates.NothingToSave(),
-                ClipFailure.Busy => NotificationStates.StillSaving(),
-                _ => NotificationStates.SaveFailed(),
-            };
-            _journal.Write($"clip not saved: {outcome.Failure}");
-            ShowClip(content, saved: false, important: outcome.Failure == ClipFailure.Failed);
-            FinishSelfTest(outcome, false);
+                var content = outcome.Failure switch
+                {
+                    ClipFailure.NothingCaptured => NotificationStates.NothingToSave(),
+                    ClipFailure.Busy => NotificationStates.StillSaving(),
+                    _ => NotificationStates.SaveFailed(),
+                };
+                _journal.Write($"clip not saved: {outcome.Failure}");
+                ShowClip(content, saved: false, important: outcome.Failure == ClipFailure.Failed);
+                FinishSelfTest(outcome, false);
+            }
+            finally
+            {
+                LeaveIfClipsDone();
+            }
+
             return;
         }
 
@@ -680,11 +690,18 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
     private void FinishClip(ClipOutcome outcome, ClipResult result, bool copied)
     {
-        var content = NotificationStates.ForClip(result, outcome.Request.Requested, outcome.Request.CopyWanted, copied, Accent);
-        _journal.Write($"clipboard: wanted {outcome.Request.CopyWanted}, copied {copied}; notification {content.Kind}");
-        var copyFailed = outcome.Request.CopyWanted && !copied;
-        ShowClip(content, saved: true, important: result.Rescued || copyFailed, copyFailed);
-        FinishSelfTest(outcome, copied);
+        try
+        {
+            var content = NotificationStates.ForClip(result, outcome.Request.Requested, outcome.Request.CopyWanted, copied, Accent);
+            _journal.Write($"clipboard: wanted {outcome.Request.CopyWanted}, copied {copied}; notification {content.Kind}");
+            var copyFailed = outcome.Request.CopyWanted && !copied;
+            ShowClip(content, saved: true, important: result.Rescued || copyFailed, copyFailed);
+            FinishSelfTest(outcome, copied);
+        }
+        finally
+        {
+            LeaveIfClipsDone();
+        }
     }
 
     private void CopyLastClip()
@@ -912,7 +929,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     /// <summary>Called whenever one of the things the icon says has changed.</summary>
     private void RefreshTray()
     {
-        var (state, tip) = StatusTransitions.TrayOf(_lastStatus, _hotkeyResults, _pending.ImportantClipWaiting, _engineFailed);
+        var (state, tip) = StatusTransitions.TrayOf(_lastStatus, _hotkeyResults, _pending.ImportantClipWaiting, _engineFailed, _leave.Waiting);
         if (state != _trayState || tip != _trayTip)
         {
             _journal.Write($"tray: {state}, {tip}");
@@ -931,7 +948,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
         ReloadSettingsIfChanged();
         var paused = _lastStatus?.Activity == CaptureActivity.Paused;
-        var command = _tray.ShowMenu((short)(wParam & 0xFFFF), (short)((wParam >> 16) & 0xFFFF), paused, _lastClip is not null);
+        var command = _tray.ShowMenu((short)(wParam & 0xFFFF), (short)((wParam >> 16) & 0xFFFF), TrayMenu.Items(paused, _lastClip is not null, _leave.Waiting));
         switch (command)
         {
             case TrayCommand.Save30s:
@@ -959,7 +976,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
                 OpenSettings(firstRun: false);
                 break;
             case TrayCommand.Quit:
-                _loop.Quit();
+                AskToLeave();
                 break;
         }
     }
@@ -1009,6 +1026,11 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     /// <summary>Only one at a time, and only while it is open: closing destroys it, and the memory goes back.</summary>
     private void OpenSettings(bool firstRun)
     {
+        if (!_leave.MayOpenSettings)
+        {
+            return;
+        }
+
         if (_window is { } open)
         {
             open.BringBack();
@@ -1269,6 +1291,52 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     }
 
     // ---------------------------------------------------------------- leaving
+
+    /// <summary>Quit, from the menu or from WM_CLOSE. A clip still being written keeps the app here, and the icon says so.</summary>
+    private void AskToLeave()
+    {
+        switch (_leave.Asked(ClipsInProgress))
+        {
+            case LeaveStep.LeaveNow:
+                _loop.Quit();
+                break;
+
+            case LeaveStep.WaitForClips:
+                _journal.Write($"asked to quit with clips being written: waiting for them, {LeaveFlow.WaitLimit} at most");
+
+                // The window first: it hands back the shortcuts it may be holding. Gone for good, the shortcuts stay gone
+                // even if the settings file is read again.
+                Guard(() => _window?.Dispose(), "settings window");
+                Guard(() =>
+                {
+                    _hotkeys?.Dispose();
+                    _hotkeys = null;
+                }, "hotkeys");
+                RefreshTray();
+                ShowStatus(NotificationStates.ClosingAfterClip());
+                _loop.After((int)LeaveFlow.WaitLimit.TotalMilliseconds, OnLeaveLimit);
+                break;
+        }
+    }
+
+    private void LeaveIfClipsDone()
+    {
+        if (_leave.ClipEnded(ClipsInProgress))
+        {
+            _journal.Write("the last clip is done: leaving");
+            _loop.Quit();
+        }
+    }
+
+    private void OnLeaveLimit()
+    {
+        if (_leave.TimeIsUp())
+        {
+            _journal.Write($"asked to quit {LeaveFlow.WaitLimit} ago: leaving with clips still being written");
+            _clipsLimit = TimeSpan.Zero;
+            _loop.Quit();
+        }
+    }
 
     // The answer is yes whatever happens: the reason only tells the user what Windows is waiting for.
     private void OnSessionEndAsked()

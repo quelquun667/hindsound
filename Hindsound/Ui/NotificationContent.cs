@@ -28,6 +28,7 @@ public enum NotificationKind
     LastClipGone,
     MicLost,
     MicBack,
+    ClosingAfterClip,
 }
 
 /// <summary>What sits on the inner side of the tab, before the text.</summary>
@@ -163,6 +164,9 @@ internal static class NotificationStates
 
     public static NotificationContent Saving(TimeSpan requested) =>
         Icon(NotificationKind.Saving, $"Saving clip ({FormatDuration(WholeSeconds(requested))})", "One moment", NotificationPalette.Muted, NotificationVisual.Pending, NotificationPalette.Muted);
+
+    public static NotificationContent ClosingAfterClip() =>
+        Icon(NotificationKind.ClosingAfterClip, "Saving your clip", "Hindsound closes when it's done", NotificationPalette.Muted, NotificationVisual.Pending, NotificationPalette.Muted);
 
     public static NotificationContent NothingToSave() =>
         Icon(NotificationKind.NothingToSave, "Nothing to save yet", "No sound has been captured so far", NotificationPalette.Amber, NotificationVisual.Triangle, NotificationPalette.Amber);

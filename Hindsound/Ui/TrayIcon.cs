@@ -28,6 +28,39 @@ internal enum TrayCommand : uint
     Quit,
 }
 
+/// <summary>One line of the tray menu. <see cref="TrayCommand.None"/> is a separator.</summary>
+internal readonly record struct TrayMenuItem(TrayCommand Command, string Text = "", bool Enabled = true);
+
+/// <summary>What the tray menu offers. Pure: tested without any window.</summary>
+internal static class TrayMenu
+{
+    /// <param name="paused">The capture is paused.</param>
+    /// <param name="hasLastClip">There is a clip to copy.</param>
+    /// <param name="closingAfterClip">Quit was asked for and a clip is still being written: a second Quit is all that is left to do.</param>
+    public static IReadOnlyList<TrayMenuItem> Items(bool paused, bool hasLastClip, bool closingAfterClip)
+    {
+        if (closingAfterClip)
+        {
+            return [new(TrayCommand.Quit, "Quit")];
+        }
+
+        return
+        [
+            new(TrayCommand.Save30s, "Save last 30s"),
+            new(TrayCommand.Save15s, "Save last 15s"),
+            new(TrayCommand.Save1m, "Save last 1 min"),
+            new(TrayCommand.Save5m, "Save last 5 min"),
+            new(TrayCommand.None),
+            new(TrayCommand.CopyLast, "Copy last clip", hasLastClip),
+            new(TrayCommand.TogglePause, paused ? "Resume capture" : "Pause capture"),
+            new(TrayCommand.OpenFolder, "Open clips folder"),
+            new(TrayCommand.Settings, "Settings"),
+            new(TrayCommand.None),
+            new(TrayCommand.Quit, "Quit"),
+        ];
+    }
+}
+
 /// <summary>The shapes of the icon, as coverage from 0 to 1. Pure: tested without any window.</summary>
 internal static class TrayIconShape
 {
@@ -143,20 +176,20 @@ internal sealed unsafe class TrayIcon(nint hwnd, uint callbackMessage) : IDispos
     }
 
     /// <summary>Returns the chosen command. Runs only on the user's own right click on the icon.</summary>
-    public TrayCommand ShowMenu(int x, int y, bool paused, bool hasLastClip)
+    public TrayCommand ShowMenu(int x, int y, IReadOnlyList<TrayMenuItem> items)
     {
         var menu = Native.CreatePopupMenu();
-        Item(menu, TrayCommand.Save30s, "Save last 30s");
-        Item(menu, TrayCommand.Save15s, "Save last 15s");
-        Item(menu, TrayCommand.Save1m, "Save last 1 min");
-        Item(menu, TrayCommand.Save5m, "Save last 5 min");
-        Native.AppendMenuW(menu, Native.MF_SEPARATOR, 0, null);
-        Item(menu, TrayCommand.CopyLast, "Copy last clip", enabled: hasLastClip);
-        Item(menu, TrayCommand.TogglePause, paused ? "Resume capture" : "Pause capture");
-        Item(menu, TrayCommand.OpenFolder, "Open clips folder");
-        Item(menu, TrayCommand.Settings, "Settings");
-        Native.AppendMenuW(menu, Native.MF_SEPARATOR, 0, null);
-        Item(menu, TrayCommand.Quit, "Quit");
+        foreach (var item in items)
+        {
+            if (item.Command == TrayCommand.None)
+            {
+                Native.AppendMenuW(menu, Native.MF_SEPARATOR, 0, null);
+            }
+            else
+            {
+                Native.AppendMenuW(menu, item.Enabled ? Native.MF_STRING : Native.MF_GRAYED, (nuint)item.Command, item.Text);
+            }
+        }
 
         // Without being the foreground window, the menu would not close on an outside click.
         Native.SetForegroundWindow(hwnd);
@@ -181,9 +214,6 @@ internal sealed unsafe class TrayIcon(nint hwnd, uint callbackMessage) : IDispos
             _icon = 0;
         }
     }
-
-    private static void Item(nint menu, TrayCommand command, string text, bool enabled = true) =>
-        Native.AppendMenuW(menu, enabled ? Native.MF_STRING : Native.MF_GRAYED, (nuint)command, text);
 
     private Native.NOTIFYICONDATAW Data(uint flags)
     {

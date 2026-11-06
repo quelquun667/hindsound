@@ -59,6 +59,9 @@ internal sealed unsafe class UiLoop : IDisposable
     /// <summary>Windows asks if the session may end. The answer is always yes.</summary>
     public Action? SessionEndAsked { get; set; }
 
+    /// <summary>Something asks this app to close (WM_CLOSE). Without a handler, <see cref="Run"/> just ends.</summary>
+    public Action? CloseAsked { get; set; }
+
     /// <summary>Windows had asked, and the session goes on after all.</summary>
     public Action? SessionKept { get; set; }
 
@@ -149,7 +152,15 @@ internal sealed unsafe class UiLoop : IDisposable
                 return 0;
 
             case Native.WM_CLOSE:
-                Quit();
+                if (CloseAsked is { } asked)
+                {
+                    asked();
+                }
+                else
+                {
+                    Quit();
+                }
+
                 return 0;
 
             default:
