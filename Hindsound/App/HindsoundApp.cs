@@ -621,8 +621,15 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     AudioSnapshot IClipBackend.Snapshot(TimeSpan duration) =>
         _engine?.Snapshot(duration) ?? new AudioSnapshot([], []);
 
-    ClipResult IClipBackend.Save(AudioSnapshot snapshot, ExportOptions options, string? appName) =>
-        _saver.Save(snapshot, options, appName);
+    ClipResult IClipBackend.Save(AudioSnapshot snapshot, ExportOptions options, string? appName)
+    {
+        if (_options.SelfTestSlowSaveSeconds is { } slow)
+        {
+            Thread.Sleep(TimeSpan.FromSeconds(slow));
+        }
+
+        return _saver.Save(snapshot, options, appName);
+    }
 
     private void OnSavingSlowly(ClipRequest request) =>
         ShowStatus(NotificationStates.Saving(request.Requested));

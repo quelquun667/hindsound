@@ -39,6 +39,9 @@ internal sealed record AppOptions(
     /// <summary><c>--no-mic</c>: the microphone stays off whatever the settings file says, at the start and at every read of the file. The file keeps its own value.</summary>
     public bool NoMic { get; init; }
 
+    /// <summary><c>--selftest-slow-save seconds</c>: every clip takes that much longer to write. To check on the real exe what leaving does while a clip is being written.</summary>
+    public double? SelfTestSlowSaveSeconds { get; init; }
+
     public const string FailCard = "card", FailReload = "reload", FailRun = "run";
 
     /// <summary>Unknown or incomplete options are ignored: the app is started by Windows, nobody could read an error.</summary>
@@ -74,6 +77,14 @@ internal sealed record AppOptions(
                     if (double.TryParse(next, NumberStyles.Float, CultureInfo.InvariantCulture, out var game) && game > 0)
                     {
                         options = options with { SelfTestGameSeconds = game };
+                    }
+
+                    i++;
+                    break;
+                case "--selftest-slow-save" when next is not null:
+                    if (double.TryParse(next, NumberStyles.Float, CultureInfo.InvariantCulture, out var slow) && slow > 0)
+                    {
+                        options = options with { SelfTestSlowSaveSeconds = slow };
                     }
 
                     i++;

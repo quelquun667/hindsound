@@ -4,6 +4,17 @@ using Hindsound.Ui;
 
 namespace Hindsound.Tests.App;
 
+public class SlowSaveOptionTests
+{
+    [Fact]
+    public void The_option_is_read_and_off_by_default()
+    {
+        Assert.Equal(40, AppOptions.Parse(["--selftest-slow-save", "40"]).SelfTestSlowSaveSeconds);
+        Assert.Null(AppOptions.Parse(["--selftest-slow-save", "nonsense"]).SelfTestSlowSaveSeconds);
+        Assert.Null(AppOptions.Parse([]).SelfTestSlowSaveSeconds);
+    }
+}
+
 public class LeaveFlowTests
 {
     [Fact]
