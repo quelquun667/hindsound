@@ -1,3 +1,5 @@
+using Hindsound.Ui;
+
 namespace Hindsound.App;
 
 /// <summary>What a request to quit comes to.</summary>
@@ -37,6 +39,31 @@ internal sealed class LeaveFlow
 
     /// <summary>The limit has come. True when the app was still waiting then.</summary>
     public bool TimeIsUp() => Waiting;
+
+    /// <summary>How long the app stays for a problem that is on screen, if the notification never says it has left.</summary>
+    public const int NoticeHoldMs = 5000;
+
+    private bool _holdingForNotice;
+
+    /// <summary>What the user must read before the app goes: a clip that went wrong, was rescued, or is silent. A good clip needs nothing: the closing message announced it.</summary>
+    public static bool IsProblem(NotificationKind kind, bool important) => important || kind == NotificationKind.Silent;
+
+    /// <summary>The last clip has ended. True when a problem is still to be read, so the app stays for it: <see cref="NoticeGone"/> or <see cref="NoticeLimit"/> then says when to go. A second Quit and the limit of the wait still apply.</summary>
+    /// <param name="lastClipHasProblem">The last clip ended with a problem.</param>
+    /// <param name="onScreen">A notification is on screen.</param>
+    /// <param name="anyWaiting">Something waits for the desktop.</param>
+    /// <param name="importantClipWaiting">What waits for the desktop includes a clip with a problem, the last one or not.</param>
+    public bool HoldForNotice(bool lastClipHasProblem, bool onScreen, bool anyWaiting, bool importantClipWaiting)
+    {
+        _holdingForNotice = Waiting && (importantClipWaiting || (lastClipHasProblem && (onScreen || anyWaiting)));
+        return _holdingForNotice;
+    }
+
+    /// <summary>A notification has left, or what waited was given up on. True when the app was only staying for that.</summary>
+    public bool NoticeGone(bool onScreen, bool anyWaiting) => _holdingForNotice && !onScreen && !anyWaiting;
+
+    /// <summary>The problem has been on screen long enough. True unless something else still waits for the desktop.</summary>
+    public bool NoticeLimit(bool anyWaiting) => _holdingForNotice && !anyWaiting;
 }
 
 /// <summary>

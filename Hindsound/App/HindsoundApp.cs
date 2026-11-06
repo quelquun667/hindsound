@@ -63,6 +63,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private TrayClick? _lastMenuClick;
     private bool _quitting;
     private readonly LeaveFlow _leave = new();
+    private bool _lastClipHasProblem;
     private readonly SessionEndBlock _sessionEndBlock = new();
     private TimeSpan _clipsLimit = QueuedClipsLimit;
     private int _copying;
@@ -763,6 +764,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
     private void ShowClip(NotificationContent content, bool saved, bool important, bool copyFailed = false, ScreenInfo? screen = null)
     {
+        _lastClipHasProblem = LeaveFlow.IsProblem(content.Kind, important);
         var (state, covers) = Surface();
         var decision = FullscreenPolicy.ForClip(state, covers, _settings.General, saved, important, copyFailed);
         _journal.Write($"presentation: state {state}, covers screen {covers}: {decision}");
@@ -909,6 +911,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         _notices.Finished();
         ShowNextNotice();
         ShowNextPendingOnDesktop();
+        LeaveIfNoticeGone();
     }
 
     /// <summary>The check only runs while something waits for the desktop, and stops by itself once nothing does.</summary>
@@ -934,6 +937,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         finally
         {
             ArmPendingPoll();
+            LeaveIfNoticeGone();
         }
     }
 
@@ -1439,9 +1443,39 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
     private void LeaveIfClipsDone()
     {
-        if (_leave.ClipEnded(ClipsInProgress))
+        if (!_leave.ClipEnded(ClipsInProgress))
         {
-            _journal.Write("the last clip is done: leaving");
+            return;
+        }
+
+        var onScreen = _notification.Showing is not null;
+        if (_leave.HoldForNotice(_lastClipHasProblem, onScreen, _pending.Any, _pending.ImportantClipWaiting))
+        {
+            _journal.Write("the last clip is done, with a problem still to be read: leaving after that");
+            if (onScreen)
+            {
+                _loop.After(LeaveFlow.NoticeHoldMs, () =>
+                {
+                    if (_leave.NoticeLimit(_pending.Any))
+                    {
+                        _journal.Write("the problem has been on screen long enough: leaving");
+                        _loop.Quit();
+                    }
+                });
+            }
+
+            return;
+        }
+
+        _journal.Write("the last clip is done: leaving");
+        _loop.Quit();
+    }
+
+    private void LeaveIfNoticeGone()
+    {
+        if (_leave.NoticeGone(_notification.Showing is not null, _pending.Any))
+        {
+            _journal.Write("the problem has been shown: leaving");
             _loop.Quit();
         }
     }
