@@ -1,7 +1,12 @@
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace Hindsound.Settings;
+
+[JsonSerializable(typeof(AppSettings))]
+internal sealed partial class SettingsJsonContext : JsonSerializerContext;
 
 public enum SettingsLoadStatus
 {
@@ -16,7 +21,8 @@ public enum SettingsLoadStatus
 /// <summary>Reads and writes settings.json. The path is a parameter so tests never touch the real %AppData%.</summary>
 public sealed class SettingsStore
 {
-    private static readonly JsonSerializerOptions Options = new()
+    // Generated at build time: the published exe is trimmed and has no reflection-based serializer.
+    private static readonly JsonTypeInfo<AppSettings> TypeInfo = new SettingsJsonContext(new JsonSerializerOptions
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true,
@@ -24,7 +30,7 @@ public sealed class SettingsStore
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         ReadCommentHandling = JsonCommentHandling.Skip,
         AllowTrailingCommas = true,
-    };
+    }).AppSettings;
 
     public SettingsStore(string? path = null)
     {
@@ -53,7 +59,7 @@ public sealed class SettingsStore
 
         try
         {
-            var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(Path), Options);
+            var settings = JsonSerializer.Deserialize(File.ReadAllText(Path), TypeInfo);
             if (settings is not null)
             {
                 LastStatus = SettingsLoadStatus.Loaded;
@@ -80,7 +86,7 @@ public sealed class SettingsStore
         var temp = System.IO.Path.Combine(folder, System.IO.Path.GetFileName(Path) + "." + Guid.NewGuid().ToString("N") + ".tmp");
         try
         {
-            File.WriteAllText(temp, JsonSerializer.Serialize(settings, Options));
+            File.WriteAllText(temp, JsonSerializer.Serialize(settings, TypeInfo));
             if (File.Exists(Path))
             {
                 File.Replace(temp, Path, null);

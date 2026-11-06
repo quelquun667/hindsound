@@ -1,0 +1,232 @@
+using Hindsound.Audio;
+using Hindsound.Export;
+
+namespace Hindsound.App;
+
+/// <summary>
+/// Runs work one piece at a time, in order, off the caller's thread, and holds no thread while it is empty. An exception
+/// in a piece is reported and the next piece still runs.
+/// </summary>
+internal sealed class SerialWorkQueue(Action<Exception> report)
+{
+    private readonly Queue<Action> _work = new();
+    private readonly object _lock = new();
+    private bool _running;
+
+    /// <summary>Pieces waiting or running.</summary>
+    public int Pending { get; private set; }
+
+    public void Enqueue(Action work)
+    {
+        lock (_lock)
+        {
+            _work.Enqueue(work);
+            Pending++;
+            if (_running)
+            {
+                return;
+            }
+
+            _running = true;
+        }
+
+        _ = Task.Run(Drain);
+    }
+
+    /// <summary>Waits until everything queued so far has run. False if the time ran out.</summary>
+    public bool WaitIdle(TimeSpan timeout)
+    {
+        lock (_lock)
+        {
+            var deadline = Environment.TickCount64 + (long)timeout.TotalMilliseconds;
+            while (Pending > 0)
+            {
+                var left = deadline - Environment.TickCount64;
+                if (left <= 0 || !Monitor.Wait(_lock, TimeSpan.FromMilliseconds(left)))
+                {
+                    return Pending == 0;
+                }
+            }
+
+            return true;
+        }
+    }
+
+    private void Drain()
+    {
+        while (true)
+        {
+            Action work;
+            lock (_lock)
+            {
+                if (_work.Count == 0)
+                {
+                    _running = false;
+                    return;
+                }
+
+                work = _work.Dequeue();
+            }
+
+            try
+            {
+                work();
+            }
+            catch (Exception ex)
+            {
+                Report(ex);
+            }
+
+            lock (_lock)
+            {
+                Pending--;
+                Monitor.PulseAll(_lock);
+            }
+        }
+    }
+
+    private void Report(Exception ex)
+    {
+        try
+        {
+            report(ex);
+        }
+        catch (Exception)
+        {
+            // Nothing left to tell.
+        }
+    }
+}
+
+/// <summary>What the pipeline needs from the audio side. Faked in tests.</summary>
+internal interface IClipBackend
+{
+    AudioSnapshot Snapshot(TimeSpan duration);
+
+    ClipResult Save(AudioSnapshot snapshot, ExportOptions options, string? appName);
+}
+
+/// <summary>One press of a save command.</summary>
+internal sealed record ClipRequest(TimeSpan Requested, ExportOptions Options, string? AppName, bool CopyWanted);
+
+internal enum ClipFailure
+{
+    None,
+
+    /// <summary>There was nothing in the buffer: not a failure of anything, just nothing to save yet.</summary>
+    NothingCaptured,
+
+    /// <summary>The snapshot or the writing threw.</summary>
+    Failed,
+}
+
+/// <summary>How one press ended. <see cref="Result"/> is null unless the clip was written.</summary>
+internal sealed record ClipOutcome(ClipRequest Request, ClipResult? Result, ClipFailure Failure);
+
+/// <summary>
+/// From the press to the written file. The moment is copied first: a snapshot is taken at once on its own queue, even
+/// while an earlier clip is encoding, and the encoding waits in a queue with a single encoder. Nothing here can throw
+/// into the caller, and an empty snapshot never reaches the encoder.
+/// </summary>
+internal sealed class ClipPipeline
+{
+    /// <summary>Under this time the writing goes unannounced.</summary>
+    public const int SavingNoticeMs = 150;
+
+    private readonly IClipBackend _backend;
+    private readonly Action<Action> _post;
+    private readonly Action<int, Action> _after;
+    private readonly Action<Exception> _report;
+    private readonly SerialWorkQueue _snapshots;
+    private readonly SerialWorkQueue _encoder;
+
+    /// <param name="backend">Takes the snapshots and writes the files.</param>
+    /// <param name="post">Runs an action on the thread of the message loop.</param>
+    /// <param name="after">On the thread of the message loop, runs an action after a delay in milliseconds.</param>
+    /// <param name="report">Where exceptions go. Any thread.</param>
+    public ClipPipeline(IClipBackend backend, Action<Action> post, Action<int, Action> after, Action<Exception> report)
+    {
+        _backend = backend;
+        _post = post;
+        _after = after;
+        _report = report;
+        _snapshots = new SerialWorkQueue(report);
+        _encoder = new SerialWorkQueue(report);
+    }
+
+    /// <summary>A write has taken over <see cref="SavingNoticeMs"/>. On the thread of the message loop.</summary>
+    public Action<ClipRequest>? SavingSlowly { get; set; }
+
+    /// <summary>A press has ended, one way or another. On the thread of the message loop.</summary>
+    public Action<ClipOutcome>? Finished { get; set; }
+
+    /// <summary>Takes the press. Returns at once.</summary>
+    public void Press(ClipRequest request) => _snapshots.Enqueue(() => TakeSnapshot(request));
+
+    /// <summary>Lets queued clips finish. False if the time ran out.</summary>
+    public bool WaitIdle(TimeSpan timeout) =>
+        _snapshots.WaitIdle(timeout) && _encoder.WaitIdle(timeout);
+
+    private void TakeSnapshot(ClipRequest request)
+    {
+        AudioSnapshot snapshot;
+        try
+        {
+            snapshot = _backend.Snapshot(request.Requested);
+        }
+        catch (Exception ex)
+        {
+            _report(ex);
+            Finish(new ClipOutcome(request, null, ClipFailure.Failed));
+            return;
+        }
+
+        if (snapshot.System.Length == 0 && snapshot.Mic.Length == 0)
+        {
+            Finish(new ClipOutcome(request, null, ClipFailure.NothingCaptured));
+            return;
+        }
+
+        _encoder.Enqueue(() => Encode(request, snapshot));
+    }
+
+    private void Encode(ClipRequest request, AudioSnapshot snapshot)
+    {
+        var done = new StrongBox();
+        _post(() => _after(SavingNoticeMs, () =>
+        {
+            if (!done.Value)
+            {
+                SavingSlowly?.Invoke(request);
+            }
+        }));
+
+        ClipOutcome outcome;
+        try
+        {
+            var result = _backend.Save(snapshot, request.Options, request.AppName);
+            outcome = new ClipOutcome(request, result, ClipFailure.None);
+        }
+        catch (Exception ex)
+        {
+            _report(ex);
+            outcome = new ClipOutcome(request, null, ClipFailure.Failed);
+        }
+
+        done.Value = true;
+        Finish(outcome);
+    }
+
+    private void Finish(ClipOutcome outcome) => _post(() => Finished?.Invoke(outcome));
+
+    private sealed class StrongBox
+    {
+        private volatile bool _value;
+
+        public bool Value
+        {
+            get => _value;
+            set => _value = value;
+        }
+    }
+}

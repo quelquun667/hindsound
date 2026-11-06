@@ -1,0 +1,446 @@
+using System.Runtime.InteropServices;
+
+namespace Hindsound.Ui;
+
+/// <summary>One notification as a prepared bitmap, plus the bars as a strip copied in, row by row, while they rise.</summary>
+internal sealed unsafe class NotificationBitmap : IDisposable
+{
+    private const float TabCut = 14, StripeWidth = 4, IconSize = 24, BarsWidth = 96, Margin = 14, Gap = 12;
+
+    private readonly nint _dib, _oldBitmap;
+    private readonly uint* _strip;
+    private readonly Pixels _pixels;
+    private readonly NotificationContent _content;
+    private readonly uint _accent;
+    private readonly bool _mirrored;
+    private readonly int _stripLeft, _stripTop, _stripWidth, _stripHeight;
+    private float _barsScale = -1;
+
+    public nint Dc { get; }
+    public int Width { get; }
+    public int Height { get; }
+
+    public Native.RECT BarsRect => new()
+    {
+        Left = _stripLeft,
+        Top = _stripTop,
+        Right = _stripLeft + _stripWidth,
+        Bottom = _stripTop + _stripHeight,
+    };
+
+    /// <param name="content">What to draw.</param>
+    /// <param name="scale">Physical pixels per design pixel.</param>
+    /// <param name="accent">The accent colour, for the glow of the bars.</param>
+    /// <param name="mirrored">On the left edge of the screen: the tab is flipped, the text still reads left to right.</param>
+    public NotificationBitmap(NotificationContent content, double scale, uint accent, bool mirrored)
+    {
+        _content = content;
+        _accent = accent;
+        _mirrored = mirrored;
+        var s = (float)scale;
+        Width = (int)Math.Round(360 * scale);
+        Height = (int)Math.Round(64 * scale);
+
+        Native.BITMAPINFOHEADER info = default;
+        info.Size = (uint)sizeof(Native.BITMAPINFOHEADER);
+        info.Width = Width;
+        info.Height = -Height;
+        info.Planes = 1;
+        info.BitCount = 32;
+        Dc = Native.CreateCompatibleDC(0);
+        void* bits;
+        _dib = Native.CreateDIBSection(Dc, &info, 0, &bits, 0, 0);
+        if (_dib == 0)
+        {
+            Native.DeleteDC(Dc);
+            throw new InvalidOperationException("CreateDIBSection failed");
+        }
+
+        _oldBitmap = Native.SelectObject(Dc, _dib);
+        _pixels = new Pixels((uint*)bits, Width, Height);
+
+        var visualLeft = VisualLeft(content, mirrored);
+        _stripLeft = (int)MathF.Floor((visualLeft - 5) * s);
+        _stripTop = (int)MathF.Floor(7 * s);
+        _stripWidth = (int)MathF.Ceiling((visualLeft + 101) * s) - _stripLeft;
+        _stripHeight = Height - 2 * _stripTop;
+        _strip = content.HasBars ? (uint*)NativeMemory.Alloc((nuint)(_stripWidth * _stripHeight * sizeof(uint))) : null;
+
+        Draw(s, visualLeft);
+    }
+
+    /// <summary>Design pixels from the left of the bitmap to the bars or the icon.</summary>
+    public static float VisualLeft(NotificationContent content, bool mirrored) =>
+        mirrored ? 360 - Margin - (content.HasBars ? BarsWidth : IconSize) : Margin;
+
+    /// <summary>Design pixels from the left of the bitmap to the text.</summary>
+    public static float TextLeft(NotificationContent content, bool mirrored) =>
+        mirrored ? StripeWidth + Margin : Margin + (content.HasBars ? BarsWidth : IconSize) + Gap;
+
+    /// <summary>Width of the text in design pixels: what is left between the visual and the stripe.</summary>
+    public static float TextWidth(NotificationContent content) =>
+        360 - Margin - (content.HasBars ? BarsWidth : IconSize) - Gap - Margin - StripeWidth;
+
+    private void Draw(float s, float visualLeft)
+    {
+        _pixels.FillTab(0, TabCut * s, NotificationPalette.Border);
+        _pixels.FillTab(s, TabCut * s, NotificationPalette.Fill);
+        DrawStripe(s);
+        if (_mirrored)
+        {
+            _pixels.MirrorHorizontally();
+        }
+
+        if (_content.HasBars)
+        {
+            DrawBars(s, visualLeft);
+        }
+        else
+        {
+            NotificationIcons.Draw(_pixels, _content.Visual, _content.VisualColor, visualLeft * s, 20 * s, s);
+        }
+
+        using var painter = new TextPainter(Dc, _pixels);
+        var titleFont = new FontSpec("Bahnschrift SemiBold SemiConden", 19 * s, false);
+        var bodyFont = new FontSpec("Segoe UI", 13 * s, false);
+        var keyFont = new FontSpec("Cascadia Mono", (_content.SmallKeys ? 10 : 12) * s, true);
+
+        var textLeft = TextLeft(_content, _mirrored) * s;
+        var textWidth = TextWidth(_content) * s;
+        painter.Text(titleFont, painter.Fit(titleFont, _content.Title, textWidth), textLeft, 8.7f * s, NotificationPalette.Title);
+
+        var rowTop = MathF.Round(34 * s);
+        var rowHeight = MathF.Round(20 * s);
+        var keysWidth = KeysWidth(painter, keyFont, s);
+        var body = _content.Keys.Count > 0
+            ? BodyBeforeKeys(painter, bodyFont, textWidth - keysWidth)
+            : painter.Fit(bodyFont, _content.Body, textWidth);
+        painter.Text(bodyFont, body, textLeft, rowTop + (rowHeight - painter.LineHeight(bodyFont)) / 2, NotificationPalette.Muted);
+
+        var x = MathF.Round(textLeft + painter.Measure(bodyFont, body) + 6 * s);
+        for (var i = 0; i < _content.Keys.Count; i++)
+        {
+            x = DrawKey(painter, keyFont, _content.Keys[i], x, rowTop, rowHeight, s) + MathF.Round(4 * s);
+        }
+    }
+
+    // A long shortcut wins over the sentence: the keys are the useful part of the row.
+    private string BodyBeforeKeys(TextPainter painter, FontSpec font, float width)
+    {
+        if (painter.Measure(font, _content.Body) <= width)
+        {
+            return _content.Body;
+        }
+
+        var lastSentence = _content.Body[(_content.Body.LastIndexOf(' ') + 1)..];
+        return painter.Measure(font, lastSentence) <= width ? lastSentence : string.Empty;
+    }
+
+    private float KeysWidth(TextPainter painter, FontSpec font, float s)
+    {
+        var width = 6 * s;
+        foreach (var key in _content.Keys)
+        {
+            width += MathF.Round(painter.Measure(font, key) + 2 * (KeyPadding * s + s)) + MathF.Round(4 * s);
+        }
+
+        return width;
+    }
+
+    private float KeyPadding => _content.SmallKeys ? 4 : 6;
+
+    private float DrawKey(TextPainter painter, FontSpec font, string text, float left, float rowTop, float rowHeight, float s)
+    {
+        var height = _content.SmallKeys ? MathF.Round(16 * s) : rowHeight;
+        var top = rowTop + MathF.Floor((rowHeight - height) / 2);
+        var textWidth = painter.Measure(font, text);
+        var right = left + MathF.Round(textWidth + 2 * (KeyPadding * s + s));
+        var radius = 3 * s;
+        _pixels.FillRoundRect(left, top, right, top + height, radius, NotificationPalette.CapBorder);
+        _pixels.FillRoundRect(left + s, top + s, right - s, top + height - s, MathF.Max(0, radius - s), NotificationPalette.CapFill);
+        painter.Text(font, text, left + (right - left - textWidth) / 2, top + (height - painter.LineHeight(font)) / 2, NotificationPalette.Title);
+        return right;
+    }
+
+    private void DrawStripe(float s)
+    {
+        var stripeLeft = Width - (int)MathF.Round(StripeWidth * s);
+        if (_content.StripeGlows)
+        {
+            var sigma = 20 * s / 3;
+            var pad = (int)MathF.Ceiling(sigma * 3);
+            var maskWidth = Width - stripeLeft + 2 * pad;
+            var maskHeight = Height + 2 * pad;
+            var mask = (byte*)NativeMemory.AllocZeroed((nuint)(maskWidth * maskHeight));
+            for (var y = pad; y < pad + Height; y++)
+            {
+                new Span<byte>(mask + y * maskWidth + pad, Width - stripeLeft).Fill(255);
+            }
+
+            _pixels.Glow(mask, stripeLeft - pad, -pad, maskWidth, maskHeight, sigma, 0.7f, _content.Stripe);
+            NativeMemory.Free(mask);
+        }
+
+        _pixels.FillRect(stripeLeft, 0, Width, Height, _content.Stripe);
+    }
+
+    private void DrawBars(float s, float visualLeft)
+    {
+        var columns = _content.Bars;
+        var mask = (byte*)NativeMemory.AllocZeroed((nuint)(_stripWidth * _stripHeight));
+        var bars = stackalloc Native.RECT[columns.Count];
+        var anyActive = false;
+        for (var i = 0; i < columns.Count; i++)
+        {
+            var left = (int)MathF.Floor((visualLeft + 1 + i * 4) * s + 0.5f);
+            var right = left + (int)MathF.Round(2 * s);
+            var height = (int)MathF.Round(columns[i].Height * s);
+            var top = (Height - height) / 2;
+            bars[i] = new Native.RECT { Left = left, Top = top, Right = right, Bottom = top + height };
+            if (!columns[i].Active)
+            {
+                continue;
+            }
+
+            anyActive = true;
+            for (var y = top; y < top + height; y++)
+            {
+                var row = mask + (y - _stripTop) * _stripWidth - _stripLeft;
+                for (var x = left; x < right; x++)
+                {
+                    row[x] = (byte)(255 * Pixels.RoundRectCoverage(x + 0.5f, y + 0.5f, left, top, right, top + height, s));
+                }
+            }
+        }
+
+        if (anyActive)
+        {
+            _pixels.Glow(mask, _stripLeft, _stripTop, _stripWidth, _stripHeight, 6 * s / 3, 0.55f, _accent);
+        }
+
+        NativeMemory.Free(mask);
+        for (var i = 0; i < columns.Count; i++)
+        {
+            ref var bar = ref bars[i];
+            _pixels.FillRoundRect(bar.Left, bar.Top, bar.Right, bar.Bottom, s, columns[i].Active ? _accent : NotificationPalette.Faint);
+        }
+
+        for (var y = 0; y < _stripHeight; y++)
+        {
+            new ReadOnlySpan<uint>(_pixels.Row(y + _stripTop) + _stripLeft, _stripWidth).CopyTo(new Span<uint>(_strip + y * _stripWidth, _stripWidth));
+        }
+    }
+
+    /// <summary>Redraws the bars at the given vertical scale, centred. Returns false when nothing changed.</summary>
+    public bool SetBarsScale(float scale)
+    {
+        if (_strip == null || scale == _barsScale)
+        {
+            return false;
+        }
+
+        _barsScale = scale;
+        var center = Height / 2f;
+        for (var y = _stripTop; y < _stripTop + _stripHeight; y++)
+        {
+            var target = new Span<uint>(_pixels.Row(y) + _stripLeft, _stripWidth);
+            var source = (int)MathF.Floor(center + (y + 0.5f - center) / scale) - _stripTop;
+            if (source < 0 || source >= _stripHeight)
+            {
+                target.Fill(0xFF000000 | NotificationPalette.Fill);
+            }
+            else
+            {
+                new ReadOnlySpan<uint>(_strip + source * _stripWidth, _stripWidth).CopyTo(target);
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>The colour of a pixel, for tests.</summary>
+    public uint PixelAt(int x, int y) => _pixels.Row(y)[x];
+
+    /// <summary>Writes the bitmap over the dark desktop colour, to check the drawing without showing anything.</summary>
+    public void DumpBmp(string path)
+    {
+        SetBarsScale(1);
+        const int headerSize = 54;
+        var rowBytes = Width * 4;
+        var file = new byte[headerSize + rowBytes * Height];
+        file[0] = (byte)'B';
+        file[1] = (byte)'M';
+        BitConverter.TryWriteBytes(file.AsSpan(2), file.Length);
+        BitConverter.TryWriteBytes(file.AsSpan(10), headerSize);
+        BitConverter.TryWriteBytes(file.AsSpan(14), 40);
+        BitConverter.TryWriteBytes(file.AsSpan(18), Width);
+        BitConverter.TryWriteBytes(file.AsSpan(22), -Height);
+        BitConverter.TryWriteBytes(file.AsSpan(26), (short)1);
+        BitConverter.TryWriteBytes(file.AsSpan(28), (short)32);
+        for (var y = 0; y < Height; y++)
+        {
+            var row = _pixels.Row(y);
+            for (var x = 0; x < Width; x++)
+            {
+                var value = row[x];
+                var keep = 255 - (value >> 24);
+                var r = ((value >> 16) & 0xFF) + 0x0D * keep / 255;
+                var g = ((value >> 8) & 0xFF) + 0x0F * keep / 255;
+                var b = (value & 0xFF) + 0x13 * keep / 255;
+                BitConverter.TryWriteBytes(file.AsSpan(headerSize + y * rowBytes + x * 4), 0xFF000000 | (r << 16) | (g << 8) | b);
+            }
+        }
+
+        File.WriteAllBytes(path, file);
+    }
+
+    public void Dispose()
+    {
+        Native.SelectObject(Dc, _oldBitmap);
+        Native.DeleteObject(_dib);
+        Native.DeleteDC(Dc);
+        NativeMemory.Free(_strip);
+    }
+}
+
+internal readonly record struct FontSpec(string Face, float Size, bool Monospace);
+
+/// <summary>GDI text on the opaque tab. No extra module: gdi32 is already loaded by user32.</summary>
+internal sealed unsafe class TextPainter(nint dc, Pixels pixels) : IDisposable
+{
+    private const int StockSystemFont = 13;
+    private readonly Dictionary<FontSpec, nint> _fonts = [];
+
+    public float Measure(FontSpec font, string text)
+    {
+        Native.SelectObject(dc, Font(font));
+        Native.SIZE size;
+        Native.GetTextExtentPoint32W(dc, text, text.Length, &size);
+        return size.Cx;
+    }
+
+    public float LineHeight(FontSpec font)
+    {
+        Native.SelectObject(dc, Font(font));
+        Native.TEXTMETRICW metrics;
+        Native.GetTextMetricsW(dc, &metrics);
+        return metrics.Height;
+    }
+
+    /// <summary>The text, cut with an ellipsis if it would run under the stripe.</summary>
+    public string Fit(FontSpec font, string text, float width)
+    {
+        if (Measure(font, text) <= width)
+        {
+            return text;
+        }
+
+        for (var length = text.Length - 1; length > 0; length--)
+        {
+            var cut = text[..length].TrimEnd() + "...";
+            if (Measure(font, cut) <= width)
+            {
+                return cut;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    public void Text(FontSpec font, string text, float x, float top, uint rgb)
+    {
+        if (text.Length == 0)
+        {
+            return;
+        }
+
+        Native.SelectObject(dc, Font(font));
+        Native.SetBkMode(dc, Native.BK_TRANSPARENT);
+        Native.SetTextColor(dc, ((rgb & 0xFF) << 16) | (rgb & 0xFF00) | ((rgb >> 16) & 0xFF));
+        Native.SIZE size;
+        Native.GetTextExtentPoint32W(dc, text, text.Length, &size);
+        var left = (int)MathF.Round(x);
+        var y = (int)MathF.Round(top);
+        Native.TextOutW(dc, left, y, text, text.Length);
+
+        // GDI clears the alpha byte of what it touches: the text sits on an opaque fill, so it goes back to opaque.
+        for (var row = Math.Max(0, y - 2); row < Math.Min(pixels.Height, y + size.Cy + 2); row++)
+        {
+            var line = pixels.Row(row);
+            for (var col = Math.Max(0, left - 2); col < Math.Min(pixels.Width, left + size.Cx + 2); col++)
+            {
+                line[col] |= 0xFF000000;
+            }
+        }
+    }
+
+    private nint Font(FontSpec font)
+    {
+        if (!_fonts.TryGetValue(font, out var handle))
+        {
+            handle = Native.CreateFontW(-(int)MathF.Floor(font.Size + 0.5f), 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, Native.ANTIALIASED_QUALITY,
+                font.Monospace ? (uint)Native.FIXED_PITCH_MODERN : 0, font.Face);
+            _fonts[font] = handle;
+        }
+
+        return handle;
+    }
+
+    public void Dispose()
+    {
+        Native.SelectObject(dc, Native.GetStockObject(StockSystemFont));
+        foreach (var handle in _fonts.Values)
+        {
+            Native.DeleteObject(handle);
+        }
+    }
+}
+
+/// <summary>The icons of the notification, as signed distances over a 24 x 24 design box (the paths of the mockup).</summary>
+internal static unsafe class NotificationIcons
+{
+    public static void Draw(Pixels pixels, NotificationVisual visual, uint rgb, float left, float top, float s)
+    {
+        var size = 24 * s;
+        for (var y = Math.Max(0, (int)top); y < Math.Min(pixels.Height, (int)MathF.Ceiling(top + size)); y++)
+        {
+            var row = pixels.Row(y);
+            for (var x = Math.Max(0, (int)left); x < Math.Min(pixels.Width, (int)MathF.Ceiling(left + size)); x++)
+            {
+                var distance = Distance(visual, (x + 0.5f - left) / s, (y + 0.5f - top) / s);
+                Pixels.Blend(row + x, rgb, Pixels.Clamp(0.5f - distance * s));
+            }
+        }
+    }
+
+    /// <summary>Distance in design pixels to the shape, negative inside.</summary>
+    public static float Distance(NotificationVisual visual, float x, float y) => visual switch
+    {
+        NotificationVisual.Triangle => Triangle(x, y),
+        NotificationVisual.Pause => MathF.Min(Sdf.RoundRect(x, y, 6, 4, 10, 20, 1), Sdf.RoundRect(x, y, 14, 4, 18, 20, 1)),
+        NotificationVisual.Dot => Sdf.Circle(x, y, 12, 12, 5),
+        NotificationVisual.Headset => Headset(x, y),
+        NotificationVisual.Pending => MathF.Min(Sdf.Circle(x, y, 5, 12, 2), MathF.Min(Sdf.Circle(x, y, 12, 12, 2), Sdf.Circle(x, y, 19, 12, 2))),
+        _ => float.MaxValue,
+    };
+
+    private static float Triangle(float x, float y)
+    {
+        var outline = MathF.Min(
+            Sdf.Segment(x, y, 12, 3.5f, 22, 20.5f, 2),
+            MathF.Min(Sdf.Segment(x, y, 22, 20.5f, 2, 20.5f, 2), Sdf.Segment(x, y, 2, 20.5f, 12, 3.5f, 2)));
+        var mark = MathF.Min(Sdf.Segment(x, y, 12, 9.5f, 12, 14, 2), Sdf.Circle(x, y, 12, 17.2f, 1.15f));
+        return MathF.Min(outline, mark);
+    }
+
+    private static float Headset(float x, float y)
+    {
+        const float stroke = 1.8f;
+        var arc = y <= 12
+            ? MathF.Abs(Sdf.Circle(x, y, 12, 12, 8)) - stroke / 2
+            : MathF.Min(Sdf.Segment(x, y, 4, 12, 4, 15, stroke), Sdf.Segment(x, y, 20, 12, 20, 15, stroke));
+        var leftCup = MathF.Abs(Sdf.RoundRect(x, y, 3, 14, 7.5f, 21, 1.2f)) - stroke / 2;
+        var rightCup = MathF.Abs(Sdf.RoundRect(x, y, 16.5f, 14, 21, 21, 1.2f)) - stroke / 2;
+        return MathF.Min(arc, MathF.Min(leftCup, rightCup));
+    }
+}

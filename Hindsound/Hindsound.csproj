@@ -1,16 +1,69 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
+  <!--
+    No interface framework: Win32 and GDI by P/Invoke (Hindsound/Ui). Measured on 06/11/2026: 14 MB exe and 16 MB of RAM,
+    against 133 MB and 81 to 96 MB with WPF. The publish settings live in Properties/PublishProfiles/win-x64.pubxml,
+    so Hindsound.Tests keeps building this project as an ordinary one.
+  -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <UseWPF>true</UseWPF>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <StartupObject>Hindsound.App.Program</StartupObject>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <LameVersion>2.1.0</LameVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NAudio" Version="3.3.0" />
-    <PackageReference Include="NAudio.Lame" Version="2.1.0" />
+    <InternalsVisibleTo Include="Hindsound.Tests" />
   </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NAudio.Wasapi" Version="3.3.0" />
+    <PackageReference Include="NAudio.Lame" Version="$(LameVersion)" />
+  </ItemGroup>
+
+  <!--
+    NAudio.Lame keeps its P/Invoke layer, LameDLLWrap, as an embedded resource and loads it at run time through
+    AssemblyResolve. In a trimmed exe that fails (FileNotFoundException, seen on 06/11/2026), and ClipSaver then silently
+    writes WAV files. So for a trimmed publish the x64 layer is pulled out at build time and referenced as an ordinary
+    assembly: the trimmer sees it, the resolver never runs, and the 32-bit library stays out of the exe.
+  -->
+  <UsingTask TaskName="ExtractLameWrap" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <Source ParameterType="System.String" Required="true" />
+      <Target ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        var assembly = System.Reflection.Assembly.Load(System.IO.File.ReadAllBytes(Source));
+        using (var resource = assembly.GetManifestResourceStream("NAudio.Lame.x64.LameDLLWrap.dll"))
+        {
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(Target));
+            using (var file = System.IO.File.Create(Target))
+            {
+                resource.CopyTo(file);
+            }
+        }
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="ReferenceLameWrapWhenTrimmed" BeforeTargets="ResolveAssemblyReferences;AssignTargetPaths" Condition="'$(PublishTrimmed)' == 'true'">
+    <PropertyGroup>
+      <LameWrapPath>$(MSBuildProjectDirectory)\$(IntermediateOutputPath)lame\LameDLLWrap.dll</LameWrapPath>
+      <ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>None</ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>
+    </PropertyGroup>
+    <ExtractLameWrap Condition="!Exists('$(LameWrapPath)')" Source="$(NuGetPackageRoot)naudio.lame\$(LameVersion)\lib\netstandard2.0\NAudio.Lame.dll" Target="$(LameWrapPath)" />
+    <ItemGroup>
+      <Reference Include="LameDLLWrap">
+        <HintPath>$(LameWrapPath)</HintPath>
+      </Reference>
+      <None Remove="@(None)" Condition="'%(Filename)%(Extension)' == 'libmp3lame.32.dll'" />
+    </ItemGroup>
+  </Target>
 
 </Project>
