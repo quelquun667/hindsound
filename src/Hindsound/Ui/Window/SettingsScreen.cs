@@ -107,6 +107,7 @@ internal sealed partial class SettingsScreen
     private string? _scrolledAwayId;
     private string? _hoverId;
     private bool _forceEditText;
+    private bool _clicking;
     private float _mouseX = -1, _mouseY = -1;
     private float _scroll;
     private float _pressScroll;
@@ -337,6 +338,16 @@ internal sealed partial class SettingsScreen
         if (next >= 0)
         {
             SetFocus(stops[next].Id);
+        }
+    }
+
+    // By the mouse the choice of Custom is made, and typing comes next. By the keyboard Custom is one stop on the way along
+    // the arrows, and Tab goes on to the field.
+    private void FocusFieldIfClicked(string id)
+    {
+        if (_clicking)
+        {
+            SetFocus(id);
         }
     }
 
@@ -803,7 +814,9 @@ internal sealed partial class SettingsScreen
 
         _pressedId = widget.Id;
         _host.CaptureMouse();
+        _clicking = true;
         widget.OnPress(x, PressY(widget, y));
+        _clicking = false;
     }
 
     public void MouseUp(float x, float y)

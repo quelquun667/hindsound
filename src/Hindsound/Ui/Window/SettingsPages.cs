@@ -349,6 +349,7 @@ internal sealed partial class SettingsScreen
             _clipField.Draft = ClipFieldText();
             _clipField.Message = null;
             Refresh();
+            FocusFieldIfClicked(ClipFieldId);
             return;
         }
 
@@ -568,6 +569,7 @@ internal sealed partial class SettingsScreen
             _hexField.Message = null;
             _forceEditText = true;
             Refresh();
+            FocusFieldIfClicked(HexFieldId);
             return;
         }
 
