@@ -58,6 +58,20 @@ public class NotificationStatesTests
         AssertState(NotificationStates.LastClipGone(), K.LastClipGone, "Last clip is gone", "It was moved or deleted", P.Amber, NotificationVisual.Triangle);
 
     [Fact]
+    public void Mic_lost() =>
+        AssertState(NotificationStates.MicLost(), K.MicLost, "Microphone lost", "Clips have no voice until it's back", P.Amber, NotificationVisual.Triangle);
+
+    [Fact]
+    public void Mic_back_is_quiet()
+    {
+        var content = NotificationStates.MicBack();
+        Assert.Equal(K.MicBack, content.Kind);
+        Assert.Equal("Microphone back", content.Title);
+        Assert.Equal(P.Muted, content.Stripe);
+        Assert.False(content.StripeGlows);
+    }
+
+    [Fact]
     public void Saved_and_copied() =>
         AssertState(NotificationStates.ForClip(Clip(), Thirty, true, true, Accent), K.Saved, "Clip saved (0:30)", "Copied. Paste", Accent, NotificationVisual.Bars, "Ctrl", "V");
 

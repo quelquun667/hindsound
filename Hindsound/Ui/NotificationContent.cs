@@ -26,6 +26,8 @@ public enum NotificationKind
     StartupNotChanged,
     StillSaving,
     LastClipGone,
+    MicLost,
+    MicBack,
 }
 
 /// <summary>What sits on the inner side of the tab, before the text.</summary>
@@ -160,6 +162,12 @@ internal static class NotificationStates
 
     public static NotificationContent LastClipGone() =>
         Icon(NotificationKind.LastClipGone, "Last clip is gone", "It was moved or deleted", NotificationPalette.Amber, NotificationVisual.Triangle, NotificationPalette.Amber);
+
+    public static NotificationContent MicLost() =>
+        Icon(NotificationKind.MicLost, "Microphone lost", "Clips have no voice until it's back", NotificationPalette.Amber, NotificationVisual.Triangle, NotificationPalette.Amber);
+
+    public static NotificationContent MicBack() =>
+        Icon(NotificationKind.MicBack, "Microphone back", "Clips have your voice again", NotificationPalette.Muted, NotificationVisual.Headset, NotificationPalette.Muted);
 
     /// <summary>The start found a broken settings file.</summary>
     /// <param name="copyKept">A copy of it exists; otherwise it stayed in its place.</param>

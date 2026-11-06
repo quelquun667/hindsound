@@ -54,6 +54,15 @@ internal static class StatusTransitions
         }
     }
 
+    /// <summary>Whether a status still waiting to be shown has stopped being true.</summary>
+    public static bool HasCeased(NotificationKind kind, AudioEngineStatus status) => kind switch
+    {
+        NotificationKind.CaptureOn => status.Activity != CaptureActivity.Capturing,
+        NotificationKind.NoDevice => status.Activity != CaptureActivity.NoDevice,
+        NotificationKind.MicLost => status.MicCapturing || !status.MicEnabled,
+        _ => false,
+    };
+
     public static TrayState TrayStateOf(CaptureActivity activity) => activity switch
     {
         CaptureActivity.Paused => TrayState.Paused,

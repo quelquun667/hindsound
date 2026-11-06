@@ -71,6 +71,8 @@ internal static class NotificationDump
             ("startup-notchanged", NotificationStates.StartupNotChanged()),
             ("stillsaving", NotificationStates.StillSaving()),
             ("lastclip-gone", NotificationStates.LastClipGone()),
+            ("miclost", NotificationStates.MicLost()),
+            ("micback", NotificationStates.MicBack()),
         ];
     }
 }

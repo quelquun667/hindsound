@@ -13,8 +13,8 @@ namespace Hindsound.App;
 /// </summary>
 internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 {
-    private const int CatchUpPollMs = 500;
-    private const int CatchUpTries = 60; // 30 s
+    private const int NoticeRetryMs = 500;
+    private const int NoticeRetries = 60; // 30 s
     private const int SnapshotReleaseDelayMs = 500;
     private const int SelfTestExitDelayMs = 3300;
     private const int ProbeStepMs = 300;
@@ -41,6 +41,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private AppSettings _settings = new();
     private readonly SettingsFileState _settingsFile = new();
     private readonly NoticeQueue _notices = new();
+    private readonly PendingNotices _pending;
+    private bool _pendingPollArmed;
     private bool _canShowNotices;
     private bool _noticeRetrying;
     private int _noticeRetries;
@@ -57,7 +59,6 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private ClipResult? _lastClip;
     private DateTime _lastClipTime;
     private TimeSpan _lastRequested;
-    private int _catchUpGeneration;
 
     private double _cpuBeforeNotification;
     private int _exitCode;
@@ -67,6 +68,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         _options = options;
         _journal = journal;
         _store = new SettingsStore(options.SettingsPath);
+        _pending = new PendingNotices(journal.Write);
         _saver = new ClipSaver(openMp3: OpenMp3);
     }
 
@@ -646,6 +648,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
     // ---------------------------------------------------------------- showing
 
+    private static long NowMs => Environment.TickCount64;
+
     private void ShowClip(NotificationContent content, bool saved, bool important, bool copyFailed = false)
     {
         var (state, covers) = Surface();
@@ -658,12 +662,14 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
         if (decision.ShowOverlay)
         {
+            _pending.NewerClipShown();
             Present(content, decision.ClickThrough);
         }
 
         if (decision.CatchUpLater)
         {
-            WaitForDesktop(content);
+            _pending.AddClip(content, important, NowMs);
+            ArmPendingPoll();
         }
     }
 
@@ -728,14 +734,14 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     // The same pace and the same limit as a clip waiting for the desktop; past it, the next press or menu looks again.
     private void RetryNoticeLater()
     {
-        if (_noticeRetrying || _noticeRetries >= CatchUpTries)
+        if (_noticeRetrying || _noticeRetries >= NoticeRetries)
         {
             return;
         }
 
         _noticeRetrying = true;
         _noticeRetries++;
-        _loop.After(CatchUpPollMs, () =>
+        _loop.After(NoticeRetryMs, () =>
         {
             _noticeRetrying = false;
             ShowNextNotice();
@@ -775,31 +781,47 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
         _notices.Finished();
         ShowNextNotice();
+        ShowNextPendingOnDesktop();
     }
 
-    /// <summary>The check only runs here, every 500 ms for 30 s at most. A newer clip replaces the one waiting.</summary>
-    private void WaitForDesktop(NotificationContent content)
+    /// <summary>The check only runs while something waits for the desktop, and stops by itself once nothing does.</summary>
+    private void ArmPendingPoll()
     {
-        var generation = ++_catchUpGeneration;
-        var tries = 0;
-        _loop.After(CatchUpPollMs, Check);
-
-        void Check()
+        if (_pendingPollArmed || !_pending.Any)
         {
-            if (generation != _catchUpGeneration)
-            {
-                return;
-            }
+            return;
+        }
 
-            var (state, covers) = Surface();
-            if (FullscreenPolicy.BackOnDesktop(state, covers))
-            {
-                Present(content, clickThrough: false);
-            }
-            else if (++tries < CatchUpTries)
-            {
-                _loop.After(CatchUpPollMs, Check);
-            }
+        _pendingPollArmed = true;
+        _loop.After(_pending.PollDelayMs(NowMs), PollPending);
+    }
+
+    private void PollPending()
+    {
+        _pendingPollArmed = false;
+        try
+        {
+            _pending.GiveUpOld(NowMs);
+            ShowNextPendingOnDesktop();
+        }
+        finally
+        {
+            ArmPendingPoll();
+        }
+    }
+
+    // One at a time: what is next waits for this one to leave, and comes back here through OnNotificationFinished.
+    private void ShowNextPendingOnDesktop()
+    {
+        if (_notification.Showing is not null || !_pending.Any)
+        {
+            return;
+        }
+
+        var (state, covers) = Surface();
+        if (FullscreenPolicy.BackOnDesktop(state, covers) && _pending.TakeNext(NowMs) is { } next)
+        {
+            Present(next, clickThrough: false);
         }
     }
 
