@@ -14,7 +14,7 @@ internal sealed class HindsoundApp : IClipBackend
 {
     private const int CatchUpPollMs = 500;
     private const int CatchUpTries = 60; // 30 s
-    private const int SelfTestStartDelayMs = 3000;
+    private const int SnapshotReleaseDelayMs = 500;
     private const int SelfTestExitDelayMs = 3300;
     private static readonly TimeSpan QueuedClipsLimit = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan EngineStopLimit = TimeSpan.FromSeconds(5);
@@ -22,7 +22,7 @@ internal sealed class HindsoundApp : IClipBackend
     private readonly AppOptions _options;
     private readonly Journal _journal;
     private readonly SettingsStore _store;
-    private readonly ClipSaver _saver = new();
+    private readonly ClipSaver _saver;
 
     private UiLoop _loop = null!;
     private TrayIcon _tray = null!;
@@ -50,6 +50,21 @@ internal sealed class HindsoundApp : IClipBackend
         _options = options;
         _journal = journal;
         _store = new SettingsStore(options.SettingsPath);
+        _saver = new ClipSaver(openMp3: OpenMp3);
+    }
+
+    // The saver falls back to WAV without saying why: the reason is kept here.
+    private IAudioFileWriter OpenMp3(string path, int channels, int bitrateKbps)
+    {
+        try
+        {
+            return Encoders.OpenMp3(path, channels, bitrateKbps);
+        }
+        catch (Exception ex)
+        {
+            _journal.Write("the MP3 encoder failed: " + ex);
+            throw;
+        }
     }
 
     public int Run()
@@ -77,6 +92,7 @@ internal sealed class HindsoundApp : IClipBackend
 
         ApplyStartupRegistration();
         StartHotkeys();
+        _journal.Write($"ready, before the capture: {Journal.Memory()}");
         StartEngine();
 
         if (_options.ExitAfterSeconds is { } seconds)
@@ -291,7 +307,7 @@ internal sealed class HindsoundApp : IClipBackend
         _journal.Write($"capture started: {status.Activity}, system {status.SystemDeviceName ?? "(none)"}, mic capturing {status.MicCapturing}, own sounds excluded {status.OwnSoundsExcluded}, {Journal.Memory()}");
         if (_options.SelfTestSave)
         {
-            _loop.After(SelfTestStartDelayMs, RunSelfTestPress);
+            _loop.After((int)(_options.SelfTestDelaySeconds * 1000), RunSelfTestPress);
         }
     }
 
@@ -347,8 +363,19 @@ internal sealed class HindsoundApp : IClipBackend
     private void OnSavingSlowly(ClipRequest request) =>
         ShowStatus(NotificationStates.Saving(request.Requested), important: false);
 
+    // A snapshot is one large array, and only a full collection gives it back. An app that sits in the background for
+    // hours should not keep the last clip in memory; off this thread, and only once no other clip is on its way.
+    private void ReleaseSnapshotMemory() => _ = Task.Run(() =>
+    {
+        if (_pipeline.WaitIdle(TimeSpan.Zero))
+        {
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: false);
+        }
+    });
+
     private void OnClipFinished(ClipOutcome outcome)
     {
+        _loop.After(SnapshotReleaseDelayMs, ReleaseSnapshotMemory);
         if (outcome.Result is not { } result)
         {
             var content = outcome.Failure == ClipFailure.NothingCaptured ? NotificationStates.NothingToSave() : NotificationStates.SaveFailed();
@@ -402,7 +429,7 @@ internal sealed class HindsoundApp : IClipBackend
         _journal.Write($"presentation: state {state}, covers screen {covers}: {decision}");
         if (decision.PlaySound)
         {
-            ConfirmSound.Play();
+            _journal.Write($"confirmation sound started: {ConfirmSound.Play()}");
         }
 
         if (decision.ShowOverlay)
@@ -450,6 +477,7 @@ internal sealed class HindsoundApp : IClipBackend
             (area, dpi) = ForegroundWindow.ActiveMonitor();
         }
 
+        _journal.Write($"notification {content.Kind}: {content.Title} / {content.Body}");
         _cpuBeforeNotification = Journal.CpuMilliseconds();
         var leftEdge = string.Equals(_settings.General.NotificationPosition, "left", StringComparison.OrdinalIgnoreCase);
         _notification.Present(content, new NotificationPlacement(area, dpi, clickThrough, leftEdge), Accent);
@@ -614,7 +642,8 @@ internal sealed class HindsoundApp : IClipBackend
             return;
         }
 
-        var ok = outcome.Result is { } result && !result.Rescued && (!outcome.Request.CopyWanted || copied);
+        // An exe whose MP3 quietly became WAV is the failure this test exists to catch.
+        var ok = outcome.Result is { } result && !result.Rescued && !result.FellBackToWav && (!outcome.Request.CopyWanted || copied);
         _exitCode = ok ? 0 : 1;
         _journal.Write($"selftest: {(ok ? "PASS" : "FAIL")}, format asked {outcome.Request.Options.Format}, {Journal.Memory()}");
 
@@ -652,7 +681,7 @@ internal sealed class HindsoundApp : IClipBackend
             }
         }, "engine");
         Guard(() => _loop.Dispose(), "window");
-        _journal.Write("left, " + Journal.Memory());
+        _journal.Write($"left, {Journal.Memory()}, {Journal.CpuMilliseconds():F0} ms of CPU in all");
     }
 
     private void Guard(Action step, string what)

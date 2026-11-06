@@ -15,6 +15,9 @@ internal sealed record AppOptions(
     bool Offscreen = false,
     string? DumpNotificationsFolder = null)
 {
+    /// <summary><c>--selftest-delay seconds</c>: how long the capture runs before the self-test presses save. By default 3 s.</summary>
+    public double SelfTestDelaySeconds { get; init; } = 3;
+
     /// <summary>Unknown or incomplete options are ignored: the app is started by Windows, nobody could read an error.</summary>
     public static AppOptions Parse(IReadOnlyList<string> args)
     {
@@ -32,6 +35,14 @@ internal sealed record AppOptions(
                     if (double.TryParse(next, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds > 0)
                     {
                         options = options with { ExitAfterSeconds = seconds };
+                    }
+
+                    i++;
+                    break;
+                case "--selftest-delay" when next is not null:
+                    if (double.TryParse(next, NumberStyles.Float, CultureInfo.InvariantCulture, out var delay) && delay > 0)
+                    {
+                        options = options with { SelfTestDelaySeconds = delay };
                     }
 
                     i++;
