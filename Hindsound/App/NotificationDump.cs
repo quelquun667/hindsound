@@ -58,6 +58,8 @@ internal static class NotificationDump
             ("paused", NotificationStates.Paused()),
             ("on", NotificationStates.CaptureOn(300, "Ctrl+Shift+F10")),
             ("on-long", NotificationStates.CaptureOn(300, "Ctrl+Alt+Shift+F24")),
+            ("on-taken", NotificationStates.CaptureOn(300, "Ctrl+Shift+F10", "Save hotkey is taken")),
+            ("on-taken-long", NotificationStates.CaptureOn(1800, "Ctrl+Shift+F10", "Save hotkey doesn't work")),
             ("device", NotificationStates.DeviceChanged("Headset Earphone")),
             ("device-long", NotificationStates.DeviceChanged("Speakers (Realtek High Definition Audio with a very long name)")),
             ("saving", NotificationStates.Saving(thirty)),

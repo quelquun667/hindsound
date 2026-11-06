@@ -146,6 +146,22 @@ public class NotificationStatesTests
     }
 
     [Fact]
+    public void Capture_on_with_the_save_hotkey_taken_shows_no_key_and_says_so()
+    {
+        var content = NotificationStates.CaptureOn(300, "Ctrl+Shift+F10", "Save hotkey is taken");
+
+        AssertState(content, K.CaptureOn, "Capture on", "Keeping the last 5:00. Save hotkey is taken", P.Amber, NotificationVisual.Dot);
+        Assert.True(content.ClickOpensSettings);
+    }
+
+    [Fact]
+    public void Only_a_problem_with_the_hotkey_sends_a_click_to_the_settings()
+    {
+        Assert.False(NotificationStates.CaptureOn(300, "Ctrl+Shift+F10").ClickOpensSettings);
+        Assert.False(NotificationStates.NoDevice().ClickOpensSettings);
+    }
+
+    [Fact]
     public void Device_changed() =>
         AssertState(NotificationStates.DeviceChanged("Headset Earphone"), K.DeviceChanged, "Audio device changed", "Now capturing Headset Earphone", P.Muted, NotificationVisual.Headset);
 

@@ -53,6 +53,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private bool _firstRun;
     private IReadOnlyList<HotkeyResult> _hotkeyResults = [];
     private AudioEngineStatus? _lastStatus;
+    private bool _engineFailed;
     private TrayState _trayState = TrayState.Active;
     private string _trayTip = "Hindsound";
     private bool _quitting;
@@ -110,7 +111,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         _journal.Write($"started, settings: {_store.Path} ({_store.LastStatus}), {Journal.Memory()}");
 
         _loop = new UiLoop();
-        _notification = new Notification { Clicked = OpenLastClipFolder, Finished = OnNotificationFinished };
+        _notification = new Notification { Clicked = OnNotificationClicked, Finished = OnNotificationFinished };
         _pipeline = new ClipPipeline(this, _loop.Post, _loop.After, ex => _journal.Write("clip error: " + ex))
         {
             SavingSlowly = OnSavingSlowly,
@@ -415,6 +416,10 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         catch (Exception ex)
         {
             _journal.Write("hotkeys: " + ex);
+            if (!string.IsNullOrWhiteSpace(_settings.Hotkeys.SaveDefault))
+            {
+                NoteHotkeys([new HotkeyResult(HotkeyAction.SaveDefault, _settings.Hotkeys.SaveDefault, HotkeyStatus.Unavailable, HotkeyResult.UnavailableMessage)]);
+            }
         }
     }
 
@@ -431,21 +436,15 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private void NoteHotkeys(IReadOnlyList<HotkeyResult> results)
     {
         _hotkeyResults = results;
-        var problem = string.Empty;
         foreach (var result in results)
         {
             if (result.Status != HotkeyStatus.NotSet)
             {
                 _journal.Write($"hotkey {result.Action} {result.Gesture}: {result.Status}");
             }
-
-            if (!result.Ok)
-            {
-                problem = $"{result.Gesture}: {result.Message}";
-            }
         }
 
-        SetTray(_trayState, problem.Length > 0 ? "Hindsound - " + problem : "Hindsound");
+        RefreshTray();
     }
 
     private void OnHotkey(HotkeyAction action)
@@ -497,7 +496,12 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             catch (Exception ex)
             {
                 _journal.Write("engine start: " + ex);
-                _loop.Post(() => ShowStatus(NotificationStates.NoDevice()));
+                _loop.Post(() =>
+                {
+                    _engineFailed = true;
+                    RefreshTray();
+                    ShowStatus(NotificationStates.NoDevice());
+                });
             }
         });
     }
@@ -524,13 +528,13 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
         var notice = StatusTransitions.Decide(_lastStatus, status);
         _lastStatus = status;
+        _engineFailed = false;
         _pending.WithdrawCeased(status);
         _window?.Screen.UpdateStatus(status);
-        SetTray(StatusTransitions.TrayStateOf(status.Activity), _trayTip);
         switch (notice)
         {
             case StatusNotice.CaptureOn:
-                ShowStatus(NotificationStates.CaptureOn(_settings.BufferSeconds, _settings.Hotkeys.SaveDefault));
+                ShowStatus(NotificationStates.CaptureOn(_settings.BufferSeconds, _settings.Hotkeys.SaveDefault, StatusTransitions.SaveHotkeyProblem(_hotkeyResults)));
                 break;
             case StatusNotice.Paused:
                 ShowStatus(NotificationStates.Paused());
@@ -542,6 +546,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
                 ShowStatus(NotificationStates.DeviceChanged(status.SystemDeviceName ?? "the default output"));
                 break;
         }
+
+        RefreshTray();
     }
 
     private void TogglePause()
@@ -673,6 +679,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         {
             _pending.AddClip(content, important, NowMs);
             ArmPendingPoll();
+            RefreshTray();
         }
     }
 
@@ -841,15 +848,19 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         if (FullscreenPolicy.BackOnDesktop(state, covers) && _pending.TakeNext(NowMs) is { } next)
         {
             Present(next, clickThrough: false);
+            RefreshTray();
         }
     }
 
     // ---------------------------------------------------------------- tray
 
-    private void SetTray(TrayState state, string tip)
+    /// <summary>Called whenever one of the things the icon says has changed.</summary>
+    private void RefreshTray()
     {
+        var (state, tip) = StatusTransitions.TrayOf(_lastStatus, _hotkeyResults, _pending.ImportantClipWaiting, _engineFailed);
         if (state != _trayState || tip != _trayTip)
         {
+            _journal.Write($"tray: {state}, {tip}");
             _trayState = state;
             _trayTip = tip;
             _tray.Update(state, Accent, tip);
@@ -911,6 +922,18 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         }
 
         OpenWithShell(folder);
+    }
+
+    private void OnNotificationClicked()
+    {
+        if (_notification.Showing is { ClickOpensSettings: true })
+        {
+            OpenSettings(firstRun: false);
+        }
+        else
+        {
+            OpenLastClipFolder();
+        }
     }
 
     private void OpenLastClipFolder()

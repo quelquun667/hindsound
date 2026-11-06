@@ -55,6 +55,9 @@ internal sealed record NotificationContent(
     uint VisualColor,
     IReadOnlyList<BarColumn> Bars)
 {
+    /// <summary>A click opens the settings, where the problem gets solved, instead of the folder of the clips.</summary>
+    public bool ClickOpensSettings { get; init; }
+
     /// <summary>The capture-on row holds three keys, so they are drawn smaller.</summary>
     public bool SmallKeys => Keys.Count > 2;
 
@@ -138,8 +141,18 @@ internal static class NotificationStates
 
     /// <param name="bufferSeconds">How much is kept.</param>
     /// <param name="saveGesture">The save shortcut, such as <c>Ctrl+Shift+F10</c>.</param>
-    public static NotificationContent CaptureOn(int bufferSeconds, string? saveGesture)
+    /// <param name="saveHotkeyProblem">Said instead of the keys when pressing them would do nothing: the user finds out now, not when the moment is gone.</param>
+    public static NotificationContent CaptureOn(int bufferSeconds, string? saveGesture, string? saveHotkeyProblem = null)
     {
+        if (saveHotkeyProblem is not null)
+        {
+            return new NotificationContent(NotificationKind.CaptureOn, "Capture on", $"Keeping the last {FormatDuration(bufferSeconds)}. {saveHotkeyProblem}", [], NotificationPalette.Amber,
+                NotificationVisual.Dot, NotificationPalette.Hot, NoBars)
+            {
+                ClickOpensSettings = true,
+            };
+        }
+
         var keys = string.IsNullOrWhiteSpace(saveGesture) ? [] : saveGesture.Split('+');
         var body = keys.Length == 0 ? $"Keeping the last {FormatDuration(bufferSeconds)}" : $"Keeping the last {FormatDuration(bufferSeconds)}. Save:";
         return new NotificationContent(NotificationKind.CaptureOn, "Capture on", body, keys, NotificationPalette.Hot, NotificationVisual.Dot, NotificationPalette.Hot, NoBars);

@@ -1,5 +1,6 @@
 using Hindsound.App;
 using Hindsound.Audio;
+using Hindsound.Input;
 using Hindsound.Settings;
 using Hindsound.Ui;
 
@@ -110,6 +111,126 @@ public class StatusTransitionsTests
     {
         var status = Status(CaptureActivity.Capturing) with { MicEnabled = enabled, MicCapturing = capturing };
         Assert.Equal(ceased, StatusTransitions.HasCeased(NotificationKind.MicLost, status));
+    }
+
+    private static readonly HotkeyResult[] AllGood = [new(HotkeyAction.SaveDefault, "Ctrl+F10", HotkeyStatus.Registered, null)];
+    private static readonly HotkeyResult[] SaveTaken = [new(HotkeyAction.SaveDefault, "Ctrl+F10", HotkeyStatus.InUse, HotkeyResult.InUseMessage)];
+    private static readonly HotkeyResult[] OtherTaken =
+    [
+        new(HotkeyAction.SaveDefault, "Ctrl+F10", HotkeyStatus.Registered, null),
+        new(HotkeyAction.Save1m, "Ctrl+F11", HotkeyStatus.InUse, HotkeyResult.InUseMessage),
+    ];
+
+    private static AudioEngineStatus Listening(CaptureActivity activity = CaptureActivity.Capturing, bool micEnabled = true, bool micCapturing = true) =>
+        Status(activity) with { MicEnabled = micEnabled, MicCapturing = micCapturing };
+
+    [Theory]
+    [InlineData(CaptureActivity.Capturing, TrayState.Active)]
+    [InlineData(CaptureActivity.Paused, TrayState.Paused)]
+    [InlineData(CaptureActivity.Stopped, TrayState.Active)]
+    public void With_no_problem_the_icon_follows_the_activity(CaptureActivity activity, TrayState expected)
+    {
+        Assert.Equal((expected, "Hindsound"), StatusTransitions.TrayOf(Listening(activity), AllGood, false));
+    }
+
+    [Fact]
+    public void No_status_yet_is_no_problem()
+    {
+        Assert.Equal((TrayState.Active, "Hindsound"), StatusTransitions.TrayOf(null, AllGood, false));
+    }
+
+    [Fact]
+    public void No_device_gives_the_triangle_and_names_itself()
+    {
+        Assert.Equal((TrayState.Error, "Hindsound - No audio device"), StatusTransitions.TrayOf(Listening(CaptureActivity.NoDevice), AllGood, false));
+    }
+
+    [Fact]
+    public void An_engine_that_could_not_start_counts_as_no_device()
+    {
+        Assert.Equal((TrayState.Error, "Hindsound - No audio device"), StatusTransitions.TrayOf(null, AllGood, false, engineFailed: true));
+    }
+
+    [Fact]
+    public void A_refused_save_hotkey_gives_the_triangle_and_says_which()
+    {
+        Assert.Equal((TrayState.Error, "Hindsound - Ctrl+F10: " + HotkeyResult.InUseMessage), StatusTransitions.TrayOf(Listening(), SaveTaken, false));
+    }
+
+    [Fact]
+    public void A_refused_save_hotkey_also_shows_over_a_pause()
+    {
+        Assert.Equal(TrayState.Error, StatusTransitions.TrayOf(Listening(CaptureActivity.Paused), SaveTaken, false).State);
+    }
+
+    [Fact]
+    public void A_clip_with_a_problem_waiting_gives_the_triangle()
+    {
+        Assert.Equal((TrayState.Error, "Hindsound - A clip has a problem"), StatusTransitions.TrayOf(Listening(), AllGood, true));
+    }
+
+    [Fact]
+    public void A_mic_not_captured_only_goes_in_the_tip()
+    {
+        Assert.Equal((TrayState.Active, "Hindsound - Microphone not captured"), StatusTransitions.TrayOf(Listening(micCapturing: false), AllGood, false));
+    }
+
+    [Theory]
+    [InlineData(CaptureActivity.Paused, true)] // nothing is captured during a pause
+    [InlineData(CaptureActivity.Capturing, false)] // the mic is off on purpose
+    public void A_mic_that_is_not_expected_is_no_problem(CaptureActivity activity, bool micEnabled)
+    {
+        Assert.Equal("Hindsound", StatusTransitions.TrayOf(Listening(activity, micEnabled, micCapturing: false), AllGood, false).Tip);
+    }
+
+    [Fact]
+    public void Another_refused_hotkey_only_goes_in_the_tip()
+    {
+        Assert.Equal((TrayState.Active, "Hindsound - Ctrl+F11: " + HotkeyResult.InUseMessage), StatusTransitions.TrayOf(Listening(), OtherTaken, false));
+    }
+
+    [Fact]
+    public void A_hotkey_being_typed_or_not_set_is_no_problem()
+    {
+        HotkeyResult[] quiet = [new(HotkeyAction.SaveDefault, null, HotkeyStatus.NotSet, null), new(HotkeyAction.Save1m, "Ctrl+F11", HotkeyStatus.Suspended, null)];
+        Assert.Equal((TrayState.Active, "Hindsound"), StatusTransitions.TrayOf(Listening(), quiet, false));
+    }
+
+    [Fact]
+    public void The_tip_names_the_first_problem_in_order()
+    {
+        var noMic = Listening(micCapturing: false);
+
+        Assert.Equal("Hindsound - No audio device", StatusTransitions.TrayOf(Listening(CaptureActivity.NoDevice, micCapturing: false), SaveTaken, true).Tip);
+        Assert.Equal("Hindsound - Ctrl+F10: " + HotkeyResult.InUseMessage, StatusTransitions.TrayOf(noMic, SaveTaken, true).Tip);
+        Assert.Equal("Hindsound - A clip has a problem", StatusTransitions.TrayOf(noMic, AllGood, true).Tip);
+        Assert.Equal("Hindsound - Microphone not captured", StatusTransitions.TrayOf(noMic, OtherTaken, false).Tip);
+    }
+
+    [Fact]
+    public void Everything_goes_back_to_normal_when_the_condition_ends()
+    {
+        Assert.Equal(TrayState.Error, StatusTransitions.TrayOf(Listening(CaptureActivity.NoDevice), SaveTaken, true).State);
+        Assert.Equal((TrayState.Active, "Hindsound"), StatusTransitions.TrayOf(Listening(), AllGood, false));
+    }
+
+    [Theory]
+    [InlineData(HotkeyStatus.Registered, null)]
+    [InlineData(HotkeyStatus.NotSet, null)]
+    [InlineData(HotkeyStatus.Suspended, null)]
+    [InlineData(HotkeyStatus.InUse, "Save hotkey is taken")]
+    [InlineData(HotkeyStatus.Duplicate, "Save hotkey is taken")]
+    [InlineData(HotkeyStatus.Invalid, "Save hotkey doesn't work")]
+    [InlineData(HotkeyStatus.Unavailable, "Save hotkey doesn't work")]
+    public void The_reminder_says_what_is_wrong_with_the_save_hotkey(HotkeyStatus status, string? problem)
+    {
+        Assert.Equal(problem, StatusTransitions.SaveHotkeyProblem([new HotkeyResult(HotkeyAction.SaveDefault, "Ctrl+F10", status, null)]));
+    }
+
+    [Fact]
+    public void Another_refused_hotkey_changes_nothing_in_the_reminder()
+    {
+        Assert.Null(StatusTransitions.SaveHotkeyProblem(OtherTaken));
     }
 
     [Fact]
