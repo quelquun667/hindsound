@@ -24,8 +24,11 @@ public partial class MainWindow : Window
     private IntPtr _shownOver;
     private TimeSpan _cpuAtShow;
 
-    public MainWindow()
+    private readonly bool _copyClip;
+
+    public MainWindow(bool copyClip)
     {
+        _copyClip = copyClip;
         InitializeComponent();
         LogPath.Text = "Log: " + ProbeLog.FilePath;
         _log.LineWritten += line =>
@@ -162,6 +165,11 @@ public partial class MainWindow : Window
 
     private string CopyClip()
     {
+        if (!_copyClip)
+        {
+            return "skipped";
+        }
+
         if (!File.Exists(_clipPath))
         {
             return "no file";

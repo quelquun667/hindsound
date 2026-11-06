@@ -8,7 +8,8 @@ namespace OverlayProbe;
 /// Throwaway tool for PLAN.MD phase 0 bis. No arguments: the hotkey window to try in real games.
 /// --audio-check: does the process-excluding loopback keep our own sound out of the capture?
 /// --tone: plays a control tone. Start it from outside, during --audio-check: a child would count as excluded.
-/// --selftest [--hardware]: shows the notification 3 times and logs its CPU cost, then exits.
+/// --selftest [--hardware] [--offscreen]: shows the notification 3 times and logs its CPU cost, then exits.
+/// --idle: creates the hidden notification window and waits, to measure memory at rest. Stop it from outside.
 public partial class App : Application
 {
     protected override async void OnStartup(StartupEventArgs e)
@@ -45,17 +46,24 @@ public partial class App : Application
         else if (e.Args.Contains("--selftest"))
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            await SelfTestAsync(softwareOnly: !e.Args.Contains("--hardware"));
+            await SelfTestAsync(softwareOnly: !e.Args.Contains("--hardware"), offscreen: e.Args.Contains("--offscreen"));
             Shutdown();
+        }
+        else if (e.Args.Contains("--idle"))
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            _idleWindow = new NotificationWindow(softwareOnly: true);
         }
         else
         {
-            MainWindow = new MainWindow();
+            MainWindow = new MainWindow(copyClip: !e.Args.Contains("--no-clipboard"));
             MainWindow.Show();
         }
     }
 
-    private static async Task SelfTestAsync(bool softwareOnly)
+    private NotificationWindow? _idleWindow;
+
+    private static async Task SelfTestAsync(bool softwareOnly, bool offscreen)
     {
         var log = new ProbeLog();
         var window = new NotificationWindow(softwareOnly);
@@ -75,7 +83,8 @@ public partial class App : Application
             finished = new TaskCompletionSource();
             process.Refresh();
             var before = process.TotalProcessorTime;
-            window.Present(info.Monitor, dpi, clickThrough: true);
+            var area = offscreen ? new NativeMethods.Rect { Left = -6000, Top = 0, Right = -5000, Bottom = 1000 } : info.Monitor;
+            window.Present(area, dpi, clickThrough: true);
             await finished.Task;
             await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
             process.Refresh();
