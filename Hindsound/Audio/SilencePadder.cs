@@ -9,7 +9,7 @@ public readonly record struct PacketPlacement(long PadFrames, int SkipFrames, bo
 /// <summary>
 /// Keeps each source on the shared timeline. The loopback delivers nothing while the PC is silent, so a packet
 /// can start well after the last one ended: that hole becomes zeros. The other small differences are clock
-/// drift between the sound card and the performance counter, corrected one frame at a time so nothing is heard.
+/// drift between the sound card and the performance counter, corrected one frame at a time, spread out by the track so nothing is heard.
 /// </summary>
 public static class SilencePadder
 {

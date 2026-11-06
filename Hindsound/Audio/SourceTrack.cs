@@ -17,8 +17,13 @@ public sealed class SourceTrack
     /// </summary>
     public const int SlackFrames = InternalFormat.SampleRate;
 
+    // A clock correction is spread over this many frames, 10 ms. Done in one frame, on a 1 kHz tone at -6 dBFS, it is a
+    // click at -33.2 dBFS above 8 kHz, 1.4 times a second at 30 ppm. Spread out, it measures -84.9 dBFS.
+    private const int FadeFrames = 480;
+
     private readonly Lock _writeGate = new();
     private readonly long _originFrame;
+    private readonly float[] _fade;
     private RingBuffer _ring;
 
     /// <param name="channels">Samples per frame.</param>
@@ -29,7 +34,15 @@ public sealed class SourceTrack
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(channels);
         Channels = channels;
         _originFrame = originFrame;
+        _fade = new float[(FadeFrames + 1) * channels];
         _ring = new RingBuffer(checked((capacityFrames + SlackFrames) * channels));
+
+        // The first correction comes minutes into a capture, on the audio thread: it must find this compiled already,
+        // which took 4.6 KB of allocation and the time to compile if it did not.
+        var warmUp = new RingBuffer(channels * 4);
+        var frames = new float[channels * 2];
+        WriteOneFrameLonger(warmUp, frames);
+        WriteOneFrameShorter(warmUp, frames);
     }
 
     public int Channels { get; }
@@ -57,13 +70,59 @@ public sealed class SourceTrack
             var placement = SilencePadder.Place(writeEnd, startFrame, frames, exact);
 
             ring.WriteSilence(placement.PadFrames * Channels);
-            var kept = samples[(placement.SkipFrames * Channels)..];
-            ring.Write(kept);
             if (placement.RepeatLastFrame)
             {
-                ring.Write(kept[^Channels..]);
+                WriteOneFrameLonger(ring, samples);
+            }
+            else if (placement.SkipFrames == 1)
+            {
+                WriteOneFrameShorter(ring, samples);
+            }
+            else
+            {
+                ring.Write(samples[(placement.SkipFrames * Channels)..]);
             }
         }
+    }
+
+    // Slides from each frame to the one before it over the fade, so the packet ends one frame later with no jump.
+    private void WriteOneFrameLonger(RingBuffer ring, ReadOnlySpan<float> samples)
+    {
+        var channels = Channels;
+        var fade = Math.Min(samples.Length / channels, FadeFrames);
+        for (var frame = 0; frame < fade; frame++)
+        {
+            var weight = (float)frame / fade;
+            var previous = Math.Max(frame - 1, 0) * channels;
+            for (var channel = 0; channel < channels; channel++)
+            {
+                var current = samples[frame * channels + channel];
+                _fade[frame * channels + channel] = current + (samples[previous + channel] - current) * weight;
+            }
+        }
+
+        samples.Slice((fade - 1) * channels, channels).CopyTo(_fade.AsSpan(fade * channels));
+        ring.Write(_fade.AsSpan(0, (fade + 1) * channels));
+        ring.Write(samples[(fade * channels)..]);
+    }
+
+    // Slides from each frame to the one after it over the fade, so the packet ends one frame earlier with no jump.
+    private void WriteOneFrameShorter(RingBuffer ring, ReadOnlySpan<float> samples)
+    {
+        var channels = Channels;
+        var fade = Math.Min(samples.Length / channels - 1, FadeFrames);
+        for (var frame = 0; frame < fade; frame++)
+        {
+            var weight = (float)(frame + 1) / fade;
+            for (var channel = 0; channel < channels; channel++)
+            {
+                var current = samples[frame * channels + channel];
+                _fade[frame * channels + channel] = current + (samples[(frame + 1) * channels + channel] - current) * weight;
+            }
+        }
+
+        ring.Write(_fade.AsSpan(0, fade * channels));
+        ring.Write(samples[((fade + 1) * channels)..]);
     }
 
     /// <summary>Writes frames straight after the previous ones. For the rest of a packet too large for one conversion.</summary>

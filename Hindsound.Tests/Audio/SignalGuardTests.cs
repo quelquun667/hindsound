@@ -323,3 +323,103 @@ public class ChannelMapGuardTests
         Assert.Equal(0f, backLeftR);
     }
 }
+
+/// <summary>
+/// What a drift correction does to a pure tone, the signal it shows on most. A high-pass filter at 8 kHz takes the
+/// 1 kHz tone away, so whatever is left is the click.
+/// </summary>
+public class DriftCorrectionTests(Xunit.Abstractions.ITestOutputHelper output)
+{
+    private const double Amplitude = 0.5;
+    private const int Rate = 48000;
+
+    private static (float[] Stored, long Corrections) RunTone(double ppm, double frequency, double seconds)
+    {
+        var clock = new FakeClock();
+        var timeline = new CaptureTimeline(() => clock.Ticks);
+        var track = new SourceTrack(1, (int)((seconds + 5) * Rate), 0);
+        var pipeline = new CapturePipeline(WaveFormat.CreateIeeeFloatWaveFormat(Rate, 1), track, timeline);
+        var actual = Rate * (1 + ppm * 1e-6);
+        var start = clock.Ticks;
+        var packet = new float[480];
+        var delivered = 0L;
+        while (clock.Ticks - start < seconds * 1e7)
+        {
+            for (var i = 0; i < packet.Length; i++)
+            {
+                packet[i] = (float)(Amplitude * Math.Sin(2 * Math.PI * frequency * (delivered + i) / actual));
+            }
+
+            var stamp = start + (long)Math.Round(delivered * 1e7 / actual);
+            clock.Ticks = start + (long)Math.Round((delivered + packet.Length) * 1e7 / actual);
+            pipeline.OnPacket(MemoryMarshal.AsBytes(packet.AsSpan()), AudioClientBufferFlags.None, 0, stamp);
+            delivered += packet.Length;
+        }
+
+        var stored = new float[track.EndFrame];
+        track.CopyFrames(0, stored);
+        return (stored, Math.Abs(track.EndFrame - delivered));
+    }
+
+    private static double[] HighPass8KHz()
+    {
+        const int Taps = 63;
+        const double Cutoff = 8000.0 / Rate;
+        var taps = new double[Taps];
+        var middle = (Taps - 1) / 2;
+        for (var i = 0; i < Taps; i++)
+        {
+            var n = i - middle;
+            var low = n == 0 ? 2 * Cutoff : Math.Sin(2 * Math.PI * Cutoff * n) / (Math.PI * n);
+            var window = 0.42 - 0.5 * Math.Cos(2 * Math.PI * i / (Taps - 1)) + 0.08 * Math.Cos(4 * Math.PI * i / (Taps - 1));
+            taps[i] = (n == 0 ? 1 : 0) - low * window;
+        }
+
+        return taps;
+    }
+
+    private static double ClickLevelDb(float[] stored)
+    {
+        var taps = HighPass8KHz();
+        var peak = 0.0;
+        for (var at = Rate; at < stored.Length - taps.Length; at++)
+        {
+            var sum = 0.0;
+            for (var tap = 0; tap < taps.Length; tap++)
+            {
+                sum += taps[tap] * stored[at + tap];
+            }
+
+            peak = Math.Max(peak, Math.Abs(sum));
+        }
+
+        return SignalMath.Db(peak);
+    }
+
+    private static double SecondDifferenceDb(float[] stored)
+    {
+        var peak = 0.0;
+        for (var at = Rate; at < stored.Length - 1; at++)
+        {
+            peak = Math.Max(peak, Math.Abs(stored[at + 1] - 2.0 * stored[at] + stored[at - 1]));
+        }
+
+        return SignalMath.Db(peak);
+    }
+
+    [Theory]
+    [InlineData(30, 120)]
+    [InlineData(-30, 120)]
+    [InlineData(100, 40)]
+    [InlineData(-100, 40)]
+    public void A_drift_correction_on_a_tone_stays_60_db_below_full_scale(double ppm, double seconds)
+    {
+        var (stored, corrections) = RunTone(ppm, 1000, seconds);
+
+        var click = ClickLevelDb(stored);
+        var text = $"{ppm:+0;-0} ppm: {corrections} corrections in {seconds} s, click at {click:F1} dBFS above 8 kHz, second difference peak {SecondDifferenceDb(stored):F1} dBFS, tone at {SignalMath.Db(Amplitude):F1} dBFS";
+        output.WriteLine(text);
+        Assert.True(corrections > 0, "Nothing was corrected: " + text);
+        Assert.True(click < -60, text);
+    }
+}
