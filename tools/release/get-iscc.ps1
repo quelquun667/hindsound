@@ -23,7 +23,18 @@ New-Item -ItemType Directory -Force -Path $Destination | Out-Null
 $package = Join-Path $Destination "tools.innosetup.$packageVersion.zip"
 $url = "https://api.nuget.org/v3-flatcontainer/tools.innosetup/$packageVersion/tools.innosetup.$packageVersion.nupkg"
 
-Invoke-WebRequest -UseBasicParsing -TimeoutSec 180 -Uri $url -OutFile $package
+# Three tries: on 2026-11-07 this address cut one connection short, with "unexpected EOF", and the next one worked.
+for ($try = 1; $try -le 3; $try++) {
+    try {
+        Invoke-WebRequest -UseBasicParsing -TimeoutSec 180 -Uri $url -OutFile $package
+        break
+    }
+    catch {
+        if ($try -eq 3) { throw }
+        Write-Warning "Download of Tools.InnoSetup failed, try $try of 3: $($_.Exception.Message)"
+        Start-Sleep -Seconds 10
+    }
+}
 
 $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $package).Hash.ToLowerInvariant()
 if ($actual -ne $packageSha256) {

@@ -2,9 +2,9 @@
 
 A tag `vX.Y.Z` on `main` is all it takes: GitHub Actions builds the Setup and the manifest, and publishes the Release.
 
-Last checked: 2026-11-06, on Windows 11 for the scripts, by reading and with stand-ins.
+Last checked: 2026-11-07, on Windows 11 for the scripts, by reading and with stand-ins.
 
-**What has never run, as of 2026-11-06: no real release has been made, and neither `release.yml` nor `lame.yml` has run on
+**What has never run, as of 2026-11-07: no real release has been made, and neither `release.yml` nor `lame.yml` has run on
 GitHub. The compilation of LAME and the installation test in `check-setup.ps1` have never run at all.** The first push of
 `lame.yml` to `main` runs the compilation, without publishing anything: check that run before the first tag.
 
