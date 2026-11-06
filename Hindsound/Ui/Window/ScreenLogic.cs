@@ -1,0 +1,278 @@
+using System.Globalization;
+using Hindsound.Audio;
+using Hindsound.Export;
+using Hindsound.Input;
+using Hindsound.Settings;
+
+namespace Hindsound.Ui.Window;
+
+internal enum CaptureStepKind
+{
+    /// <summary>Still waiting for a combination.</summary>
+    Listening,
+
+    /// <summary>Escape: nothing changes.</summary>
+    Cancelled,
+
+    /// <summary>Tab alone: nothing changes, and the focus moves on.</summary>
+    CancelledAndMoveOn,
+
+    /// <summary>Backspace: the hotkey is removed.</summary>
+    Cleared,
+
+    /// <summary>A combination that can be tried.</summary>
+    Captured,
+}
+
+internal readonly record struct CaptureStep(CaptureStepKind Kind, string? Gesture = null);
+
+/// <summary>
+/// "Press your combo...": what each key press means while a hotkey field listens. The global hotkeys are suspended for
+/// that time by the screen. Modifiers alone only show up in the field.
+/// </summary>
+internal sealed class HotkeyCapture
+{
+    public const string Prompt = "Press your combo...";
+    public const string CannotClearMain = "The main save hotkey can't be empty";
+
+    /// <summary>The action being set, while listening.</summary>
+    public HotkeyAction? Action { get; private set; }
+
+    public bool Listening => Action is not null;
+
+    /// <summary>The modifiers held right now, to draw them as they go down.</summary>
+    public uint Held { get; private set; }
+
+    /// <summary>Why the last key did not count.</summary>
+    public string? Message { get; private set; }
+
+    public void Begin(HotkeyAction action)
+    {
+        Action = action;
+        Held = 0;
+        Message = null;
+    }
+
+    public void End()
+    {
+        Action = null;
+        Held = 0;
+        Message = null;
+    }
+
+    /// <param name="vk">The key that went down.</param>
+    /// <param name="modifiers">The modifiers held, as <see cref="HotkeyGesture"/> flags.</param>
+    public CaptureStep Key(uint vk, uint modifiers)
+    {
+        Held = modifiers;
+        if (Vk.IsModifier(vk))
+        {
+            return new CaptureStep(CaptureStepKind.Listening);
+        }
+
+        if (modifiers == 0)
+        {
+            switch (vk)
+            {
+                case Vk.Escape:
+                    return new CaptureStep(CaptureStepKind.Cancelled);
+                case Vk.Tab:
+                    return new CaptureStep(CaptureStepKind.CancelledAndMoveOn);
+                case Vk.Back:
+                    if (Action == HotkeyAction.SaveDefault)
+                    {
+                        Message = CannotClearMain;
+                        return new CaptureStep(CaptureStepKind.Listening);
+                    }
+
+                    return new CaptureStep(CaptureStepKind.Cleared);
+            }
+        }
+
+        if (!HotkeyGesture.TryCreate(modifiers, vk, out var gesture))
+        {
+            Message = HotkeyResult.InvalidMessage;
+            return new CaptureStep(CaptureStepKind.Listening);
+        }
+
+        return new CaptureStep(CaptureStepKind.Captured, gesture.ToString());
+    }
+
+    /// <summary>A modifier went up: the field no longer shows it.</summary>
+    public void KeyUp(uint modifiers) => Held = modifiers;
+
+    /// <summary>The held modifiers as text, such as "Ctrl+Shift", or nothing.</summary>
+    public string HeldText()
+    {
+        var parts = new List<string>();
+        if ((Held & HotkeyGesture.ModControl) != 0) parts.Add("Ctrl");
+        if ((Held & HotkeyGesture.ModAlt) != 0) parts.Add("Alt");
+        if ((Held & HotkeyGesture.ModShift) != 0) parts.Add("Shift");
+        if ((Held & HotkeyGesture.ModWin) != 0) parts.Add("Win");
+        return string.Join('+', parts);
+    }
+}
+
+internal enum StatusMark
+{
+    /// <summary>The red dot of the capture.</summary>
+    Dot,
+
+    /// <summary>Two bars.</summary>
+    Pause,
+
+    /// <summary>The triangle of the errors.</summary>
+    Warning,
+
+    /// <summary>Nothing yet.</summary>
+    None,
+}
+
+/// <summary>What the band at the top says, from the engine's status alone.</summary>
+internal readonly record struct StatusBand(StatusMark Mark, string Title, string Mic, string Duration, string Ram, string PauseLabel, bool PauseEnabled);
+
+internal static class StatusText
+{
+    public static StatusBand From(AudioEngineStatus? status)
+    {
+        if (status is null)
+        {
+            return new StatusBand(StatusMark.None, "Starting", string.Empty, string.Empty, string.Empty, "Pause", false);
+        }
+
+        var (mark, title) = status.Activity switch
+        {
+            CaptureActivity.Capturing => (StatusMark.Dot, "Capturing"),
+            CaptureActivity.Paused => (StatusMark.Pause, "Paused"),
+            CaptureActivity.NoDevice => (StatusMark.Warning, "No audio device"),
+            _ => (StatusMark.None, "Not capturing"),
+        };
+        var mic = !status.MicEnabled ? "mic off" : status.MicCapturing ? "mic on" : "mic not captured";
+        var paused = status.Activity == CaptureActivity.Paused;
+        return new StatusBand(
+            mark,
+            title,
+            mic,
+            NotificationStates.FormatDuration(NotificationStates.WholeSeconds(status.Buffered)),
+            Megabytes(status.MemoryBytes),
+            paused ? "Resume" : "Pause",
+            status.Activity != CaptureActivity.Stopped);
+    }
+
+    public static string Megabytes(long bytes) =>
+        string.Create(CultureInfo.InvariantCulture, $"~{Math.Round(bytes / 1_000_000.0, MidpointRounding.AwayFromZero):0} MB");
+
+    /// <summary>The words of the big button: "30s", "1 min", "1:30".</summary>
+    public static string SaveLabel(int clipSeconds) =>
+        "Save last " + (clipSeconds < 60 ? clipSeconds + "s"
+            : clipSeconds % 60 == 0 ? clipSeconds / 60 + " min"
+            : NotificationStates.FormatDuration(clipSeconds));
+
+    /// <summary>"720 KB", "1.4 MB".</summary>
+    public static string FileSize(long bytes)
+    {
+        if (bytes < 1_000_000)
+        {
+            return string.Create(CultureInfo.InvariantCulture, $"{Math.Max(1, (long)Math.Round(bytes / 1000.0, MidpointRounding.AwayFromZero))} KB");
+        }
+
+        return string.Create(CultureInfo.InvariantCulture, $"{bytes / 1_000_000.0:0.0} MB");
+    }
+
+    public static string GainLabel(double db) =>
+        string.Create(CultureInfo.InvariantCulture, $"{(db > 0 ? "+" : string.Empty)}{Math.Round(db):0} dB");
+}
+
+/// <summary>What the foot of the window shows about the last clip.</summary>
+internal sealed record LastClipInfo(TimeSpan Duration, DateTime Time, long SizeBytes)
+{
+    public string DurationText => NotificationStates.FormatDuration(NotificationStates.WholeSeconds(Duration));
+
+    public string TimeText => Time.ToString("HH:mm", CultureInfo.InvariantCulture);
+
+    public string SizeText => StatusText.FileSize(SizeBytes);
+}
+
+/// <summary>Turns the loudest sample of each reading into the height of the bar: fast up, slow down, on a dB scale.</summary>
+internal sealed class MicMeter
+{
+    private const float FloorDb = -60;
+    private const float FallPerTick = 0.06f;
+
+    /// <summary>From 0 to 1.</summary>
+    public float Level { get; private set; }
+
+    public void Feed(float peak)
+    {
+        var target = ScaleOf(peak);
+        Level = target >= Level ? target : Math.Max(target, Level - FallPerTick);
+    }
+
+    public void Reset() => Level = 0;
+
+    public static float ScaleOf(float peak)
+    {
+        var magnitude = float.IsNaN(peak) ? 0 : Math.Abs(peak);
+        if (magnitude <= 0)
+        {
+            return 0;
+        }
+
+        var db = 20 * MathF.Log10(magnitude);
+        return Math.Clamp((db - FloorDb) / -FloorDb, 0, 1);
+    }
+
+    /// <summary>The loudest sample, from 0 to 1 and above.</summary>
+    public static float Peak(ReadOnlySpan<float> samples)
+    {
+        var peak = 0f;
+        foreach (var sample in samples)
+        {
+            peak = Math.Max(peak, Math.Abs(sample));
+        }
+
+        return peak;
+    }
+}
+
+/// <summary>Moves a focus over a list where some entries cannot take it. Wraps around.</summary>
+internal static class FocusRing
+{
+    /// <summary>The next entry that can take the focus, or -1 if none can.</summary>
+    public static int Next(int count, int current, bool forward, Func<int, bool> canFocus)
+    {
+        if (count == 0)
+        {
+            return -1;
+        }
+
+        var step = forward ? 1 : -1;
+        var index = current < 0 ? (forward ? -1 : 0) : current;
+        for (var i = 0; i < count; i++)
+        {
+            index = (index + step + count) % count;
+            if (canFocus(index))
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+}
+
+/// <summary>The clip of the accent preview and of "Show test notification".</summary>
+internal static class SampleClip
+{
+    private static readonly float[] Bars =
+    [
+        0.25f, 0.25f, 0.3f, 0.39f, 0.42f, 0.4f, 0.15f, 0.12f, 0.38f, 0.44f, 0.51f, 0.26f,
+        0.14f, 0.23f, 0.35f, 0.44f, 0.36f, 0.35f, 0.78f, 0.84f, 0.88f, 0.59f, 0.8f, 0.8f,
+    ];
+
+    public static NotificationContent Notification(uint accent)
+    {
+        var thirty = TimeSpan.FromSeconds(30);
+        return NotificationStates.ForClip(new ClipResult(["clip.mp3"], thirty, 1, false, Bars, false), thirty, true, true, accent);
+    }
+}

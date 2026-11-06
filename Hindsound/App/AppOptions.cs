@@ -8,13 +8,20 @@ namespace Hindsound.App;
 /// <param name="SelfTestSave"><c>--selftest-save</c>: goes through the whole clip path once, writes the result to the log, and leaves.</param>
 /// <param name="Offscreen"><c>--offscreen</c>: draws the notifications outside every screen.</param>
 /// <param name="DumpNotificationsFolder"><c>--dump-notifications folder</c>: writes each state as a BMP file, shows nothing, and leaves.</param>
+/// <param name="DumpSettingsFolder"><c>--dump-settings folder</c>: writes each page of the settings window as a PNG file, shows nothing, and leaves.</param>
+/// <param name="SettingsProbe"><c>--settings-probe</c>: opens the settings window, sends it keys, measures the memory, and leaves.</param>
 internal sealed record AppOptions(
     string? SettingsPath = null,
     double? ExitAfterSeconds = null,
     bool SelfTestSave = false,
     bool Offscreen = false,
-    string? DumpNotificationsFolder = null)
+    string? DumpNotificationsFolder = null,
+    string? DumpSettingsFolder = null,
+    bool SettingsProbe = false)
 {
+    /// <summary><c>--scale n</c>: the scale of <c>--dump-settings</c>, 1 for 100 %, 1.5 for 150 %.</summary>
+    public double DumpScale { get; init; } = 1;
+
     /// <summary><c>--selftest-delay seconds</c>: how long the capture runs before the self-test presses save. By default 3 s.</summary>
     public double SelfTestDelaySeconds { get; init; } = 3;
 
@@ -52,6 +59,21 @@ internal sealed record AppOptions(
                     break;
                 case "--offscreen":
                     options = options with { Offscreen = true };
+                    break;
+                case "--dump-settings" when next is not null:
+                    options = options with { DumpSettingsFolder = next };
+                    i++;
+                    break;
+                case "--scale" when next is not null:
+                    if (double.TryParse(next, NumberStyles.Float, CultureInfo.InvariantCulture, out var scale) && scale is >= 1 and <= 4)
+                    {
+                        options = options with { DumpScale = scale };
+                    }
+
+                    i++;
+                    break;
+                case "--settings-probe":
+                    options = options with { SettingsProbe = true };
                     break;
                 case "--dump-notifications" when next is not null:
                     options = options with { DumpNotificationsFolder = next };

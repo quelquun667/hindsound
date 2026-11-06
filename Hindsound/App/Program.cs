@@ -27,6 +27,19 @@ internal static class Program
             return NotificationDump.Write(options.DumpNotificationsFolder, journal);
         }
 
+        if (options.DumpSettingsFolder is not null)
+        {
+            try
+            {
+                return Ui.Window.SettingsDump.Write(options.DumpSettingsFolder, options.DumpScale);
+            }
+            catch (Exception ex)
+            {
+                journal.Write("dump failed: " + ex);
+                return ExitFailed;
+            }
+        }
+
         using var instance = new Mutex(true, MutexName, out var first);
         if (!first)
         {
