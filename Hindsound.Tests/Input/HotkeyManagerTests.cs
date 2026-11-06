@@ -267,6 +267,52 @@ public class HotkeyManagerTests
     }
 
     [Fact]
+    public async Task APressRaisedByTheNativeLayer_ReachesPressed()
+    {
+        var native = new FakeNative();
+        using var m = new HotkeyManager(native);
+        m.Apply(Keys(s15: "F9"));
+        var received = new TaskCompletionSource<HotkeyAction>();
+        m.Pressed += received.SetResult;
+
+        native.Press(native.Registered.Single(kv => kv.Value.Key == 0x78).Key); // WM_HOTKEY for F9
+
+        Assert.Equal(HotkeyAction.Save15s, await received.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+    }
+
+    [Fact]
+    public async Task APressRaisedWhileRegistering_FindsTheActionAlready()
+    {
+        // The press can arrive before Register returns: the id must be known by then.
+        var native = new FakeNative { PressDuringRegister = true };
+        using var m = new HotkeyManager(native);
+        var received = new TaskCompletionSource<HotkeyAction>();
+        m.Pressed += action => received.TrySetResult(action);
+
+        m.Apply(Keys());
+
+        Assert.Equal(HotkeyAction.SaveDefault, await received.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+    }
+
+    [Fact]
+    public async Task APressOfAnUnknownIdOrAfterDispose_RaisesNothing()
+    {
+        var native = new FakeNative();
+        var m = new HotkeyManager(native);
+        m.Apply(Keys());
+        var id = native.Registered.Keys.Single();
+        var received = new List<HotkeyAction>();
+        m.Pressed += received.Add;
+
+        native.Press(999);
+        m.Dispose();
+        native.Press(id);
+        await Task.Delay(100);
+
+        Assert.Empty(received);
+    }
+
+    [Fact]
     public void AHandlerThatThrows_DoesNotPropagate_AndTheNextOneStillGetsThePress()
     {
         var native = new FakeNative();
