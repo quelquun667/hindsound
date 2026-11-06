@@ -37,12 +37,6 @@ public sealed class SourceTrack
         _fade = new float[(FadeFrames + 1) * channels];
         _ring = new RingBuffer(checked((capacityFrames + SlackFrames) * channels));
 
-        // The first correction comes minutes into a capture, on the audio thread: it must find this compiled already,
-        // which took 4.6 KB of allocation and the time to compile if it did not.
-        var warmUp = new RingBuffer(channels * 4);
-        var frames = new float[channels * 2];
-        WriteOneFrameLonger(warmUp, frames);
-        WriteOneFrameShorter(warmUp, frames);
     }
 
     public int Channels { get; }
