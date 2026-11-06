@@ -61,6 +61,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private TrayState _trayState = TrayState.Active;
     private string _trayTip = "Hindsound";
     private readonly TrayAddRetry _trayRetry = new();
+    private TrayClick? _pauseClick;
     private bool _quitting;
     private readonly LeaveFlow _leave = new();
     private readonly SessionEndBlock _sessionEndBlock = new();
@@ -545,10 +546,10 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         switch (notice)
         {
             case StatusNotice.CaptureOn:
-                ShowStatus(NotificationStates.CaptureOn(_settings.BufferSeconds, _settings.Hotkeys.SaveDefault, StatusTransitions.SaveHotkeyProblem(_hotkeyResults)));
+                ShowStatus(NotificationStates.CaptureOn(_settings.BufferSeconds, _settings.Hotkeys.SaveDefault, StatusTransitions.SaveHotkeyProblem(_hotkeyResults)), TakePauseScreen());
                 break;
             case StatusNotice.Paused:
-                ShowStatus(NotificationStates.Paused());
+                ShowStatus(NotificationStates.Paused(), TakePauseScreen());
                 break;
             case StatusNotice.NoDevice:
                 ShowStatus(NotificationStates.NoDevice());
@@ -606,16 +607,23 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         Watch(engine.TogglePauseAsync(), "pause or resume");
     }
 
+    // The answer to Pause in the menu comes back later, as a new status.
+    private ScreenInfo? TakePauseScreen()
+    {
+        var screen = _pauseClick?.ScreenAt(NowMs);
+        _pauseClick = null;
+        return screen;
+    }
+
     private void Watch(Task task, string what) =>
         _ = task.ContinueWith(t => _journal.Write($"{what}: {t.Exception}"), CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
 
     // ---------------------------------------------------------------- the clip path
 
-    private void SaveClip(TimeSpan requested)
-    {
-        var foreground = ForegroundWindow.Read();
-        _pipeline.Press(new ClipRequest(requested, SettingsMapping.ToExportOptions(_settings), foreground.Title, _settings.Export.CopyToClipboard));
-    }
+    private void SaveClip(TimeSpan requested) => SaveClip(requested, ForegroundWindow.Read().AppName, null);
+
+    private void SaveClip(TimeSpan requested, string? appName, ScreenInfo? screen) =>
+        _pipeline.Press(new ClipRequest(requested, SettingsMapping.ToExportOptions(_settings), appName, _settings.Export.CopyToClipboard) { Screen = screen });
 
     AudioSnapshot IClipBackend.Snapshot(TimeSpan duration) =>
         _engine?.Snapshot(duration) ?? new AudioSnapshot([], []);
@@ -631,7 +639,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     }
 
     private void OnSavingSlowly(ClipRequest request) =>
-        ShowStatus(NotificationStates.Saving(request.Requested));
+        ShowStatus(NotificationStates.Saving(request.Requested), request.Screen);
 
     // A clip is not over until it has been copied too: that goes on after the pipeline is done with it.
     private bool ClipsInProgress => _pipeline.Busy || _copying > 0;
@@ -660,7 +668,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
                     _ => NotificationStates.SaveFailed(),
                 };
                 _journal.Write($"clip not saved: {outcome.Failure}");
-                ShowClip(content, saved: false, important: outcome.Failure == ClipFailure.Failed);
+                ShowClip(content, saved: false, important: outcome.Failure == ClipFailure.Failed, screen: outcome.Request.Screen);
                 FinishSelfTest(outcome, false);
             }
             finally
@@ -701,7 +709,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             var content = NotificationStates.ForClip(result, outcome.Request.Requested, outcome.Request.CopyWanted, copied, Accent);
             _journal.Write($"clipboard: wanted {outcome.Request.CopyWanted}, copied {copied}; notification {content.Kind}");
             var copyFailed = outcome.Request.CopyWanted && !copied;
-            ShowClip(content, saved: true, important: result.Rescued || copyFailed, copyFailed);
+            ShowClip(content, saved: true, important: result.Rescued || copyFailed, copyFailed, outcome.Request.Screen);
             FinishSelfTest(outcome, copied);
         }
         finally
@@ -710,11 +718,11 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         }
     }
 
-    private void CopyLastClip()
+    private void CopyLastClip(ScreenInfo? screen = null)
     {
         if (_lastClip is not { } clip)
         {
-            ShowStatus(NotificationStates.NothingToSave());
+            ShowStatus(NotificationStates.NothingToSave(), screen);
             return;
         }
 
@@ -723,19 +731,19 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             _journal.Write($"last clip gone: {string.Join(", ", clip.Paths)}");
             _lastClip = null;
             _window?.Screen.SetLastClip(null);
-            ShowClip(NotificationStates.LastClipGone(), saved: false, important: true, copyFailed: true);
+            ShowClip(NotificationStates.LastClipGone(), saved: false, important: true, copyFailed: true, screen);
             return;
         }
 
         // The answer to a press: the sound is only for a new clip, and a copy that failed is said whatever the settings.
-        CopyClip(clip, copied => ShowClip(NotificationStates.ForClip(clip, _lastRequested, true, copied, Accent), saved: false, important: !copied, copyFailed: !copied));
+        CopyClip(clip, copied => ShowClip(NotificationStates.ForClip(clip, _lastRequested, true, copied, Accent), saved: false, important: !copied, copyFailed: !copied, screen));
     }
 
     // ---------------------------------------------------------------- showing
 
     private static long NowMs => Environment.TickCount64;
 
-    private void ShowClip(NotificationContent content, bool saved, bool important, bool copyFailed = false)
+    private void ShowClip(NotificationContent content, bool saved, bool important, bool copyFailed = false, ScreenInfo? screen = null)
     {
         var (state, covers) = Surface();
         var decision = FullscreenPolicy.ForClip(state, covers, _settings.General, saved, important, copyFailed);
@@ -748,7 +756,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         if (decision.ShowOverlay)
         {
             _pending.NewerClipShown();
-            Present(content, decision.ClickThrough);
+            Present(content, decision.ClickThrough, screen);
         }
 
         if (decision.CatchUpLater)
@@ -759,13 +767,13 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         }
     }
 
-    private void ShowStatus(NotificationContent content)
+    private void ShowStatus(NotificationContent content, ScreenInfo? screen = null)
     {
         var (state, covers) = Surface();
         var decision = FullscreenPolicy.ForStatus(state, covers, _settings.General, PendingNotices.IsImportantStatus(content.Kind));
         if (decision.ShowOverlay)
         {
-            Present(content, decision.ClickThrough);
+            Present(content, decision.ClickThrough, screen);
         }
 
         if (decision.CatchUpLater)
@@ -789,11 +797,11 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         return (state, ForegroundWindow.Read().CoversMonitor);
     }
 
-    private void Present(NotificationContent content, bool clickThrough)
+    private void Present(NotificationContent content, bool clickThrough, ScreenInfo? screen = null)
     {
         if (_notices.ShowsNow(content))
         {
-            PresentNow(content, clickThrough);
+            PresentNow(content, clickThrough, screen);
         }
     }
 
@@ -852,9 +860,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         });
     }
 
-    private void PresentNow(NotificationContent content, bool clickThrough)
+    private void PresentNow(NotificationContent content, bool clickThrough, ScreenInfo? clicked = null)
     {
-        var screen = ForegroundWindow.ActiveScreen();
+        var screen = clicked ?? ForegroundWindow.ActiveScreen();
         var covers = ForegroundWindow.CoversScreen(screen);
         var area = NotificationPlacement.AreaOn(screen, covers);
         var dpi = screen.Dpi;
@@ -980,27 +988,29 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
     private void OnTrayMenu(nuint wParam)
     {
-        ReloadSettingsIfChanged();
-        var paused = _lastStatus?.Activity == CaptureActivity.Paused;
-        var command = _tray.ShowMenu((short)(wParam & 0xFFFF), (short)((wParam >> 16) & 0xFFFF), TrayMenu.Items(paused, _lastClip is not null, _leave.Waiting));
+        var (click, command) = TrayMenu.ReadThenShow(
+            () => new TrayClick(ForegroundWindow.Read().AppName, ForegroundWindow.CursorScreen(), NowMs),
+            () => AskTrayMenu(wParam));
+        _journal.Write($"tray menu: {command}, app name known {click.AppName is not null}, screen of the click {click.Screen.Monitor.Left},{click.Screen.Monitor.Top},{click.Screen.Monitor.Right},{click.Screen.Monitor.Bottom}");
         switch (command)
         {
             case TrayCommand.Save30s:
-                SaveClip(TimeSpan.FromSeconds(30));
+                SaveClip(TimeSpan.FromSeconds(30), click.AppName, click.Screen);
                 break;
             case TrayCommand.Save15s:
-                SaveClip(TimeSpan.FromSeconds(15));
+                SaveClip(TimeSpan.FromSeconds(15), click.AppName, click.Screen);
                 break;
             case TrayCommand.Save1m:
-                SaveClip(TimeSpan.FromMinutes(1));
+                SaveClip(TimeSpan.FromMinutes(1), click.AppName, click.Screen);
                 break;
             case TrayCommand.Save5m:
-                SaveClip(TimeSpan.FromMinutes(5));
+                SaveClip(TimeSpan.FromMinutes(5), click.AppName, click.Screen);
                 break;
             case TrayCommand.CopyLast:
-                CopyLastClip();
+                CopyLastClip(click.Screen);
                 break;
             case TrayCommand.TogglePause:
+                _pauseClick = click;
                 TogglePause();
                 break;
             case TrayCommand.OpenFolder:
@@ -1010,9 +1020,23 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
                 OpenSettings(firstRun: false);
                 break;
             case TrayCommand.Quit:
-                AskToLeave();
+                AskToLeave(click.Screen);
                 break;
         }
+    }
+
+    private TrayCommand AskTrayMenu(nuint wParam)
+    {
+        ReloadSettingsIfChanged();
+
+        // Off screen, nothing shows and nothing takes the focus: a message posted by a test names the command itself.
+        if (_options.Offscreen)
+        {
+            return (TrayCommand)(wParam & 0xFFFF);
+        }
+
+        var paused = _lastStatus?.Activity == CaptureActivity.Paused;
+        return _tray.ShowMenu((short)(wParam & 0xFFFF), (short)((wParam >> 16) & 0xFFFF), TrayMenu.Items(paused, _lastClip is not null, _leave.Waiting));
     }
 
     private void OpenClipsFolder()
@@ -1071,7 +1095,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             return;
         }
 
-        var window = new SettingsWindow(_settings, this, ReadMicPeak, firstRun, _options.Offscreen, OnSettingsClosed);
+        // The screen the user is looking at, whatever the active window is: a game on the first one, a click on the second.
+        var screen = ForegroundWindow.CursorScreen();
+        var window = new SettingsWindow(_settings, this, ReadMicPeak, firstRun, _options.Offscreen, screen, OnSettingsClosed);
         _window = window;
         if (_lastStatus is { } status)
         {
@@ -1091,7 +1117,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             ReloadSettingsIfChanged();
             LoadChoices();
         };
-        _journal.Write($"settings window opened, first launch {firstRun}, {Journal.Memory()}");
+        _journal.Write($"settings window opened, first launch {firstRun}, on the screen of the cursor {screen.Monitor.Left},{screen.Monitor.Top},{screen.Monitor.Right},{screen.Monitor.Bottom}{(_options.Offscreen ? " (drawn off screen instead)" : string.Empty)}, {Journal.Memory()}");
         if (_options.Offscreen && firstRun)
         {
             _loop.After(ProbeStepMs, () => _window?.ProbePicture(Path.ChangeExtension(_journal.Path, ".firstrun.png")));
@@ -1335,7 +1361,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     // ---------------------------------------------------------------- leaving
 
     /// <summary>Quit, from the menu or from WM_CLOSE. A clip still being written keeps the app here, and the icon says so.</summary>
-    private void AskToLeave()
+    private void AskToLeave() => AskToLeave(null);
+
+    private void AskToLeave(ScreenInfo? screen)
     {
         switch (_leave.Asked(ClipsInProgress))
         {
@@ -1355,7 +1383,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
                     _hotkeys = null;
                 }, "hotkeys");
                 RefreshTray();
-                ShowStatus(NotificationStates.ClosingAfterClip());
+                ShowStatus(NotificationStates.ClosingAfterClip(), screen);
                 _loop.After((int)LeaveFlow.WaitLimit.TotalMilliseconds, OnLeaveLimit);
                 break;
         }

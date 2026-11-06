@@ -21,7 +21,7 @@ internal static unsafe partial class Native
     public static readonly nint HWND_TOPMOST = -1;
 
     public const uint ULW_ALPHA = 2;
-    public const uint MONITOR_DEFAULTTOPRIMARY = 1;
+    public const uint MONITOR_DEFAULTTOPRIMARY = 1, MONITOR_DEFAULTTONEAREST = 2;
     public const int SM_CXSMICON = 49, SM_XVIRTUALSCREEN = 76, SM_YVIRTUALSCREEN = 77;
 
     public const uint NIM_ADD = 0, NIM_MODIFY = 1, NIM_DELETE = 2, NIM_SETVERSION = 4;
@@ -176,6 +176,8 @@ internal static unsafe partial class Native
     [LibraryImport(U)] public static partial int GetClassNameW(nint hwnd, char* text, int count);
     [LibraryImport(U)] public static partial int GetWindowRect(nint hwnd, RECT* rect);
     [LibraryImport(U)] public static partial nint MonitorFromWindow(nint hwnd, uint flags);
+    [LibraryImport(U)] public static partial nint MonitorFromPoint(POINT point, uint flags);
+    [LibraryImport(U)] public static partial int GetCursorPos(POINT* point);
     [LibraryImport(U)] public static partial int GetMonitorInfoW(nint monitor, MONITORINFO* info);
     [LibraryImport(U)] public static partial int GetSystemMetrics(int index);
     [LibraryImport(U)] public static partial nint CreatePopupMenu();

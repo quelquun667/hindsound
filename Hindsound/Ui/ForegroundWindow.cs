@@ -7,9 +7,9 @@ namespace Hindsound.Ui;
 internal readonly record struct ScreenInfo(Native.RECT Monitor, Native.RECT Work, uint Dpi);
 
 /// <summary>What the active window looks like from outside.</summary>
-/// <param name="Title">Its title, for <c>{app}</c>. Empty if it has none.</param>
+/// <param name="AppName">Its title, for <c>{app}</c>. Null if it has none, or if it says nothing about what the user was doing.</param>
 /// <param name="CoversMonitor">It covers its whole screen, and is not the desktop itself.</param>
-internal readonly record struct ForegroundInfo(string Title, bool CoversMonitor);
+internal readonly record struct ForegroundInfo(string? AppName, bool CoversMonitor);
 
 /// <summary>
 /// Only reads the window manager: GetForegroundWindow, GetWindowText and the window's rectangle. No handle to the game's
@@ -22,15 +22,38 @@ internal static unsafe class ForegroundWindow
         var hwnd = Native.GetForegroundWindow();
         if (hwnd == 0)
         {
-            return new ForegroundInfo(string.Empty, false);
+            return new ForegroundInfo(null, false);
         }
 
-        return new ForegroundInfo(TitleOf(hwnd), Covers(hwnd));
+        uint processId;
+        Native.GetWindowThreadProcessId(hwnd, &processId);
+        var title = TitleOf(hwnd);
+        var usable = UsableForApp(title, ClassOf(hwnd), processId == (uint)Environment.ProcessId);
+        return new ForegroundInfo(usable ? title : null, Covers(hwnd));
     }
+
+    /// <summary>
+    /// Whether a window's title can name a clip. The taskbar, the desktop and this app's own windows say nothing about what
+    /// the user was doing: a right click on the icon makes the taskbar the active window, and showing the menu makes it ours.
+    /// </summary>
+    public static bool UsableForApp(string title, string className, bool ownWindow) =>
+        !ownWindow
+        && !string.IsNullOrWhiteSpace(title)
+        && !IsDesktopClass(className)
+        && className is not ("NotifyIconOverflowWindow" or "TopLevelWindowForOverflowXamlIsland" or "TaskListThumbnailWnd")
+        && !className.StartsWith("Hindsound", StringComparison.Ordinal);
 
     /// <summary>The screen under the active window.</summary>
     public static ScreenInfo ActiveScreen() =>
         ScreenOf(Native.MonitorFromWindow(Native.GetForegroundWindow(), Native.MONITOR_DEFAULTTOPRIMARY));
+
+    /// <summary>The screen under the mouse.</summary>
+    public static ScreenInfo CursorScreen()
+    {
+        Native.POINT cursor = default;
+        Native.GetCursorPos(&cursor);
+        return ScreenOf(Native.MonitorFromPoint(cursor, Native.MONITOR_DEFAULTTONEAREST));
+    }
 
     /// <summary>Whether the active window covers that screen, which need not be the one it is on.</summary>
     public static bool CoversScreen(ScreenInfo screen)
@@ -65,6 +88,14 @@ internal static unsafe class ForegroundWindow
         return length > 0 ? new string(text, 0, length) : string.Empty;
     }
 
+    private static string ClassOf(nint hwnd)
+    {
+        const int capacity = 64;
+        var text = stackalloc char[capacity];
+        var length = Native.GetClassNameW(hwnd, text, capacity);
+        return length > 0 ? new string(text, 0, length) : string.Empty;
+    }
+
     private static bool Covers(nint hwnd)
     {
         var monitor = Native.MonitorFromWindow(hwnd, Native.MONITOR_DEFAULTTOPRIMARY);
@@ -75,10 +106,7 @@ internal static unsafe class ForegroundWindow
 
     private static bool Covers(nint hwnd, Native.RECT monitor)
     {
-        const int capacity = 64;
-        var text = stackalloc char[capacity];
-        var length = Native.GetClassNameW(hwnd, text, capacity);
-        if (length > 0 && IsDesktopClass(new string(text, 0, length)))
+        if (IsDesktopClass(ClassOf(hwnd)))
         {
             return false;
         }

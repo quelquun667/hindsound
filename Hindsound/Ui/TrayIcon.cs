@@ -39,6 +39,19 @@ internal enum TrayGesture
     OpenSettings,
 }
 
+/// <summary>What was true at the right click on the icon. Showing the menu changes both: the hidden window becomes the active one.</summary>
+/// <param name="AppName">For <c>{app}</c>; null if the active window says nothing about what the user was doing.</param>
+/// <param name="Screen">The screen of the click, where the answer to a command goes.</param>
+/// <param name="AtMs">When it happened.</param>
+internal readonly record struct TrayClick(string? AppName, ScreenInfo Screen, long AtMs)
+{
+    /// <summary>How long a command without a result of its own, like Pause, still counts as the reason for the next notification.</summary>
+    public const int ScreenKeptMs = 5000;
+
+    /// <summary>The screen of the click, if what happens now can still be the answer to it.</summary>
+    public ScreenInfo? ScreenAt(long nowMs) => nowMs - AtMs <= ScreenKeptMs ? Screen : null;
+}
+
 /// <summary>What the tray menu offers. Pure: tested without any window.</summary>
 internal static class TrayMenu
 {
@@ -49,6 +62,13 @@ internal static class TrayMenu
         Native.NIN_SELECT or Native.NIN_KEYSELECT => TrayGesture.OpenSettings,
         _ => TrayGesture.None,
     };
+
+    /// <summary>What was true at the click comes first: <paramref name="show"/> makes our own hidden window the active one.</summary>
+    public static (TrayClick Click, TrayCommand Command) ReadThenShow(Func<TrayClick> read, Func<TrayCommand> show)
+    {
+        var click = read();
+        return (click, show());
+    }
 
     /// <param name="paused">The capture is paused.</param>
     /// <param name="hasLastClip">There is a clip to copy.</param>

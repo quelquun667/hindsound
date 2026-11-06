@@ -101,7 +101,7 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
     private float _editSize;
     private bool _closed;
 
-    public SettingsWindow(AppSettings settings, ISettingsBackend backend, Func<float> readMicPeak, bool firstRun, bool offscreen, Action closed)
+    public SettingsWindow(AppSettings settings, ISettingsBackend backend, Func<float> readMicPeak, bool firstRun, bool offscreen, ScreenInfo screen, Action closed)
     {
         Closed = closed;
         _offscreen = offscreen;
@@ -110,8 +110,7 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
         var instance = Native.GetModuleHandleW(null);
         RegisterClass(instance);
 
-        var active = ForegroundWindow.ActiveScreen();
-        var (area, dpi) = offscreen ? OffscreenArea() : (active.Work, active.Dpi);
+        var (area, dpi) = offscreen ? OffscreenArea() : (screen.Work, screen.Dpi);
         _dpi = dpi;
         var size = OuterSize(dpi);
         var exStyle = offscreen ? Native.WS_EX_NOACTIVATE | Native.WS_EX_TOOLWINDOW : 0;

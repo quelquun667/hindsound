@@ -107,7 +107,11 @@ internal interface IClipBackend
 }
 
 /// <summary>One press of a save command.</summary>
-internal sealed record ClipRequest(TimeSpan Requested, ExportOptions Options, string? AppName, bool CopyWanted);
+internal sealed record ClipRequest(TimeSpan Requested, ExportOptions Options, string? AppName, bool CopyWanted)
+{
+    /// <summary>Where the answer goes when it does not go to the active screen: the screen of a click on the tray menu.</summary>
+    public Hindsound.Ui.ScreenInfo? Screen { get; init; }
+}
 
 internal enum ClipFailure
 {
