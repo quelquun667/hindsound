@@ -152,8 +152,9 @@ internal static class TrayIconShape
 /// </summary>
 internal sealed class TrayPresence(Func<uint, uint, bool> call)
 {
-    public const uint AddFlags = Native.NIF_MESSAGE | Native.NIF_ICON | Native.NIF_TIP;
-    public const uint ModifyFlags = Native.NIF_ICON | Native.NIF_TIP;
+    // With NOTIFYICON_VERSION_4, the shell drops the tooltip of an icon without NIF_SHOWTIP.
+    public const uint AddFlags = Native.NIF_MESSAGE | Native.NIF_ICON | Native.NIF_TIP | Native.NIF_SHOWTIP;
+    public const uint ModifyFlags = Native.NIF_ICON | Native.NIF_TIP | Native.NIF_SHOWTIP;
 
     private bool _closed;
 

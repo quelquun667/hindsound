@@ -25,6 +25,21 @@ public class TrayPresenceTests
     }
 
     [Fact]
+    public void Every_call_that_shows_the_tip_asks_for_it()
+    {
+        // 0x80 is NIF_SHOWTIP: with NOTIFYICON_VERSION_4, the shell drops the tooltip without it.
+        const uint ShowTip = 0x80;
+        var shell = new Shell();
+        var presence = new TrayPresence(shell.Call);
+
+        presence.Add();
+        presence.Update();
+
+        Assert.Equal(ShowTip, shell.Calls.First(c => c.Message == Native.NIM_ADD).Flags & ShowTip);
+        Assert.Equal(ShowTip, shell.Calls.First(c => c.Message == Native.NIM_MODIFY).Flags & ShowTip);
+    }
+
+    [Fact]
     public void An_add_sets_the_version_the_messages_depend_on()
     {
         var shell = new Shell();

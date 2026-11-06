@@ -25,7 +25,7 @@ internal static unsafe partial class Native
     public const int SM_CXSMICON = 49, SM_XVIRTUALSCREEN = 76, SM_YVIRTUALSCREEN = 77;
 
     public const uint NIM_ADD = 0, NIM_MODIFY = 1, NIM_DELETE = 2, NIM_SETVERSION = 4;
-    public const uint NIF_MESSAGE = 1, NIF_ICON = 2, NIF_TIP = 4, NOTIFYICON_VERSION_4 = 4;
+    public const uint NIF_MESSAGE = 1, NIF_ICON = 2, NIF_TIP = 4, NIF_SHOWTIP = 0x80, NOTIFYICON_VERSION_4 = 4;
 
     public const uint MF_STRING = 0, MF_GRAYED = 1, MF_SEPARATOR = 0x800, TPM_RETURNCMD = 0x0100, TPM_RIGHTBUTTON = 0x0002,
         TPM_NONOTIFY = 0x0080;
