@@ -698,9 +698,6 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
         GC.WaitForPendingFinalizers();
         GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
-
-        // What the window touched (its code, the fonts) stays counted until it is let go. Whatever is still in use comes back at once.
-        WindowNative.K32EmptyWorkingSet(Native.GetCurrentProcess());
     });
 
     // The level comes from what the capture already holds. If the microphone is off this reads nothing and opens nothing.

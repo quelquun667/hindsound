@@ -61,7 +61,6 @@ internal static unsafe partial class WindowNative
     [LibraryImport(G)] public static partial nint CreateSolidBrush(uint color);
     [LibraryImport(G)] public static partial uint SetBkColor(nint dc, uint color);
     [LibraryImport("dwmapi.dll")] public static partial int DwmSetWindowAttribute(nint hwnd, int attribute, void* value, int size);
-    [LibraryImport("kernel32.dll")] public static partial int K32EmptyWorkingSet(nint process);
     [LibraryImport("ole32.dll")] public static partial int CoCreateInstance(Guid* clsid, nint outer, uint context, Guid* iid, nint* result);
 }
 

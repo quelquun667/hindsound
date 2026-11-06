@@ -7,7 +7,7 @@ namespace Hindsound.Ui.Window;
 internal sealed partial class SettingsScreen
 {
     public const string LegalNote = "Recording a conversation without telling the people in it can be illegal. Let them know before you keep it.";
-    public const string ClearsNote = "Changing this clears what is captured so far";
+    public const string ShorterBufferNote = "A shorter buffer drops the oldest audio";
     public const string SoundHelp = "The beep can be heard in your next clip if you capture a specific output.";
 
     private const float Left = 200, Right = 728, Width = Right - Left, RowHeight = 30, FieldWidth = 220;
@@ -320,7 +320,7 @@ internal sealed partial class SettingsScreen
         var ram = Editor.RamText(shown);
         Note(ram, y + 8, face: Face.Mono, color: Theme.Text);
         y += 20;
-        Note(ClearsNote, y + 8);
+        Note(ShorterBufferNote, y + 8);
         y += 20;
         if (shown <= Editor.BufferFloor && Editor.BufferFloor > SettingsEditor.BufferSliderMin)
         {
