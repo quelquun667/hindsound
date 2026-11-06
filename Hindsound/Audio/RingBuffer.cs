@@ -14,7 +14,7 @@ namespace Hindsound.Audio;
 public sealed class RingBuffer
 {
     private readonly short[] _data;
-    private readonly long _firstPosition;
+    private long _firstPosition;
 
     // Published after the samples are in place: every position below it can be read.
     private long _position;
@@ -44,6 +44,16 @@ public sealed class RingBuffer
 
     /// <summary>Absolute position of the oldest sample still held.</summary>
     public long OldestPosition => Math.Max(_firstPosition, Position - _data.Length);
+
+    /// <summary>
+    /// Forgets everything and starts again at <paramref name="position"/>. Only for a buffer no reader can see yet.
+    /// </summary>
+    internal void RestartAt(long position)
+    {
+        _firstPosition = position;
+        _position = position;
+        _overwriteLimit = position;
+    }
 
     /// <summary>Appends samples. Allocates nothing. If there are more than the capacity, only the last ones are kept.</summary>
     public void Write(ReadOnlySpan<float> samples)
@@ -89,14 +99,25 @@ public sealed class RingBuffer
     /// comes out as zeros.
     /// </summary>
     /// <returns>The number of real samples delivered.</returns>
-    public int CopyTo(long position, Span<float> destination)
+    public int CopyTo(long position, Span<float> destination) => CopyTo(position, destination, out _);
+
+    /// <inheritdoc cref="CopyTo(long, Span{float})"/>
+    /// <param name="position">Absolute position of the first sample wanted.</param>
+    /// <param name="destination">Where the samples go.</param>
+    /// <param name="firstHeld">
+    /// Where what was held begins, within the range asked for: anything before it is gone, or was never written.
+    /// </param>
+    public int CopyTo(long position, Span<float> destination, out long firstHeld)
     {
+        // One reading of the position: the writer can move on by more than the capacity between two of them.
+        var written = Position;
         var requestedEnd = position + destination.Length;
-        var start = Math.Max(position, OldestPosition);
-        var end = Math.Min(requestedEnd, Position);
+        var start = Math.Max(position, Math.Max(_firstPosition, written - _data.Length));
+        var end = Math.Min(requestedEnd, written);
         if (start >= end)
         {
             destination.Clear();
+            firstHeld = Math.Min(start, requestedEnd);
             return 0;
         }
 
@@ -115,11 +136,13 @@ public sealed class RingBuffer
         var overwrittenUpTo = Volatile.Read(ref _overwriteLimit) - _data.Length;
         if (overwrittenUpTo <= start)
         {
+            firstHeld = start;
             return length;
         }
 
         var lost = (int)Math.Min(overwrittenUpTo - start, length);
         destination.Slice(offset, lost).Clear();
+        firstHeld = Math.Min(overwrittenUpTo, requestedEnd);
         return length - lost;
     }
 
@@ -128,7 +151,8 @@ public sealed class RingBuffer
     {
         ArgumentOutOfRangeException.ThrowIfNegative(count);
         var end = Position;
-        var start = Math.Max(OldestPosition, end - count);
+        // Worked out from that one position. OldestPosition reads a newer one, which can lie beyond this end.
+        var start = Math.Max(Math.Max(_firstPosition, end - _data.Length), end - count);
         var result = new float[(int)(end - start)];
         CopyTo(start, result);
         return result;

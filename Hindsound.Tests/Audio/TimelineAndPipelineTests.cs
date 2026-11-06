@@ -360,24 +360,34 @@ public class SourceTrackTests
         var track = new SourceTrack(1, 48000, 0);
         var stop = false;
         var written = 0L;
+
+        // At the pace of real audio, however the machine schedules this thread.
         var writer = new Thread(() =>
         {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
             var frame = 0L;
             while (!Volatile.Read(ref stop))
             {
-                track.Append(frame, Ramped(frame, 480), exact: false);
-                frame += 480;
-                Volatile.Write(ref written, frame);
-                Thread.Sleep(0);
+                var due = (long)(clock.Elapsed.TotalMilliseconds * 48);
+                while (frame + 480 <= due)
+                {
+                    track.Append(frame, Ramped(frame, 480), exact: false);
+                    frame += 480;
+                    Volatile.Write(ref written, frame);
+                }
+
+                Thread.Sleep(1);
             }
         });
 
         writer.Start();
         try
         {
+            Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref written) >= 4800, TimeSpan.FromSeconds(60)));
             track.Resize(96000);
             track.Resize(240000);
-            Thread.Sleep(30);
+            var afterResizes = Volatile.Read(ref written);
+            Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref written) >= afterResizes + 4800, TimeSpan.FromSeconds(60)));
         }
         finally
         {
@@ -387,9 +397,9 @@ public class SourceTrackTests
 
         var end = track.EndFrame;
         Assert.Equal(Volatile.Read(ref written), end);
-        var oldest = Math.Max(track.OldestFrame, end - 200_000);
+        var oldest = track.OldestFrame;
         var stored = new float[end - oldest];
-        track.CopyFrames(oldest, stored);
+        Assert.Equal(stored.Length, track.CopyFrames(oldest, stored));
         for (var i = 0; i < stored.Length; i++)
         {
             if (stored[i] != Ramp.ThroughBuffer(oldest + i))
@@ -399,28 +409,193 @@ public class SourceTrackTests
         }
     }
 }
-
 public class DeviceWatcherTests
 {
     [Fact]
     public async Task Many_notifications_make_one_event()
     {
-        using var watcher = new DeviceWatcher(TimeSpan.FromMilliseconds(50));
+        var delay = TimeSpan.FromMilliseconds(50);
+        using var watcher = new DeviceWatcher(delay);
         var fired = 0;
-        var first = new TaskCompletionSource();
+        var first = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         watcher.DevicesChanged += () =>
         {
             Interlocked.Increment(ref fired);
             first.TrySetResult();
         };
 
+        // An event can only slip in where this thread itself stalled for longer than the delay, so that is counted
+        // and not assumed away. On a machine that keeps up there are none, and this says exactly one event.
+        var stalls = 0;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
         for (var i = 0; i < 10; i++)
         {
+            var before = clock.Elapsed;
             watcher.Signal();
+            if (i > 0 && before - previous >= delay)
+            {
+                stalls++;
+            }
+
+            previous = clock.Elapsed;
         }
 
-        await first.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        await Task.Delay(200);
-        Assert.Equal(1, Volatile.Read(ref fired));
+        await first.Task.WaitAsync(TimeSpan.FromSeconds(60));
+        await Task.Delay(delay * 4);
+        Assert.InRange(Volatile.Read(ref fired), 1, 1 + stalls);
+    }
+
+    private static TimeSpan previous;
+}
+public class SnapshotTruthTests
+{
+    private static SourceTrack Track(int channels, int capacity, long origin, long firstFrame, int frames)
+    {
+        var track = new SourceTrack(channels, capacity, origin);
+        var samples = new float[frames * channels];
+        for (var frame = 0; frame < frames; frame++)
+        {
+            for (var channel = 0; channel < channels; channel++)
+            {
+                samples[frame * channels + channel] = Ramp.Value(firstFrame + frame);
+            }
+        }
+
+        track.Append(firstFrame, samples, exact: true);
+        return track;
+    }
+
+    [Fact]
+    public void A_window_overtaken_by_the_writer_loses_the_same_head_on_both_sources()
+    {
+        // Both hold 1000 + 48000 frames: the PC from frame 11 000, the microphone from frame 21 000.
+        var system = Track(2, 1000, 0, 0, 60_000);
+        var mic = Track(1, 1000, 0, 0, 70_000);
+
+        var snapshot = AudioSnapshot.CopyFrom(system, mic, 5000, 50_000);
+
+        Assert.Equal(34_000, snapshot.Mic.Length);
+        Assert.Equal(68_000, snapshot.System.Length);
+        Assert.Equal(Ramp.ThroughBuffer(21_000), snapshot.Mic[0]);
+        Assert.Equal(Ramp.ThroughBuffer(21_000), snapshot.System[0]);
+        Assert.Equal(Ramp.ThroughBuffer(54_999), snapshot.Mic[^1]);
+        Assert.DoesNotContain(0f, snapshot.Mic);
+        Assert.DoesNotContain(0f, snapshot.System);
+    }
+
+    [Fact]
+    public void A_resize_between_the_window_and_the_copy_shortens_the_clip_and_adds_no_silence()
+    {
+        var system = Track(2, 100_000, 0, 0, 90_000);
+        var mic = Track(1, 100_000, 0, 0, 90_000);
+        var start = system.EndFrame - 80_000;
+
+        system.Resize(1000);
+        mic.Resize(1000);
+        var snapshot = AudioSnapshot.CopyFrom(system, mic, start, 80_000);
+
+        Assert.Equal(49_000, snapshot.Mic.Length);
+        Assert.Equal(98_000, snapshot.System.Length);
+        Assert.Equal(Ramp.ThroughBuffer(41_000), snapshot.Mic[0]);
+        Assert.Equal(Ramp.ThroughBuffer(89_999), snapshot.System[^1]);
+        Assert.DoesNotContain(0f, snapshot.Mic);
+        Assert.DoesNotContain(0f, snapshot.System);
+    }
+
+    [Fact]
+    public void A_window_entirely_gone_gives_an_empty_clip()
+    {
+        var system = Track(2, 1000, 0, 0, 200_000);
+        var mic = Track(1, 1000, 0, 0, 200_000);
+
+        var snapshot = AudioSnapshot.CopyFrom(system, mic, 1000, 5000);
+
+        Assert.Empty(snapshot.System);
+        Assert.Empty(snapshot.Mic);
+    }
+
+    [Fact]
+    public void A_lost_head_with_the_mic_off_leaves_the_mic_empty()
+    {
+        var system = Track(2, 1000, 0, 0, 60_000);
+
+        var snapshot = AudioSnapshot.CopyFrom(system, null, 5000, 50_000);
+
+        Assert.Empty(snapshot.Mic);
+        Assert.Equal(88_000, snapshot.System.Length);
+    }
+
+    [Fact]
+    public void Real_silence_is_kept_a_source_that_began_later_or_ended_earlier_cuts_nothing()
+    {
+        var late = Track(1, 10_000, 3000, 3000, 2000);
+        var early = Track(2, 10_000, 0, 0, 2000);
+
+        var snapshot = AudioSnapshot.CopyFrom(early, late, 0, 5000);
+
+        Assert.Equal(5000, snapshot.Mic.Length);
+        Assert.Equal(10_000, snapshot.System.Length);
+        Assert.Equal(0f, snapshot.Mic[2999]);
+        Assert.Equal(Ramp.ThroughBuffer(3000), snapshot.Mic[3000]);
+        Assert.Equal(Ramp.ThroughBuffer(1999), snapshot.System[3999]);
+        Assert.Equal(0f, snapshot.System[4000]);
+    }
+}
+
+[Collection(nameof(TimingSensitive))]
+public class ResizeUnderAWriterAtFullSpeedTests
+{
+    [Fact]
+    public void A_resize_overtaken_by_the_writer_holds_only_real_audio()
+    {
+        var track = new SourceTrack(1, 1000, 0);
+        var stop = false;
+        var written = 0L;
+        var writer = new Thread(() =>
+        {
+            var packet = new float[480];
+            var frame = 0L;
+            while (!Volatile.Read(ref stop))
+            {
+                for (var i = 0; i < packet.Length; i++)
+                {
+                    packet[i] = Ramp.Value(frame + i);
+                }
+
+                track.Append(frame, packet, exact: false);
+                frame += packet.Length;
+                Volatile.Write(ref written, frame);
+            }
+        });
+
+        writer.Start();
+        var stored = new float[10_000];
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            while (clock.Elapsed.TotalSeconds < 2)
+            {
+                // Full, so the oldest frames are the ones being overwritten when the copy to the larger buffer starts.
+                track.Resize(1000);
+                var filled = Volatile.Read(ref written);
+                Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref written) > filled + 60_000, TimeSpan.FromSeconds(30)));
+                track.Resize(400_000);
+
+                var oldest = track.OldestFrame;
+                var lost = track.CopyWindow(oldest, stored);
+                for (var i = lost; i < stored.Length; i++)
+                {
+                    if (stored[i] != Ramp.ThroughBuffer(oldest + i))
+                    {
+                        Assert.Fail($"Frame {oldest + i} is wrong: {stored[i]}");
+                    }
+                }
+            }
+        }
+        finally
+        {
+            Volatile.Write(ref stop, true);
+            writer.Join();
+        }
     }
 }
