@@ -78,7 +78,16 @@ internal sealed partial class WinHttpTransport : IUpdateTransport
                 return new HopOutcome(LastError());
             }
 
-            if (!WinHttpSendRequest(request, 0, 0, 0, 0, 0, 0) || !WinHttpReceiveResponse(request, 0))
+            if (!WinHttpSendRequest(request, 0, 0, 0, 0, 0, 0))
+            {
+                return new HopOutcome(LastError());
+            }
+
+            // Connecting took part of the time: what is left, and no more, goes to the answer.
+            var answerPatience = (uint)Math.Max(Patience(limits, watch.Elapsed), 1);
+            if (!WinHttpSetOption(request, OptionReceiveTimeout, ref answerPatience, sizeof(uint))
+                || !WinHttpSetOption(request, OptionReceiveResponseTimeout, ref answerPatience, sizeof(uint))
+                || !WinHttpReceiveResponse(request, 0))
             {
                 return new HopOutcome(LastError());
             }

@@ -73,11 +73,26 @@ public class WinHttpTransportTests
     public void ARealGetFollowsTheRedirectsToTheAssetHost()
     {
         using var body = new MemoryStream();
+        var hosts = new List<string>();
 
-        var result = new WinHttpTransport().Get(RealUrl, Roomy, data => body.Write(data), () => false);
+        var result = new WinHttpTransport().Run(
+            RealUrl,
+            Roomy,
+            data => body.Write(data),
+            () => false,
+            (url, request, stop) => TransferLoops.FollowRedirects(
+                url,
+                uri =>
+                {
+                    hosts.Add(uri.Host);
+                    return request(uri);
+                },
+                stop));
 
         Assert.Equal(new TransportResult(TransportStatus.Completed), result);
         Assert.Contains("Dependencies", Encoding.UTF8.GetString(body.ToArray()));
+        Assert.Equal("github.com", hosts[0]);
+        Assert.EndsWith(".githubusercontent.com", hosts[^1]);
     }
 
     [Fact]
