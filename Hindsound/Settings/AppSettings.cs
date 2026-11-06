@@ -170,7 +170,8 @@ public sealed class ExportSettings
 
 public sealed class GeneralSettings
 {
-    public bool StartWithWindows { get; set; } = true;
+    /// <summary>Off until the user asks: an app that records audio should not start itself at boot on its own decision.</summary>
+    public bool StartWithWindows { get; set; }
 
     public bool Notifications { get; set; } = true;
 

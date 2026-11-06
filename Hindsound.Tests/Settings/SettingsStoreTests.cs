@@ -32,7 +32,7 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal("%USERPROFILE%\\Music\\Hindsound", s.Export.OutputFolder);
         Assert.Equal("Hindsound_{app}_{date}_{time}", s.Export.FileNameTemplate);
         Assert.True(s.Export.CopyToClipboard);
-        Assert.True(s.General.StartWithWindows);
+        Assert.False(s.General.StartWithWindows);
         Assert.Equal("#D4F53C", s.General.AccentColor);
         Assert.Equal("right", s.General.NotificationPosition);
         Assert.Equal("auto", s.General.FullscreenGames);
