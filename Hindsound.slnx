@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Hindsound.Tests/Hindsound.Tests.csproj" />
+  <Project Path="Hindsound/Hindsound.csproj" />
+</Solution>
