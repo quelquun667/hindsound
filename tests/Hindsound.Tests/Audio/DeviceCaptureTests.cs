@@ -78,7 +78,7 @@ public class DeviceCaptureTests(ITestOutputHelper output)
                 output.WriteLine($"Gap between consecutive packets, beyond their length: {jumps.Min():F2} to {jumps.Max():F2} ms");
             }
 
-            // A stamp can be ahead of the clock: a real headset in 44.1 kHz with 8 channels gave 29 ms at most on the
+            // A stamp can be ahead of the clock: a real headset in 44.1 kHz with 8 channels gave 33 ms at most on the
             // classic loopback. A stamp from another clock would be far outside this range.
             Assert.All(ages, age => Assert.InRange(age, -50, 2000));
         }
