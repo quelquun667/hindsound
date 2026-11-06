@@ -11,6 +11,7 @@ public enum SettingsNotice
     Unreadable,
     HasError,
     NotSaved,
+    StartupNotChanged,
 }
 
 /// <summary>What the start does about what it found in the file.</summary>
@@ -37,6 +38,37 @@ public enum WriteStep
 
     /// <summary>The file has not been read yet, so its content is not known: writing would destroy it.</summary>
     Refuse,
+}
+
+/// <summary>Makes the Windows startup entry follow the setting, or the setting follow the entry when Windows refuses.</summary>
+internal static class StartupSwitch
+{
+    /// <summary>False if the entry could not change: the setting then says what the entry really is. Faked key in tests.</summary>
+    /// <param name="general">The settings, changed in place on a refusal.</param>
+    /// <param name="key">The Run key.</param>
+    /// <param name="exePath">The exe, by default this one.</param>
+    public static bool Apply(GeneralSettings general, IRunKey key, string? exePath = null)
+    {
+        var wanted = general.StartWithWindows;
+        var registration = new StartupRegistration(key, exePath);
+        try
+        {
+            // A setting that is off and was never on needs no write.
+            if ((!wanted && key.GetValue(StartupRegistration.DefaultValueName) is null) || registration.Apply(wanted))
+            {
+                return true;
+            }
+
+            general.StartWithWindows = registration.IsEnabled();
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException)
+        {
+            // Not even readable: nothing changed, so it is still the opposite of what was asked.
+            general.StartWithWindows = !wanted;
+        }
+
+        return false;
+    }
 }
 
 /// <summary>
@@ -78,6 +110,7 @@ internal sealed class SettingsFileState
         SettingsNotice.Unreadable => NotificationStates.SettingsUnreadable(),
         SettingsNotice.HasError => NotificationStates.SettingsHasError(),
         SettingsNotice.NotSaved => NotificationStates.SettingsNotSaved(),
+        SettingsNotice.StartupNotChanged => NotificationStates.StartupNotChanged(),
         _ => null,
     };
 

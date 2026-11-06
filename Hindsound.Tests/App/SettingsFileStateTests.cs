@@ -4,6 +4,110 @@ using Hindsound.Ui;
 
 namespace Hindsound.Tests.App;
 
+public class StartupSwitchTests
+{
+    private const string Exe = @"C:\Apps\Hindsound.exe";
+    private const string Command = "\"" + Exe + "\"";
+
+    private sealed class FakeKey : IRunKey
+    {
+        public string? Value { get; set; }
+
+        public bool RefusesWrites { get; init; }
+
+        public bool RefusesReads { get; init; }
+
+        public int Writes { get; private set; }
+
+        public string? GetValue(string name) => RefusesReads ? throw new UnauthorizedAccessException() : Value;
+
+        public void SetValue(string name, string value)
+        {
+            Writes++;
+            if (RefusesWrites)
+            {
+                throw new UnauthorizedAccessException();
+            }
+
+            Value = value;
+        }
+
+        public void DeleteValue(string name)
+        {
+            Writes++;
+            if (RefusesWrites)
+            {
+                throw new UnauthorizedAccessException();
+            }
+
+            Value = null;
+        }
+    }
+
+    [Fact]
+    public void On_writes_the_entry()
+    {
+        var key = new FakeKey();
+        var general = new GeneralSettings { StartWithWindows = true };
+
+        Assert.True(StartupSwitch.Apply(general, key, Exe));
+
+        Assert.Equal(Command, key.Value);
+        Assert.True(general.StartWithWindows);
+    }
+
+    [Fact]
+    public void Off_removes_the_entry()
+    {
+        var key = new FakeKey { Value = Command };
+        var general = new GeneralSettings { StartWithWindows = false };
+
+        Assert.True(StartupSwitch.Apply(general, key, Exe));
+
+        Assert.Null(key.Value);
+    }
+
+    [Fact]
+    public void Off_and_never_on_writes_nothing()
+    {
+        var key = new FakeKey();
+
+        Assert.True(StartupSwitch.Apply(new GeneralSettings { StartWithWindows = false }, key, Exe));
+
+        Assert.Equal(0, key.Writes);
+    }
+
+    [Fact]
+    public void A_refused_on_puts_the_switch_back_to_off()
+    {
+        var general = new GeneralSettings { StartWithWindows = true };
+
+        Assert.False(StartupSwitch.Apply(general, new FakeKey { RefusesWrites = true }, Exe));
+
+        Assert.False(general.StartWithWindows);
+    }
+
+    [Fact]
+    public void A_refused_off_puts_the_switch_back_to_on()
+    {
+        var general = new GeneralSettings { StartWithWindows = false };
+
+        Assert.False(StartupSwitch.Apply(general, new FakeKey { RefusesWrites = true, Value = Command }, Exe));
+
+        Assert.True(general.StartWithWindows);
+    }
+
+    [Fact]
+    public void A_key_that_cannot_even_be_read_counts_as_unchanged()
+    {
+        var general = new GeneralSettings { StartWithWindows = true };
+
+        Assert.False(StartupSwitch.Apply(general, new FakeKey { RefusesReads = true }, Exe));
+
+        Assert.False(general.StartWithWindows);
+    }
+}
+
 public class SettingsFileStateTests
 {
     private static readonly DateTime Monday = new(2026, 11, 2, 0, 0, 0, DateTimeKind.Utc);
@@ -357,6 +461,7 @@ public class SettingsFileStateTests
     [InlineData(SettingsNotice.Unreadable, NotificationKind.SettingsUnreadable)]
     [InlineData(SettingsNotice.HasError, NotificationKind.SettingsHasError)]
     [InlineData(SettingsNotice.NotSaved, NotificationKind.SettingsNotSaved)]
+    [InlineData(SettingsNotice.StartupNotChanged, NotificationKind.StartupNotChanged)]
     public void Each_notice_has_its_notification(SettingsNotice notice, NotificationKind kind)
     {
         Assert.Equal(kind, SettingsFileState.ContentOf(notice, copyKept: true)!.Kind);

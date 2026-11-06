@@ -330,8 +330,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         }
     }
 
-    // A test run with its own settings file never touches the registry; and a setting that is off and was never on
-    // needs no write either.
+    // A test run with its own settings file never touches the registry. A refusal changes the setting back, so the switch
+    // in the window, drawn from that same object, shows the truth at its next refresh.
     private void ApplyStartupRegistration()
     {
         if (_options.SettingsPath is not null)
@@ -341,10 +341,10 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
         try
         {
-            var key = new RegistryRunKey();
-            if (_settings.General.StartWithWindows || key.GetValue(StartupRegistration.DefaultValueName) is not null)
+            if (!StartupSwitch.Apply(_settings.General, new RegistryRunKey()))
             {
-                new StartupRegistration(key).Apply(_settings.General.StartWithWindows);
+                _journal.Write($"startup registration: Windows refused the change, it now says {_settings.General.StartWithWindows}");
+                TellAboutSettings(SettingsNotice.StartupNotChanged);
             }
         }
         catch (Exception ex)
@@ -914,12 +914,13 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             _settingsFile.SawBeforeWriting(_store.Read().Status);
         }
 
-        TrySaveSettings();
+        // Before the write: if Windows refuses, the file gets what the entry really is.
         if ((change & SettingsChange.Startup) != 0)
         {
             ApplyStartupRegistration();
         }
 
+        TrySaveSettings();
         if ((change & SettingsChange.Accent) != 0)
         {
             _tray.Update(_trayState, Accent, _trayTip);
