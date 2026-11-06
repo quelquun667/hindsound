@@ -209,7 +209,32 @@ public sealed class AudioEngine : IDisposable
     }
 
     /// <summary>Stops capturing but keeps the buffer, which can still be saved. The paused time will not exist in it.</summary>
-    public Task PauseAsync() => RunCommandAsync(async () =>
+    public Task PauseAsync() => RunCommandAsync(PauseCoreAsync);
+
+    /// <summary>Captures again, the new audio following straight after what was kept.</summary>
+    public Task ResumeAsync() => RunCommandAsync(ResumeCoreAsync);
+
+    /// <summary>
+    /// Pauses if capturing, resumes if paused, and does nothing if stopped. The choice is made when the command gets
+    /// its turn, so two toggles in a row always cancel out, whatever was still running when they were asked for.
+    /// </summary>
+    /// <returns>The state this ended in.</returns>
+    public async Task<CaptureActivity> TogglePauseAsync()
+    {
+        var activity = CaptureActivity.Stopped;
+        await RunCommandAsync(async () =>
+        {
+            if (_started)
+            {
+                await (_paused ? ResumeCoreAsync() : PauseCoreAsync()).ConfigureAwait(false);
+            }
+
+            activity = BuildStatus().Activity;
+        }).ConfigureAwait(false);
+        return activity;
+    }
+
+    private async Task PauseCoreAsync()
     {
         if (_started && !_paused)
         {
@@ -217,17 +242,16 @@ public sealed class AudioEngine : IDisposable
             CancelRetry();
             await EndCaptureAsync().ConfigureAwait(false);
         }
-    });
+    }
 
-    /// <summary>Captures again, the new audio following straight after what was kept.</summary>
-    public Task ResumeAsync() => RunCommandAsync(async () =>
+    private async Task ResumeCoreAsync()
     {
         if (_started && _paused)
         {
             _paused = false;
             await RefreshSourcesAsync().ConfigureAwait(false);
         }
-    });
+    }
 
     /// <summary>Changes how much is kept, keeping the newest audio. Clips can be saved meanwhile.</summary>
     public Task ResizeBufferAsync(TimeSpan duration)

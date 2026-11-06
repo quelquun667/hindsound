@@ -807,3 +807,35 @@ public class LoopbackChoiceTests
         Assert.False(mic.Disposed);
     }
 }
+
+[Collection(nameof(TimingSensitive))]
+public class TogglePauseTests
+{
+    [Fact]
+    public async Task Two_toggles_during_a_stuck_open_end_up_capturing()
+    {
+        var stuck = new TaskCompletionSource();
+        var factory = new TrackingFactory { BeforeOpen = _ => stuck.Task };
+        using var engine = new AudioEngine(new AudioEngineOptions(TimeSpan.FromSeconds(2), MicEnabled: false), factory, new FakeWatcher());
+        var start = engine.StartAsync();
+        await Eventually.True(() => factory.OpenCalls == 1, "the opening under way");
+
+        var first = engine.TogglePauseAsync();
+        var second = engine.TogglePauseAsync();
+        stuck.SetResult();
+        await start;
+
+        Assert.Equal(CaptureActivity.Paused, await first);
+        Assert.Equal(CaptureActivity.Capturing, await second);
+        Assert.Equal(CaptureActivity.Capturing, engine.Status.Activity);
+    }
+
+    [Fact]
+    public async Task Toggling_a_stopped_engine_does_nothing()
+    {
+        using var rig = new AudioTestRig();
+
+        Assert.Equal(CaptureActivity.Stopped, await rig.Engine.TogglePauseAsync());
+        Assert.Empty(rig.Factory.Opened);
+    }
+}
