@@ -188,7 +188,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             throw new InvalidOperationException("--selftest-fail " + AppOptions.FailRun);
         }
 
-        new SettingsRetry(() => _settingsFile.AwaitingRead, () => NowMs, _loop.After, ReloadSettingsIfChanged).Arm();
+        SettingsRetry.Watching(_settingsFile, () => NowMs, _loop.After, ReloadSettingsIfChanged).Arm();
         _loop.Run();
     }
 

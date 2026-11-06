@@ -84,19 +84,24 @@ internal static class StartupSwitch
 
 /// <summary>
 /// A file the start could not read gets read as soon as it can be, without waiting for the user: a shortcut of the file is
-/// not registered yet, so its press would never come. The pace drops, it never stops, and it ends with the first real read.
+/// not registered yet, so its press would never come. The pace drops, it never stops, and it ends with the first real read:
+/// a lock that falls on a broken file changes nothing, as the defaults are still running with the microphone off.
 /// </summary>
-/// <param name="awaitingRead">The file is still to be read.</param>
+/// <param name="stillToRead">The app still waits for the settings of the file.</param>
 /// <param name="nowMs">The time.</param>
 /// <param name="after">Runs an action later, on the loop's thread.</param>
 /// <param name="read">Reads the file. Never throws.</param>
-internal sealed class SettingsRetry(Func<bool> awaitingRead, Func<long> nowMs, Action<int, Action> after, Action read)
+internal sealed class SettingsRetry(Func<bool> stillToRead, Func<long> nowMs, Action<int, Action> after, Action read)
 {
     private readonly NoticeRetry _pace = new();
 
+    /// <summary>The look the app keeps on its own file.</summary>
+    public static SettingsRetry Watching(SettingsFileState file, Func<long> nowMs, Action<int, Action> after, Action read) =>
+        new(() => file.StillOnDefaults, nowMs, after, read);
+
     public void Arm()
     {
-        if (!awaitingRead() || _pace.Arm(nowMs()) is not { } delay)
+        if (!stillToRead() || _pace.Arm(nowMs()) is not { } delay)
         {
             return;
         }
@@ -124,6 +129,12 @@ internal sealed class SettingsFileState
 
     /// <summary>The start could not read the file: nothing is written until it could.</summary>
     public bool AwaitingRead { get; private set; }
+
+    /// <summary>
+    /// The start could not read the file, so the defaults run with the microphone off, and nothing has replaced them yet.
+    /// Longer than <see cref="AwaitingRead"/>: a file found broken or gone can be looked at, but it gave no settings.
+    /// </summary>
+    public bool StillOnDefaults { get; private set; }
 
     /// <summary>The file in place is broken, and no copy of it exists yet.</summary>
     public bool BrokenOnDisk { get; private set; }
@@ -169,6 +180,7 @@ internal sealed class SettingsFileState
 
             case SettingsLoadStatus.Unreadable:
                 AwaitingRead = true;
+                StillOnDefaults = true;
                 _saysUnreadable = true;
                 return new StartDecision(MakeSafe: true, TouchRunKey: false, Write: false, FirstRun: false, SettingsNotice.Unreadable);
 
@@ -206,6 +218,7 @@ internal sealed class SettingsFileState
         AwaitingRead = false;
         Noted = written;
         BrokenOnDisk = status == SettingsLoadStatus.Corrupt;
+        StillOnDefaults &= status != SettingsLoadStatus.Loaded;
         return status switch
         {
             SettingsLoadStatus.Loaded => new ReloadDecision(true, SettingsNotice.None, "settings read again (Loaded)"),
@@ -258,6 +271,7 @@ internal sealed class SettingsFileState
         {
             Noted = written;
             _saveFailing = false;
+            StillOnDefaults = false;
             return SettingsNotice.None;
         }
 
