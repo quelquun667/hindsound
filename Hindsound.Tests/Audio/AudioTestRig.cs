@@ -18,7 +18,7 @@ internal sealed class FakeSource(AudioFlow flow, CaptureRequest request, string 
 
     public CaptureRequest Request { get; } = request;
 
-    public WaveFormat Format { get; } = flow == AudioFlow.System
+    public WaveFormat Format { get; set; } = flow == AudioFlow.System
         ? WaveFormat.CreateIeeeFloatWaveFormat(48000, 2)
         : WaveFormat.CreateIeeeFloatWaveFormat(48000, 1);
 
@@ -43,6 +43,11 @@ internal sealed class FakeSource(AudioFlow flow, CaptureRequest request, string 
         PacketAvailable?.Invoke(MemoryMarshal.AsBytes(samples), flags, 0, qpc);
     }
 
+    public void DeliverBytes(ReadOnlySpan<byte> data, long qpc)
+    {
+        PacketAvailable?.Invoke(data, AudioClientBufferFlags.None, 0, qpc);
+    }
+
     public void Die(Exception exception) => Stopped?.Invoke(exception);
 }
 
@@ -55,6 +60,8 @@ internal sealed class FakeFactory : ICaptureSourceFactory
     public bool FailExclusion { get; set; }
 
     public bool FailEverything { get; set; }
+
+    public WaveFormat? MicFormat { get; set; }
 
     public List<FakeSource> Opened { get; } = [];
 
@@ -74,6 +81,11 @@ internal sealed class FakeFactory : ICaptureSourceFactory
         }
 
         var source = new FakeSource(request.Flow, request, request.DeviceId + " name");
+        if (request.Flow == AudioFlow.Mic && MicFormat is not null)
+        {
+            source.Format = MicFormat;
+        }
+
         Opened.Add(source);
         return Task.FromResult<ICaptureSource>(source);
     }

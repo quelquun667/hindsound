@@ -163,6 +163,59 @@ public class AudioEngineTests
         Assert.Equal(Ramp.ThroughBuffer(FramesPerSecond - 1), snapshot.System[^2]);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Sources_a_little_apart_end_together_at_the_older_end_with_no_zeros(bool micBehind)
+    {
+        using var rig = new AudioTestRig();
+        await rig.Engine.StartAsync();
+
+        rig.Run(1);
+        rig.Run(0.05, system: micBehind, mic: !micBehind);
+        var snapshot = rig.Engine.Snapshot(Seconds(1));
+
+        // One source is 50 ms ahead: still live, so the clip stops where the other one has got to.
+        Assert.Equal(FramesPerSecond, snapshot.Mic.Length);
+        Assert.Equal(Ramp.ThroughBuffer(FramesPerSecond - 1), snapshot.Mic[^1]);
+        Assert.Equal(Ramp.ThroughBuffer(FramesPerSecond - 1), snapshot.System[^2]);
+        AssertAligned(snapshot);
+    }
+
+    [Fact]
+    public async Task A_mic_at_44100_16_bit_stereo_lines_up_with_the_pc_sound()
+    {
+        using var rig = new AudioTestRig();
+        rig.Factory.MicFormat = new NAudio.Wave.WaveFormat(44100, 16, 2);
+        await rig.Engine.StartAsync();
+
+        // Both sources go from silence to a tone edge at exactly the same moment, 2 s in.
+        var systemPacket = new float[960];
+        var micPacket = new short[441 * 2];
+        for (var packet = 0; packet < 300; packet++)
+        {
+            var stamp = rig.Clock.Ticks;
+            rig.Clock.Advance(0.01);
+            var level = packet >= 200 ? 0.5f : 0f;
+            Array.Fill(systemPacket, level);
+            Array.Fill(micPacket, (short)(level * 32768));
+            rig.SystemSource.Deliver(systemPacket, stamp);
+            rig.MicSource.DeliverBytes(MemoryMarshal.AsBytes(micPacket.AsSpan()), stamp);
+        }
+
+        var snapshot = rig.Engine.Snapshot(Seconds(3));
+
+        Assert.Equal(snapshot.Mic.Length * 2, snapshot.System.Length);
+        Assert.InRange(snapshot.Duration.TotalSeconds, 2.99, 3.0);
+
+        // The edge lands at the same place in both, to within the 2 ms the sync lets through.
+        var systemEdge = Array.FindIndex(snapshot.System, sample => sample > 0.25f) / 2;
+        var micEdge = Array.FindIndex(snapshot.Mic, sample => sample > 0.25f);
+        Assert.InRange(micEdge - systemEdge, -SilencePadder.JitterFrames, SilencePadder.JitterFrames);
+
+        Assert.Equal(0.5f, snapshot.Mic[^1], 3);
+    }
+
     [Fact]
     public async Task With_the_mic_off_there_is_no_mic_at_all()
     {
