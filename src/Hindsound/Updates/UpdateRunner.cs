@@ -31,6 +31,7 @@ internal enum RunStatus
 /// </summary>
 internal sealed class UpdateRunner(UpdateStateStore store, string folder, Action<ProcessStartInfo> start)
 {
+    /// <summary>/WAITEXIT outlasts the slowest exit of the app, 5 min for a clip being written and 5 s for the engine: an app leaving after Setup gave up would stay off.</summary>
     public static IReadOnlyList<string> SetupArguments(bool restartApp)
     {
         List<string> arguments = ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/WAITEXIT=330"];
