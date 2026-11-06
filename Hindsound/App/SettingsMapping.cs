@@ -22,6 +22,13 @@ internal static class SettingsMapping
             SourceApp(settings.Audio.SourceApp));
     }
 
+    /// <summary>What the running app hands to the engine: <c>--no-mic</c> wins over the file, and nothing of it reaches the settings.</summary>
+    public static AudioEngineOptions ToEngineOptions(AppSettings settings, AppOptions options)
+    {
+        var engine = ToEngineOptions(settings);
+        return options.NoMic ? engine with { MicEnabled = false, MicDeviceId = null } : engine;
+    }
+
     /// <summary>The devices alone: what <see cref="AudioEngine.SetDevicesAsync"/> takes.</summary>
     public static (string? SystemDeviceId, string? MicDeviceId, bool MicEnabled) ToDevices(AudioSettings audio)
     {

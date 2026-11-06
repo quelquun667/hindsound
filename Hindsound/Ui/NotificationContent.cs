@@ -19,6 +19,16 @@ public enum NotificationKind
     Saving,
     NothingToSave,
     SaveFailed,
+    SettingsDamaged,
+    SettingsUnreadable,
+    SettingsHasError,
+    SettingsNotSaved,
+    StartupNotChanged,
+    StillSaving,
+    LastClipGone,
+    MicLost,
+    MicBack,
+    ClosingAfterClip,
 }
 
 /// <summary>What sits on the inner side of the tab, before the text.</summary>
@@ -46,6 +56,9 @@ internal sealed record NotificationContent(
     uint VisualColor,
     IReadOnlyList<BarColumn> Bars)
 {
+    /// <summary>A click opens the settings, where the problem gets solved, instead of the folder of the clips.</summary>
+    public bool ClickOpensSettings { get; init; }
+
     /// <summary>The capture-on row holds three keys, so they are drawn smaller.</summary>
     public bool SmallKeys => Keys.Count > 2;
 
@@ -65,6 +78,7 @@ internal static class NotificationPalette
 internal static class NotificationStates
 {
     public const string RescuedBody = @"Clip kept in Hindsound\Rescued";
+    public const string RescuedNotCopiedBody = @"Kept in Hindsound\Rescued. Not copied";
 
     private static readonly string[] PasteKeys = ["Ctrl", "V"];
     private static readonly BarColumn[] NoBars = [];
@@ -77,9 +91,10 @@ internal static class NotificationStates
     /// <param name="accent">The accent colour.</param>
     public static NotificationContent ForClip(ClipResult result, TimeSpan requested, bool copyWanted, bool copied, uint accent)
     {
+        var copyFailed = copyWanted && !copied;
         if (result.Rescued)
         {
-            return Icon(NotificationKind.Rescued, "Output folder not writable", RescuedBody, NotificationPalette.Hot, NotificationVisual.Triangle, NotificationPalette.Hot);
+            return Icon(NotificationKind.Rescued, "Output folder not writable", copyFailed ? RescuedNotCopiedBody : RescuedBody, NotificationPalette.Hot, NotificationVisual.Triangle, NotificationPalette.Hot);
         }
 
         var seconds = WholeSeconds(result.Duration);
@@ -92,11 +107,11 @@ internal static class NotificationStates
 
         if (result.IsSilent)
         {
-            return new NotificationContent(NotificationKind.Silent, title, "It's silent. Check Settings > Audio.", [], NotificationPalette.Amber,
+            return new NotificationContent(NotificationKind.Silent, title, copyFailed ? "It's silent, and not copied" : "It's silent. Check Settings > Audio.", [], NotificationPalette.Amber,
                 NotificationVisual.Bars, accent, bars);
         }
 
-        if (copyWanted && !copied)
+        if (copyFailed)
         {
             // The sentence needs the wider text area, so the triangle takes the place of the bars.
             return new NotificationContent(NotificationKind.CopyFailed, title, "Couldn't copy. Use tray > Copy last clip.", [], NotificationPalette.Amber,
@@ -127,8 +142,18 @@ internal static class NotificationStates
 
     /// <param name="bufferSeconds">How much is kept.</param>
     /// <param name="saveGesture">The save shortcut, such as <c>Ctrl+Shift+F10</c>.</param>
-    public static NotificationContent CaptureOn(int bufferSeconds, string? saveGesture)
+    /// <param name="saveHotkeyProblem">Said instead of the keys when pressing them would do nothing: the user finds out now, not when the moment is gone.</param>
+    public static NotificationContent CaptureOn(int bufferSeconds, string? saveGesture, string? saveHotkeyProblem = null)
     {
+        if (saveHotkeyProblem is not null)
+        {
+            return new NotificationContent(NotificationKind.CaptureOn, "Capture on", $"Keeping the last {FormatDuration(bufferSeconds)}. {saveHotkeyProblem}", [], NotificationPalette.Amber,
+                NotificationVisual.Dot, NotificationPalette.Hot, NoBars)
+            {
+                ClickOpensSettings = true,
+            };
+        }
+
         var keys = string.IsNullOrWhiteSpace(saveGesture) ? [] : saveGesture.Split('+');
         var body = keys.Length == 0 ? $"Keeping the last {FormatDuration(bufferSeconds)}" : $"Keeping the last {FormatDuration(bufferSeconds)}. Save:";
         return new NotificationContent(NotificationKind.CaptureOn, "Capture on", body, keys, NotificationPalette.Hot, NotificationVisual.Dot, NotificationPalette.Hot, NoBars);
@@ -140,11 +165,43 @@ internal static class NotificationStates
     public static NotificationContent Saving(TimeSpan requested) =>
         Icon(NotificationKind.Saving, $"Saving clip ({FormatDuration(WholeSeconds(requested))})", "One moment", NotificationPalette.Muted, NotificationVisual.Pending, NotificationPalette.Muted);
 
+    public static NotificationContent ClosingAfterClip() =>
+        Icon(NotificationKind.ClosingAfterClip, "Saving your clip", "Hindsound closes when it's done", NotificationPalette.Muted, NotificationVisual.Pending, NotificationPalette.Muted);
+
     public static NotificationContent NothingToSave() =>
         Icon(NotificationKind.NothingToSave, "Nothing to save yet", "No sound has been captured so far", NotificationPalette.Amber, NotificationVisual.Triangle, NotificationPalette.Amber);
 
     public static NotificationContent SaveFailed() =>
         Icon(NotificationKind.SaveFailed, "Couldn't save the clip", "The reason is in hindsound.log", NotificationPalette.Hot, NotificationVisual.Triangle, NotificationPalette.Hot);
+
+    public static NotificationContent StillSaving() =>
+        Icon(NotificationKind.StillSaving, "Still saving your last clip", "Try again in a moment", NotificationPalette.Amber, NotificationVisual.Triangle, NotificationPalette.Amber);
+
+    public static NotificationContent LastClipGone() =>
+        Icon(NotificationKind.LastClipGone, "Last clip is gone", "It was moved or deleted", NotificationPalette.Amber, NotificationVisual.Triangle, NotificationPalette.Amber);
+
+    public static NotificationContent MicLost() =>
+        Icon(NotificationKind.MicLost, "Microphone lost", "Clips have no voice until it's back", NotificationPalette.Amber, NotificationVisual.Triangle, NotificationPalette.Amber);
+
+    public static NotificationContent MicBack() =>
+        Icon(NotificationKind.MicBack, "Microphone back", "Clips have your voice again", NotificationPalette.Muted, NotificationVisual.Headset, NotificationPalette.Muted);
+
+    /// <summary>The start found a broken settings file.</summary>
+    /// <param name="copyKept">A copy of it exists; otherwise it stayed in its place.</param>
+    public static NotificationContent SettingsDamaged(bool copyKept) =>
+        Problem(NotificationKind.SettingsDamaged, "Settings file was damaged", copyKept ? "Defaults restored, mic off. Copy kept as .bak" : "Defaults restored, mic off");
+
+    public static NotificationContent SettingsUnreadable() =>
+        Problem(NotificationKind.SettingsUnreadable, "Can't read the settings file", "Using defaults, mic off, until it can be read");
+
+    public static NotificationContent SettingsHasError() =>
+        Problem(NotificationKind.SettingsHasError, "Settings file has an error", "Keeping the current settings");
+
+    public static NotificationContent SettingsNotSaved() =>
+        Problem(NotificationKind.SettingsNotSaved, "Couldn't save your settings", "This change is lost at the next start");
+
+    public static NotificationContent StartupNotChanged() =>
+        Problem(NotificationKind.StartupNotChanged, "Couldn't change Start with Windows", "It stays as it was");
 
     /// <summary><c>m:ss</c>.</summary>
     public static string FormatDuration(int seconds) => $"{seconds / 60}:{seconds % 60:00}";
@@ -154,6 +211,9 @@ internal static class NotificationStates
 
     private static NotificationContent Icon(NotificationKind kind, string title, string body, uint stripe, NotificationVisual visual, uint color) =>
         new(kind, title, body, [], stripe, visual, color, NoBars);
+
+    private static NotificationContent Problem(NotificationKind kind, string title, string body) =>
+        Icon(kind, title, body, NotificationPalette.Hot, NotificationVisual.Triangle, NotificationPalette.Hot);
 }
 
 /// <summary>Turns the 24 values of <see cref="ClipResult.Bars"/> into the 24 columns drawn.</summary>

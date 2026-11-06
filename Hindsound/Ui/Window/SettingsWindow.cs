@@ -7,13 +7,13 @@ namespace Hindsound.Ui.Window;
 
 internal static unsafe partial class WindowNative
 {
-    public const uint WM_SETICON = 0x0080, WM_DESTROY = 0x0002, WM_SETFOCUS = 0x0007, WM_KILLFOCUS = 0x0008, WM_PAINT = 0x000F, WM_ERASEBKGND = 0x0014, WM_ACTIVATE = 0x0006,
+    public const uint WM_SETICON = 0x0080, WM_GETICON = 0x007F, WM_DESTROY = 0x0002, WM_SETFOCUS = 0x0007, WM_KILLFOCUS = 0x0008, WM_PAINT = 0x000F, WM_ERASEBKGND = 0x0014, WM_ACTIVATE = 0x0006,
         WM_SETFONT = 0x0030, WM_KEYDOWN = 0x0100, WM_KEYUP = 0x0101, WM_CHAR = 0x0102, WM_SYSKEYDOWN = 0x0104, WM_SYSKEYUP = 0x0105, WM_SYSCHAR = 0x0106,
         WM_COMMAND = 0x0111, WM_CTLCOLOREDIT = 0x0133, WM_MOUSEMOVE = 0x0200, WM_LBUTTONDOWN = 0x0201, WM_LBUTTONUP = 0x0202, WM_MOUSEWHEEL = 0x020A,
         WM_CAPTURECHANGED = 0x0215, WM_MOUSELEAVE = 0x02A3, WM_DPICHANGED = 0x02E0, EM_SETSEL = 0x00B1, EM_SETLIMITTEXT = 0x00C5, EN_CHANGE = 0x0300, TME_LEAVE = 0x0002;
 
     public const uint WS_OVERLAPPED = 0, WS_CAPTION = 0x00C00000, WS_SYSMENU = 0x00080000, WS_MINIMIZEBOX = 0x00020000, WS_CLIPCHILDREN = 0x02000000,
-        WS_CHILD = 0x40000000, ES_AUTOHSCROLL = 0x0080, SRCCOPY = 0x00CC0020, SWP_NOZORDER = 0x0004, SWP_HIDEWINDOW = 0x0080;
+        WS_CHILD = 0x40000000, ES_AUTOHSCROLL = 0x0080, SRCCOPY = 0x00CC0020, SWP_NOZORDER = 0x0004;
 
     public const int SW_SHOW = 5, SW_SHOWNOACTIVATE = 4, SW_RESTORE = 9, GWLP_WNDPROC = -4, IDC_ARROW = 32512, WA_INACTIVE = 0;
     public const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20, DWMWA_CAPTION_COLOR = 35;
@@ -87,7 +87,8 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
     private nint _edit;
     private static nint _editOriginal;
     private nint _editFont;
-    private nint _icon;
+    private nint _smallIcon, _bigIcon;
+    private uint? _iconAccent;
     private GdiCanvas _canvas;
     private uint _dpi;
     private bool _dirty = true;
@@ -103,7 +104,7 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
     private float _editSize;
     private bool _closed;
 
-    public SettingsWindow(AppSettings settings, ISettingsBackend backend, Func<float> readMicPeak, bool firstRun, bool offscreen, Action closed)
+    public SettingsWindow(AppSettings settings, ISettingsBackend backend, Func<float> readMicPeak, bool firstRun, bool offscreen, ScreenInfo screen, Action closed)
     {
         Closed = closed;
         _offscreen = offscreen;
@@ -112,7 +113,7 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
         var instance = Native.GetModuleHandleW(null);
         RegisterClass(instance);
 
-        var (area, dpi) = offscreen ? OffscreenArea() : ForegroundWindow.ActiveMonitor();
+        var (area, dpi) = offscreen ? OffscreenArea() : (screen.Work, screen.Dpi);
         _dpi = dpi;
         var size = OuterSize(dpi);
         var exStyle = offscreen ? Native.WS_EX_NOACTIVATE | Native.WS_EX_TOOLWINDOW : 0;
@@ -203,15 +204,38 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
     /// <summary>The icon of the title bar: the same H as the tray, in the accent colour.</summary>
     public void SetIcon(uint accent)
     {
-        var icon = TrayIcon.CreateIcon(TrayState.Active, accent);
-        WindowNative.SendMessageW(_hwnd, WindowNative.WM_SETICON, 0, icon);
-        WindowNative.SendMessageW(_hwnd, WindowNative.WM_SETICON, 1, icon);
-        if (_icon != 0)
+        const nuint small = 0, big = 1;
+        _iconAccent = accent;
+        var smallIcon = TrayIcon.CreateIcon(TrayState.Active, accent, TrayIcon.SmallSizeAt(_dpi));
+        var bigIcon = TrayIcon.CreateIcon(TrayState.Active, accent, TrayIcon.BigSizeAt(_dpi));
+        WindowNative.SendMessageW(_hwnd, WindowNative.WM_SETICON, small, smallIcon);
+        WindowNative.SendMessageW(_hwnd, WindowNative.WM_SETICON, big, bigIcon);
+        DestroyIcons();
+        _smallIcon = smallIcon;
+        _bigIcon = bigIcon;
+    }
+
+    /// <summary>The widths of the two icons, as the window itself holds them.</summary>
+    public (int Small, int Big) IconWidths()
+    {
+        const nuint small = 0, big = 1;
+        return (TrayIcon.WidthOf(WindowNative.SendMessageW(_hwnd, WindowNative.WM_GETICON, small, 0)),
+            TrayIcon.WidthOf(WindowNative.SendMessageW(_hwnd, WindowNative.WM_GETICON, big, 0)));
+    }
+
+    private void DestroyIcons()
+    {
+        if (_smallIcon != 0)
         {
-            Native.DestroyIcon(_icon);
+            Native.DestroyIcon(_smallIcon);
+            _smallIcon = 0;
         }
 
-        _icon = icon;
+        if (_bigIcon != 0)
+        {
+            Native.DestroyIcon(_bigIcon);
+            _bigIcon = 0;
+        }
     }
 
     private static (Native.RECT Area, uint Dpi) OffscreenArea()
@@ -582,6 +606,11 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
             PlaceEdit();
         }
 
+        if (_iconAccent is { } accent)
+        {
+            SetIcon(accent);
+        }
+
         Invalidate();
     }
 
@@ -660,12 +689,7 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
         }
 
         Native.DeleteObject(_editBrush);
-        if (_icon != 0)
-        {
-            Native.DestroyIcon(_icon);
-            _icon = 0;
-        }
-
+        DestroyIcons();
         _hwnd = 0;
         _edit = 0;
         _current = null;

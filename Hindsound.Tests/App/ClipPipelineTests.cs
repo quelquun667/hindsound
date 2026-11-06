@@ -5,6 +5,29 @@ using Hindsound.Export;
 
 namespace Hindsound.Tests.App;
 
+public class ClipFilesTests
+{
+    [Fact]
+    public void A_clip_with_all_its_files_can_be_copied()
+    {
+        Assert.True(ClipFiles.AllThere(["a_system.wav", "a_mic.wav"], _ => true));
+    }
+
+    [Theory]
+    [InlineData("a_system.wav")]
+    [InlineData("a_mic.wav")]
+    public void One_file_missing_is_enough_to_say_no(string missing)
+    {
+        Assert.False(ClipFiles.AllThere(["a_system.wav", "a_mic.wav"], path => path != missing));
+    }
+
+    [Fact]
+    public void A_clip_without_files_cannot_be_copied()
+    {
+        Assert.False(ClipFiles.AllThere([], _ => true));
+    }
+}
+
 public class ClipPipelineTests
 {
     private static readonly TimeSpan Wait = TimeSpan.FromSeconds(20);
@@ -230,6 +253,215 @@ public class ClipPipelineTests
         Assert.False(rig.Pipeline.WaitIdle(TimeSpan.FromMilliseconds(30)));
         hold.Set();
         Assert.True(rig.Pipeline.WaitIdle(Wait));
+    }
+
+    // 5:00 takes 172.8 MB, so six of them hold 1.0368 GB and a seventh would go past the limit.
+    private const int FiveMinutes = 300;
+    private const int FitBelowTheLimit = 6;
+
+    private static int Snapshots(FakeBackend backend) => backend.Calls.Count(c => c.StartsWith("snapshot"));
+
+    private static void HoldTheEncoder(Rig rig, ManualResetEventSlim hold)
+    {
+        rig.Backend.HoldSave = hold;
+        rig.Pipeline.Press(Request(FiveMinutes));
+        Assert.True(SpinWait.SpinUntil(() => rig.Backend.Calls.Contains("save 1"), Wait));
+    }
+
+    [Theory]
+    [InlineData(300, 172_800_000L)]
+    [InlineData(1800, 1_036_800_000L)]
+    [InlineData(15, 8_640_000L)]
+    public void The_memory_is_estimated_from_the_duration_asked(int seconds, long bytes)
+    {
+        Assert.Equal(bytes, ClipPipeline.EstimatedBytes(TimeSpan.FromSeconds(seconds)));
+    }
+
+    [Fact]
+    public void Presses_past_the_limit_copy_nothing_and_say_busy_at_once()
+    {
+        var rig = new Rig();
+        using var hold = new ManualResetEventSlim(false);
+        HoldTheEncoder(rig, hold);
+        for (var i = 1; i < FitBelowTheLimit; i++)
+        {
+            rig.Pipeline.Press(Request(FiveMinutes));
+        }
+
+        Assert.True(SpinWait.SpinUntil(() => Snapshots(rig.Backend) == FitBelowTheLimit, Wait));
+
+        for (var i = 0; i < 44; i++)
+        {
+            rig.Pipeline.Press(Request(FiveMinutes));
+        }
+
+        for (var i = 0; i < 44; i++)
+        {
+            Assert.Equal(ClipFailure.Busy, rig.NextOutcome().Failure);
+        }
+
+        Assert.Equal(FitBelowTheLimit, Snapshots(rig.Backend));
+        hold.Set();
+        for (var i = 0; i < FitBelowTheLimit; i++)
+        {
+            Assert.Equal(ClipFailure.None, rig.NextOutcome().Failure);
+        }
+    }
+
+    [Fact]
+    public void A_short_press_still_fits_where_a_long_one_does_not()
+    {
+        var rig = new Rig();
+        using var hold = new ManualResetEventSlim(false);
+        HoldTheEncoder(rig, hold);
+        for (var i = 1; i < FitBelowTheLimit; i++)
+        {
+            rig.Pipeline.Press(Request(FiveMinutes));
+        }
+
+        rig.Pipeline.Press(Request(30));
+        Assert.True(SpinWait.SpinUntil(() => Snapshots(rig.Backend) == FitBelowTheLimit + 1, Wait), "a press that fits was refused");
+        hold.Set();
+    }
+
+    [Fact]
+    public void A_single_clip_goes_through_whatever_its_size()
+    {
+        var rig = new Rig();
+
+        rig.Pipeline.Press(Request(3600)); // 2 GB on its own
+
+        Assert.Equal(ClipFailure.None, rig.NextOutcome().Failure);
+    }
+
+    [Fact]
+    public void A_clip_too_large_for_the_limit_is_refused_only_while_another_one_waits()
+    {
+        var rig = new Rig();
+        using var hold = new ManualResetEventSlim(false);
+        HoldTheEncoder(rig, hold);
+
+        rig.Pipeline.Press(Request(3600));
+        Assert.Equal(ClipFailure.Busy, rig.NextOutcome().Failure);
+
+        hold.Set();
+        Assert.Equal(ClipFailure.None, rig.NextOutcome().Failure);
+
+        rig.Pipeline.Press(Request(3600));
+        Assert.Equal(ClipFailure.None, rig.NextOutcome().Failure);
+    }
+
+    // A clip of 40:00 is over the limit on its own: each one goes through only if the one before gave its memory back.
+    private const int OverTheLimit = 2400;
+
+    [Fact]
+    public void The_memory_comes_back_when_a_clip_is_written()
+    {
+        var rig = new Rig();
+        for (var i = 0; i < 3; i++)
+        {
+            rig.Pipeline.Press(Request(OverTheLimit));
+            Assert.Equal(ClipFailure.None, rig.NextOutcome().Failure);
+        }
+    }
+
+    [Fact]
+    public void The_memory_comes_back_when_the_writing_fails()
+    {
+        var rig = new Rig();
+        rig.Backend.SaveThrows = new IOException("disk full");
+        for (var i = 0; i < 3; i++)
+        {
+            rig.Pipeline.Press(Request(OverTheLimit));
+            Assert.Equal(ClipFailure.Failed, rig.NextOutcome().Failure);
+        }
+    }
+
+    [Fact]
+    public void The_memory_comes_back_when_the_snapshot_fails()
+    {
+        var rig = new Rig();
+        rig.Backend.NextSnapshot = () => throw new OutOfMemoryException();
+        for (var i = 0; i < 3; i++)
+        {
+            rig.Pipeline.Press(Request(OverTheLimit));
+            Assert.Equal(ClipFailure.Failed, rig.NextOutcome().Failure);
+        }
+    }
+
+    [Fact]
+    public void The_memory_comes_back_when_the_snapshot_is_empty()
+    {
+        var rig = new Rig();
+        rig.Backend.NextSnapshot = () => new AudioSnapshot([], []);
+        for (var i = 0; i < 3; i++)
+        {
+            rig.Pipeline.Press(Request(OverTheLimit));
+            Assert.Equal(ClipFailure.NothingCaptured, rig.NextOutcome().Failure);
+        }
+    }
+
+    [Fact]
+    public void Leaving_gives_the_two_queues_one_deadline_not_one_each()
+    {
+        var rig = new Rig();
+        using var hold = new ManualResetEventSlim(false);
+        rig.Backend.HoldSave = hold;
+        rig.Backend.NextSnapshot = () =>
+        {
+            Thread.Sleep(1500);
+            return new AudioSnapshot(new float[2], []);
+        };
+        rig.Pipeline.Press(Request());
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var idle = rig.Pipeline.WaitIdle(TimeSpan.FromSeconds(2));
+        watch.Stop();
+        hold.Set();
+
+        Assert.False(idle);
+        Assert.True(watch.ElapsedMilliseconds < 3000, $"waited {watch.ElapsedMilliseconds} ms for a limit of 2000 ms");
+        rig.NextOutcome();
+    }
+
+    [Fact]
+    public void Busy_holds_from_the_press_until_the_last_clip_is_heard_of()
+    {
+        var rig = new Rig();
+        using var hold = new ManualResetEventSlim(false);
+        rig.Backend.HoldSave = hold;
+        var busyWhenHeard = new ConcurrentQueue<bool>();
+        rig.Pipeline.Finished = outcome =>
+        {
+            busyWhenHeard.Enqueue(rig.Pipeline.Busy);
+            rig.Outcomes.Add(outcome);
+        };
+
+        Assert.False(rig.Pipeline.Busy);
+        rig.Pipeline.Press(Request());
+        rig.Pipeline.Press(Request());
+        Assert.True(rig.Pipeline.Busy);
+        hold.Set();
+        rig.NextOutcome();
+        rig.NextOutcome();
+
+        // The first one still has the second behind it. The last one can already leave, the queues being a step behind.
+        Assert.Equal([true, false], busyWhenHeard);
+        Assert.False(rig.Pipeline.Busy);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_press_that_ends_without_a_clip_stops_being_busy(bool snapshotThrows)
+    {
+        var rig = new Rig();
+        rig.Backend.NextSnapshot = () => snapshotThrows ? throw new InvalidOperationException("on purpose") : new AudioSnapshot([], []);
+
+        rig.Pipeline.Press(Request());
+
+        Assert.Equal(snapshotThrows ? ClipFailure.Failed : ClipFailure.NothingCaptured, rig.NextOutcome().Failure);
+        Assert.False(rig.Pipeline.Busy);
     }
 
     [Fact]

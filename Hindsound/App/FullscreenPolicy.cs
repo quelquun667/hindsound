@@ -36,13 +36,16 @@ internal readonly record struct Presentation(bool ShowOverlay, bool ClickThrough
 /// </summary>
 internal static class FullscreenPolicy
 {
-    /// <summary>The decision once a clip is saved. The sound only ever confirms a saved clip.</summary>
-    public static Presentation ForClip(UserNotificationState state, bool foregroundCoversScreen, GeneralSettings general, bool saved, bool important)
+    /// <summary>
+    /// The decision once a clip is saved. The sound only ever confirms a saved clip, and never one that Ctrl+V will not
+    /// paste: with the copy failed the silence is the warning, whatever the sound setting says, and the notification follows.
+    /// </summary>
+    public static Presentation ForClip(UserNotificationState state, bool foregroundCoversScreen, GeneralSettings general, bool saved, bool important, bool copyFailed = false)
     {
         var overlayAllowed = OverlayAllowed(state, foregroundCoversScreen, general.FullscreenGames);
         var wanted = general.Notifications || important;
         var showOverlay = overlayAllowed && wanted;
-        var sound = saved && general.ConfirmSound switch
+        var sound = saved && !copyFailed && general.ConfirmSound switch
         {
             "never" => false,
             "always" => true,
@@ -51,14 +54,18 @@ internal static class FullscreenPolicy
         return new Presentation(showOverlay, showOverlay && ClickThrough(state, foregroundCoversScreen), sound, !overlayAllowed && wanted);
     }
 
-    /// <summary>The decision for a status (capture on, paused, device changed): silent, and dropped when no overlay can show.</summary>
+    /// <summary>
+    /// The decision for a status: silent. When no overlay can show, an important one (capture on, no device, microphone
+    /// lost) waits for the desktop and any other is dropped. The notifications setting only speaks for the ordinary ones.
+    /// </summary>
     public static Presentation ForStatus(UserNotificationState state, bool foregroundCoversScreen, GeneralSettings general, bool important)
     {
-        var showOverlay = OverlayAllowed(state, foregroundCoversScreen, general.FullscreenGames) && (general.Notifications || important);
-        return new Presentation(showOverlay, showOverlay && ClickThrough(state, foregroundCoversScreen), false, false);
+        var overlayAllowed = OverlayAllowed(state, foregroundCoversScreen, general.FullscreenGames);
+        var showOverlay = overlayAllowed && (general.Notifications || important);
+        return new Presentation(showOverlay, showOverlay && ClickThrough(state, foregroundCoversScreen), false, !overlayAllowed && important);
     }
 
-    /// <summary>Has the user come back, so a clip kept waiting can be shown?</summary>
+    /// <summary>Has the user come back, so what was kept waiting can be shown?</summary>
     public static bool BackOnDesktop(UserNotificationState state, bool foregroundCoversScreen) =>
         !foregroundCoversScreen && !IsFullScreenState(state) && !NoOneThere(state);
 

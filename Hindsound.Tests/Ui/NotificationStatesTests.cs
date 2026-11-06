@@ -26,6 +26,52 @@ public class NotificationStatesTests
     }
 
     [Fact]
+    public void Settings_damaged() =>
+        AssertState(NotificationStates.SettingsDamaged(copyKept: true), K.SettingsDamaged, "Settings file was damaged", "Defaults restored, mic off. Copy kept as .bak", P.Hot, NotificationVisual.Triangle);
+
+    [Fact]
+    public void Settings_damaged_without_a_copy() =>
+        AssertState(NotificationStates.SettingsDamaged(copyKept: false), K.SettingsDamaged, "Settings file was damaged", "Defaults restored, mic off", P.Hot, NotificationVisual.Triangle);
+
+    [Fact]
+    public void Settings_unreadable() =>
+        AssertState(NotificationStates.SettingsUnreadable(), K.SettingsUnreadable, "Can't read the settings file", "Using defaults, mic off, until it can be read", P.Hot, NotificationVisual.Triangle);
+
+    [Fact]
+    public void Settings_has_an_error() =>
+        AssertState(NotificationStates.SettingsHasError(), K.SettingsHasError, "Settings file has an error", "Keeping the current settings", P.Hot, NotificationVisual.Triangle);
+
+    [Fact]
+    public void Settings_not_saved() =>
+        AssertState(NotificationStates.SettingsNotSaved(), K.SettingsNotSaved, "Couldn't save your settings", "This change is lost at the next start", P.Hot, NotificationVisual.Triangle);
+
+    [Fact]
+    public void Startup_not_changed() =>
+        AssertState(NotificationStates.StartupNotChanged(), K.StartupNotChanged, "Couldn't change Start with Windows", "It stays as it was", P.Hot, NotificationVisual.Triangle);
+
+    [Fact]
+    public void Still_saving() =>
+        AssertState(NotificationStates.StillSaving(), K.StillSaving, "Still saving your last clip", "Try again in a moment", P.Amber, NotificationVisual.Triangle);
+
+    [Fact]
+    public void Last_clip_gone() =>
+        AssertState(NotificationStates.LastClipGone(), K.LastClipGone, "Last clip is gone", "It was moved or deleted", P.Amber, NotificationVisual.Triangle);
+
+    [Fact]
+    public void Mic_lost() =>
+        AssertState(NotificationStates.MicLost(), K.MicLost, "Microphone lost", "Clips have no voice until it's back", P.Amber, NotificationVisual.Triangle);
+
+    [Fact]
+    public void Mic_back_is_quiet()
+    {
+        var content = NotificationStates.MicBack();
+        Assert.Equal(K.MicBack, content.Kind);
+        Assert.Equal("Microphone back", content.Title);
+        Assert.Equal(P.Muted, content.Stripe);
+        Assert.False(content.StripeGlows);
+    }
+
+    [Fact]
     public void Saved_and_copied() =>
         AssertState(NotificationStates.ForClip(Clip(), Thirty, true, true, Accent), K.Saved, "Clip saved (0:30)", "Copied. Paste", Accent, NotificationVisual.Bars, "Ctrl", "V");
 
@@ -43,7 +89,23 @@ public class NotificationStatesTests
 
     [Fact]
     public void Rescued_wins_over_everything_else() =>
-        AssertState(NotificationStates.ForClip(Clip(12, silent: true, rescued: true), Thirty, true, false, Accent), K.Rescued, "Output folder not writable", @"Clip kept in Hindsound\Rescued", P.Hot, NotificationVisual.Triangle);
+        AssertState(NotificationStates.ForClip(Clip(12, silent: true, rescued: true), Thirty, true, true, Accent), K.Rescued, "Output folder not writable", @"Clip kept in Hindsound\Rescued", P.Hot, NotificationVisual.Triangle);
+
+    [Fact]
+    public void Rescued_and_not_copied_says_both() =>
+        AssertState(NotificationStates.ForClip(Clip(rescued: true), Thirty, true, false, Accent), K.Rescued, "Output folder not writable", @"Kept in Hindsound\Rescued. Not copied", P.Hot, NotificationVisual.Triangle);
+
+    [Fact]
+    public void Rescued_with_no_copy_asked_claims_no_failure() =>
+        AssertState(NotificationStates.ForClip(Clip(rescued: true), Thirty, false, false, Accent), K.Rescued, "Output folder not writable", @"Clip kept in Hindsound\Rescued", P.Hot, NotificationVisual.Triangle);
+
+    [Fact]
+    public void Silent_and_not_copied_says_both() =>
+        AssertState(NotificationStates.ForClip(Clip(silent: true), Thirty, true, false, Accent), K.Silent, "Clip saved (0:30)", "It's silent, and not copied", P.Amber, NotificationVisual.Bars);
+
+    [Fact]
+    public void Silent_with_no_copy_asked_claims_no_failure() =>
+        AssertState(NotificationStates.ForClip(Clip(silent: true), Thirty, false, false, Accent), K.Silent, "Clip saved (0:30)", "It's silent. Check Settings > Audio.", P.Amber, NotificationVisual.Bars);
 
     [Fact]
     public void No_copy_asked_never_claims_a_copy()
@@ -81,6 +143,22 @@ public class NotificationStatesTests
         var content = NotificationStates.CaptureOn(90, "Alt+F9");
         Assert.Equal("Keeping the last 1:30. Save:", content.Body);
         Assert.Equal(new[] { "Alt", "F9" }, content.Keys);
+    }
+
+    [Fact]
+    public void Capture_on_with_the_save_hotkey_taken_shows_no_key_and_says_so()
+    {
+        var content = NotificationStates.CaptureOn(300, "Ctrl+Shift+F10", "Save hotkey is taken");
+
+        AssertState(content, K.CaptureOn, "Capture on", "Keeping the last 5:00. Save hotkey is taken", P.Amber, NotificationVisual.Dot);
+        Assert.True(content.ClickOpensSettings);
+    }
+
+    [Fact]
+    public void Only_a_problem_with_the_hotkey_sends_a_click_to_the_settings()
+    {
+        Assert.False(NotificationStates.CaptureOn(300, "Ctrl+Shift+F10").ClickOpensSettings);
+        Assert.False(NotificationStates.NoDevice().ClickOpensSettings);
     }
 
     [Fact]

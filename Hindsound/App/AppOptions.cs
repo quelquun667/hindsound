@@ -27,6 +27,23 @@ internal sealed record AppOptions(
     /// <summary><c>--selftest-delay seconds</c>: how long the capture runs before the self-test presses save. By default 3 s.</summary>
     public double SelfTestDelaySeconds { get; init; } = 3;
 
+    /// <summary><c>--selftest-fail card|reload|run</c>: throws at that point, to check on the real exe that the app survives it or leaves cleanly.</summary>
+    public string? SelfTestFail { get; init; }
+
+    /// <summary><c>--selftest-game seconds</c>: the app sees no real screen state: for that long after the start, a game in exclusive full screen; then the plain desktop. To check what waits for the desktop on the real exe, whatever the PC is doing.</summary>
+    public double? SelfTestGameSeconds { get; init; }
+
+    /// <summary><c>--selftest-clip-gone</c>: after the self-test clip, asks for a copy of a last clip whose files are not there. The clipboard is never reached.</summary>
+    public bool SelfTestClipGone { get; init; }
+
+    /// <summary><c>--no-mic</c>: the microphone stays off whatever the settings file says, at the start and at every read of the file. The file keeps its own value.</summary>
+    public bool NoMic { get; init; }
+
+    /// <summary><c>--selftest-slow-save seconds</c>: every clip takes that much longer to write. To check on the real exe what leaving does while a clip is being written.</summary>
+    public double? SelfTestSlowSaveSeconds { get; init; }
+
+    public const string FailCard = "card", FailReload = "reload", FailRun = "run";
+
     /// <summary>Unknown or incomplete options are ignored: the app is started by Windows, nobody could read an error.</summary>
     public static AppOptions Parse(IReadOnlyList<string> args)
     {
@@ -56,8 +73,34 @@ internal sealed record AppOptions(
 
                     i++;
                     break;
+                case "--selftest-game" when next is not null:
+                    if (double.TryParse(next, NumberStyles.Float, CultureInfo.InvariantCulture, out var game) && game > 0)
+                    {
+                        options = options with { SelfTestGameSeconds = game };
+                    }
+
+                    i++;
+                    break;
+                case "--selftest-slow-save" when next is not null:
+                    if (double.TryParse(next, NumberStyles.Float, CultureInfo.InvariantCulture, out var slow) && slow > 0)
+                    {
+                        options = options with { SelfTestSlowSaveSeconds = slow };
+                    }
+
+                    i++;
+                    break;
+                case "--selftest-fail" when next is not null:
+                    options = options with { SelfTestFail = next };
+                    i++;
+                    break;
+                case "--selftest-clip-gone":
+                    options = options with { SelfTestClipGone = true };
+                    break;
                 case "--selftest-save":
                     options = options with { SelfTestSave = true };
+                    break;
+                case "--no-mic":
+                    options = options with { NoMic = true };
                     break;
                 case "--offscreen":
                     options = options with { Offscreen = true };

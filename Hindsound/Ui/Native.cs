@@ -6,8 +6,9 @@ namespace Hindsound.Ui;
 internal static unsafe partial class Native
 {
     public const uint WM_CLOSE = 0x0010, WM_QUERYENDSESSION = 0x0011, WM_ENDSESSION = 0x0016, WM_TIMER = 0x0113,
-        WM_LBUTTONUP = 0x0202, WM_RBUTTONUP = 0x0205, WM_MOUSEACTIVATE = 0x0021, WM_NULL = 0, WM_CONTEXTMENU = 0x007B,
-        WM_APP = 0x8000;
+        WM_LBUTTONUP = 0x0202, WM_MOUSEACTIVATE = 0x0021, WM_NULL = 0, WM_CONTEXTMENU = 0x007B,
+        WM_SETTINGCHANGE = 0x001A, WM_DISPLAYCHANGE = 0x007E, WM_DPICHANGED = 0x02E0, WM_APP = 0x8000;
+    public const uint SPI_SETNONCLIENTMETRICS = 0x002A, SPI_SETICONMETRICS = 0x002E, SPI_SETLOGICALDPIOVERRIDE = 0x009F;
     public const uint NIN_SELECT = 0x0400, NIN_KEYSELECT = 0x0401;
     public const nint MA_NOACTIVATE = 3;
 
@@ -21,11 +22,11 @@ internal static unsafe partial class Native
     public static readonly nint HWND_TOPMOST = -1;
 
     public const uint ULW_ALPHA = 2;
-    public const uint MONITOR_DEFAULTTOPRIMARY = 1;
-    public const int SM_CXSMICON = 49, SM_XVIRTUALSCREEN = 76, SM_YVIRTUALSCREEN = 77;
+    public const uint MONITOR_DEFAULTTOPRIMARY = 1, MONITOR_DEFAULTTONEAREST = 2;
+    public const int SM_CXICON = 11, SM_CXSMICON = 49, SM_XVIRTUALSCREEN = 76, SM_YVIRTUALSCREEN = 77;
 
     public const uint NIM_ADD = 0, NIM_MODIFY = 1, NIM_DELETE = 2, NIM_SETVERSION = 4;
-    public const uint NIF_MESSAGE = 1, NIF_ICON = 2, NIF_TIP = 4, NOTIFYICON_VERSION_4 = 4;
+    public const uint NIF_MESSAGE = 1, NIF_ICON = 2, NIF_TIP = 4, NIF_SHOWTIP = 0x80, NOTIFYICON_VERSION_4 = 4;
 
     public const uint MF_STRING = 0, MF_GRAYED = 1, MF_SEPARATOR = 0x800, TPM_RETURNCMD = 0x0100, TPM_RIGHTBUTTON = 0x0002,
         TPM_NONOTIFY = 0x0080;
@@ -118,6 +119,14 @@ internal static unsafe partial class Native
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    public struct BITMAP
+    {
+        public int Type, Width, Height, WidthBytes;
+        public ushort Planes, BitsPixel;
+        public void* Bits;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     public struct NOTIFYICONDATAW
     {
         public uint Size;
@@ -176,8 +185,11 @@ internal static unsafe partial class Native
     [LibraryImport(U)] public static partial int GetClassNameW(nint hwnd, char* text, int count);
     [LibraryImport(U)] public static partial int GetWindowRect(nint hwnd, RECT* rect);
     [LibraryImport(U)] public static partial nint MonitorFromWindow(nint hwnd, uint flags);
+    [LibraryImport(U)] public static partial nint MonitorFromPoint(POINT point, uint flags);
+    [LibraryImport(U)] public static partial int GetCursorPos(POINT* point);
     [LibraryImport(U)] public static partial int GetMonitorInfoW(nint monitor, MONITORINFO* info);
     [LibraryImport(U)] public static partial int GetSystemMetrics(int index);
+    [LibraryImport(U)] public static partial int GetSystemMetricsForDpi(int index, uint dpi);
     [LibraryImport(U)] public static partial nint CreatePopupMenu();
     [LibraryImport(U, StringMarshalling = StringMarshalling.Utf16)]
     public static partial int AppendMenuW(nint menu, uint flags, nuint id, string? text);
@@ -185,10 +197,16 @@ internal static unsafe partial class Native
     [LibraryImport(U)] public static partial int DestroyMenu(nint menu);
     [LibraryImport(U)] public static partial nint CreateIconIndirect(ICONINFO* info);
     [LibraryImport(U)] public static partial int DestroyIcon(nint icon);
+    [LibraryImport(U)] public static partial int GetIconInfo(nint icon, ICONINFO* info);
     [LibraryImport(U)] public static partial int OpenClipboard(nint owner);
     [LibraryImport(U)] public static partial int EmptyClipboard();
     [LibraryImport(U)] public static partial nint SetClipboardData(uint format, nint data);
     [LibraryImport(U)] public static partial int CloseClipboard();
+    [LibraryImport(U, StringMarshalling = StringMarshalling.Utf16)] public static partial int ShutdownBlockReasonCreate(nint hwnd, string reason);
+    [LibraryImport(U)] public static partial int ShutdownBlockReasonDestroy(nint hwnd);
+    [LibraryImport(U, StringMarshalling = StringMarshalling.Utf16)] public static partial nint FindWindowW(string cls, string? title);
+    [LibraryImport(U)] public static partial uint GetWindowThreadProcessId(nint hwnd, uint* processId);
+    [LibraryImport(U)] public static partial int AllowSetForegroundWindow(uint processId);
 
     [LibraryImport("shcore.dll")] public static partial int GetDpiForMonitor(nint monitor, int type, uint* x, uint* y);
 
@@ -204,6 +222,7 @@ internal static unsafe partial class Native
     [LibraryImport(G)] public static partial nint CreateDIBSection(nint dc, BITMAPINFOHEADER* info, uint usage, void** bits, nint section, uint offset);
     [LibraryImport(G)] public static partial nint SelectObject(nint dc, nint obj);
     [LibraryImport(G)] public static partial int DeleteObject(nint obj);
+    [LibraryImport(G)] public static partial int GetObjectW(nint obj, int size, void* buffer);
     [LibraryImport(G)] public static partial nint GetStockObject(int index);
     [LibraryImport(G)] public static partial nint CreateBitmap(int w, int h, uint planes, uint bits, void* data);
     [LibraryImport(G, StringMarshalling = StringMarshalling.Utf16)]

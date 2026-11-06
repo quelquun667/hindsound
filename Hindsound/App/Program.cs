@@ -7,6 +7,9 @@ internal static class Program
     private const int ExitAnotherInstance = 2;
     private const int ExitFailed = 3;
 
+    /// <summary>A test run with its own settings file never reaches for the user's real instance.</summary>
+    internal static bool WakesTheFirstInstance(AppOptions options) => options.SettingsPath is null;
+
     [STAThread]
     private static int Main(string[] args)
     {
@@ -44,6 +47,13 @@ internal static class Program
         if (!first)
         {
             journal.Write("another instance is running: leaving");
+
+            // The icon may be hidden: without an answer, a click on the shortcut would look like nothing happened.
+            if (WakesTheFirstInstance(options) && !Ui.UiLoop.WakeRunningInstance())
+            {
+                journal.Write("the running instance could not be told");
+            }
+
             return ExitAnotherInstance;
         }
 
@@ -58,6 +68,9 @@ internal static class Program
         catch (Exception ex)
         {
             journal.Write("fatal: " + ex);
+
+            // The same as a normal exit: nothing may be left capturing behind a process that has given up.
+            Environment.Exit(ExitFailed);
             return ExitFailed;
         }
     }

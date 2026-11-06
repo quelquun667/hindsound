@@ -1,5 +1,6 @@
 using Hindsound.App;
 using Hindsound.Audio;
+using Hindsound.Input;
 using Hindsound.Settings;
 using Hindsound.Ui;
 
@@ -19,6 +20,28 @@ public class AppOptionsTests
         var options = AppOptions.Parse(["--settings", @"C:\t\s.json", "--exit-after", "2.5", "--selftest-save", "--offscreen", "--dump-notifications", @"C:\t\d"]);
 
         Assert.Equal(new AppOptions(@"C:\t\s.json", 2.5, true, true, @"C:\t\d"), options);
+    }
+
+    [Fact]
+    public void A_failure_for_the_self_test_is_read()
+    {
+        Assert.Equal(AppOptions.FailRun, AppOptions.Parse(["--selftest-fail", "run"]).SelfTestFail);
+        Assert.Null(AppOptions.Parse([]).SelfTestFail);
+    }
+
+    [Fact]
+    public void A_last_clip_gone_for_the_self_test_is_read()
+    {
+        Assert.True(AppOptions.Parse(["--selftest-clip-gone"]).SelfTestClipGone);
+        Assert.False(AppOptions.Parse([]).SelfTestClipGone);
+    }
+
+    [Fact]
+    public void A_pretend_game_for_the_self_test_is_read()
+    {
+        Assert.Equal(12.5, AppOptions.Parse(["--selftest-game", "12.5"]).SelfTestGameSeconds);
+        Assert.Null(AppOptions.Parse(["--selftest-game", "soon"]).SelfTestGameSeconds);
+        Assert.Null(AppOptions.Parse([]).SelfTestGameSeconds);
     }
 
     [Theory]
@@ -45,6 +68,156 @@ public class AppOptionsTests
     }
 }
 
+public class MicLossWatchTests
+{
+    private readonly MicLossWatch _watch = new();
+
+    private static AudioEngineStatus Status(bool capturing, bool enabled = true, CaptureActivity activity = CaptureActivity.Capturing) =>
+        new(activity, true, enabled, capturing, "Speakers", capturing ? "Mic" : null, true, TimeSpan.Zero, 0);
+
+    [Fact]
+    public void A_mic_that_stays_away_is_told_after_2_s_only()
+    {
+        Assert.Equal(StatusNotice.None, _watch.Note(Status(true), 0));
+
+        Assert.Equal(StatusNotice.None, _watch.Note(Status(false), 1000));
+        Assert.True(_watch.Waiting);
+        Assert.Equal(StatusNotice.None, _watch.Check(2999));
+        Assert.True(_watch.Waiting);
+
+        Assert.Equal(StatusNotice.MicLost, _watch.Check(3000));
+        Assert.False(_watch.Waiting);
+    }
+
+    [Fact]
+    public void A_new_status_can_be_the_one_that_tells()
+    {
+        _watch.Note(Status(true), 0);
+        _watch.Note(Status(false), 1000);
+
+        Assert.Equal(StatusNotice.MicLost, _watch.Note(Status(false) with { Buffered = TimeSpan.FromSeconds(1) }, 3000));
+    }
+
+    [Fact]
+    public void A_change_of_device_within_2_s_says_nothing()
+    {
+        _watch.Note(Status(true), 0);
+        _watch.Note(Status(false), 1000);
+
+        Assert.Equal(StatusNotice.None, _watch.Note(Status(true), 1500));
+        Assert.False(_watch.Waiting);
+        Assert.Equal(StatusNotice.None, _watch.Check(5000));
+    }
+
+    [Fact]
+    public void A_loss_is_told_once()
+    {
+        _watch.Note(Status(true), 0);
+        _watch.Note(Status(false), 1000);
+        Assert.Equal(StatusNotice.MicLost, _watch.Check(3000));
+
+        Assert.Equal(StatusNotice.None, _watch.Note(Status(false) with { Buffered = TimeSpan.FromSeconds(9) }, 9000));
+        Assert.False(_watch.Waiting);
+    }
+
+    [Fact]
+    public void The_mic_back_is_told_only_after_a_loss_that_was()
+    {
+        _watch.Note(Status(true), 0);
+        _watch.Note(Status(false), 1000);
+        _watch.Check(3000);
+
+        Assert.Equal(StatusNotice.MicBack, _watch.Note(Status(true), 4000));
+        Assert.Equal(StatusNotice.None, _watch.Note(Status(true) with { Buffered = TimeSpan.FromSeconds(1) }, 5000));
+    }
+
+    [Fact]
+    public void It_can_be_lost_again_after_coming_back()
+    {
+        _watch.Note(Status(true), 0);
+        _watch.Note(Status(false), 1000);
+        _watch.Check(3000);
+        _watch.Note(Status(true), 4000);
+
+        _watch.Note(Status(false), 5000);
+        Assert.Equal(StatusNotice.MicLost, _watch.Check(7000));
+    }
+
+    [Fact]
+    public void No_mic_at_the_start_says_nothing()
+    {
+        Assert.Equal(StatusNotice.None, _watch.Note(Status(false), 0));
+        Assert.False(_watch.Waiting);
+        Assert.Equal(StatusNotice.None, _watch.Check(60_000));
+    }
+
+    [Fact]
+    public void Turning_the_mic_off_says_nothing_now_or_later()
+    {
+        _watch.Note(Status(true), 0);
+
+        Assert.Equal(StatusNotice.None, _watch.Note(Status(false, enabled: false), 1000));
+        Assert.False(_watch.Waiting);
+        Assert.Equal(StatusNotice.None, _watch.Check(9000));
+    }
+
+    [Fact]
+    public void Turning_the_mic_off_after_a_loss_means_no_good_news_later()
+    {
+        _watch.Note(Status(true), 0);
+        _watch.Note(Status(false), 1000);
+        _watch.Check(3000);
+
+        _watch.Note(Status(false, enabled: false), 4000);
+
+        Assert.Equal(StatusNotice.None, _watch.Note(Status(true), 5000));
+    }
+
+    [Theory]
+    [InlineData(CaptureActivity.Paused)]
+    [InlineData(CaptureActivity.NoDevice)]
+    public void A_pause_or_no_device_is_no_lost_mic(CaptureActivity activity)
+    {
+        _watch.Note(Status(true), 0);
+
+        Assert.Equal(StatusNotice.None, _watch.Note(Status(false, activity: activity), 1000));
+        Assert.False(_watch.Waiting);
+    }
+
+    [Fact]
+    public void A_pause_stops_the_wait_of_a_loss()
+    {
+        _watch.Note(Status(true), 0);
+        _watch.Note(Status(false), 1000);
+
+        _watch.Note(Status(false, activity: CaptureActivity.Paused), 1500);
+
+        Assert.False(_watch.Waiting);
+        Assert.Equal(StatusNotice.None, _watch.Check(9000));
+    }
+
+    [Theory]
+    [InlineData(StatusNotice.MicLost, StatusNotice.None, false, true)]
+    [InlineData(StatusNotice.MicLost, StatusNotice.CaptureOn, false, true)]
+    [InlineData(StatusNotice.MicBack, StatusNotice.None, false, true)]
+    [InlineData(StatusNotice.MicBack, StatusNotice.CaptureOn, false, false)]
+    [InlineData(StatusNotice.MicBack, StatusNotice.None, true, false)]
+    public void The_good_news_only_goes_out_when_it_says_something(StatusNotice mic, StatusNotice capture, bool lossNeverShown, bool worth)
+    {
+        Assert.Equal(worth, MicLossWatch.WorthTelling(mic, capture, lossNeverShown));
+    }
+
+    [Fact]
+    public void A_headset_unplugged_is_seen_through_the_moment_without_any_device()
+    {
+        _watch.Note(Status(true), 0);
+        _watch.Note(Status(false, activity: CaptureActivity.NoDevice), 1000);
+
+        Assert.Equal(StatusNotice.None, _watch.Note(Status(false), 1200));
+        Assert.Equal(StatusNotice.MicLost, _watch.Check(3200));
+    }
+}
+
 public class StatusTransitionsTests
 {
     private static AudioEngineStatus Status(CaptureActivity activity, string? device = "Speakers") =>
@@ -66,6 +239,155 @@ public class StatusTransitionsTests
     {
         var previous = from is { } activity ? Status(activity) : null;
         Assert.Equal(expected, StatusTransitions.Decide(previous, Status(to)));
+    }
+
+    [Theory]
+    [InlineData(CaptureActivity.Capturing, false)]
+    [InlineData(CaptureActivity.Paused, true)]
+    [InlineData(CaptureActivity.NoDevice, true)]
+    [InlineData(CaptureActivity.Stopped, true)]
+    public void Capture_on_stops_being_true_when_the_capture_stops(CaptureActivity activity, bool ceased)
+    {
+        Assert.Equal(ceased, StatusTransitions.HasCeased(NotificationKind.CaptureOn, Status(activity)));
+    }
+
+    [Theory]
+    [InlineData(CaptureActivity.NoDevice, false)]
+    [InlineData(CaptureActivity.Capturing, true)]
+    [InlineData(CaptureActivity.Paused, true)]
+    public void No_device_stops_being_true_when_the_activity_changes(CaptureActivity activity, bool ceased)
+    {
+        Assert.Equal(ceased, StatusTransitions.HasCeased(NotificationKind.NoDevice, Status(activity)));
+    }
+
+    [Theory]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, true)]
+    [InlineData(false, false, true)]
+    public void Mic_lost_stops_being_true_when_the_mic_is_back_or_not_wanted(bool enabled, bool capturing, bool ceased)
+    {
+        var status = Status(CaptureActivity.Capturing) with { MicEnabled = enabled, MicCapturing = capturing };
+        Assert.Equal(ceased, StatusTransitions.HasCeased(NotificationKind.MicLost, status));
+    }
+
+    private static readonly HotkeyResult[] AllGood = [new(HotkeyAction.SaveDefault, "Ctrl+F10", HotkeyStatus.Registered, null)];
+    private static readonly HotkeyResult[] SaveTaken = [new(HotkeyAction.SaveDefault, "Ctrl+F10", HotkeyStatus.InUse, HotkeyResult.InUseMessage)];
+    private static readonly HotkeyResult[] OtherTaken =
+    [
+        new(HotkeyAction.SaveDefault, "Ctrl+F10", HotkeyStatus.Registered, null),
+        new(HotkeyAction.Save1m, "Ctrl+F11", HotkeyStatus.InUse, HotkeyResult.InUseMessage),
+    ];
+
+    private static AudioEngineStatus Listening(CaptureActivity activity = CaptureActivity.Capturing, bool micEnabled = true, bool micCapturing = true) =>
+        Status(activity) with { MicEnabled = micEnabled, MicCapturing = micCapturing };
+
+    [Theory]
+    [InlineData(CaptureActivity.Capturing, TrayState.Active)]
+    [InlineData(CaptureActivity.Paused, TrayState.Paused)]
+    [InlineData(CaptureActivity.Stopped, TrayState.Active)]
+    public void With_no_problem_the_icon_follows_the_activity(CaptureActivity activity, TrayState expected)
+    {
+        Assert.Equal((expected, "Hindsound"), StatusTransitions.TrayOf(Listening(activity), AllGood, false));
+    }
+
+    [Fact]
+    public void No_status_yet_is_no_problem()
+    {
+        Assert.Equal((TrayState.Active, "Hindsound"), StatusTransitions.TrayOf(null, AllGood, false));
+    }
+
+    [Fact]
+    public void No_device_gives_the_triangle_and_names_itself()
+    {
+        Assert.Equal((TrayState.Error, "Hindsound - No audio device"), StatusTransitions.TrayOf(Listening(CaptureActivity.NoDevice), AllGood, false));
+    }
+
+    [Fact]
+    public void An_engine_that_could_not_start_counts_as_no_device()
+    {
+        Assert.Equal((TrayState.Error, "Hindsound - No audio device"), StatusTransitions.TrayOf(null, AllGood, false, engineFailed: true));
+    }
+
+    [Fact]
+    public void A_refused_save_hotkey_gives_the_triangle_and_says_which()
+    {
+        Assert.Equal((TrayState.Error, "Hindsound - Ctrl+F10: " + HotkeyResult.InUseMessage), StatusTransitions.TrayOf(Listening(), SaveTaken, false));
+    }
+
+    [Fact]
+    public void A_refused_save_hotkey_also_shows_over_a_pause()
+    {
+        Assert.Equal(TrayState.Error, StatusTransitions.TrayOf(Listening(CaptureActivity.Paused), SaveTaken, false).State);
+    }
+
+    [Fact]
+    public void A_clip_with_a_problem_waiting_gives_the_triangle()
+    {
+        Assert.Equal((TrayState.Error, "Hindsound - A clip has a problem"), StatusTransitions.TrayOf(Listening(), AllGood, true));
+    }
+
+    [Fact]
+    public void A_mic_not_captured_only_goes_in_the_tip()
+    {
+        Assert.Equal((TrayState.Active, "Hindsound - Microphone not captured"), StatusTransitions.TrayOf(Listening(micCapturing: false), AllGood, false));
+    }
+
+    [Theory]
+    [InlineData(CaptureActivity.Paused, true)] // nothing is captured during a pause
+    [InlineData(CaptureActivity.Capturing, false)] // the mic is off on purpose
+    public void A_mic_that_is_not_expected_is_no_problem(CaptureActivity activity, bool micEnabled)
+    {
+        Assert.Equal("Hindsound", StatusTransitions.TrayOf(Listening(activity, micEnabled, micCapturing: false), AllGood, false).Tip);
+    }
+
+    [Fact]
+    public void Another_refused_hotkey_only_goes_in_the_tip()
+    {
+        Assert.Equal((TrayState.Active, "Hindsound - Ctrl+F11: " + HotkeyResult.InUseMessage), StatusTransitions.TrayOf(Listening(), OtherTaken, false));
+    }
+
+    [Fact]
+    public void A_hotkey_being_typed_or_not_set_is_no_problem()
+    {
+        HotkeyResult[] quiet = [new(HotkeyAction.SaveDefault, null, HotkeyStatus.NotSet, null), new(HotkeyAction.Save1m, "Ctrl+F11", HotkeyStatus.Suspended, null)];
+        Assert.Equal((TrayState.Active, "Hindsound"), StatusTransitions.TrayOf(Listening(), quiet, false));
+    }
+
+    [Fact]
+    public void The_tip_names_the_first_problem_in_order()
+    {
+        var noMic = Listening(micCapturing: false);
+
+        Assert.Equal("Hindsound - No audio device", StatusTransitions.TrayOf(Listening(CaptureActivity.NoDevice, micCapturing: false), SaveTaken, true).Tip);
+        Assert.Equal("Hindsound - Ctrl+F10: " + HotkeyResult.InUseMessage, StatusTransitions.TrayOf(noMic, SaveTaken, true).Tip);
+        Assert.Equal("Hindsound - A clip has a problem", StatusTransitions.TrayOf(noMic, AllGood, true).Tip);
+        Assert.Equal("Hindsound - Microphone not captured", StatusTransitions.TrayOf(noMic, OtherTaken, false).Tip);
+    }
+
+    [Fact]
+    public void Everything_goes_back_to_normal_when_the_condition_ends()
+    {
+        Assert.Equal(TrayState.Error, StatusTransitions.TrayOf(Listening(CaptureActivity.NoDevice), SaveTaken, true).State);
+        Assert.Equal((TrayState.Active, "Hindsound"), StatusTransitions.TrayOf(Listening(), AllGood, false));
+    }
+
+    [Theory]
+    [InlineData(HotkeyStatus.Registered, null)]
+    [InlineData(HotkeyStatus.NotSet, null)]
+    [InlineData(HotkeyStatus.Suspended, null)]
+    [InlineData(HotkeyStatus.InUse, "Save hotkey is taken")]
+    [InlineData(HotkeyStatus.Duplicate, "Save hotkey is taken")]
+    [InlineData(HotkeyStatus.Invalid, "Save hotkey doesn't work")]
+    [InlineData(HotkeyStatus.Unavailable, "Save hotkey doesn't work")]
+    public void The_reminder_says_what_is_wrong_with_the_save_hotkey(HotkeyStatus status, string? problem)
+    {
+        Assert.Equal(problem, StatusTransitions.SaveHotkeyProblem([new HotkeyResult(HotkeyAction.SaveDefault, "Ctrl+F10", status, null)]));
+    }
+
+    [Fact]
+    public void Another_refused_hotkey_changes_nothing_in_the_reminder()
+    {
+        Assert.Null(StatusTransitions.SaveHotkeyProblem(OtherTaken));
     }
 
     [Fact]

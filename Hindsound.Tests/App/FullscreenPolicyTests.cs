@@ -60,6 +60,29 @@ public class FullscreenPolicyTests
         Assert.True(decision.CatchUpLater);
     }
 
+    [Theory]
+    [InlineData("always", S.AcceptsNotifications)]
+    [InlineData("always", S.RunningD3dFullScreen)]
+    [InlineData("whenNoOverlay", S.RunningD3dFullScreen)]
+    public void A_clip_saved_but_not_copied_never_sounds_like_success(string setting, S state)
+    {
+        var decision = FullscreenPolicy.ForClip(state, false, General(sound: setting), saved: true, important: true, copyFailed: true);
+        Assert.False(decision.PlaySound);
+    }
+
+    [Fact]
+    public void A_copy_that_failed_is_shown_even_with_notifications_off()
+    {
+        var onDesktop = FullscreenPolicy.ForClip(S.AcceptsNotifications, false, General(notifications: false), saved: true, important: true, copyFailed: true);
+        Assert.True(onDesktop.ShowOverlay);
+        Assert.False(onDesktop.PlaySound);
+
+        var inGame = FullscreenPolicy.ForClip(S.RunningD3dFullScreen, false, General(notifications: false), saved: true, important: true, copyFailed: true);
+        Assert.False(inGame.ShowOverlay);
+        Assert.True(inGame.CatchUpLater);
+        Assert.False(inGame.PlaySound);
+    }
+
     [Fact]
     public void Notifications_off_shows_nothing_and_keeps_nothing_for_later()
     {
@@ -83,6 +106,50 @@ public class FullscreenPolicyTests
     {
         var decision = FullscreenPolicy.ForStatus(state, covers, General(), important: false);
         Assert.Equal(new Presentation(overlay, clickThrough, false, false), decision);
+    }
+
+    [Theory]
+    [InlineData(S.RunningD3dFullScreen, false)]
+    [InlineData(S.PresentationMode, false)]
+    [InlineData(S.NotPresent, false)]
+    public void An_important_status_waits_when_no_overlay_can_show(S state, bool covers)
+    {
+        var decision = FullscreenPolicy.ForStatus(state, covers, General(), important: true);
+        Assert.Equal(new Presentation(false, false, false, true), decision);
+    }
+
+    [Fact]
+    public void An_important_status_also_waits_when_games_only_get_a_sound()
+    {
+        var decision = FullscreenPolicy.ForStatus(S.Busy, false, General(fullscreen: "soundOnly"), important: true);
+        Assert.Equal(new Presentation(false, false, false, true), decision);
+    }
+
+    [Theory]
+    [InlineData(S.AcceptsNotifications, false, true, false)]
+    [InlineData(S.Busy, false, true, true)]
+    public void An_important_status_shows_at_once_when_it_can(S state, bool covers, bool overlay, bool clickThrough)
+    {
+        var decision = FullscreenPolicy.ForStatus(state, covers, General(), important: true);
+        Assert.Equal(new Presentation(overlay, clickThrough, false, false), decision);
+    }
+
+    [Fact]
+    public void Notifications_off_never_silences_an_important_status()
+    {
+        var onDesktop = FullscreenPolicy.ForStatus(S.AcceptsNotifications, false, General(notifications: false), important: true);
+        Assert.True(onDesktop.ShowOverlay);
+
+        var inGame = FullscreenPolicy.ForStatus(S.RunningD3dFullScreen, false, General(notifications: false), important: true);
+        Assert.True(inGame.CatchUpLater);
+    }
+
+    [Fact]
+    public void Notifications_off_silences_an_ordinary_status_for_good()
+    {
+        var onDesktop = FullscreenPolicy.ForStatus(S.AcceptsNotifications, false, General(notifications: false), important: false);
+        Assert.False(onDesktop.ShowOverlay);
+        Assert.False(onDesktop.CatchUpLater);
     }
 
     [Theory]

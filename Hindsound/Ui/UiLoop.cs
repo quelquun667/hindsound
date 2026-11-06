@@ -10,6 +10,10 @@ namespace Hindsound.Ui;
 internal sealed unsafe class UiLoop : IDisposable
 {
     public const uint TrayCallbackMessage = Native.WM_APP + 3;
+
+    /// <summary>What a second launch sends to the running instance: the user is looking for the app.</summary>
+    public const uint ShowMessage = Native.WM_APP + 4;
+
     private const string ClassName = "HindsoundMessages";
     private const uint PostedWork = Native.WM_APP + 1;
 
@@ -50,8 +54,55 @@ internal sealed unsafe class UiLoop : IDisposable
     /// <summary>Explorer started again: the tray icon has to be added again.</summary>
     public Action? TaskbarCreated { get; set; }
 
-    /// <summary>Windows is ending the session and will end the process after this returns.</summary>
+    /// <summary>
+    /// Something says the display scale may have changed. A hidden window can get any of these, and Explorer also sends
+    /// TaskbarCreated: whoever listens checks what it really needs.
+    /// </summary>
+    public Action? ScaleMayHaveChanged { get; set; }
+
+    /// <summary>
+    /// Windows is ending the session, or an installer or the Restart Manager wants this app closed (ENDSESSION_CLOSEAPP).
+    /// In that second case Windows goes on and nothing ends the process for us: <see cref="Run"/> ends right after this.
+    /// </summary>
     public Action? SessionEnding { get; set; }
+
+    /// <summary>Windows asks if the session may end. The answer is always yes.</summary>
+    public Action? SessionEndAsked { get; set; }
+
+    /// <summary>Something asks this app to close (WM_CLOSE). Without a handler, <see cref="Run"/> just ends.</summary>
+    public Action? CloseAsked { get; set; }
+
+    /// <summary>Windows had asked, and the session goes on after all.</summary>
+    public Action? SessionKept { get; set; }
+
+    /// <summary>A second launch of the app asks to be seen.</summary>
+    public Action? ShowAsked { get; set; }
+
+    /// <summary>
+    /// From a second launch: tells the running instance to show itself, and lets it come to the foreground, a right this
+    /// process has because the user just started it. False if no running instance could be told.
+    /// </summary>
+    public static bool WakeRunningInstance()
+    {
+        var running = Native.FindWindowW(ClassName, null);
+        if (running == 0)
+        {
+            return false;
+        }
+
+        uint processId;
+        Native.GetWindowThreadProcessId(running, &processId);
+        Native.AllowSetForegroundWindow(processId);
+        return Native.PostMessageW(running, ShowMessage, 0, 0) != 0;
+    }
+
+    /// <summary>Whether a message says the display scale may have changed. A WM_SETTINGCHANGE for anything else does not.</summary>
+    public static bool MeansScaleChange(uint message, nuint wParam) => message switch
+    {
+        Native.WM_DPICHANGED or Native.WM_DISPLAYCHANGE => true,
+        Native.WM_SETTINGCHANGE => wParam is Native.SPI_SETLOGICALDPIOVERRIDE or Native.SPI_SETNONCLIENTMETRICS or Native.SPI_SETICONMETRICS,
+        _ => false,
+    };
 
     /// <summary>Runs the action on the loop's thread, soon. Safe from any thread.</summary>
     public void Post(Action action)
@@ -108,19 +159,51 @@ internal sealed unsafe class UiLoop : IDisposable
                 TrayMessage?.Invoke((uint)(lParam & 0xFFFF), wParam);
                 return 0;
 
+            case ShowMessage:
+                ShowAsked?.Invoke();
+                return 0;
+
             case Native.WM_QUERYENDSESSION:
+                try
+                {
+                    SessionEndAsked?.Invoke();
+                }
+                catch (Exception ex)
+                {
+                    UiErrors.Report(ex);
+                }
+
                 return 1;
 
             case Native.WM_ENDSESSION:
                 if (wParam != 0)
                 {
-                    SessionEnding?.Invoke();
+                    try
+                    {
+                        SessionEnding?.Invoke();
+                    }
+                    finally
+                    {
+                        Quit();
+                    }
+                }
+                else
+                {
+                    SessionKept?.Invoke();
                 }
 
                 return 0;
 
             case Native.WM_CLOSE:
-                Quit();
+                if (CloseAsked is { } asked)
+                {
+                    asked();
+                }
+                else
+                {
+                    Quit();
+                }
+
                 return 0;
 
             default:
@@ -128,6 +211,11 @@ internal sealed unsafe class UiLoop : IDisposable
                 {
                     TaskbarCreated?.Invoke();
                     return 0;
+                }
+
+                if (MeansScaleChange(message, wParam))
+                {
+                    ScaleMayHaveChanged?.Invoke();
                 }
 
                 return Native.DefWindowProcW(hwnd, message, wParam, lParam);

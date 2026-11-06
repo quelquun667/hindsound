@@ -1,9 +1,15 @@
 namespace Hindsound.Ui;
 
+/// <summary>A screen, in physical pixels.</summary>
+/// <param name="Monitor">All of it.</param>
+/// <param name="Work">What the taskbar leaves.</param>
+/// <param name="Dpi">Its own DPI.</param>
+internal readonly record struct ScreenInfo(Native.RECT Monitor, Native.RECT Work, uint Dpi);
+
 /// <summary>What the active window looks like from outside.</summary>
-/// <param name="Title">Its title, for <c>{app}</c>. Empty if it has none.</param>
+/// <param name="AppName">Its title, for <c>{app}</c>. Null if it has none, or if it says nothing about what the user was doing.</param>
 /// <param name="CoversMonitor">It covers its whole screen, and is not the desktop itself.</param>
-internal readonly record struct ForegroundInfo(string Title, bool CoversMonitor);
+internal readonly record struct ForegroundInfo(string? AppName, bool CoversMonitor);
 
 /// <summary>
 /// Only reads the window manager: GetForegroundWindow, GetWindowText and the window's rectangle. No handle to the game's
@@ -16,22 +22,54 @@ internal static unsafe class ForegroundWindow
         var hwnd = Native.GetForegroundWindow();
         if (hwnd == 0)
         {
-            return new ForegroundInfo(string.Empty, false);
+            return new ForegroundInfo(null, false);
         }
 
-        return new ForegroundInfo(TitleOf(hwnd), Covers(hwnd));
+        uint processId;
+        Native.GetWindowThreadProcessId(hwnd, &processId);
+        var title = TitleOf(hwnd);
+        var usable = UsableForApp(title, ClassOf(hwnd), processId == (uint)Environment.ProcessId);
+        return new ForegroundInfo(usable ? title : null, Covers(hwnd));
     }
 
-    /// <summary>The rectangle and DPI of the screen under the active window.</summary>
-    public static (Native.RECT Area, uint Dpi) ActiveMonitor()
+    /// <summary>
+    /// Whether a window's title can name a clip. The taskbar, the desktop and this app's own windows say nothing about what
+    /// the user was doing: a right click on the icon makes the taskbar the active window, and showing the menu makes it ours.
+    /// </summary>
+    public static bool UsableForApp(string title, string className, bool ownWindow) =>
+        !ownWindow
+        && !string.IsNullOrWhiteSpace(title)
+        && !IsDesktopClass(className)
+        && className is not ("NotifyIconOverflowWindow" or "TopLevelWindowForOverflowXamlIsland" or "TaskListThumbnailWnd")
+        && !className.StartsWith("Hindsound", StringComparison.Ordinal);
+
+    /// <summary>The screen under the active window.</summary>
+    public static ScreenInfo ActiveScreen() =>
+        ScreenOf(Native.MonitorFromWindow(Native.GetForegroundWindow(), Native.MONITOR_DEFAULTTOPRIMARY));
+
+    /// <summary>The screen under the mouse.</summary>
+    public static ScreenInfo CursorScreen()
     {
-        var monitor = Native.MonitorFromWindow(Native.GetForegroundWindow(), Native.MONITOR_DEFAULTTOPRIMARY);
+        Native.POINT cursor = default;
+        Native.GetCursorPos(&cursor);
+        return ScreenOf(Native.MonitorFromPoint(cursor, Native.MONITOR_DEFAULTTONEAREST));
+    }
+
+    /// <summary>Whether the active window covers that screen, which need not be the one it is on.</summary>
+    public static bool CoversScreen(ScreenInfo screen)
+    {
+        var hwnd = Native.GetForegroundWindow();
+        return hwnd != 0 && Covers(hwnd, screen.Monitor);
+    }
+
+    private static ScreenInfo ScreenOf(nint monitor)
+    {
         Native.MONITORINFO info = default;
         info.Size = sizeof(Native.MONITORINFO);
         Native.GetMonitorInfoW(monitor, &info);
         uint dpi = 96, dpiY;
         Native.GetDpiForMonitor(monitor, 0, &dpi, &dpiY);
-        return (info.Monitor, dpi == 0 ? 96 : dpi);
+        return new ScreenInfo(info.Monitor, info.Work, dpi == 0 ? 96 : dpi);
     }
 
     /// <summary>The shell's own windows cover the screen too, and clicks on them must stay clicks.</summary>
@@ -50,25 +88,30 @@ internal static unsafe class ForegroundWindow
         return length > 0 ? new string(text, 0, length) : string.Empty;
     }
 
-    private static bool Covers(nint hwnd)
+    private static string ClassOf(nint hwnd)
     {
         const int capacity = 64;
         var text = stackalloc char[capacity];
         var length = Native.GetClassNameW(hwnd, text, capacity);
-        if (length > 0 && IsDesktopClass(new string(text, 0, length)))
+        return length > 0 ? new string(text, 0, length) : string.Empty;
+    }
+
+    private static bool Covers(nint hwnd)
+    {
+        var monitor = Native.MonitorFromWindow(hwnd, Native.MONITOR_DEFAULTTOPRIMARY);
+        Native.MONITORINFO info = default;
+        info.Size = sizeof(Native.MONITORINFO);
+        return Native.GetMonitorInfoW(monitor, &info) != 0 && Covers(hwnd, info.Monitor);
+    }
+
+    private static bool Covers(nint hwnd, Native.RECT monitor)
+    {
+        if (IsDesktopClass(ClassOf(hwnd)))
         {
             return false;
         }
 
         Native.RECT window;
-        if (Native.GetWindowRect(hwnd, &window) == 0)
-        {
-            return false;
-        }
-
-        var monitor = Native.MonitorFromWindow(hwnd, Native.MONITOR_DEFAULTTOPRIMARY);
-        Native.MONITORINFO info = default;
-        info.Size = sizeof(Native.MONITORINFO);
-        return Native.GetMonitorInfoW(monitor, &info) != 0 && RectCovers(window, info.Monitor);
+        return Native.GetWindowRect(hwnd, &window) != 0 && RectCovers(window, monitor);
     }
 }
