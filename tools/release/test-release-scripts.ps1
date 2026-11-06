@@ -499,7 +499,12 @@ try {
     )
     $releaseSteps = @($release | ForEach-Object { if ($_ -match '^\s+- name: (.+)$') { $Matches[1] } })
     Assert-Equal 'release.yml has its steps in order' ($stepOrder -join ' | ') ($releaseSteps -join ' | ')
-    Report 'the release sees all the tags' ($releaseText -match '(?m)^\s+fetch-depth: 0$')
+    foreach ($step in @(@('Build LAME', 'build-lame'), @('Prove the encoding with the compiled DLL', 'prove-encoding'), @('Check the Setup', 'check-setup'))) {
+        Report "the step $($step[0]) runs $($step[1])" ($releaseText -cmatch "- name: $($step[0])\n(?:\s+timeout-minutes: \d+\n)?\s+run: \./tools/release/$($step[1])\.ps1 ")
+    }
+    Report 'the compiled DLL replaces the one in the published folder' ($releaseText -cmatch '- name: Replace the DLL in the published folder\n\s+run: Copy-Item -LiteralPath "\$env:RUNNER_TEMP/lame/libmp3lame\.64\.dll" -Destination "\$env:RUNNER_TEMP/publish/libmp3lame\.64\.dll" -Force')
+    Report 'the lame workflow builds and proves' (($lameText -cmatch '\./tools/release/build-lame\.ps1 ') -and ($lameText -cmatch '\./tools/release/prove-encoding\.ps1 '))
+    Report 'the release sees all the tags'($releaseText -match '(?m)^\s+fetch-depth: 0$')
     Report 'the release checks the version jump, with the confirmation' ($releaseText -cmatch 'check-tag\.ps1 -Tag \$env:TAG -MainRef origin/main -CheckVersionJump -ConfirmVersion \$env:RELEASE_CONFIRM_VERSION')
     Report 'the confirmation comes from a repository variable, through env' ($releaseText -cmatch 'RELEASE_CONFIRM_VERSION: \$\{\{ vars\.RELEASE_CONFIRM_VERSION \}\}')
     Report 'the release attaches the Setup, the manifest and the LAME source' ($releaseText -cmatch 'gh release upload [^\n]*Setup\.exe[^\n]*hindsound-update-win-x64\.json[^\n]*lame-3\.100\.tar\.gz')

@@ -51,13 +51,22 @@ Hindsound's own source is this repository, with one tag per release.
 
 ### Where the shipped DLL comes from
 
-What is established:
+**In the Setup of a GitHub Release**, the DLL is compiled by the release workflow, with [tools/release/build-lame.ps1](tools/release/build-lame.ps1), from the `lame-3.100.tar.gz` attached to that Release. The script verifies the SHA-256 above before extracting the archive.
+
+- No file of the archive is changed, neither source nor build file, and the script fails if the build changes one.
+- It runs `nmake` on the archive's own `Makefile.MSVC`, target `libmp3lame.dll`, with three settings on the command line: `MSVCVER=Win64`, `MACHINE=/machine:X64`, and `ADDL_OBJ=kernel32.lib` in place of a library that current Visual Studio does not have.
+- The compiler is Microsoft's, from the Visual Studio of the GitHub runner. The Microsoft C runtime is linked statically into the DLL (`/MT`, set by that makefile), so it needs no redistributable.
+- This DLL has no version resource: the makefile does not add one. Its function `get_lame_short_version` returns `3.100`.
+
+**In a build from source** (`dotnet publish`), the DLL is the one below, from the NuGet package.
+
+What is established about the DLL of the package:
 
 - The file is taken unchanged from the NuGet package NAudio.Lame 2.1.0, folder `build`. SHA-256: `71dba147b6c16d8d0f012b8e657d52e12cb8796a659e1151200d0a6c8b04bce3`. The file in that project's repository is the same.
 - It is byte for byte the `libmp3lame.dll` of the RareWares archive <https://www.rarewares.org/files/mp3/libmp3lame-3.100x64.zip> (compared on 2026-11-06; archive SHA-256: `99d934cf99c74e8e76d8a2fdbf83b778dfdc3c4476af6f81173fe5a7e278e313`). [RareWares](https://www.rarewares.org/mp3-lame-libraries.php) lists it as dated 2017-10-22, and its link timestamp is 2017-10-22 12:00:39 UTC.
 - Its version resource says LAME 3.100.
 
-What is not established:
+What is not established about it:
 
 - Neither NAudio.Lame nor RareWares says which exact source tree or build scripts produced this binary, and RareWares does not say whether it was patched. It describes the library as "the standard libmp3lame.dll" and its builds as "Intel compiles".
 - A build path inside the DLL, `E:\lame-3.100-CVS\output\Release\libmp3lame.pdb`, points to a CVS checkout, and the build is nine days younger than the source archive (2017-10-13). So `lame-3.100.tar.gz` is the published source of LAME 3.100, but it is not proven to be the exact source of this binary.
