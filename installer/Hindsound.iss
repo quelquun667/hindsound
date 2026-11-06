@@ -2,8 +2,10 @@
 ;   ISCC.exe /DMyAppVersion=X.Y.Z /DPublishDir=<folder of dotnet publish> /O<output folder> installer\Hindsound.iss
 ;
 ; The app starts this Setup and then leaves:
-;   Hindsound-X.Y.Z-Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /WAITEXIT=60 /RESTARTAPP
-;   /WAITEXIT=N   waits up to N seconds for the app's mutex to go, instead of failing on the race
+;   Hindsound-X.Y.Z-Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /WAITEXIT=330 /RESTARTAPP
+;   /WAITEXIT=N   waits up to N seconds for the app's mutex to go, instead of failing on the race. N must outlast the app's
+;                 slowest exit, 5 min for a clip being written and 5 s for the engine: an app that leaves after Setup gave up
+;                 stays off, because nothing is left to start it again.
 ;   /RESTARTAPP   starts the app again at the end: the new version, or the one in place if the installation failed.
 ;                 That one gets --update-failed on its command line.
 ; Without /RESTARTAPP (the app was left with Quit), nothing is started, even after a failure.
@@ -165,8 +167,16 @@ begin
 #endif
 end;
 
+// By name, not the whole folder: the clips folder can be set to any folder, this one included, and the question says clips stay.
+// settings.json, its .bak copies and a .tmp left by a crash all start with this name. The folder goes only if nothing else is in it.
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Folder: String;
 begin
   if (CurUninstallStep = usPostUninstall) and DeleteSettingsWanted then
-    DelTree(ExpandConstant('{#RoamingDataDir}'), True, True, True);
+  begin
+    Folder := ExpandConstant('{#RoamingDataDir}');
+    DelTree(Folder + '\settings.json*', False, True, False);
+    RemoveDir(Folder);
+  end;
 end;

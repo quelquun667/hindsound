@@ -35,7 +35,7 @@ Measured: exe 17.66 MB, DLL 1.03 MB, Setup 8.23 MB, 7 s for step 3.
 ## How the app uses it
 
 ```
-Hindsound-X.Y.Z-Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /WAITEXIT=60 [/RESTARTAPP] [/LOG=<file>]
+Hindsound-X.Y.Z-Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /WAITEXIT=330 [/RESTARTAPP] [/LOG=<file>]
 ```
 
 The app starts this, then leaves.
@@ -48,8 +48,13 @@ The app starts this, then leaves.
 | Setup exit code | Seen when |
 | --- | --- |
 | 0 | Installed. |
-| 1 | The app was still running at the end of the wait. Nothing changed, the app keeps running. |
+| 1 | The app was still running at the end of the wait. Nothing changed and nothing starts, because the app is there. |
 | 5 | A file was locked. After 4 retries, Setup aborts and rolls back. |
+
+**N must outlast the slowest exit of the app.** That is 305 s: 5 min for a clip being written, then 5 s for the engine. The
+app has already decided to leave when Setup waits, so if Setup gives up first (exit code 1), the app leaves a little later
+and nothing is left to start it again: no app and no update until the next Windows session, through the Run value if the
+user has it. Measured with `/WAITEXIT=60` and an app leaving after 70 s. Hence 330.
 
 **The exe is the last file written, and that order matters.** A rollback removes new files but does not bring back the ones
 it replaced: with the DLL locked and the exe written first, the exe stayed new while the Uninstall key stayed old. With the
@@ -63,9 +68,11 @@ the next Windows session, through the Run value if the user has it.
 
 - Refused while the app runs: exit code 1, nothing changed, the app keeps running.
 - Removes the files, the shortcut, the Uninstall key, the `Hindsound` value of the Run key, and from
-  `%LocalAppData%\Hindsound` the log and the `updates` folder.
+  `%LocalAppData%\Hindsound` the log and the `updates` folder, then that folder too if nothing else is in it.
 - Keeps the clips and `Rescued`.
-- Asks whether to delete `%AppData%\Hindsound`, no by default. A silent uninstallation asks nothing and keeps it.
+- Asks whether to delete the settings, no by default. A silent uninstallation asks nothing and keeps them. The answer yes
+  deletes `settings.json*` from `%AppData%\Hindsound`, by name, because the clips folder can be set to any folder, this one
+  included. The folder goes only if nothing else is in it.
 
 ## Trials
 
@@ -103,24 +110,33 @@ Two seconds after each start, `<TrialRoot>\settings.log` must say `mic enabled F
 `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=<TrialRoot>\install /LOG=<file>`. To lock a file, another process keeps it
 open: `[IO.File]::Open($path, 'Open', 'Read', 'Read')`. The running app leaves by itself: `--exit-after 8`.
 
+The real mutex name needs one more trial: exes from unmodified code, and a copy of `Hindsound.iss` in this folder with
+`Local\HindsoundTrial.SingleInstance` replaced by `Local\Hindsound.SingleInstance`, still with `/DTrialRoot`. Wait until no
+other Hindsound holds the mutex: `[Threading.Mutex]::OpenExisting('Local\Hindsound.SingleInstance')` must throw.
+
 Results of 06/11/2026:
 
 | Case | Command | Result |
 | --- | --- | --- |
 | First installation | `1.0.0 Setup` | Exit 0 in 2 s. Exe, DLL, `LICENSE.txt`, uninstaller, Uninstall key, shortcut without arguments. No app started. |
-| Update, app running | `1.0.1 Setup /WAITEXIT=60 /RESTARTAPP` | Exit 0 in 6.5 s. Waited 4.2 s. 1.0.1 runs, with `--settings` and `--offscreen`, mic off. |
-| Exe locked | same | Exit 5 in 8 s. 1.0.0 runs again with `--update-failed`, mic off. Exe hash and Uninstall key still 1.0.0. |
+| Default folder, not elevated | `1.0.0 Setup` without `/DIR` | Exit 0. `%LocalAppData%\Programs\Hindsound`, no prompt. The manifest of the Setup says `asInvoker`. |
+| Update, app running | `1.0.1 Setup /WAITEXIT=60 /RESTARTAPP` | Exit 0 in 6.5 to 7.5 s. Waited 4.2 to 5.4 s. 1.0.1 runs, with `--settings` and `--offscreen`, mic off. |
+| Exe locked | same | Exit 5 in 8 to 9.4 s. 1.0.0 runs again with `--update-failed`, mic off. Exe hash and Uninstall key still 1.0.0, no stray file. One app process and no Setup over the next 20 s. |
 | DLL locked | same | Same result. |
 | The next attempt | same, lock gone | Exit 0. 1.0.1 runs. |
 | Quit, install works | `1.0.1 Setup /WAITEXIT=60` | Exit 0. 1.0.1 on disk. Nothing started. |
 | Quit, exe locked | same | Exit 5. 1.0.0 on disk. Nothing started. |
 | App outlives the wait | `1.0.1 Setup /WAITEXIT=3 /RESTARTAPP` | Exit 1 in 3.8 s. Same process alive, no second one. |
+| App leaves after the wait | `1.0.1 Setup /WAITEXIT=60 /RESTARTAPP`, app leaves after 70 s | Exit 1 in 62 s. The app leaves at 69 s. 15 s later no process runs, and 1.0.0 is still on disk. This is why N is 330. |
+| Slowest exit | `1.0.1 Setup /WAITEXIT=330 /RESTARTAPP`, app leaves after 300 s | Exit 0 in 299 s. Waited 286 s. 1.0.1 runs, mic off. |
+| Real mutex name | `1.0.1 Setup /WAITEXIT=330 /RESTARTAPP`, unmodified exes | The running exe holds the mutex. Uninstall refused, exit 1. `/WAITEXIT=2`: exit 1, app alive. Then exit 0 in 9.4 s, waited 7.6 s, 1.0.1 runs, mic off. |
 | No wait | `1.0.1 Setup` | Exit 1 in 0.6 s. App untouched. |
 | First installation fails | `1.0.1 Setup /RESTARTAPP`, a locked `Hindsound.exe` in the folder | Exit 5. No Uninstall key, no shortcut, DLL and licence removed. Nothing started. |
 | Uninstall, app running | `unins000.exe` | Exit 1. Nothing changed. |
-| Uninstall, app closed | `unins000.exe` | Exit 0, after a failed update too. Files, key and shortcut gone; log, `updates` and the Run value gone, another Run value kept; `Rescued` and the settings kept. |
-| Delete the settings | `unins000.exe`, Setup built with `/DTrialDeleteSettings=1` | Settings folder gone, `Rescued` kept. |
+| Uninstall, app closed | `unins000.exe` | Exit 0, after a failed update too. Files, key and shortcut gone; log, `updates` and the Run value gone, another Run value kept; `Rescued` and the settings kept. Without `Rescued`, `%LocalAppData%\Hindsound` goes too. |
+| Delete the settings | `unins000.exe`, Setup built with `/DTrialDeleteSettings=1` | `settings.json`, its `.bak` and `.tmp` files gone, the folder too. `Rescued` kept. |
+| Delete the settings, clips in that folder | same | The settings files gone. The clips and the folder kept. Deleting the whole folder lost them. |
 
 Not tried: anything with a window, so the wizard, its launch box and the question about the settings; the uninstaller and
-the Setup of a release build, which would touch the real log and Run value; the real mutex name, which `Program.cs` and
-`Hindsound.iss` must keep equal.
+the Setup of a release build, which would touch the real log and Run value; a real clip being written while Setup waits:
+`--exit-after` stands in for it, and Setup only sees the mutex.
