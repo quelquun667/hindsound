@@ -61,6 +61,156 @@ public class AppOptionsTests
     }
 }
 
+public class MicLossWatchTests
+{
+    private readonly MicLossWatch _watch = new();
+
+    private static AudioEngineStatus Status(bool capturing, bool enabled = true, CaptureActivity activity = CaptureActivity.Capturing) =>
+        new(activity, true, enabled, capturing, "Speakers", capturing ? "Mic" : null, true, TimeSpan.Zero, 0);
+
+    [Fact]
+    public void A_mic_that_stays_away_is_told_after_2_s_only()
+    {
+        Assert.Equal(StatusNotice.None, _watch.Note(Status(true), 0));
+
+        Assert.Equal(StatusNotice.None, _watch.Note(Status(false), 1000));
+        Assert.True(_watch.Waiting);
+        Assert.Equal(StatusNotice.None, _watch.Check(2999));
+        Assert.True(_watch.Waiting);
+
+        Assert.Equal(StatusNotice.MicLost, _watch.Check(3000));
+        Assert.False(_watch.Waiting);
+    }
+
+    [Fact]
+    public void A_new_status_can_be_the_one_that_tells()
+    {
+        _watch.Note(Status(true), 0);
+        _watch.Note(Status(false), 1000);
+
+        Assert.Equal(StatusNotice.MicLost, _watch.Note(Status(false) with { Buffered = TimeSpan.FromSeconds(1) }, 3000));
+    }
+
+    [Fact]
+    public void A_change_of_device_within_2_s_says_nothing()
+    {
+        _watch.Note(Status(true), 0);
+        _watch.Note(Status(false), 1000);
+
+        Assert.Equal(StatusNotice.None, _watch.Note(Status(true), 1500));
+        Assert.False(_watch.Waiting);
+        Assert.Equal(StatusNotice.None, _watch.Check(5000));
+    }
+
+    [Fact]
+    public void A_loss_is_told_once()
+    {
+        _watch.Note(Status(true), 0);
+        _watch.Note(Status(false), 1000);
+        Assert.Equal(StatusNotice.MicLost, _watch.Check(3000));
+
+        Assert.Equal(StatusNotice.None, _watch.Note(Status(false) with { Buffered = TimeSpan.FromSeconds(9) }, 9000));
+        Assert.False(_watch.Waiting);
+    }
+
+    [Fact]
+    public void The_mic_back_is_told_only_after_a_loss_that_was()
+    {
+        _watch.Note(Status(true), 0);
+        _watch.Note(Status(false), 1000);
+        _watch.Check(3000);
+
+        Assert.Equal(StatusNotice.MicBack, _watch.Note(Status(true), 4000));
+        Assert.Equal(StatusNotice.None, _watch.Note(Status(true) with { Buffered = TimeSpan.FromSeconds(1) }, 5000));
+    }
+
+    [Fact]
+    public void It_can_be_lost_again_after_coming_back()
+    {
+        _watch.Note(Status(true), 0);
+        _watch.Note(Status(false), 1000);
+        _watch.Check(3000);
+        _watch.Note(Status(true), 4000);
+
+        _watch.Note(Status(false), 5000);
+        Assert.Equal(StatusNotice.MicLost, _watch.Check(7000));
+    }
+
+    [Fact]
+    public void No_mic_at_the_start_says_nothing()
+    {
+        Assert.Equal(StatusNotice.None, _watch.Note(Status(false), 0));
+        Assert.False(_watch.Waiting);
+        Assert.Equal(StatusNotice.None, _watch.Check(60_000));
+    }
+
+    [Fact]
+    public void Turning_the_mic_off_says_nothing_now_or_later()
+    {
+        _watch.Note(Status(true), 0);
+
+        Assert.Equal(StatusNotice.None, _watch.Note(Status(false, enabled: false), 1000));
+        Assert.False(_watch.Waiting);
+        Assert.Equal(StatusNotice.None, _watch.Check(9000));
+    }
+
+    [Fact]
+    public void Turning_the_mic_off_after_a_loss_means_no_good_news_later()
+    {
+        _watch.Note(Status(true), 0);
+        _watch.Note(Status(false), 1000);
+        _watch.Check(3000);
+
+        _watch.Note(Status(false, enabled: false), 4000);
+
+        Assert.Equal(StatusNotice.None, _watch.Note(Status(true), 5000));
+    }
+
+    [Theory]
+    [InlineData(CaptureActivity.Paused)]
+    [InlineData(CaptureActivity.NoDevice)]
+    public void A_pause_or_no_device_is_no_lost_mic(CaptureActivity activity)
+    {
+        _watch.Note(Status(true), 0);
+
+        Assert.Equal(StatusNotice.None, _watch.Note(Status(false, activity: activity), 1000));
+        Assert.False(_watch.Waiting);
+    }
+
+    [Fact]
+    public void A_pause_stops_the_wait_of_a_loss()
+    {
+        _watch.Note(Status(true), 0);
+        _watch.Note(Status(false), 1000);
+
+        _watch.Note(Status(false, activity: CaptureActivity.Paused), 1500);
+
+        Assert.False(_watch.Waiting);
+        Assert.Equal(StatusNotice.None, _watch.Check(9000));
+    }
+
+    [Theory]
+    [InlineData(StatusNotice.MicLost, StatusNotice.None, false, true)]
+    [InlineData(StatusNotice.MicLost, StatusNotice.CaptureOn, false, true)]
+    [InlineData(StatusNotice.MicBack, StatusNotice.None, false, true)]
+    [InlineData(StatusNotice.MicBack, StatusNotice.CaptureOn, false, false)]
+    [InlineData(StatusNotice.MicBack, StatusNotice.None, true, false)]
+    public void The_good_news_only_goes_out_when_it_says_something(StatusNotice mic, StatusNotice capture, bool lossNeverShown, bool worth)
+    {
+        Assert.Equal(worth, MicLossWatch.WorthTelling(mic, capture, lossNeverShown));
+    }
+
+    [Fact]
+    public void A_headset_unplugged_is_seen_through_the_moment_without_any_device()
+    {
+        _watch.Note(Status(true), 0);
+        _watch.Note(Status(false, activity: CaptureActivity.NoDevice), 1000);
+
+        Assert.Equal(StatusNotice.None, _watch.Note(Status(false), 1200));
+        Assert.Equal(StatusNotice.MicLost, _watch.Check(3200));
+    }
+}
+
 public class StatusTransitionsTests
 {
     private static AudioEngineStatus Status(CaptureActivity activity, string? device = "Speakers") =>

@@ -54,6 +54,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private IReadOnlyList<HotkeyResult> _hotkeyResults = [];
     private AudioEngineStatus? _lastStatus;
     private bool _engineFailed;
+    private readonly MicLossWatch _micWatch = new();
+    private bool _micCheckArmed;
     private TrayState _trayState = TrayState.Active;
     private string _trayTip = "Hindsound";
     private bool _quitting;
@@ -527,9 +529,10 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         }
 
         var notice = StatusTransitions.Decide(_lastStatus, status);
+        var micNotice = _micWatch.Note(status, NowMs);
         _lastStatus = status;
         _engineFailed = false;
-        _pending.WithdrawCeased(status);
+        var withdrawn = _pending.WithdrawCeased(status);
         _window?.Screen.UpdateStatus(status);
         switch (notice)
         {
@@ -547,7 +550,42 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
                 break;
         }
 
+        if (MicLossWatch.WorthTelling(micNotice, notice, lossNeverShown: withdrawn?.Kind == NotificationKind.MicLost))
+        {
+            TellAboutMic(micNotice);
+        }
+
+        ArmMicCheck();
         RefreshTray();
+    }
+
+    private void TellAboutMic(StatusNotice notice)
+    {
+        if (notice == StatusNotice.MicLost)
+        {
+            ShowStatus(NotificationStates.MicLost());
+        }
+        else if (notice == StatusNotice.MicBack)
+        {
+            ShowStatus(NotificationStates.MicBack());
+        }
+    }
+
+    // The status only changes on a change: if the microphone stays away, no new one comes to end the wait.
+    private void ArmMicCheck()
+    {
+        if (_micCheckArmed || !_micWatch.Waiting)
+        {
+            return;
+        }
+
+        _micCheckArmed = true;
+        _loop.After(MicLossWatch.SettleMs, () =>
+        {
+            _micCheckArmed = false;
+            TellAboutMic(_micWatch.Check(NowMs));
+            ArmMicCheck();
+        });
     }
 
     private void TogglePause()

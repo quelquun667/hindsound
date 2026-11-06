@@ -12,6 +12,78 @@ public enum StatusNotice
     Paused,
     NoDevice,
     DeviceChanged,
+    MicLost,
+    MicBack,
+}
+
+/// <summary>
+/// Whether the microphone was lost while the sound of the PC goes on. The engine shows a capture as stopped from the moment
+/// it dies until the new one is open, also when the microphone only changes device: so the loss is told once it has lasted
+/// <see cref="SettleMs"/>. A microphone that never was there says nothing here. Pure: tested without any engine.
+/// </summary>
+internal sealed class MicLossWatch
+{
+    public const int SettleMs = 2000;
+
+    private bool _hadMic;
+    private bool _told;
+    private long? _lostAt;
+
+    /// <summary>A loss has yet to last long enough: <see cref="Check"/> must be called later, as no new status may come.</summary>
+    public bool Waiting => _lostAt is not null;
+
+    /// <summary>Takes a new status. What it returns is to be told now.</summary>
+    public StatusNotice Note(AudioEngineStatus next, long nowMs)
+    {
+        if (next.MicCapturing)
+        {
+            _hadMic = true;
+            _lostAt = null;
+            var back = _told;
+            _told = false;
+            return back ? StatusNotice.MicBack : StatusNotice.None;
+        }
+
+        if (!next.MicEnabled)
+        {
+            _hadMic = false;
+            _told = false;
+            _lostAt = null;
+            return StatusNotice.None;
+        }
+
+        // A pause or no device at all: the microphone is not what's wrong.
+        if (next.Activity != CaptureActivity.Capturing)
+        {
+            _lostAt = null;
+            return StatusNotice.None;
+        }
+
+        if (_hadMic)
+        {
+            _lostAt ??= nowMs;
+        }
+
+        return Check(nowMs);
+    }
+
+    /// <summary>A loss the user never got to read needs no good news, and the news of the capture says enough on its own.</summary>
+    public static bool WorthTelling(StatusNotice mic, StatusNotice capture, bool lossNeverShown) =>
+        mic != StatusNotice.MicBack || (capture == StatusNotice.None && !lossNeverShown);
+
+    /// <summary>The loss, if it has now lasted long enough. Told once, until the microphone comes back.</summary>
+    public StatusNotice Check(long nowMs)
+    {
+        if (_lostAt is not { } since || nowMs - since < SettleMs)
+        {
+            return StatusNotice.None;
+        }
+
+        _lostAt = null;
+        _hadMic = false;
+        _told = true;
+        return StatusNotice.MicLost;
+    }
 }
 
 /// <summary>From two successive engine statuses to what the user sees. Pure: tested without any window.</summary>
