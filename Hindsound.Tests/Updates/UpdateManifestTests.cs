@@ -183,6 +183,7 @@ public class UpdateManifestTests
     [InlineData("https://github.com/quelquun667/hindsound/releases/download/v1.2.3/a.exe#x")] // fragment
     [InlineData("https://github.com/quelquun667/hindsound/releases/download/v1.2.3//a.exe")] // empty segment
     [InlineData("https://github.com/quelquun667/hindsound/releases/download/v1.2.3/x/a.exe")] // one more segment
+    [InlineData("https://github.com/quelquun667/hindsound/releases/download/v1.2.3/a.exe/b.exe")] // one more after a good name
     [InlineData("https://github.com/quelquun667/hindsound/releases/download/a.exe")] // one segment less
     [InlineData("https://github.com/quelquun667/hindsound/releases/download/v1.2.2/a.exe")] // an older release: rollback
     [InlineData("https://github.com/quelquun667/hindsound/releases/download/1.2.3/a.exe")] // tag without v
@@ -222,6 +223,8 @@ public class UpdateManifestTests
 
     [Theory]
     [InlineData("http://github.com/a")]
+    [InlineData("http://github.com:443/a")]
+    [InlineData("https://github.com/a\\b")]
     [InlineData("HTTP://github.com/a")]
     [InlineData("ftp://github.com/a")]
     [InlineData("https://evil.com/a")]
