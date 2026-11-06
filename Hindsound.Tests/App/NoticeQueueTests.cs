@@ -33,6 +33,8 @@ public class NoticeQueueTests
     [InlineData(NotificationKind.Paused, NoticeRank.Ordinary)]
     [InlineData(NotificationKind.NoDevice, NoticeRank.Ordinary)]
     [InlineData(NotificationKind.DeviceChanged, NoticeRank.Ordinary)]
+    [InlineData(NotificationKind.MicLost, NoticeRank.Ordinary)]
+    [InlineData(NotificationKind.MicBack, NoticeRank.Ordinary)]
     [InlineData(NotificationKind.Saved, NoticeRank.Answer)]
     [InlineData(NotificationKind.SaveFailed, NoticeRank.Answer)]
     [InlineData(NotificationKind.Saving, NoticeRank.Answer)]

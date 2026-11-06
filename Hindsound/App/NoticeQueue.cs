@@ -31,7 +31,8 @@ internal sealed class NoticeQueue
     {
         NotificationKind.SettingsDamaged or NotificationKind.SettingsUnreadable or NotificationKind.SettingsHasError or NotificationKind.SettingsNotSaved
             or NotificationKind.StartupNotChanged => NoticeRank.Lasting,
-        NotificationKind.NoDevice or NotificationKind.Paused or NotificationKind.CaptureOn or NotificationKind.DeviceChanged => NoticeRank.Ordinary,
+        NotificationKind.NoDevice or NotificationKind.Paused or NotificationKind.CaptureOn or NotificationKind.DeviceChanged
+            or NotificationKind.MicLost or NotificationKind.MicBack => NoticeRank.Ordinary,
         _ => NoticeRank.Answer,
     };
 
