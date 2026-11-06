@@ -426,21 +426,19 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         catch (Exception ex)
         {
             _journal.Write("hotkeys: " + ex);
-            if (!string.IsNullOrWhiteSpace(_settings.Hotkeys.SaveDefault))
-            {
-                NoteHotkeys([new HotkeyResult(HotkeyAction.SaveDefault, _settings.Hotkeys.SaveDefault, HotkeyStatus.Unavailable, HotkeyResult.UnavailableMessage)]);
-            }
+            NoteHotkeys(HotkeyManager.WithoutManager(_settings.Hotkeys));
         }
     }
 
     private void ApplyHotkeys()
     {
-        if (_hotkeys is null)
+        // On the way out they are gone on purpose. Otherwise the manager never came up, and the settings may name others now.
+        if (_hotkeys is null && _leave.Waiting)
         {
             return;
         }
 
-        NoteHotkeys(_hotkeys.Apply(_settings.Hotkeys));
+        NoteHotkeys(_hotkeys?.Apply(_settings.Hotkeys) ?? HotkeyManager.WithoutManager(_settings.Hotkeys));
     }
 
     private void NoteHotkeys(IReadOnlyList<HotkeyResult> results)
@@ -1222,14 +1220,14 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
     IReadOnlyList<HotkeyResult> ISettingsBackend.ApplyHotkeys(HotkeySettings hotkeys)
     {
-        var results = _hotkeys?.Apply(hotkeys) ?? [];
+        var results = _hotkeys?.Apply(hotkeys) ?? HotkeyManager.WithoutManager(hotkeys);
         NoteHotkeys(results);
         return results;
     }
 
     IReadOnlyList<HotkeyResult> ISettingsBackend.ResumeHotkeys()
     {
-        var results = _hotkeys?.Resume() ?? [];
+        var results = _hotkeys?.Resume() ?? HotkeyManager.WithoutManager(_settings.Hotkeys);
         NoteHotkeys(results);
         return results;
     }

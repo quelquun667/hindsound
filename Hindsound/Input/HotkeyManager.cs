@@ -39,6 +39,25 @@ public sealed class HotkeyManager : IDisposable
     /// </summary>
     public event Action<HotkeyAction>? Pressed;
 
+    /// <summary>What the shortcuts come to when the manager could not even be created: every one that is set does not work.</summary>
+    public static IReadOnlyList<HotkeyResult> WithoutManager(HotkeySettings settings) => Actions.Select(action => Without(action, Gesture(settings, action))).ToList();
+
+    private static HotkeyResult Without(HotkeyAction action, string? gesture) =>
+        string.IsNullOrWhiteSpace(gesture)
+            ? new HotkeyResult(action, null, HotkeyStatus.NotSet, null)
+            : new HotkeyResult(action, gesture, HotkeyStatus.Unavailable, HotkeyResult.UnavailableMessage);
+
+    private static string? Gesture(HotkeySettings settings, HotkeyAction action) => action switch
+    {
+        HotkeyAction.SaveDefault => settings.SaveDefault,
+        HotkeyAction.Save15s => settings.Save15s,
+        HotkeyAction.Save1m => settings.Save1m,
+        HotkeyAction.Save5m => settings.Save5m,
+        HotkeyAction.TogglePause => settings.TogglePause,
+        HotkeyAction.CopyLast => settings.CopyLast,
+        _ => null,
+    };
+
     /// <summary>Registers the shortcuts of these settings. An old shortcut is only released once its replacement is in place.</summary>
     public IReadOnlyList<HotkeyResult> Apply(HotkeySettings settings)
     {
