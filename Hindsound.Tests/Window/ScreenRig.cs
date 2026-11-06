@@ -62,12 +62,18 @@ internal sealed class FakeCanvas : ICanvas
 {
     public void SetOrigin(float dy) { }
     public void FillRect(Box box, uint rgb) { }
-    public void FillRound(Box box, float radius, uint rgb) { }
+    public void FillRound(Box box, float radius, uint rgb) => LastRoundFill = rgb;
     public void Frame(Box box, float radius, uint fill, uint border) { }
     public void Ring(Box box, float radius, float thickness, uint rgb) { }
-    public void Stroke(float ax, float ay, float bx, float by, float width, uint rgb) { }
+    public void Stroke(float ax, float ay, float bx, float by, float width, uint rgb) => Strokes.Add((width, rgb));
     public void Glow(Box box, float sigma, float opacity, uint rgb) { }
-    public void Text(string text, Face face, float size, float x, float top, uint rgb) => Drawn.Add(text);
+
+    public void Text(string text, Face face, float size, float x, float top, uint rgb)
+    {
+        Drawn.Add(text);
+        TextColors[text] = rgb;
+    }
+
     public float Measure(string text, Face face, float size) => text.Length * size * 0.5f;
     public float LineHeight(Face face, float size) => size * 1.3f;
     public void WarningIcon(float x, float y, float size, uint rgb) { }
@@ -75,7 +81,15 @@ internal sealed class FakeCanvas : ICanvas
 
     public List<string> Drawn { get; } = [];
 
+    /// <summary>The colour each text was last drawn in.</summary>
+    public Dictionary<string, uint> TextColors { get; } = [];
+
+    public List<(float Width, uint Rgb)> Strokes { get; } = [];
+
     public uint? NotificationAccent { get; private set; }
+
+    /// <summary>The colour of the last rounded shape: the scroll thumb, on a page that has one and no list open.</summary>
+    public uint LastRoundFill { get; private set; }
 }
 
 internal sealed class FakeHost : IWindowHost
@@ -83,6 +97,9 @@ internal sealed class FakeHost : IWindowHost
     public int Invalidated { get; private set; }
 
     public string? EditText { get; private set; }
+
+    /// <summary>How many times the box was told to take a text, which also loses the caret.</summary>
+    public int EditResets { get; private set; }
 
     public bool EditVisible { get; private set; }
 
@@ -103,10 +120,19 @@ internal sealed class FakeHost : IWindowHost
         if (resetText)
         {
             EditText = text;
+            EditResets++;
         }
     }
 
     public void HideEdit() => EditVisible = false;
+
+    /// <summary>The window is the foreground one. The tests that care turn it off.</summary>
+    public bool IsForeground { get; set; } = true;
+
+    /// <summary>How many times the screen asked for the keyboard.</summary>
+    public int FocusRequests { get; private set; }
+
+    public void FocusEdit() => FocusRequests++;
 
     public void CaptureMouse() => MouseHeld = true;
 

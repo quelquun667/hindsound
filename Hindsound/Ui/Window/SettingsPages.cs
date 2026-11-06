@@ -610,12 +610,12 @@ internal sealed partial class SettingsScreen
 
                 if (finished)
                 {
-                    c.Stroke(circle.X + 7, mid, circle.X + 10.5f, mid + 4, 2, Theme.OnAccent);
-                    c.Stroke(circle.X + 10.5f, mid + 4, circle.X + 17, mid - 4, 2, Theme.OnAccent);
+                    c.Stroke(circle.X + 7, mid, circle.X + 10.5f, mid + 4, 2, ui.OnAccent);
+                    c.Stroke(circle.X + 10.5f, mid + 4, circle.X + 17, mid - 4, 2, ui.OnAccent);
                 }
                 else
                 {
-                    c.TextCentered((i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture), Face.Medium, 13, circle, i == step ? Theme.OnAccent : Theme.Muted);
+                    c.TextCentered((i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture), Face.Medium, 13, circle, i == step ? ui.OnAccent : Theme.Muted);
                 }
 
                 c.TextMid(FirstRunSteps[i], i == step ? Face.Medium : Face.Body, 14, x + 34, mid, i == step ? Theme.Text : Theme.Muted);

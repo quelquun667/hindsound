@@ -248,6 +248,53 @@ internal sealed class MicMeter
     }
 }
 
+/// <summary>When the native text box may take the keyboard. WM_SETFOCUS gives it back when the window returns to the foreground.</summary>
+internal static class EditFocus
+{
+    public static bool Wanted(bool wasVisible, bool foreground) => !wasVisible && foreground;
+
+    /// <summary>A key on a field scrolled away. A modifier alone means nothing yet, and Alt and Win belong to Windows.</summary>
+    public static bool KeyBringsBack(uint vk, uint modifiers) =>
+        !Vk.IsModifier(vk) && (modifiers & (HotkeyGesture.ModAlt | HotkeyGesture.ModWin)) == 0;
+}
+
+/// <summary>What a key held down may do: move and type, but never save, toggle or open again.</summary>
+internal static class KeyRepeat
+{
+    private const long RepeatBit = 1L << 30;
+
+    /// <summary>Bit 30 of a key message: the key was already down.</summary>
+    public static bool FromLParam(nint lParam) => ((long)lParam & RepeatBit) != 0;
+
+    /// <param name="vk">The virtual key.</param>
+    /// <param name="inField">The focus is on a text field: holding a key there types.</param>
+    public static bool Acts(uint vk, bool inField) => vk switch
+    {
+        Vk.Left or Vk.Right or Vk.Up or Vk.Down or Vk.PageUp or Vk.PageDown or Vk.Home or Vk.End or Vk.Back => true,
+        Vk.Tab or Vk.Enter or Vk.Escape => false,
+        _ => inField,
+    };
+
+    /// <summary>A repeat that does nothing is still taken from Windows if the key itself means something here.</summary>
+    public static bool Swallowed(uint vk) => vk is Vk.Tab or Vk.Enter or Vk.Escape or Vk.Space;
+}
+
+/// <summary>Turns the wheel deltas of Windows into notches. A touchpad sends small deltas that only count together.</summary>
+internal static class WheelNotches
+{
+    public const int PerNotch = 120;
+
+    /// <param name="rest">What the last call left over.</param>
+    /// <param name="delta">The delta of this message.</param>
+    /// <returns>The whole notches, and what to pass as the rest next time. A change of direction forgets the rest.</returns>
+    public static (int Notches, int LeftOver) Add(int rest, int delta)
+    {
+        var total = Math.Sign(rest) * Math.Sign(delta) < 0 ? delta : rest + delta;
+        var notches = total / PerNotch;
+        return (notches, total - notches * PerNotch);
+    }
+}
+
 /// <summary>Moves a focus over a list where some entries cannot take it. Wraps around.</summary>
 internal static class FocusRing
 {

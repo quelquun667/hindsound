@@ -42,7 +42,7 @@ internal interface IWindowHost
 {
     void Invalidate();
 
-    /// <summary>Puts the native text box over a field and gives it the keyboard.</summary>
+    /// <summary>Puts the native text box over a field, without touching the keyboard.</summary>
     /// <param name="box">Where, on the window.</param>
     /// <param name="text">The text to put in, if <paramref name="resetText"/>.</param>
     /// <param name="face">Its font.</param>
@@ -51,6 +51,12 @@ internal interface IWindowHost
     void ShowEdit(Box box, string text, Face face, float size, bool resetText);
 
     void HideEdit();
+
+    /// <summary>This window is the foreground one. Otherwise it must not move the keyboard: a game or a menu may hold it.</summary>
+    bool IsForeground { get; }
+
+    /// <summary>Gives the keyboard to the native text box.</summary>
+    void FocusEdit();
 
     void CaptureMouse();
 
@@ -98,10 +104,12 @@ internal sealed partial class SettingsScreen
     private string? _focusId;
     private string? _pressedId;
     private string? _editId;
+    private string? _scrolledAwayId;
     private string? _hoverId;
     private bool _forceEditText;
     private float _mouseX = -1, _mouseY = -1;
     private float _scroll;
+    private float _pressScroll;
     private float _contentBottom;
     private bool _draggingScroll;
     private float _dragGrabY;
@@ -377,16 +385,31 @@ internal sealed partial class SettingsScreen
     /// <summary>The native box follows the focus. A field scrolled partly under the band or the foot is only drawn.</summary>
     private void SyncEdit()
     {
+        if (_scrolledAwayId != _focusId)
+        {
+            _scrolledAwayId = null;
+        }
+
         if (Focus is TextField field && OnScreen(field, out var box))
         {
-            var reset = _forceEditText || _editId != field.Id;
+            var wasVisible = _editId is not null;
+
+            // A box only scrolled away still holds the text as typed, with its caret: it must come back as it left.
+            var reset = _forceEditText || (_editId ?? _scrolledAwayId) != field.Id;
             _host.ShowEdit(box, field.State.Draft, field.Face, field.Size, reset);
             _editId = field.Id;
             _forceEditText = false;
+
+            // This runs on every piece of news from the app. Only the box appearing may ask for the keyboard.
+            if (EditFocus.Wanted(wasVisible, _host.IsForeground))
+            {
+                _host.FocusEdit();
+            }
         }
         else if (_editId is not null)
         {
             _host.HideEdit();
+            _scrolledAwayId = _editId == _focusId ? _editId : null;
             _editId = null;
         }
     }
@@ -403,12 +426,22 @@ internal sealed partial class SettingsScreen
     /// <summary>A key went down. Returns false if nothing here wanted it, so Windows can do what it does with it.</summary>
     /// <param name="vk">The virtual key.</param>
     /// <param name="modifiers">The modifiers held, as <see cref="HotkeyGesture"/> flags.</param>
-    public bool Key(uint vk, uint modifiers)
+    /// <param name="repeat">The key was already down: this is Windows repeating it.</param>
+    public bool Key(uint vk, uint modifiers, bool repeat = false)
     {
         if (_capture.Listening)
         {
-            CaptureKey(vk, modifiers);
+            if (!repeat)
+            {
+                CaptureKey(vk, modifiers);
+            }
+
             return true;
+        }
+
+        if (repeat && !KeyRepeat.Acts(vk, Focus is TextField))
+        {
+            return KeyRepeat.Swallowed(vk);
         }
 
         if (_popup is { } popup)
@@ -420,6 +453,12 @@ internal sealed partial class SettingsScreen
         {
             MoveFocus((modifiers & HotkeyGesture.ModShift) == 0);
             return true;
+        }
+
+        // The field was scrolled away with the focus on it: its box is hidden, and this key would go nowhere.
+        if (Focus is TextField away && !OnScreen(away, out _) && EditFocus.KeyBringsBack(vk, modifiers))
+        {
+            Reveal();
         }
 
         if ((modifiers & (HotkeyGesture.ModControl | HotkeyGesture.ModAlt | HotkeyGesture.ModWin)) != 0)
@@ -742,6 +781,8 @@ internal sealed partial class SettingsScreen
             return;
         }
 
+        // Taking the focus may scroll a half-hidden widget into view, under a mouse that has not moved.
+        _pressScroll = _scroll;
         if (widget.CanFocus)
         {
             SetFocus(widget.Id);
@@ -750,7 +791,7 @@ internal sealed partial class SettingsScreen
 
         _pressedId = widget.Id;
         _host.CaptureMouse();
-        widget.OnPress(x, LocalY(widget, y));
+        widget.OnPress(x, PressY(widget, y));
     }
 
     public void MouseUp(float x, float y)
@@ -759,19 +800,27 @@ internal sealed partial class SettingsScreen
         {
             _draggingScroll = false;
             _host.ReleaseMouse();
+
+            // The thumb is lit while it is dragged.
+            _host.Invalidate();
             return;
         }
 
         var pressed = Find(_pressedId);
         _pressedId = null;
         _host.ReleaseMouse();
-        pressed?.OnRelease(pressed.Bounds.Contains(x, LocalY(pressed, y)));
+        pressed?.OnRelease(pressed.Bounds.Contains(x, PressY(pressed, y)));
     }
 
     /// <summary>The mouse was taken away while a button was held.</summary>
     public void MouseCaptureLost()
     {
-        _draggingScroll = false;
+        if (_draggingScroll)
+        {
+            _draggingScroll = false;
+            _host.Invalidate();
+        }
+
         if (_pressedId is not null)
         {
             _pressedId = null;
@@ -792,6 +841,9 @@ internal sealed partial class SettingsScreen
     }
 
     private float LocalY(Widget widget, float y) => widget.Scrolls ? y + _scroll : y;
+
+    /// <summary>Where the mouse is on a widget, as the page lay when the button went down.</summary>
+    private float PressY(Widget widget, float y) => widget.Scrolls ? y + _pressScroll : y;
 
     private Widget? HitTest(float x, float y)
     {
