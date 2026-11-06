@@ -604,3 +604,136 @@ public class DisposalTests
         Assert.Equal(CaptureActivity.Stopped, engine.Status.Activity);
     }
 }
+
+internal sealed class WatcherThatHangsOnDispose(ManualResetEventSlim release) : IDeviceWatcher
+{
+    public event Action? DevicesChanged
+    {
+        add { }
+        remove { }
+    }
+
+    public void Start()
+    {
+    }
+
+    public void Dispose() => release.Wait();
+}
+
+[Collection(nameof(TimingSensitive))]
+public class ListenerDeadlockTests
+{
+    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(10);
+
+    private static AudioEngine SystemOnly(TrackingFactory factory, IDeviceWatcher? watcher = null) =>
+        new(new AudioEngineOptions(TimeSpan.FromSeconds(2), MicEnabled: false), factory, watcher ?? new FakeWatcher());
+
+    [Fact]
+    public async Task Dispose_does_not_wait_for_a_listener_that_waits_for_the_disposing_thread()
+    {
+        using var interfaceThreadFree = new ManualResetEventSlim();
+        var factory = new TrackingFactory();
+        var engine = SystemOnly(factory);
+        await engine.StartAsync();
+        engine.StatusChanged += status =>
+        {
+            if (status.Activity == CaptureActivity.Stopped)
+            {
+                interfaceThreadFree.Wait();
+            }
+        };
+
+        try
+        {
+            await Task.Run(engine.Dispose).WaitAsync(Bound);
+            Assert.Equal(0, factory.Live);
+        }
+        finally
+        {
+            interfaceThreadFree.Set();
+        }
+    }
+
+    [Fact]
+    public async Task Stop_does_not_wait_for_a_listener_that_waits_for_the_caller()
+    {
+        using var callerFree = new ManualResetEventSlim();
+        var factory = new TrackingFactory();
+        using var engine = SystemOnly(factory);
+        await engine.StartAsync();
+        engine.StatusChanged += status =>
+        {
+            if (status.Activity == CaptureActivity.Stopped)
+            {
+                callerFree.Wait();
+            }
+        };
+
+        try
+        {
+            await engine.StopAsync().WaitAsync(Bound);
+        }
+        finally
+        {
+            callerFree.Set();
+        }
+    }
+
+    [Fact]
+    public async Task A_listener_can_dispose_the_engine()
+    {
+        var factory = new TrackingFactory();
+        var engine = SystemOnly(factory);
+        var disposed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        engine.StatusChanged += status =>
+        {
+            if (status.Activity == CaptureActivity.Capturing)
+            {
+                engine.Dispose();
+                disposed.TrySetResult();
+            }
+        };
+
+        await engine.StartAsync();
+
+        await disposed.Task.WaitAsync(Bound);
+        Assert.Equal(0, factory.Live);
+    }
+
+    [Fact]
+    public async Task Dispose_comes_back_even_if_the_device_layer_does_not()
+    {
+        using var release = new ManualResetEventSlim();
+        var engine = SystemOnly(new TrackingFactory(), new WatcherThatHangsOnDispose(release));
+        await engine.StartAsync();
+
+        try
+        {
+            await Task.Run(engine.Dispose).WaitAsync(Bound);
+        }
+        finally
+        {
+            release.Set();
+        }
+    }
+
+    [Fact]
+    public async Task A_stuck_listener_holds_up_other_commands_only_briefly()
+    {
+        using var release = new ManualResetEventSlim();
+        using var engine = SystemOnly(new TrackingFactory());
+        await engine.StartAsync();
+        engine.StatusChanged += _ => release.Wait();
+
+        try
+        {
+            await engine.PauseAsync().WaitAsync(Bound);
+            await engine.ResumeAsync().WaitAsync(Bound);
+            Assert.Equal(CaptureActivity.Capturing, engine.Status.Activity);
+        }
+        finally
+        {
+            release.Set();
+        }
+    }
+}

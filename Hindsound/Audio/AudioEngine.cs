@@ -76,6 +76,12 @@ public sealed class AudioEngine : IDisposable
     private static readonly TimeSpan DefaultOpenLimit = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan CloseLimit = TimeSpan.FromSeconds(2);
 
+    // Dispose runs on the interface thread when the app closes, and a process stuck here keeps the app's mutex.
+    private static readonly TimeSpan ShutdownLimit = TimeSpan.FromSeconds(3);
+
+    // Commands other than a stop give listeners this long to see the result, then get on with it.
+    private static readonly TimeSpan ListenerWaitLimit = TimeSpan.FromSeconds(1);
+
     private sealed class OpenSource(ICaptureSource source, CapturePipeline pipeline, string deviceId, bool excludesOwnProcess, long openedAtTicks)
     {
         private volatile bool _dead;
@@ -276,7 +282,18 @@ public sealed class AudioEngine : IDisposable
         }
 
         _watcher.DevicesChanged -= QueueRefresh;
-        Task.Run(TearDownAsync).GetAwaiter().GetResult();
+        try
+        {
+            // A listener never takes part in this: the status it may be blocked on is sent from another thread.
+            if (!Task.Run(TearDownAsync).Wait(ShutdownLimit))
+            {
+                Debug.WriteLine("Gave up waiting for the engine to close: it finishes in the background");
+            }
+        }
+        catch (AggregateException exception)
+        {
+            Debug.WriteLine($"The engine did not close cleanly: {exception.GetBaseException().Message}");
+        }
     }
 
     // The semaphore is left to the collector: commands may still be waiting on it, and they must get their turn to
@@ -368,7 +385,14 @@ public sealed class AudioEngine : IDisposable
         var delivered = RequestPublish();
         if (waitForListeners)
         {
-            await delivered.ConfigureAwait(false);
+            try
+            {
+                await delivered.WaitAsync(ListenerWaitLimit).ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                Debug.WriteLine("A StatusChanged listener is taking its time");
+            }
         }
     }
 
