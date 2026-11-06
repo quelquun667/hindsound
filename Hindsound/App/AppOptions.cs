@@ -27,6 +27,11 @@ internal sealed record AppOptions(
     /// <summary><c>--selftest-delay seconds</c>: how long the capture runs before the self-test presses save. By default 3 s.</summary>
     public double SelfTestDelaySeconds { get; init; } = 3;
 
+    /// <summary><c>--selftest-fail card|reload|run</c>: throws at that point, to check on the real exe that the app survives it or leaves cleanly.</summary>
+    public string? SelfTestFail { get; init; }
+
+    public const string FailCard = "card", FailReload = "reload", FailRun = "run";
+
     /// <summary>Unknown or incomplete options are ignored: the app is started by Windows, nobody could read an error.</summary>
     public static AppOptions Parse(IReadOnlyList<string> args)
     {
@@ -54,6 +59,10 @@ internal sealed record AppOptions(
                         options = options with { SelfTestDelaySeconds = delay };
                     }
 
+                    i++;
+                    break;
+                case "--selftest-fail" when next is not null:
+                    options = options with { SelfTestFail = next };
                     i++;
                     break;
                 case "--selftest-save":

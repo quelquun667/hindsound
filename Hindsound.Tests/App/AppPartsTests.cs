@@ -21,6 +21,13 @@ public class AppOptionsTests
         Assert.Equal(new AppOptions(@"C:\t\s.json", 2.5, true, true, @"C:\t\d"), options);
     }
 
+    [Fact]
+    public void A_failure_for_the_self_test_is_read()
+    {
+        Assert.Equal(AppOptions.FailRun, AppOptions.Parse(["--selftest-fail", "run"]).SelfTestFail);
+        Assert.Null(AppOptions.Parse([]).SelfTestFail);
+    }
+
     [Theory]
     [InlineData("--exit-after")]
     [InlineData("--settings")]
