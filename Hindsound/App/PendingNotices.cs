@@ -116,5 +116,8 @@ internal sealed class PendingNotices(Action<string> journal)
     }
 
     /// <summary>How long until the next look at the screen. A game can last for hours: the pace drops, it never stops.</summary>
-    public int PollDelayMs(long nowMs) => nowMs - _lastArrival < FastPollingLimitMs ? FastPollMs : SlowPollMs;
+    public int PollDelayMs(long nowMs) => PaceAfter(nowMs - _lastArrival);
+
+    /// <summary>The pace of anything that looks at the screen while it waits for the desktop.</summary>
+    public static int PaceAfter(long waitedMs) => waitedMs < FastPollingLimitMs ? FastPollMs : SlowPollMs;
 }

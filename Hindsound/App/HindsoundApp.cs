@@ -13,8 +13,6 @@ namespace Hindsound.App;
 /// </summary>
 internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 {
-    private const int NoticeRetryMs = 500;
-    private const int NoticeRetries = 60; // 30 s
     private const int SnapshotReleaseDelayMs = 500;
     private const int SelfTestExitDelayMs = 3300;
     private const int SelfTestLeaveCheckMs = 500;
@@ -48,8 +46,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private readonly long _pretendGameUntilMs;
     private bool _pendingPollArmed;
     private bool _canShowNotices;
-    private bool _noticeRetrying;
-    private int _noticeRetries;
+    private readonly NoticeRetry _noticeRetry = new();
     private bool _startTouchesRunKey;
     private AudioEngineOptions? _engineOptions;
     private SettingsWindow? _window;
@@ -825,7 +822,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             if (decision.ShowOverlay)
             {
                 _notices.Remove(next);
-                _noticeRetries = 0;
+                _noticeRetry.Shown();
                 PresentNow(next, decision.ClickThrough);
                 return;
             }
@@ -845,19 +842,17 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         }
     }
 
-    // Every 500 ms for 30 s; past it, the next press or menu looks again.
+    // A long game can keep it from showing for hours: the pace drops, it never stops.
     private void RetryNoticeLater()
     {
-        if (_noticeRetrying || _noticeRetries >= NoticeRetries)
+        if (_noticeRetry.Arm(NowMs) is not { } delay)
         {
             return;
         }
 
-        _noticeRetrying = true;
-        _noticeRetries++;
-        _loop.After(NoticeRetryMs, () =>
+        _loop.After(delay, () =>
         {
-            _noticeRetrying = false;
+            _noticeRetry.Fired();
             ShowNextNotice();
         });
     }

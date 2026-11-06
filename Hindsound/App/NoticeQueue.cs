@@ -16,6 +16,35 @@ public enum NoticeRank
 }
 
 /// <summary>
+/// When a lasting notification that can't show yet looks again. It stays in line until it has shown, so it keeps looking at
+/// the pace of what waits for the desktop. Pure: tested without any window.
+/// </summary>
+internal sealed class NoticeRetry
+{
+    private bool _armed;
+    private long? _since;
+
+    /// <summary>The delay to wait before the next look, or null if one is already on its way.</summary>
+    public int? Arm(long nowMs)
+    {
+        if (_armed)
+        {
+            return null;
+        }
+
+        _armed = true;
+        _since ??= nowMs;
+        return PendingNotices.PaceAfter(nowMs - _since.Value);
+    }
+
+    /// <summary>The look is happening.</summary>
+    public void Fired() => _armed = false;
+
+    /// <summary>It has shown: the next one starts at the fast pace again.</summary>
+    public void Shown() => _since = null;
+}
+
+/// <summary>
 /// Which notification comes next. The notification window replaces what it shows in place, so "Capture on", arriving a
 /// moment after the start, would wipe out the news that the settings were lost. Pure: tested without any window.
 /// </summary>
