@@ -260,6 +260,21 @@ public sealed class ClipSaverTests : IDisposable
         Assert.Equal(firstBytes, File.ReadAllBytes(first.PrimaryPath));
     }
 
+    [Theory]
+    [InlineData(@"%HINDSOUND_NOPE_4F2A%\clips")] // unknown variable: left as typed
+    [InlineData("clips")] // relative: would depend on the current directory
+    [InlineData(@"C:clips")] // relative to the current directory of drive C
+    public void An_output_folder_that_is_not_a_full_path_sends_the_clip_to_the_rescue_folder(string folder)
+    {
+        var options = Wav(o => o with { OutputFolder = folder });
+
+        var result = Saver().Save(new AudioSnapshot(Signals.Sine(300, 0.3, 0.5), []), options, "Game");
+
+        Assert.True(result.Rescued);
+        Assert.Equal(RescueFolder, Path.GetDirectoryName(result.PrimaryPath));
+        Assert.True(File.Exists(result.PrimaryPath));
+    }
+
     [Fact]
     public async Task Two_saves_at_the_same_moment_get_distinct_files_and_both_exist()
     {

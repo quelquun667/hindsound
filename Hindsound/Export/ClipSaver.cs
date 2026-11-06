@@ -197,9 +197,9 @@ public sealed class ClipSaver
 
     private (IReadOnlyList<string> Paths, bool Rescued, bool FellBack) WriteTracks(List<Track> tracks, ExportOptions options, string baseName, CancellationToken cancellationToken)
     {
-        var folder = ExpandFolder(options.OutputFolder);
         try
         {
+            var folder = ExpandFolder(options.OutputFolder);
             var (paths, fellBack) = WriteWithFallback(folder, tracks, options, baseName, cancellationToken);
             return (paths, false, fellBack);
         }
@@ -298,8 +298,21 @@ public sealed class ClipSaver
         }
     }
 
-    private static string ExpandFolder(string folder) =>
-        string.IsNullOrWhiteSpace(folder) ? ExportOptions.DefaultOutputFolder() : Environment.ExpandEnvironmentVariables(folder.Trim());
+    /// <summary>
+    /// The full path of the output folder. A folder that is still relative after the expansion (an unknown
+    /// <c>%VARIABLE%</c> is left as typed, "clips" or "C:clips" depend on the current directory) is invalid: the
+    /// clip would land where nobody looks. The ArgumentException sends the clip to the rescue folder.
+    /// </summary>
+    private static string ExpandFolder(string folder)
+    {
+        if (string.IsNullOrWhiteSpace(folder)) return Path.GetFullPath(ExportOptions.DefaultOutputFolder());
+
+        var expanded = Environment.ExpandEnvironmentVariables(folder.Trim());
+        if (!Path.IsPathFullyQualified(expanded))
+            throw new ArgumentException($"The output folder '{expanded}' is not a full path.", nameof(folder));
+
+        return Path.GetFullPath(expanded);
+    }
 
     private static bool IsStorageFailure(Exception ex) =>
         ex is IOException or UnauthorizedAccessException or NotSupportedException or SecurityException
