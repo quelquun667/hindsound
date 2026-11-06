@@ -1,7 +1,8 @@
 <#
 .SYNOPSIS
-    Tries check-tag, extract-changelog and write-manifest on their accepted and refused cases.
-    Writes only in a new temporary folder, and fails if any case fails.
+    Tries the release scripts on their accepted and refused cases, and reads the workflows for their rules.
+    Writes only in a new temporary folder, and fails if any case fails. Needs the NAudio.Lame package: run after a restore.
+    Nothing here compiles, downloads, installs or starts a Setup: build-lame gets a fake compiler and check-setup a fake folder.
 .EXAMPLE
     ./tools/release/test-release-scripts.ps1
 #>
@@ -36,6 +37,16 @@ function Assert-Refused([string]$Name, [scriptblock]$Action, [string]$Reason) {
     }
     catch {
         Report $Name ($_.Exception.Message -like "*$Reason*") "wrong reason: $($_.Exception.Message)"
+    }
+}
+
+function Assert-Accepted([string]$Name, [scriptblock]$Action) {
+    try {
+        $null = & $Action
+        Report $Name $true
+    }
+    catch {
+        Report $Name $false "it was refused: $($_.Exception.Message)"
     }
 }
 
@@ -177,6 +188,339 @@ try {
 
     Assert-Refused 'missing Setup refused' { & $writeManifest -Version '1.2.3' -SetupPath (Join-Path $temp 'none.exe') -Repository 'owner/name' -OutFile (Join-Path $temp 'none.json') } 'none.exe'
     Report 'no manifest left after a refusal' (-not (Test-Path -LiteralPath (Join-Path $temp 'none.json')))
+
+    # --- check-tag: version jumps ---
+    $outside = Join-Path $temp 'not-a-repository'
+    New-Item -ItemType Directory -Path $outside | Out-Null
+    Push-Location $outside
+    try {
+        Assert-Refused 'tags unreadable refused, not taken as no tag' { & $checkTag -Tag 'v0.0.9' -CheckVersionJump } 'git tag failed'
+    }
+    finally {
+        Pop-Location
+    }
+
+    $jumps = Join-Path $temp 'jumps'
+    New-Item -ItemType Directory -Path $jumps | Out-Null
+    Push-Location $jumps
+    try {
+        Invoke-Git init -q -b main
+        Invoke-Git commit -q --allow-empty -m first
+        $jump = { param($Tag, $Confirm = '') & $checkTag -Tag $Tag -CheckVersionJump -ConfirmVersion $Confirm }
+
+        Assert-Equal 'first tag, 0.x passes' '0.0.9' (& $jump 'v0.0.9')
+        Assert-Equal 'first tag, any 0.x passes' '0.50.3' (& $jump 'v0.50.3')
+        Assert-Refused 'first tag, 1.0.0 refused' { & $jump 'v1.0.0' } 'not a 0.x'
+        Assert-Equal 'first tag, 1.0.0 confirmed' '1.0.0' (& $jump 'v1.0.0' '1.0.0')
+
+        Invoke-Git tag nightly
+        Invoke-Git tag v9.0
+        Invoke-Git tag v9.0.0-beta
+        Invoke-Git tag V9.0.0
+        Invoke-Git tag v09.0.0
+        Assert-Equal 'tags in another form are no versions' '0.1.0' (& $jump 'v0.1.0')
+
+        Invoke-Git tag v0.0.9
+        Assert-Equal 'the next patch passes' '0.0.10' (& $jump 'v0.0.10')
+        Assert-Equal 'the next minor with patch 0 passes' '0.1.0' (& $jump 'v0.1.0')
+        Assert-Refused 'the next minor with patch 1 refused' { & $jump 'v0.1.1' } 'is a jump'
+        Assert-Refused 'a skipped patch refused' { & $jump 'v0.0.11' } 'is a jump'
+        Assert-Refused 'a skipped minor refused' { & $jump 'v0.2.0' } 'is a jump'
+        Assert-Refused 'a new major refused' { & $jump 'v1.0.0' } 'is a jump'
+        Assert-Refused 'a new major with the next minor refused' { & $jump 'v1.1.0' } 'is a jump'
+        Assert-Refused 'the 9.0.0 of the mistake refused' { & $jump 'v9.0.0' } 'is a jump'
+        Assert-Equal 'a new major confirmed' '1.0.0' (& $jump 'v1.0.0' '1.0.0')
+        Assert-Equal 'a skipped minor confirmed' '0.2.0' (& $jump 'v0.2.0' '0.2.0')
+        Assert-Refused 'the confirmation of another version refused' { & $jump 'v1.0.0' '1.0.1' } 'RELEASE_CONFIRM_VERSION'
+        Assert-Refused 'a confirmation with a v refused' { & $jump 'v1.0.0' 'v1.0.0' } 'RELEASE_CONFIRM_VERSION'
+        Assert-Refused 'a confirmation with a space refused' { & $jump 'v1.0.0' '1.0.0 ' } 'RELEASE_CONFIRM_VERSION'
+
+        Assert-Equal 'a rerun of the only tag passes' '0.0.9' (& $jump 'v0.0.9')
+        Invoke-Git tag v0.0.10
+        Assert-Equal 'a rerun of the highest tag passes' '0.0.10' (& $jump 'v0.0.10')
+        Assert-Refused 'a rerun below the highest refused' { & $jump 'v0.0.9' } 'not above'
+        Assert-Refused 'a lower version refused' { & $jump 'v0.0.8' } 'not above'
+        Assert-Refused 'a lower version refused, even confirmed' { & $jump 'v0.0.8' '0.0.8' } 'not above'
+
+        # As text, 0.9.0 is above 0.10.0.
+        Invoke-Git tag v0.9.0
+        Assert-Equal 'versions compare as numbers, upward' '0.10.0' (& $jump 'v0.10.0')
+        Invoke-Git tag v0.10.0
+        Assert-Refused 'versions compare as numbers, downward' { & $jump 'v0.9.1' } 'not above'
+        Assert-Equal 'the highest is the highest, wherever it is listed' '0.10.1' (& $jump 'v0.10.1')
+    }
+    finally {
+        Pop-Location
+    }
+
+    # --- check-lame-dll ---
+    $nuget = if ($env:NUGET_PACKAGES) { $env:NUGET_PACKAGES } else { Join-Path $HOME '.nuget\packages' }
+    $packageDll = Join-Path $nuget 'naudio.lame\2.1.0\build\libmp3lame.64.dll'
+    $package32 = Join-Path $nuget 'naudio.lame\2.1.0\build\libmp3lame.32.dll'
+    if (-not (Test-Path -LiteralPath $packageDll)) {
+        throw "No $packageDll. Run dotnet restore first."
+    }
+    $dlls = Join-Path $temp 'dlls'
+    New-Item -ItemType Directory -Path $dlls | Out-Null
+
+    # Same length, so that every address in the file stays right.
+    function New-PatchedDll([string]$Name, [string]$Find, [string]$Replace) {
+        $latin1 = [Text.Encoding]::GetEncoding(28591)
+        $text = $latin1.GetString([IO.File]::ReadAllBytes($packageDll))
+        if (-not $text.Contains($Find) -or $Find.Length -ne $Replace.Length) { throw "Cannot patch $Find." }
+        $path = Join-Path $dlls $Name
+        [IO.File]::WriteAllBytes($path, $latin1.GetBytes($text.Replace($Find, $Replace)))
+        $path
+    }
+
+    $checkDll = Join-Path $PSScriptRoot 'check-lame-dll.ps1'
+    Assert-Accepted 'the package DLL passes' { & $checkDll -DllPath $packageDll -ReferenceDll $packageDll }
+    Assert-Refused 'a 32-bit DLL refused' { & $checkDll -DllPath $package32 } 'not an x64'
+    $notPe = Join-Path $dlls 'text.dll'
+    [IO.File]::WriteAllText($notPe, ('not a program ' * 20))
+    Assert-Refused 'a file that is no PE refused' { & $checkDll -DllPath $notPe } 'not a PE'
+
+    $withCrt = New-PatchedDll 'crt.dll' 'KERNEL32.dll' 'MSVCP140.dll'
+    Assert-Refused 'a DLL that needs a redistributable refused' { & $checkDll -DllPath $withCrt } 'MSVCP140.dll'
+    $withoutClose = New-PatchedDll 'noclose.dll' "lame_close`0" "lame_clxse`0"
+    Assert-Refused 'a missing export that NAudio.Lame calls refused' { & $checkDll -DllPath $withoutClose } 'lame_close'
+    $withoutOther = New-PatchedDll 'noother.dll' "id3tag_set_textinfo_utf16`0" "id3tag_set_textinfo_utfxx`0"
+    Assert-Accepted 'an export that NAudio.Lame does not call may go, without a reference' { & $checkDll -DllPath $withoutOther }
+    Assert-Refused 'an export of the package DLL may not go' { & $checkDll -DllPath $withoutOther -ReferenceDll $packageDll } 'id3tag_set_textinfo_utf16'
+    $otherVersion = New-PatchedDll 'version.dll' '3.100' '3.101'
+    Assert-Refused 'another version refused' { & $checkDll -DllPath $otherVersion } 'expected 3.100'
+
+    # IMAGE_FILE_DLL is bit 13 of the characteristics, 22 bytes after the PE signature.
+    $notDll = Join-Path $dlls 'notdll.dll'
+    $notDllBytes = [IO.File]::ReadAllBytes($packageDll)
+    $notDllBytes[[BitConverter]::ToInt32($notDllBytes, 0x3C) + 23] = $notDllBytes[[BitConverter]::ToInt32($notDllBytes, 0x3C) + 23] -band 0xDF
+    [IO.File]::WriteAllBytes($notDll, $notDllBytes)
+    Assert-Refused 'an x64 program that is no DLL refused' { & $checkDll -DllPath $notDll } 'not a DLL'
+
+    # --- build-lame, with a fake archive and a fake compiler ---
+    $buildLame = Join-Path $PSScriptRoot 'build-lame.ps1'
+    $systemTar = Join-Path $env:SystemRoot 'System32\tar.exe'
+    $fake = Join-Path $temp 'fake-build'
+    $fakeBin = Join-Path $fake 'bin'
+    $fakeTree = Join-Path $fake 'tree'
+    New-Item -ItemType Directory -Path $fakeBin, (Join-Path $fakeTree 'lame-3.100\include'), (Join-Path $fake 'emptytree\lame-3.100') | Out-Null
+    foreach ($name in 'Makefile.MSVC', 'configMS.h', 'include\lame.def') {
+        [IO.File]::WriteAllText((Join-Path $fakeTree "lame-3.100\$name"), "fake $name`n")
+    }
+    $fakeArchive = Join-Path $fake 'lame-3.100.tar.gz'
+    & $systemTar -czf $fakeArchive -C $fakeTree 'lame-3.100'
+    $fakeSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $fakeArchive).Hash.ToLowerInvariant()
+    $emptyArchive = Join-Path $fake 'empty.tar.gz'
+    & $systemTar -czf $emptyArchive -C (Join-Path $fake 'emptytree') 'lame-3.100'
+    $emptySha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $emptyArchive).Hash.ToLowerInvariant()
+
+    $fakeArgs = Join-Path $fake 'nmake-args.txt'
+    foreach ($tool in 'cl', 'link') {
+        [IO.File]::WriteAllText((Join-Path $fakeBin "$tool.cmd"), "@exit /b 0`r`n")
+    }
+    [IO.File]::WriteAllLines((Join-Path $fakeBin 'nmake.cmd'), [string[]]@(
+            '@echo off'
+            "echo %* > `"$fakeArgs`""
+            'if "%FAKE_NMAKE%"=="fail" (echo fake compiler error C2000 & exit /b 2)'
+            'mkdir output'
+            'if "%FAKE_NMAKE%"=="nooutput" exit /b 0'
+            'if "%FAKE_NMAKE%"=="changesource" echo changed>> Makefile.MSVC'
+            "if `"%FAKE_NMAKE%`"==`"x86`" (copy /y `"$package32`" output\libmp3lame.dll > nul & exit /b 0)"
+            "copy /y `"$packageDll`" output\libmp3lame.dll > nul"
+            'exit /b 0'
+        ))
+    $fakeVs = Join-Path $fake 'VsDevCmd.bat'
+    [IO.File]::WriteAllText($fakeVs, "@set `"PATH=$fakeBin;%PATH%`"`r`n")
+    # This one finds no tools. PATH holds the system only, for "where" itself.
+    $fakeVsEmpty = Join-Path $fake 'VsDevCmdEmpty.bat'
+    [IO.File]::WriteAllText($fakeVsEmpty, "@set `"PATH=$env:SystemRoot\System32`"`r`n")
+
+    $buildNumber = 0
+    function New-BuildFolder {
+        $script:buildNumber++
+        Join-Path $temp "build-$($script:buildNumber)"
+    }
+    function Invoke-FakeBuild([string]$Work, [string]$Mode = '') {
+        $env:FAKE_NMAKE = $Mode
+        try {
+            & $buildLame -WorkDir $Work -OutFile (Join-Path $Work 'out\libmp3lame.64.dll') -ArchivePath $fakeArchive -ExpectedSha256 $fakeSha256 -VsDevCmd $fakeVs
+        }
+        finally {
+            $env:FAKE_NMAKE = $null
+        }
+    }
+
+    $work = New-BuildFolder
+    Assert-Refused 'an archive with another hash refused' { & $buildLame -WorkDir $work -OutFile (Join-Path $work 'out.dll') -ArchivePath $fakeArchive } 'SHA-256'
+    Report 'nothing extracted after a wrong hash' (-not (Test-Path -LiteralPath (Join-Path $work 'src')))
+    $work = New-BuildFolder
+    Assert-Refused 'an archive that is not the expected tree refused' { & $buildLame -WorkDir $work -OutFile (Join-Path $work 'out.dll') -ArchivePath $emptyArchive -ExpectedSha256 $emptySha256 -VsDevCmd $fakeVs } 'has no lame-3.100'
+    $work = New-BuildFolder
+    Assert-Refused 'no VsDevCmd refused' { & $buildLame -WorkDir $work -OutFile (Join-Path $work 'out.dll') -ArchivePath $fakeArchive -ExpectedSha256 $fakeSha256 -VsDevCmd (Join-Path $fake 'none.bat') } 'VsDevCmd is not at'
+    $work = New-BuildFolder
+    Assert-Refused 'no compiler after VsDevCmd refused' { & $buildLame -WorkDir $work -OutFile (Join-Path $work 'out.dll') -ArchivePath $fakeArchive -ExpectedSha256 $fakeSha256 -VsDevCmd $fakeVsEmpty } 'not on the PATH'
+
+    $work = New-BuildFolder
+    Assert-Accepted 'a working build passes' { Invoke-FakeBuild $work }
+    Assert-Equal 'the built DLL is copied' (Get-FileHash -Algorithm SHA256 -LiteralPath $packageDll).Hash (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $work 'out\libmp3lame.64.dll')).Hash
+    Assert-Equal 'nmake gets the 64-bit macros and the DLL target, on the command line' '/NOLOGO -f Makefile.MSVC MSVCVER=Win64 MACHINE=/machine:X64 ADDL_OBJ=kernel32.lib libmp3lame.dll' ((Get-Content -LiteralPath $fakeArgs) -join ' ').Trim()
+    Assert-Refused 'a used work folder refused' { Invoke-FakeBuild $work } 'already exists'
+
+    $work = New-BuildFolder
+    $failedOutput = New-Object Collections.ArrayList
+    Assert-Refused 'a failed nmake refused' { Invoke-FakeBuild $work 'fail' | ForEach-Object { [void]$failedOutput.Add("$_") } } 'nmake failed with exit code 2'
+    Report 'a failed nmake shows its error in the run log' (@($failedOutput | Where-Object { $_ -like 'fake compiler error C2000*' }).Count -eq 1)
+    Report 'a failed nmake shows the output folder in the run log' (@($failedOutput | Where-Object { $_ -like '*output ---' }).Count -eq 1)
+    Report 'no DLL after a failed nmake' (-not (Test-Path -LiteralPath (Join-Path $work 'out\libmp3lame.64.dll')))
+    $work = New-BuildFolder
+    Assert-Refused 'no DLL in the output refused' { Invoke-FakeBuild $work 'nooutput' } 'no output\libmp3lame.dll'
+    $work = New-BuildFolder
+    Assert-Refused 'a changed source file refused' { Invoke-FakeBuild $work 'changesource' } 'changed a source file'
+    $work = New-BuildFolder
+    Assert-Refused 'a built DLL that fails its checks refused' { Invoke-FakeBuild $work 'x86' } 'not an x64'
+    Report 'no DLL copied after failed checks' (-not (Test-Path -LiteralPath (Join-Path $work 'out\libmp3lame.64.dll')))
+
+    # --- check-setup: the folder part, on a fake folder. The package DLL stands in for the exe: it has a version resource. ---
+    $checkSetup = Join-Path $PSScriptRoot 'check-setup.ps1'
+    $packageInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($packageDll)
+    $packageVersion = '{0}.{1}.{2}' -f $packageInfo.FileMajorPart, $packageInfo.FileMinorPart, $packageInfo.FileBuildPart
+    Assert-Equal 'the stand-in exe has a usable version' 0 $packageInfo.FilePrivatePart
+
+    $fakeRepo = Join-Path $temp 'fake-repo'
+    New-Item -ItemType Directory -Path (Join-Path $fakeRepo 'licenses') | Out-Null
+    foreach ($name in 'LICENSE', 'THIRD-PARTY-NOTICES.md', 'licenses\a.txt', 'licenses\b.txt') {
+        [IO.File]::WriteAllText((Join-Path $fakeRepo $name), "text of $name`n")
+    }
+    $noLicences = Join-Path $temp 'fake-repo-no-licences'
+    New-Item -ItemType Directory -Path (Join-Path $noLicences 'licenses') | Out-Null
+    foreach ($name in 'LICENSE', 'THIRD-PARTY-NOTICES.md') {
+        [IO.File]::WriteAllText((Join-Path $noLicences $name), "text of $name`n")
+    }
+    $compiledDll = Join-Path $temp 'compiled.dll'
+    Copy-Item -LiteralPath $withoutOther -Destination $compiledDll
+
+    $installNumber = 0
+    function New-FakeInstall {
+        $script:installNumber++
+        $folder = Join-Path $temp "install-$($script:installNumber)"
+        New-Item -ItemType Directory -Path (Join-Path $folder 'licenses') | Out-Null
+        Copy-Item -LiteralPath $packageDll -Destination (Join-Path $folder 'Hindsound.exe')
+        Copy-Item -LiteralPath $compiledDll -Destination (Join-Path $folder 'libmp3lame.64.dll')
+        foreach ($name in 'LICENSE', 'THIRD-PARTY-NOTICES.md', 'licenses\a.txt', 'licenses\b.txt') {
+            Copy-Item -LiteralPath (Join-Path $fakeRepo $name) -Destination (Join-Path $folder $name)
+        }
+        $folder
+    }
+    function Assert-FolderRefused([string]$Name, [scriptblock]$Damage, [string]$Reason) {
+        $folder = New-FakeInstall
+        & $Damage $folder
+        Assert-Refused $Name { & $checkSetup -CheckFolder $folder -Version $packageVersion -DllPath $compiledDll -RepoRoot $fakeRepo } $Reason
+    }
+
+    $goodFolder = New-FakeInstall
+    Assert-Accepted 'a right installed folder passes' { & $checkSetup -CheckFolder $goodFolder -Version $packageVersion -DllPath $compiledDll -RepoRoot $fakeRepo }
+    Assert-Refused 'another exe version refused' { & $checkSetup -CheckFolder $goodFolder -Version '1.2.3' -DllPath $compiledDll -RepoRoot $fakeRepo } 'file version'
+    Assert-Refused 'no licence in the repository refused' { & $checkSetup -CheckFolder $goodFolder -Version $packageVersion -DllPath $compiledDll -RepoRoot $noLicences } 'no licenses'
+    Assert-FolderRefused 'no exe refused' { Remove-Item -LiteralPath (Join-Path $args[0] 'Hindsound.exe') } 'Hindsound.exe'
+    Assert-FolderRefused 'no DLL refused' { Remove-Item -LiteralPath (Join-Path $args[0] 'libmp3lame.64.dll') } 'libmp3lame.64.dll'
+    Assert-FolderRefused 'the DLL of the package in place of the compiled one refused' { Copy-Item -LiteralPath $packageDll -Destination (Join-Path $args[0] 'libmp3lame.64.dll') -Force } 'differs'
+    Assert-FolderRefused 'no LICENSE refused' { Remove-Item -LiteralPath (Join-Path $args[0] 'LICENSE') } 'LICENSE'
+    Assert-FolderRefused 'another LICENSE refused' { [IO.File]::WriteAllText((Join-Path $args[0] 'LICENSE'), 'other') } 'differs'
+    Assert-FolderRefused 'no notices refused' { Remove-Item -LiteralPath (Join-Path $args[0] 'THIRD-PARTY-NOTICES.md') } 'THIRD-PARTY-NOTICES.md'
+    Assert-FolderRefused 'other notices refused' { [IO.File]::WriteAllText((Join-Path $args[0] 'THIRD-PARTY-NOTICES.md'), 'other') } 'differs'
+    Assert-FolderRefused 'a licence file missing refused' { Remove-Item -LiteralPath (Join-Path $args[0] 'licenses\b.txt') } 'b.txt'
+    Assert-FolderRefused 'another licence file refused' { [IO.File]::WriteAllText((Join-Path $args[0] 'licenses\a.txt'), 'other') } 'differs'
+
+    # A text file: if the guard were gone, Windows could not start it. Never a real Setup here.
+    $notSetup = Join-Path $temp 'not-a-setup.exe'
+    [IO.File]::WriteAllText($notSetup, 'not a program')
+    $savedActions = $env:GITHUB_ACTIONS
+    $savedRunner = $env:RUNNER_ENVIRONMENT
+    try {
+        foreach ($case in @(@($null, $null), @('true', $null), @('true', 'self-hosted'), @($null, 'github-hosted'))) {
+            $env:GITHUB_ACTIONS = $case[0]
+            $env:RUNNER_ENVIRONMENT = $case[1]
+            Assert-Refused "no installation with GITHUB_ACTIONS=$($case[0]) RUNNER_ENVIRONMENT=$($case[1])" { & $checkSetup -SetupPath $notSetup -Version '1.2.3' -DllPath $compiledDll -WorkDir (Join-Path $temp 'setup-check') -RepoRoot $fakeRepo } 'GitHub-hosted runner only'
+        }
+    }
+    finally {
+        $env:GITHUB_ACTIONS = $savedActions
+        $env:RUNNER_ENVIRONMENT = $savedRunner
+    }
+    Report 'nothing written after the refused installation' (-not (Test-Path -LiteralPath (Join-Path $temp 'setup-check')))
+
+    # --- prove-encoding: what it accepts from a test run ---
+    $proveEncoding = Join-Path $PSScriptRoot 'prove-encoding.ps1'
+    function New-Trx([int]$Passed, [int]$Failed) {
+        $path = Join-Path $temp "results-$Passed-$Failed.trx"
+        $total = $Passed + $Failed
+        [IO.File]::WriteAllText($path, "<?xml version=`"1.0`" encoding=`"UTF-8`"?><TestRun xmlns=`"http://microsoft.com/schemas/VisualStudio/TeamTest/2010`"><ResultSummary outcome=`"Completed`"><Counters total=`"$total`" passed=`"$Passed`" failed=`"$Failed`" /></ResultSummary></TestRun>")
+        $path
+    }
+    Assert-Accepted 'all the encoding tests passed' { & $proveEncoding -CheckTrx (New-Trx 6 0) }
+    Assert-Refused 'a failed encoding test refused' { & $proveEncoding -CheckTrx (New-Trx 6 1) } 'failed'
+    Assert-Refused 'too few encoding tests refused' { & $proveEncoding -CheckTrx (New-Trx 5 0) } 'expected 6'
+    Assert-Refused 'no encoding test refused' { & $proveEncoding -CheckTrx (New-Trx 0 0) } 'expected 6'
+    $noTests = Join-Path $temp 'no-tests-output'
+    New-Item -ItemType Directory -Path $noTests | Out-Null
+    Assert-Refused 'no DLL to replace in the tests output refused' { & $proveEncoding -DllPath $compiledDll -TestsOutput $noTests -ResultsDir (Join-Path $temp 'encoding') } 'build the tests first'
+
+    # --- the workflows ---
+    function Get-RunBlocks([string[]]$Lines) {
+        $inRun = $false
+        $indent = 0
+        foreach ($line in $Lines) {
+            if ($inRun) {
+                if ($line -match '^\s*$') { continue }
+                if (($line.Length - $line.TrimStart().Length) -gt $indent) {
+                    $line
+                    continue
+                }
+                $inRun = $false
+            }
+            if ($line -match '^( *)(?:- )?run:(.*)$') {
+                $indent = $Matches[1].Length
+                $inRun = $true
+                $Matches[2]
+            }
+        }
+    }
+
+    $workflowFolder = Join-Path $PSScriptRoot '..\..\.github\workflows'
+    $release = @(Get-Content -LiteralPath (Join-Path $workflowFolder 'release.yml'))
+    $lame = @(Get-Content -LiteralPath (Join-Path $workflowFolder 'lame.yml'))
+    $releaseText = $release -join "`n"
+    $lameText = $lame -join "`n"
+
+    $stepOrder = @(
+        'Check out', 'Check the tag', 'Extract the release notes', 'Set up .NET', 'Test', 'Test the release scripts', 'Publish the app',
+        'Build LAME', 'Replace the DLL in the published folder', 'Prove the encoding with the compiled DLL', 'Build the Setup', 'Check the Setup',
+        'Write the update manifest', 'Create the draft release', 'Attach the files', 'Publish the release'
+    )
+    $releaseSteps = @($release | ForEach-Object { if ($_ -match '^\s+- name: (.+)$') { $Matches[1] } })
+    Assert-Equal 'release.yml has its steps in order' ($stepOrder -join ' | ') ($releaseSteps -join ' | ')
+    Report 'the release sees all the tags' ($releaseText -match '(?m)^\s+fetch-depth: 0$')
+    Report 'the release checks the version jump, with the confirmation' ($releaseText -cmatch 'check-tag\.ps1 -Tag \$env:TAG -MainRef origin/main -CheckVersionJump -ConfirmVersion \$env:RELEASE_CONFIRM_VERSION')
+    Report 'the confirmation comes from a repository variable, through env' ($releaseText -cmatch 'RELEASE_CONFIRM_VERSION: \$\{\{ vars\.RELEASE_CONFIRM_VERSION \}\}')
+    Report 'the release attaches the Setup, the manifest and the LAME source' ($releaseText -cmatch 'gh release upload [^\n]*Setup\.exe[^\n]*hindsound-update-win-x64\.json[^\n]*lame-3\.100\.tar\.gz')
+    Assert-Equal 'the token goes to the three steps of the release' 3 ([regex]::Matches($releaseText, 'GH_TOKEN:')).Count
+    $firstToken = [array]::FindIndex($release, [Predicate[string]] { param($l) $l -match 'GH_TOKEN:' })
+    $draftStep = [array]::FindIndex($release, [Predicate[string]] { param($l) $l -match '- name: Create the draft release' })
+    Report 'no step before the draft gets the token' ($firstToken -gt $draftStep)
+    Report 'no step of the release is conditional' (-not ($releaseText -match '(?m)^\s+if:'))
+    Report 'the lame workflow only reads' (($lameText -match '(?m)^permissions:\n  contents: read$') -and -not ($lameText -match 'contents: write|GH_TOKEN|gh release'))
+
+    foreach ($workflow in @(@('release.yml', $release), @('lame.yml', $lame))) {
+        $text = $workflow[1] -join "`n"
+        $runText = @(Get-RunBlocks $workflow[1]) -join "`n"
+        Report "$($workflow[0]) has run blocks" ($runText.Length -gt 0)
+        Report "$($workflow[0]) puts no expression in a run block" (-not $runText.Contains('${{'))
+        Report "$($workflow[0]) lets no step fail silently" (-not ($text -match 'continue-on-error'))
+        Report "$($workflow[0]) does not use the test parameters of build-lame" (-not ($text -match '-ExpectedSha256|-VsDevCmd'))
+        foreach ($uses in @($workflow[1] | Where-Object { $_ -match '^\s*(- )?uses:' })) {
+            Report "$($workflow[0]) pins $($uses.Trim())" ($uses -cmatch '@[0-9a-f]{40} # v[0-9]')
+        }
+    }
 }
 finally {
     Remove-Item -LiteralPath $temp -Recurse -Force
