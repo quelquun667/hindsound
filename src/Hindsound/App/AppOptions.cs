@@ -42,6 +42,12 @@ internal sealed record AppOptions(
     /// <summary><c>--no-clipboard</c>: the clipboard is never touched, whatever the settings file says, for a new clip and for Copy last clip alike. The file keeps its own value.</summary>
     public bool NoClipboard { get; init; }
 
+    /// <summary><c>--no-hotkeys</c>: no global shortcut is registered in this run, whatever the settings file says, so a press never reaches it and it holds no combination. The app sees shortcuts that work. The file keeps its own value.</summary>
+    public bool NoHotkeys { get; init; }
+
+    /// <summary>What the shortcuts of this run go through.</summary>
+    public Input.IHotkeyNative NewHotkeyLayer() => NoHotkeys ? new Input.UnregisteredHotkeys() : new Input.Win32HotkeyNative();
+
     /// <summary><c>--selftest-slow-save seconds</c>: every clip takes that much longer to write. To check on the real exe what leaving does while a clip is being written.</summary>
     public double? SelfTestSlowSaveSeconds { get; init; }
 
@@ -107,6 +113,9 @@ internal sealed record AppOptions(
                     break;
                 case "--no-clipboard":
                     options = options with { NoClipboard = true };
+                    break;
+                case "--no-hotkeys":
+                    options = options with { NoHotkeys = true };
                     break;
                 case "--offscreen":
                     options = options with { Offscreen = true };

@@ -133,6 +133,11 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             _journal.Write("clipboard: never touched in this run (--no-clipboard), whatever the settings say");
         }
 
+        if (_options.NoHotkeys)
+        {
+            _journal.Write("hotkeys: none registered in this run (--no-hotkeys), whatever the settings say");
+        }
+
         _loop = new UiLoop();
         _notification = new Notification { Clicked = OnNotificationClicked, Finished = OnNotificationFinished };
         _pipeline = new ClipPipeline(this, _loop.Post, _loop.After, ex => _journal.Write("clip error: " + ex))
@@ -436,7 +441,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     {
         try
         {
-            _hotkeys = new HotkeyManager();
+            _hotkeys = new HotkeyManager(_options.NewHotkeyLayer());
 
             // The hotkey thread only asks for a turn on the loop.
             _hotkeys.Pressed += action => _loop.Post(() => OnHotkey(action));

@@ -24,6 +24,22 @@ public enum HotkeyRegistration
 }
 
 /// <summary>The Win32 side of the shortcuts, so tests can replace it.</summary>
+/// <summary><c>--no-hotkeys</c>: says yes to every shortcut and registers none. Nothing on the keyboard can reach this run.</summary>
+public sealed class UnregisteredHotkeys : IHotkeyNative
+{
+    public event Action<int>? HotkeyPressed { add { } remove { } }
+
+    public bool Register(int id, uint modifiers, uint virtualKey) => true;
+
+    public void Unregister(int id)
+    {
+    }
+
+    public void Dispose()
+    {
+    }
+}
+
 public interface IHotkeyNative : IDisposable
 {
     /// <summary>Raised with the id of a pressed shortcut, on the native layer's own thread.</summary>
