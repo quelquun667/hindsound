@@ -94,6 +94,22 @@ public class EncodersTests
 
     // ---------------------------------------------------------------- MP3
 
+    [Fact]
+    public void Mp3_starts_with_a_filled_lame_header_not_an_empty_frame()
+    {
+        using var folder = new TempFolder();
+        var path = folder.Combine("a.mp3");
+
+        Encoders.WriteMp3(path, Signals.Sine(440, 0.5, 3), 2, 192);
+
+        var head = System.Text.Encoding.ASCII.GetString(File.ReadAllBytes(path), 0, 400);
+        Assert.Contains("Info", head); // CBR file: the header frame is tagged "Info"
+        Assert.Contains("LAME", head);
+        using var reader = new Mp3FileReader(path);
+        // 3.048 s before (the empty placeholder frame counted as audio); one encoder delay frame remains.
+        Assert.InRange(reader.TotalTime.TotalSeconds, 3.0, 3.03);
+    }
+
     [Theory]
     [InlineData(128)]
     [InlineData(192)]
