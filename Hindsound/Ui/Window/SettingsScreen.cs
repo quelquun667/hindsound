@@ -762,6 +762,9 @@ internal sealed partial class SettingsScreen
         {
             _draggingScroll = false;
             _host.ReleaseMouse();
+
+            // The thumb is lit while it is dragged.
+            _host.Invalidate();
             return;
         }
 
@@ -774,7 +777,12 @@ internal sealed partial class SettingsScreen
     /// <summary>The mouse was taken away while a button was held.</summary>
     public void MouseCaptureLost()
     {
-        _draggingScroll = false;
+        if (_draggingScroll)
+        {
+            _draggingScroll = false;
+            _host.Invalidate();
+        }
+
         if (_pressedId is not null)
         {
             _pressedId = null;

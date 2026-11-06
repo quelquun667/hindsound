@@ -62,7 +62,7 @@ internal sealed class FakeCanvas : ICanvas
 {
     public void SetOrigin(float dy) { }
     public void FillRect(Box box, uint rgb) { }
-    public void FillRound(Box box, float radius, uint rgb) { }
+    public void FillRound(Box box, float radius, uint rgb) => LastRoundFill = rgb;
     public void Frame(Box box, float radius, uint fill, uint border) { }
     public void Ring(Box box, float radius, float thickness, uint rgb) { }
     public void Stroke(float ax, float ay, float bx, float by, float width, uint rgb) { }
@@ -76,6 +76,9 @@ internal sealed class FakeCanvas : ICanvas
     public List<string> Drawn { get; } = [];
 
     public uint? NotificationAccent { get; private set; }
+
+    /// <summary>The colour of the last rounded shape: the scroll thumb, on a page that has one and no list open.</summary>
+    public uint LastRoundFill { get; private set; }
 }
 
 internal sealed class FakeHost : IWindowHost

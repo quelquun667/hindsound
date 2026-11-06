@@ -73,4 +73,48 @@ public sealed class SettingsMouseTests : IDisposable
 
         Assert.Equal(0, _rig.Backend.Tests);
     }
+
+    // ---------------------------------------------------------------- the scroll bar
+
+    private (float X, float Y) DragTheThumb()
+    {
+        Screen.ShowSection(Section.General);
+        Assert.True(Screen.MaxScroll > 0);
+        var x = SettingsScreen.WindowWidth - 9;
+        Screen.MouseDown(x, SettingsScreen.BandHeight + 12);
+        Screen.MouseMove(x, SettingsScreen.BandHeight + 40);
+        return (x, SettingsScreen.BandHeight + 40);
+    }
+
+    private static uint ThumbColor(SettingsScreen screen)
+    {
+        var canvas = new FakeCanvas();
+        screen.Paint(canvas);
+        return canvas.LastRoundFill;
+    }
+
+    [Fact]
+    public void The_thumb_goes_dark_again_when_the_drag_ends()
+    {
+        var (x, y) = DragTheThumb();
+        Assert.Equal(Theme.Muted, ThumbColor(Screen));
+        var before = _rig.Host.Invalidated;
+
+        Screen.MouseUp(x, y);
+
+        Assert.True(_rig.Host.Invalidated > before);
+        Assert.Equal(Theme.Control, ThumbColor(Screen));
+    }
+
+    [Fact]
+    public void The_thumb_goes_dark_again_when_the_mouse_is_taken_away()
+    {
+        DragTheThumb();
+        var before = _rig.Host.Invalidated;
+
+        Screen.MouseCaptureLost();
+
+        Assert.True(_rig.Host.Invalidated > before);
+        Assert.Equal(Theme.Control, ThumbColor(Screen));
+    }
 }
