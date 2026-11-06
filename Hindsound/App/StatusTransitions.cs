@@ -159,15 +159,14 @@ internal static class StatusTransitions
     public static (TrayState State, string Tip) TrayOf(AudioEngineStatus? status, IReadOnlyList<HotkeyResult> hotkeys, bool importantClipWaiting, bool engineFailed = false)
     {
         var activity = engineFailed ? CaptureActivity.NoDevice : status?.Activity ?? CaptureActivity.Stopped;
-        var noDevice = activity == CaptureActivity.NoDevice;
         var refused = RefusedSave(hotkeys);
-        var problem = noDevice ? "No audio device"
+        var problem = activity == CaptureActivity.NoDevice ? "No audio device"
             : refused is not null ? Describe(refused)
             : importantClipWaiting ? "A clip has a problem"
             : status is { Activity: CaptureActivity.Capturing, MicEnabled: true, MicCapturing: false } ? "Microphone not captured"
             : hotkeys.FirstOrDefault(result => !result.Ok) is { } other ? Describe(other)
             : null;
-        var state = noDevice || refused is not null || importantClipWaiting ? TrayState.Error : TrayStateOf(activity);
+        var state = refused is not null || importantClipWaiting ? TrayState.Error : TrayStateOf(activity);
         return (state, problem is null ? "Hindsound" : "Hindsound - " + problem);
     }
 
