@@ -50,6 +50,16 @@ function Assert-Accepted([string]$Name, [scriptblock]$Action) {
     }
 }
 
+# A refusal here is one failed case, not the end of the run.
+function Assert-Returns([string]$Name, $Expected, [scriptblock]$Action) {
+    try {
+        Assert-Equal $Name $Expected (& $Action)
+    }
+    catch {
+        Report $Name $false "it was refused: $($_.Exception.Message)"
+    }
+}
+
 function Invoke-Git {
     # A runner has no git identity.
     & git -c user.name=test -c user.email=test@example.invalid @args
@@ -208,46 +218,46 @@ try {
         Invoke-Git commit -q --allow-empty -m first
         $jump = { param($Tag, $Confirm = '') & $checkTag -Tag $Tag -CheckVersionJump -ConfirmVersion $Confirm }
 
-        Assert-Equal 'first tag, 0.x passes' '0.0.9' (& $jump 'v0.0.9')
-        Assert-Equal 'first tag, any 0.x passes' '0.50.3' (& $jump 'v0.50.3')
+        Assert-Returns 'first tag, 0.x passes' '0.0.9' { & $jump 'v0.0.9' }
+        Assert-Returns 'first tag, any 0.x passes' '0.50.3' { & $jump 'v0.50.3' }
         Assert-Refused 'first tag, 1.0.0 refused' { & $jump 'v1.0.0' } 'not a 0.x'
-        Assert-Equal 'first tag, 1.0.0 confirmed' '1.0.0' (& $jump 'v1.0.0' '1.0.0')
+        Assert-Returns 'first tag, 1.0.0 confirmed' '1.0.0' { & $jump 'v1.0.0' '1.0.0' }
 
         Invoke-Git tag nightly
         Invoke-Git tag v9.0
         Invoke-Git tag v9.0.0-beta
         Invoke-Git tag V9.0.0
         Invoke-Git tag v09.0.0
-        Assert-Equal 'tags in another form are no versions' '0.1.0' (& $jump 'v0.1.0')
+        Assert-Returns 'tags in another form are no versions' '0.1.0' { & $jump 'v0.1.0' }
 
         Invoke-Git tag v0.0.9
-        Assert-Equal 'the next patch passes' '0.0.10' (& $jump 'v0.0.10')
-        Assert-Equal 'the next minor with patch 0 passes' '0.1.0' (& $jump 'v0.1.0')
+        Assert-Returns 'the next patch passes' '0.0.10' { & $jump 'v0.0.10' }
+        Assert-Returns 'the next minor with patch 0 passes' '0.1.0' { & $jump 'v0.1.0' }
         Assert-Refused 'the next minor with patch 1 refused' { & $jump 'v0.1.1' } 'is a jump'
         Assert-Refused 'a skipped patch refused' { & $jump 'v0.0.11' } 'is a jump'
         Assert-Refused 'a skipped minor refused' { & $jump 'v0.2.0' } 'is a jump'
         Assert-Refused 'a new major refused' { & $jump 'v1.0.0' } 'is a jump'
         Assert-Refused 'a new major with the next minor refused' { & $jump 'v1.1.0' } 'is a jump'
         Assert-Refused 'the 9.0.0 of the mistake refused' { & $jump 'v9.0.0' } 'is a jump'
-        Assert-Equal 'a new major confirmed' '1.0.0' (& $jump 'v1.0.0' '1.0.0')
-        Assert-Equal 'a skipped minor confirmed' '0.2.0' (& $jump 'v0.2.0' '0.2.0')
+        Assert-Returns 'a new major confirmed' '1.0.0' { & $jump 'v1.0.0' '1.0.0' }
+        Assert-Returns 'a skipped minor confirmed' '0.2.0' { & $jump 'v0.2.0' '0.2.0' }
         Assert-Refused 'the confirmation of another version refused' { & $jump 'v1.0.0' '1.0.1' } 'RELEASE_CONFIRM_VERSION'
         Assert-Refused 'a confirmation with a v refused' { & $jump 'v1.0.0' 'v1.0.0' } 'RELEASE_CONFIRM_VERSION'
         Assert-Refused 'a confirmation with a space refused' { & $jump 'v1.0.0' '1.0.0 ' } 'RELEASE_CONFIRM_VERSION'
 
-        Assert-Equal 'a rerun of the only tag passes' '0.0.9' (& $jump 'v0.0.9')
+        Assert-Returns 'a rerun of the only tag passes' '0.0.9' { & $jump 'v0.0.9' }
         Invoke-Git tag v0.0.10
-        Assert-Equal 'a rerun of the highest tag passes' '0.0.10' (& $jump 'v0.0.10')
+        Assert-Returns 'a rerun of the highest tag passes' '0.0.10' { & $jump 'v0.0.10' }
         Assert-Refused 'a rerun below the highest refused' { & $jump 'v0.0.9' } 'not above'
         Assert-Refused 'a lower version refused' { & $jump 'v0.0.8' } 'not above'
         Assert-Refused 'a lower version refused, even confirmed' { & $jump 'v0.0.8' '0.0.8' } 'not above'
 
         # As text, 0.9.0 is above 0.10.0.
         Invoke-Git tag v0.9.0
-        Assert-Equal 'versions compare as numbers, upward' '0.10.0' (& $jump 'v0.10.0')
+        Assert-Returns 'versions compare as numbers, upward' '0.10.0' { & $jump 'v0.10.0' }
         Invoke-Git tag v0.10.0
         Assert-Refused 'versions compare as numbers, downward' { & $jump 'v0.9.1' } 'not above'
-        Assert-Equal 'the highest is the highest, wherever it is listed' '0.10.1' (& $jump 'v0.10.1')
+        Assert-Returns 'the highest is the highest, wherever it is listed' '0.10.1' { & $jump 'v0.10.1' }
     }
     finally {
         Pop-Location
@@ -354,6 +364,10 @@ try {
     Assert-Refused 'an archive with another hash refused' { & $buildLame -WorkDir $work -OutFile (Join-Path $work 'out.dll') -ArchivePath $fakeArchive } 'SHA-256'
     Report 'nothing extracted after a wrong hash' (-not (Test-Path -LiteralPath (Join-Path $work 'src')))
     $work = New-BuildFolder
+    Assert-Accepted 'the download alone needs no compiler' { & $buildLame -WorkDir $work -OutFile (Join-Path $work 'out.dll') -ArchivePath $fakeArchive -ExpectedSha256 $fakeSha256 -DownloadOnly -VsDevCmd (Join-Path $fake 'none.bat') }
+    Report 'the download alone extracts nothing' (-not (Test-Path -LiteralPath (Join-Path $work 'src')))
+    Assert-Refused 'the download alone still verifies the hash' { & $buildLame -WorkDir $work -OutFile (Join-Path $work 'out.dll') -ArchivePath $fakeArchive -DownloadOnly } 'SHA-256'
+    $work = New-BuildFolder
     Assert-Refused 'an archive that is not the expected tree refused' { & $buildLame -WorkDir $work -OutFile (Join-Path $work 'out.dll') -ArchivePath $emptyArchive -ExpectedSha256 $emptySha256 -VsDevCmd $fakeVs } 'has no lame-3.100'
     $work = New-BuildFolder
     Assert-Refused 'no VsDevCmd refused' { & $buildLame -WorkDir $work -OutFile (Join-Path $work 'out.dll') -ArchivePath $fakeArchive -ExpectedSha256 $fakeSha256 -VsDevCmd (Join-Path $fake 'none.bat') } 'VsDevCmd is not at'
@@ -421,14 +435,14 @@ try {
     Assert-Accepted 'a right installed folder passes' { & $checkSetup -CheckFolder $goodFolder -Version $packageVersion -DllPath $compiledDll -RepoRoot $fakeRepo }
     Assert-Refused 'another exe version refused' { & $checkSetup -CheckFolder $goodFolder -Version '1.2.3' -DllPath $compiledDll -RepoRoot $fakeRepo } 'file version'
     Assert-Refused 'no licence in the repository refused' { & $checkSetup -CheckFolder $goodFolder -Version $packageVersion -DllPath $compiledDll -RepoRoot $noLicences } 'no licenses'
-    Assert-FolderRefused 'no exe refused' { Remove-Item -LiteralPath (Join-Path $args[0] 'Hindsound.exe') } 'Hindsound.exe'
-    Assert-FolderRefused 'no DLL refused' { Remove-Item -LiteralPath (Join-Path $args[0] 'libmp3lame.64.dll') } 'libmp3lame.64.dll'
+    Assert-FolderRefused 'no exe refused' { Remove-Item -LiteralPath (Join-Path $args[0] 'Hindsound.exe') } 'has no*Hindsound.exe'
+    Assert-FolderRefused 'no DLL refused' { Remove-Item -LiteralPath (Join-Path $args[0] 'libmp3lame.64.dll') } 'has no*libmp3lame.64.dll'
     Assert-FolderRefused 'the DLL of the package in place of the compiled one refused' { Copy-Item -LiteralPath $packageDll -Destination (Join-Path $args[0] 'libmp3lame.64.dll') -Force } 'differs'
-    Assert-FolderRefused 'no LICENSE refused' { Remove-Item -LiteralPath (Join-Path $args[0] 'LICENSE') } 'LICENSE'
+    Assert-FolderRefused 'no LICENSE refused' { Remove-Item -LiteralPath (Join-Path $args[0] 'LICENSE') } 'has no*LICENSE'
     Assert-FolderRefused 'another LICENSE refused' { [IO.File]::WriteAllText((Join-Path $args[0] 'LICENSE'), 'other') } 'differs'
-    Assert-FolderRefused 'no notices refused' { Remove-Item -LiteralPath (Join-Path $args[0] 'THIRD-PARTY-NOTICES.md') } 'THIRD-PARTY-NOTICES.md'
+    Assert-FolderRefused 'no notices refused' { Remove-Item -LiteralPath (Join-Path $args[0] 'THIRD-PARTY-NOTICES.md') } 'has no*THIRD-PARTY-NOTICES.md'
     Assert-FolderRefused 'other notices refused' { [IO.File]::WriteAllText((Join-Path $args[0] 'THIRD-PARTY-NOTICES.md'), 'other') } 'differs'
-    Assert-FolderRefused 'a licence file missing refused' { Remove-Item -LiteralPath (Join-Path $args[0] 'licenses\b.txt') } 'b.txt'
+    Assert-FolderRefused 'a licence file missing refused' { Remove-Item -LiteralPath (Join-Path $args[0] 'licenses\b.txt') } 'has no*b.txt'
     Assert-FolderRefused 'another licence file refused' { [IO.File]::WriteAllText((Join-Path $args[0] 'licenses\a.txt'), 'other') } 'differs'
 
     # A text file: if the guard were gone, Windows could not start it. Never a real Setup here.
@@ -509,8 +523,8 @@ try {
     Report 'the confirmation comes from a repository variable, through env' ($releaseText -cmatch 'RELEASE_CONFIRM_VERSION: \$\{\{ vars\.RELEASE_CONFIRM_VERSION \}\}')
     Report 'the release attaches the Setup, the manifest and the LAME source' ($releaseText -cmatch 'gh release upload [^\n]*Setup\.exe[^\n]*hindsound-update-win-x64\.json[^\n]*lame-3\.100\.tar\.gz')
     Assert-Equal 'the token goes to the three steps of the release' 3 ([regex]::Matches($releaseText, 'GH_TOKEN:')).Count
-    $firstToken = [array]::FindIndex($release, [Predicate[string]] { param($l) $l -match 'GH_TOKEN:' })
-    $draftStep = [array]::FindIndex($release, [Predicate[string]] { param($l) $l -match '- name: Create the draft release' })
+    $firstToken = @($release | Select-String 'GH_TOKEN:')[0].LineNumber
+    $draftStep = @($release | Select-String '- name: Create the draft release')[0].LineNumber
     Report 'no step before the draft gets the token' ($firstToken -gt $draftStep)
     Report 'no step of the release is conditional' (-not ($releaseText -match '(?m)^\s+if:'))
     Report 'the lame workflow only reads' (($lameText -match '(?m)^permissions:\n  contents: read$') -and -not ($lameText -match 'contents: write|GH_TOKEN|gh release'))

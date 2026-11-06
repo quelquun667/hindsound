@@ -24,6 +24,8 @@
     An archive already there, instead of downloading. Its SHA-256 is verified just the same.
 .PARAMETER ReferenceDll
     The DLL of the NAudio.Lame package, for check-lame-dll.ps1 to compare the exports with.
+.PARAMETER DownloadOnly
+    Stops once the archive is verified: for a release that ships the DLL of the package and must still attach the source.
 .PARAMETER ExpectedSha256
     For test-release-scripts.ps1 only, with a fake archive. A workflow never passes it.
 .PARAMETER VsDevCmd
@@ -36,6 +38,7 @@ param(
     [Parameter(Mandatory = $true)][string]$OutFile,
     [string]$ArchivePath,
     [string]$ReferenceDll,
+    [switch]$DownloadOnly,
     [string]$ExpectedSha256 = 'ddfe36cab873794038ae2c1210557ad34857a4b6bdc515785d1da9e175b1da1e',
     [string]$VsDevCmd
 )
@@ -87,6 +90,7 @@ if ($actualSha256 -cne $ExpectedSha256) {
     throw "$archive has the SHA-256 $actualSha256, expected $ExpectedSha256. Nothing was extracted."
 }
 Write-Output "Archive verified: $archive, SHA-256 $actualSha256"
+if ($DownloadOnly) { return }
 
 # --- 2. MSVC ---
 if (-not $VsDevCmd) {

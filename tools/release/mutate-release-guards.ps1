@@ -44,7 +44,7 @@ $mutations = @(
     @($tag, "throw 'git tag failed: the earlier versions are unknown.'", '$names = @()')
 
     # The checks of the DLL
-    @($dll, '$bytes[0] -ne 0x4D', '$false')
+    @($dll, 'if ($bytes.Length -lt 64 -or $bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) {', 'if ($false) {')
     @($dll, 'if ($summary.Machine -ne 0x8664 -or $summary.Magic -ne 0x20B) {', 'if ($false) {')
     @($dll, 'if (-not $summary.IsDll) {', 'if ($false) {')
     @($dll, 'if ($badImports.Count -gt 0) {', 'if ($false) {')
@@ -55,6 +55,7 @@ $mutations = @(
     # The build of the DLL
     @($build, 'if ($actualSha256 -cne $ExpectedSha256) {', 'if ($false) {')
     @($build, 'if (-not (Test-Path -LiteralPath $VsDevCmd)) {', 'if ($false) {')
+    @($build, 'if ($DownloadOnly) { return }', '')
     @($build, 'if (Test-Path -LiteralPath $sourceRoot) {', 'if ($false) {')
     @($build, 'if (-not (Test-Path -LiteralPath (Join-Path $source $needed))) {', 'if ($false) {')
     @($build, 'if ($buildExit -eq 101) {', 'if ($false) {')
@@ -106,12 +107,14 @@ $mutations = @(
 
 $repository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).ProviderPath
 $shell = (Get-Process -Id $PID).Path
-$last = [Math]::Min($To, $mutations.Count)
+# PowerShell flattens the list above into one array: three values per entry.
+$entries = [int]($mutations.Count / 3)
+$last = [Math]::Min($To, $entries)
 $totalFailures = 0
 $missed = @()
 
 for ($index = $From; $index -le $last; $index++) {
-    $file, $find, $replace = $mutations[$index - 1]
+    $file, $find, $replace = $mutations[(3 * ($index - 1))..(3 * $index - 1)]
 
     $copy = Join-Path ([IO.Path]::GetTempPath()) ('hindsound-mutation-' + [Guid]::NewGuid().ToString('N'))
     try {
@@ -129,10 +132,11 @@ for ($index = $From; $index -le $last; $index++) {
         }
         [IO.File]::WriteAllText($path, $text.Replace($find, $replace))
 
-        # In the copy's git-free folder: test-release-scripts makes its own repositories.
-        $errorFile = Join-Path $copy 'errors.txt'
-        $output = & $shell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $copy 'tools/release/test-release-scripts.ps1') 2> $errorFile
+        # Continue: in Windows PowerShell, with Stop, the error stream of a program ends this script. A failed run writes there.
+        $ErrorActionPreference = 'Continue'
+        $output = & $shell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $copy 'tools/release/test-release-scripts.ps1') 2> $null
         $exit = $LASTEXITCODE
+        $ErrorActionPreference = 'Stop'
         $failures = @($output | Where-Object { $_ -like 'FAIL *' })
     }
     finally {
@@ -150,7 +154,7 @@ for ($index = $From; $index -le $last; $index++) {
     }
 }
 
-Write-Output "Entries $From to $last of $($mutations.Count): $totalFailures failure(s) in all, missed: $($missed.Count)."
+Write-Output "Entries $From to $last of ${entries}: $totalFailures failure(s) in all, missed: $($missed.Count)."
 if ($missed.Count -gt 0) {
     throw "Guards undone without a failing test: entries $($missed -join ', ')."
 }
