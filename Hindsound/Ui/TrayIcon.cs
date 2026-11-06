@@ -50,6 +50,14 @@ internal readonly record struct TrayClick(string? AppName, ScreenInfo Screen, lo
 
     /// <summary>The screen of the click, if what happens now can still be the answer to it.</summary>
     public ScreenInfo? ScreenAt(long nowMs) => nowMs - AtMs <= ScreenKeptMs ? Screen : null;
+
+    /// <summary>
+    /// A menu closed without a command leaves our hidden window the active one, with no size and no title, until the user
+    /// goes elsewhere. As long as it does, the last click says more about what the user is doing than the active window can.
+    /// </summary>
+    /// <param name="hiddenWindowActive">Our hidden window is the active one right now.</param>
+    /// <param name="last">The last right click on the icon, if any.</param>
+    public static TrayClick? StandingIn(bool hiddenWindowActive, TrayClick? last) => hiddenWindowActive ? last : null;
 }
 
 /// <summary>What the tray menu offers. Pure: tested without any window.</summary>

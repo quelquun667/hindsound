@@ -60,6 +60,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private string _trayTip = "Hindsound";
     private readonly TrayAddRetry _trayRetry = new();
     private TrayClick? _pauseClick;
+    private TrayClick? _lastMenuClick;
     private bool _quitting;
     private readonly LeaveFlow _leave = new();
     private readonly SessionEndBlock _sessionEndBlock = new();
@@ -624,7 +625,13 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
     // ---------------------------------------------------------------- the clip path
 
-    private void SaveClip(TimeSpan requested) => SaveClip(requested, ForegroundWindow.Read().AppName, null);
+    private TrayClick? ClickStandingIn => TrayClick.StandingIn(Native.GetForegroundWindow() == _loop.Hwnd, _lastMenuClick);
+
+    private void SaveClip(TimeSpan requested)
+    {
+        var click = ClickStandingIn;
+        SaveClip(requested, click is { } standing ? standing.AppName : ForegroundWindow.Read().AppName, click?.Screen);
+    }
 
     private void SaveClip(TimeSpan requested, string? appName, ScreenInfo? screen) =>
         _pipeline.Press(new ClipRequest(requested, SettingsMapping.ToExportOptions(_settings), appName, _settings.Export.CopyToClipboard) { Screen = screen });
@@ -864,7 +871,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
     private void PresentNow(NotificationContent content, bool clickThrough, ScreenInfo? clicked = null)
     {
-        var screen = clicked ?? ForegroundWindow.ActiveScreen();
+        var screen = clicked ?? ClickStandingIn?.Screen ?? ForegroundWindow.ActiveScreen();
         var covers = ForegroundWindow.CoversScreen(screen);
         var area = NotificationPlacement.AreaOn(screen, covers);
         var dpi = screen.Dpi;
@@ -1003,6 +1010,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         var (click, command) = TrayMenu.ReadThenShow(
             () => new TrayClick(ForegroundWindow.Read().AppName, ForegroundWindow.CursorScreen(), NowMs),
             () => AskTrayMenu(wParam));
+        _lastMenuClick = click;
         _journal.Write($"tray menu: {command}, app name known {click.AppName is not null}, screen of the click {click.Screen.Monitor.Left},{click.Screen.Monitor.Top},{click.Screen.Monitor.Right},{click.Screen.Monitor.Bottom}");
         switch (command)
         {
