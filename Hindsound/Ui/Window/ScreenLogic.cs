@@ -164,7 +164,8 @@ internal static class StatusText
             CaptureActivity.Paused => (StatusMark.Pause, "Paused"),
             CaptureActivity.NoDevice => (StatusMark.Warning, app is null ? "No audio device" : "Can't capture " + app),
             CaptureActivity.Capturing when app is null => (StatusMark.Dot, "Capturing"),
-            CaptureActivity.Capturing when status.SourceAppMissing => (StatusMark.Caution, app + " not running"),
+            // The state comes first: a long name gets cut at the end of the title.
+            CaptureActivity.Capturing when status.SourceAppMissing => (StatusMark.Caution, "Not running: " + app),
             CaptureActivity.Capturing when status.SystemCapturing => (StatusMark.Dot, "Capturing " + app),
             CaptureActivity.Capturing => (StatusMark.Warning, "Can't capture " + app),
             _ => (StatusMark.None, "Not capturing"),

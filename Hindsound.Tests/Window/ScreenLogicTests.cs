@@ -140,7 +140,7 @@ public class StatusTextTests
         var band = StatusText.From(ScreenRig.Capturing() with { SystemCapturing = false, SourceApp = "Discord.exe", SourceAppMissing = true });
 
         Assert.Equal(StatusMark.Caution, band.Mark);
-        Assert.Equal("Discord not running", band.Title);
+        Assert.Equal("Not running: Discord", band.Title);
     }
 
     [Fact]
