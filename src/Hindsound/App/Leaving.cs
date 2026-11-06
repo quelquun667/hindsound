@@ -64,6 +64,22 @@ internal sealed class LeaveFlow
 
     /// <summary>The problem has been on screen long enough. True unless something else still waits for the desktop.</summary>
     public bool NoticeLimit(bool anyWaiting) => _holdingForNotice && !anyWaiting;
+
+    /// <summary>The last clip has ended, with what waits for the desktop as it is. Only a clip can keep the app: "Saving your clip" goes now, and another status can be lost with the app.</summary>
+    /// <param name="lastClipHasProblem">The last clip ended with a problem.</param>
+    /// <param name="onScreen">A notification is on screen.</param>
+    /// <param name="pending">What waits for the desktop.</param>
+    public bool HoldForNotice(bool lastClipHasProblem, bool onScreen, PendingNotices pending)
+    {
+        pending.LastClipDone();
+        return HoldForNotice(lastClipHasProblem, onScreen, pending.ClipWaiting, pending.ImportantClipWaiting);
+    }
+
+    /// <summary>See <see cref="NoticeGone(bool, bool)"/>: only a clip that waits keeps the app.</summary>
+    public bool NoticeGone(bool onScreen, PendingNotices pending) => NoticeGone(onScreen, pending.ClipWaiting);
+
+    /// <summary>See <see cref="NoticeLimit(bool)"/>: only a clip that waits keeps the app.</summary>
+    public bool NoticeLimit(PendingNotices pending) => NoticeLimit(pending.ClipWaiting);
 }
 
 /// <summary>

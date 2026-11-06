@@ -30,6 +30,9 @@ internal sealed class PendingNotices(Action<string> journal)
 
     public bool ImportantClipWaiting => _importantClip is not null;
 
+    /// <summary>A clip waits, ordinary or important. Unlike <see cref="Any"/>, a status does not count: none is worth keeping an app that is leaving.</summary>
+    public bool ClipWaiting => _importantClip is not null || _ordinaryClip is not null;
+
     /// <summary>A status that must reach the user, whatever the notifications setting says, and even if it has to wait.</summary>
     public static bool IsImportantStatus(NotificationKind kind) =>
         kind is NotificationKind.CaptureOn or NotificationKind.NoDevice or NotificationKind.MicLost or NotificationKind.ClosingAfterClip;
@@ -70,6 +73,16 @@ internal sealed class PendingNotices(Action<string> journal)
         _status = null;
         journal($"notification {waiting.Kind} no longer waits: it stopped being true");
         return waiting;
+    }
+
+    /// <summary>The last clip is done: "Saving your clip" has stopped being true, and must not greet the user back on the desktop.</summary>
+    public void LastClipDone()
+    {
+        if (_status is { Kind: NotificationKind.ClosingAfterClip })
+        {
+            _status = null;
+            journal("notification ClosingAfterClip no longer waits: the last clip is done");
+        }
     }
 
     /// <summary>A newer clip is on screen: an older ordinary one has nothing left to say.</summary>

@@ -1457,14 +1457,14 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         }
 
         var onScreen = _notification.Showing is not null;
-        if (_leave.HoldForNotice(_lastClipHasProblem, onScreen, _pending.Any, _pending.ImportantClipWaiting))
+        if (_leave.HoldForNotice(_lastClipHasProblem, onScreen, _pending))
         {
             _journal.Write("the last clip is done, with a problem still to be read: leaving after that");
             if (onScreen)
             {
                 _loop.After(LeaveFlow.NoticeHoldMs, () =>
                 {
-                    if (_leave.NoticeLimit(_pending.Any))
+                    if (_leave.NoticeLimit(_pending))
                     {
                         _journal.Write("the problem has been on screen long enough: leaving");
                         _loop.Quit();
@@ -1481,9 +1481,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
     private void LeaveIfNoticeGone()
     {
-        if (_leave.NoticeGone(_notification.Showing is not null, _pending.Any))
+        if (_leave.NoticeGone(_notification.Showing is not null, _pending))
         {
-            _journal.Write("the problem has been shown: leaving");
+            _journal.Write("the problem has been shown or given up on: leaving");
             _loop.Quit();
         }
     }
