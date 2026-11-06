@@ -87,6 +87,9 @@ internal sealed class FakeHost : IWindowHost
 
     public string? EditText { get; private set; }
 
+    /// <summary>How many times the box was told to take a text, which also loses the caret.</summary>
+    public int EditResets { get; private set; }
+
     public bool EditVisible { get; private set; }
 
     public Box EditBox { get; private set; }
@@ -106,6 +109,7 @@ internal sealed class FakeHost : IWindowHost
         if (resetText)
         {
             EditText = text;
+            EditResets++;
         }
     }
 

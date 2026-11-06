@@ -104,6 +104,7 @@ internal sealed partial class SettingsScreen
     private string? _focusId;
     private string? _pressedId;
     private string? _editId;
+    private string? _scrolledAwayId;
     private string? _hoverId;
     private bool _forceEditText;
     private float _mouseX = -1, _mouseY = -1;
@@ -384,10 +385,17 @@ internal sealed partial class SettingsScreen
     /// <summary>The native box follows the focus. A field scrolled partly under the band or the foot is only drawn.</summary>
     private void SyncEdit()
     {
+        if (_scrolledAwayId != _focusId)
+        {
+            _scrolledAwayId = null;
+        }
+
         if (Focus is TextField field && OnScreen(field, out var box))
         {
             var wasVisible = _editId is not null;
-            var reset = _forceEditText || _editId != field.Id;
+
+            // A box only scrolled away still holds the text as typed, with its caret: it must come back as it left.
+            var reset = _forceEditText || (_editId ?? _scrolledAwayId) != field.Id;
             _host.ShowEdit(box, field.State.Draft, field.Face, field.Size, reset);
             _editId = field.Id;
             _forceEditText = false;
@@ -401,6 +409,7 @@ internal sealed partial class SettingsScreen
         else if (_editId is not null)
         {
             _host.HideEdit();
+            _scrolledAwayId = _editId == _focusId ? _editId : null;
             _editId = null;
         }
     }
@@ -444,6 +453,12 @@ internal sealed partial class SettingsScreen
         {
             MoveFocus((modifiers & HotkeyGesture.ModShift) == 0);
             return true;
+        }
+
+        // The field was scrolled away with the focus on it: its box is hidden, and this key would go nowhere.
+        if (Focus is TextField away && !OnScreen(away, out _) && EditFocus.KeyBringsBack(vk, modifiers))
+        {
+            Reveal();
         }
 
         if ((modifiers & (HotkeyGesture.ModControl | HotkeyGesture.ModAlt | HotkeyGesture.ModWin)) != 0)

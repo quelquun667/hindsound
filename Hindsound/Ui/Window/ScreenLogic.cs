@@ -252,6 +252,10 @@ internal sealed class MicMeter
 internal static class EditFocus
 {
     public static bool Wanted(bool wasVisible, bool foreground) => !wasVisible && foreground;
+
+    /// <summary>A key on a field scrolled away. A modifier alone means nothing yet, and Alt and Win belong to Windows.</summary>
+    public static bool KeyBringsBack(uint vk, uint modifiers) =>
+        !Vk.IsModifier(vk) && (modifiers & (HotkeyGesture.ModAlt | HotkeyGesture.ModWin)) == 0;
 }
 
 /// <summary>What a key held down may do: move and type, but never save, toggle or open again.</summary>

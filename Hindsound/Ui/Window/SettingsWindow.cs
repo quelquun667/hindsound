@@ -96,6 +96,7 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
     private bool _meterOn;
     private bool _editVisible;
     private bool _swallowSystemKeyUp;
+    private bool _charForEdit;
     private int _wheelRest;
     private (Face Face, float Size, uint Dpi) _editFontKey;
     private Box _editBox;
@@ -423,12 +424,17 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
             case WindowNative.WM_KEYDOWN:
             case WindowNative.WM_SYSKEYDOWN:
                 _swallowSystemKeyUp = Screen.Listening;
-                if (Screen.Key((uint)wParam, Modifiers(), KeyRepeat.FromLParam(lParam)))
+                var editWasHidden = !_editVisible;
+                var used = Screen.Key((uint)wParam, Modifiers(), KeyRepeat.FromLParam(lParam));
+
+                // This key brought a scrolled-away field back: it is the box's, and so is its character, already on its way here.
+                _charForEdit = !used && editWasHidden && _editVisible && message == WindowNative.WM_KEYDOWN;
+                if (_charForEdit)
                 {
-                    return 0;
+                    return WindowNative.SendMessageW(_edit, message, wParam, lParam);
                 }
 
-                return Native.DefWindowProcW(hwnd, message, wParam, lParam);
+                return used ? 0 : Native.DefWindowProcW(hwnd, message, wParam, lParam);
 
             case WindowNative.WM_KEYUP:
             case WindowNative.WM_SYSKEYUP:
@@ -441,6 +447,12 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
                 return Screen.Listening ? 0 : Native.DefWindowProcW(hwnd, message, wParam, lParam);
 
             case WindowNative.WM_CHAR:
+                if (_charForEdit)
+                {
+                    _charForEdit = false;
+                    return WindowNative.SendMessageW(_edit, message, wParam, lParam);
+                }
+
                 return 0;
 
             case WindowNative.WM_MOUSEMOVE:
