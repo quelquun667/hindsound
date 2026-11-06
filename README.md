@@ -163,7 +163,8 @@ Good to know:
   could throw it out of fullscreen. The notification shows when you are back on the desktop, within 30 seconds for a normal
   clip, and at any time for a clip that had a problem. A borderless game gets the notification right away, unless you set
   `In fullscreen games` to `Sound only`.
-- **A click on the notification,** on the desktop, opens your clips folder, or the settings if it reports a problem there.
+- **A click on the notification,** on the desktop, opens the folder of your last clip, or the settings if it reports a problem
+  there.
 - **The icon:** a left click opens the settings. A right click opens the menu: `Save last 30s`, `Save last 15s`,
   `Save last 1 min`, `Save last 5 min`, `Copy last clip`, `Pause capture`, `Open clips folder`, `Settings`, `Quit`.
 - **Starting Hindsound again** while it runs opens the settings of the one already running.
