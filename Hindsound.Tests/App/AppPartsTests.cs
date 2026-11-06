@@ -30,6 +30,13 @@ public class AppOptionsTests
     }
 
     [Fact]
+    public void A_last_clip_gone_for_the_self_test_is_read()
+    {
+        Assert.True(AppOptions.Parse(["--selftest-clip-gone"]).SelfTestClipGone);
+        Assert.False(AppOptions.Parse([]).SelfTestClipGone);
+    }
+
+    [Fact]
     public void A_pretend_game_for_the_self_test_is_read()
     {
         Assert.Equal(12.5, AppOptions.Parse(["--selftest-game", "12.5"]).SelfTestGameSeconds);

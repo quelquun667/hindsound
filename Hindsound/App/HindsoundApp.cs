@@ -17,6 +17,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private const int NoticeRetries = 60; // 30 s
     private const int SnapshotReleaseDelayMs = 500;
     private const int SelfTestExitDelayMs = 3300;
+    private const int SelfTestLeaveCheckMs = 500;
+    private const int SelfTestLongestWaitMs = 30_000;
     private const int ProbeStepMs = 300;
     private const int ProbeAfterCloseMs = 10_000;
     private const int StartupReadTries = 3;
@@ -1228,8 +1230,27 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         _exitCode = ok ? 0 : 1;
         _journal.Write($"selftest: {(ok ? "PASS" : "FAIL")}, format asked {outcome.Request.Options.Format}, {Journal.Memory()}");
 
-        // The notification goes through its whole life before leaving.
-        _loop.After(SelfTestExitDelayMs, _loop.Quit);
+        if (_options.SelfTestClipGone && outcome.Result is { } written)
+        {
+            _lastClip = written with { Paths = [written.PrimaryPath + ".gone"] };
+            CopyLastClip();
+        }
+
+        // The notification goes through its whole life before leaving, and so does what still waits for the desktop.
+        var latest = NowMs + SelfTestLongestWaitMs;
+        _loop.After(SelfTestExitDelayMs, Leave);
+
+        void Leave()
+        {
+            if ((_pending.Any || _notification.Showing is not null) && NowMs < latest)
+            {
+                _loop.After(SelfTestLeaveCheckMs, Leave);
+            }
+            else
+            {
+                _loop.Quit();
+            }
+        }
     }
 
     // ---------------------------------------------------------------- leaving

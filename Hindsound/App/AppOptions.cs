@@ -33,6 +33,9 @@ internal sealed record AppOptions(
     /// <summary><c>--selftest-game seconds</c>: for that long after the start, the app behaves as if a game held the screen in exclusive full screen, to check what waits for the desktop on the real exe.</summary>
     public double? SelfTestGameSeconds { get; init; }
 
+    /// <summary><c>--selftest-clip-gone</c>: after the self-test clip, asks for a copy of a last clip whose files are not there. The clipboard is never reached.</summary>
+    public bool SelfTestClipGone { get; init; }
+
     /// <summary><c>--no-mic</c>: the microphone stays off whatever the settings file says, at the start and at every read of the file. The file keeps its own value.</summary>
     public bool NoMic { get; init; }
 
@@ -78,6 +81,9 @@ internal sealed record AppOptions(
                 case "--selftest-fail" when next is not null:
                     options = options with { SelfTestFail = next };
                     i++;
+                    break;
+                case "--selftest-clip-gone":
+                    options = options with { SelfTestClipGone = true };
                     break;
                 case "--selftest-save":
                     options = options with { SelfTestSave = true };
