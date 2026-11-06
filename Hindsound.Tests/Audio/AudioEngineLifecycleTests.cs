@@ -553,3 +553,54 @@ public class StuckDeviceTests
         await Eventually.True(() => factory.Live == 1, "the late capture is closed, and only that one");
     }
 }
+
+[Collection(nameof(TimingSensitive))]
+public class DisposalTests
+{
+    private static AudioEngine SystemOnly(TrackingFactory factory, IDeviceWatcher? watcher = null) =>
+        new(new AudioEngineOptions(TimeSpan.FromSeconds(2), MicEnabled: false), factory, watcher ?? new FakeWatcher());
+
+    [Fact]
+    public async Task A_start_racing_with_dispose_leaves_no_capture_open()
+    {
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var factory = new TrackingFactory();
+        var engine = SystemOnly(factory);
+        await engine.StartAsync();
+        factory.OnStop = _ =>
+        {
+            entered.Set();
+            release.Wait();
+        };
+
+        var disposing = Task.Run(engine.Dispose);
+        Assert.True(entered.Wait(TimeSpan.FromSeconds(10)));
+        factory.OnStop = null;
+        var start = engine.StartAsync();
+        release.Set();
+
+        await disposing.WaitAsync(TimeSpan.FromSeconds(10));
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => start.WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.Equal(1, factory.OpenCalls);
+        Assert.Equal(0, factory.Live);
+    }
+
+    [Fact]
+    public async Task After_dispose_commands_are_refused_a_stop_is_harmless_and_nothing_opens()
+    {
+        var factory = new TrackingFactory();
+        var engine = SystemOnly(factory);
+        await engine.StartAsync();
+
+        engine.Dispose();
+        engine.Dispose();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(engine.StartAsync);
+        await Assert.ThrowsAsync<ObjectDisposedException>(engine.RefreshDevicesAsync);
+        await engine.StopAsync();
+        Assert.Equal(1, factory.OpenCalls);
+        Assert.Equal(0, factory.Live);
+        Assert.Equal(CaptureActivity.Stopped, engine.Status.Activity);
+    }
+}

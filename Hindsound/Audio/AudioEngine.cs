@@ -131,7 +131,7 @@ public sealed class AudioEngine : IDisposable
     private bool _exclusionDiedEarly;
     private int _quickDeaths;
     private int _refreshQueued;
-    private bool _disposed;
+    private int _disposed;
     private AudioEngineStatus? _lastPublished;
 
     /// <param name="options">The starting settings.</param>
@@ -196,7 +196,7 @@ public sealed class AudioEngine : IDisposable
         AbortOpenings();
 
         // A listener may be waiting for a thread that is itself waiting for this stop.
-        return RunCommandAsync(StopCoreAsync, waitForListeners: false);
+        return RunCommandAsync(StopCoreAsync, waitForListeners: false, evenIfDisposed: true);
     }
 
     /// <summary>Stops capturing but keeps the buffer, which can still be saved. The paused time will not exist in it.</summary>
@@ -270,19 +270,35 @@ public sealed class AudioEngine : IDisposable
 
     public void Dispose()
     {
-        if (_disposed)
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
         {
             return;
         }
 
-        _disposed = true;
-        Task.Run(StopAsync).GetAwaiter().GetResult();
         _watcher.DevicesChanged -= QueueRefresh;
-        _watcher.Dispose();
+        Task.Run(TearDownAsync).GetAwaiter().GetResult();
+    }
+
+    // The semaphore is left to the collector: commands may still be waiting on it, and they must get their turn to
+    // be refused. Disposing it would leave them waiting for ever.
+    private async Task TearDownAsync()
+    {
+        // Whatever command was running or waiting ahead of this one, nothing is open once this one has run.
+        await StopAsync().ConfigureAwait(false);
+        try
+        {
+            _watcher.Dispose();
+        }
+        catch (Exception exception) when (IsCaptureFailure(exception))
+        {
+            Debug.WriteLine($"Device watcher did not close cleanly: {exception.Message}");
+        }
+
         _tick.Dispose();
         _retry.Dispose();
-        _commands.Dispose();
     }
+
+    private bool IsDisposed => Volatile.Read(ref _disposed) != 0;
 
     // Where a snapshot starts and how long it is. It ends at the newest instant every live source has reached.
     private (long Start, int Frames) WindowOf(SourceTrack? system, SourceTrack? mic, int requestedFrames)
@@ -334,12 +350,14 @@ public sealed class AudioEngine : IDisposable
         return samples;
     }
 
-    private async Task RunCommandAsync(Func<Task> command, bool waitForListeners = true)
+    private async Task RunCommandAsync(Func<Task> command, bool waitForListeners = true, bool evenIfDisposed = false)
     {
         // The turn is taken on the caller's thread, so commands run in the order they were asked for.
         await _commands.WaitAsync().ConfigureAwait(false);
         try
         {
+            // A command that was waiting when the engine closed must not open anything behind the final stop.
+            ObjectDisposedException.ThrowIf(IsDisposed && !evenIfDisposed, this);
             await Task.Run(command).ConfigureAwait(false);
         }
         finally
@@ -364,7 +382,7 @@ public sealed class AudioEngine : IDisposable
 
     private async Task StopCoreAsync()
     {
-        if (Interlocked.Decrement(ref _stopsWaiting) == 0)
+        if (Interlocked.Decrement(ref _stopsWaiting) == 0 && !IsDisposed)
         {
             Volatile.Write(ref _abortOpenings, new CancellationTokenSource());
         }
@@ -650,7 +668,7 @@ public sealed class AudioEngine : IDisposable
             }
         }
 
-        if (!_disposed)
+        if (!IsDisposed)
         {
             _ = RunQuietlyAsync(() => OnSourceDeathAsync(open, reopenNow));
         }
@@ -681,7 +699,7 @@ public sealed class AudioEngine : IDisposable
     private void QueueRefresh()
     {
         // One waiting refresh does the work of any number of them: they must not pile up behind a slow device.
-        if (_disposed || Interlocked.Exchange(ref _refreshQueued, 1) == 1)
+        if (IsDisposed || Interlocked.Exchange(ref _refreshQueued, 1) == 1)
         {
             return;
         }
