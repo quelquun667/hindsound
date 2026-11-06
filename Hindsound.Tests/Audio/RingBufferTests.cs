@@ -260,3 +260,41 @@ public class RingBufferTests
         }
     }
 }
+
+[Collection(nameof(TimingSensitive))]
+public class RingBufferUnderAWriterAtFullSpeedTests
+{
+    [Fact]
+    public void Snapshot_and_copy_stay_valid_when_the_writer_laps_the_buffer_between_two_reads()
+    {
+        const int Capacity = 2048;
+        var ring = new RingBuffer(Capacity);
+        var stop = false;
+        var writer = new Thread(() =>
+        {
+            var packet = new float[6000];
+            Array.Fill(packet, 0.25f);
+            while (!Volatile.Read(ref stop))
+            {
+                ring.Write(packet);
+            }
+        });
+
+        writer.Start();
+        var longer = new float[Capacity * 3];
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            while (clock.Elapsed.TotalSeconds < 2)
+            {
+                Assert.InRange(ring.Snapshot(Capacity).Length, 0, Capacity);
+                ring.CopyTo(ring.OldestPosition, longer);
+            }
+        }
+        finally
+        {
+            Volatile.Write(ref stop, true);
+            writer.Join();
+        }
+    }
+}
