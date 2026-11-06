@@ -71,6 +71,11 @@ public sealed class AudioEngine : IDisposable
     // A source that ran this long was working: its death is an event, not a device refusing to capture.
     private static readonly long StableAfterTicks = TimeSpan.FromSeconds(5).Ticks;
 
+    // How long a device gets to answer, and to close, before the engine goes on without it. Commands run one at a
+    // time, so one Windows call that never returns must not hold the others up for ever, least of all the stop.
+    private static readonly TimeSpan DefaultOpenLimit = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan CloseLimit = TimeSpan.FromSeconds(2);
+
     private sealed class OpenSource(ICaptureSource source, CapturePipeline pipeline, string deviceId, bool excludesOwnProcess, long openedAtTicks)
     {
         private volatile bool _dead;
@@ -104,7 +109,11 @@ public sealed class AudioEngine : IDisposable
     private readonly Timer _tick;
     private readonly Timer _retry;
     private readonly TimeSpan _tickInterval;
+    private readonly TimeSpan _openLimit;
+    private readonly HashSet<string> _stuckCalls = [];
 
+    private CancellationTokenSource _abortOpenings = new();
+    private int _stopsWaiting;
     private AudioEngineOptions _options;
     private CaptureTimeline _timeline;
     private SourceTrack? _systemTrack;
@@ -125,12 +134,14 @@ public sealed class AudioEngine : IDisposable
     /// <param name="watcher">Reports device changes. By default, the real one.</param>
     /// <param name="clock">Current time in 100 ns units, on the clock of the packet stamps. For tests.</param>
     /// <param name="tickInterval">How often the buffered time is reported and a missing device is looked for again.</param>
+    /// <param name="openLimit">How long a device gets to answer before it counts as missing. A later answer is thrown away.</param>
     public AudioEngine(
         AudioEngineOptions options,
         ICaptureSourceFactory? factory = null,
         IDeviceWatcher? watcher = null,
         Func<long>? clock = null,
-        TimeSpan? tickInterval = null)
+        TimeSpan? tickInterval = null,
+        TimeSpan? openLimit = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         _options = options;
@@ -139,6 +150,7 @@ public sealed class AudioEngine : IDisposable
         _clock = clock;
         _timeline = new CaptureTimeline(clock);
         _tickInterval = tickInterval ?? DefaultTick;
+        _openLimit = openLimit ?? DefaultOpenLimit;
         _tick = new Timer(_ => OnTick());
         _retry = new Timer(_ => QueueRefresh());
         _watcher.DevicesChanged += QueueRefresh;
@@ -174,32 +186,21 @@ public sealed class AudioEngine : IDisposable
     });
 
     /// <summary>Stops capturing. The buffer can still be saved, until the next <see cref="StartAsync"/>.</summary>
-    public Task StopAsync() => RunCommandAsync(() =>
+    public Task StopAsync()
     {
-        if (!_started)
-        {
-            return Task.CompletedTask;
-        }
-
-        _tick.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
-        _started = false;
-        _paused = false;
-        CancelRetry();
-        EndCapture();
-        return Task.CompletedTask;
-    });
+        AbortOpenings();
+        return RunCommandAsync(StopCoreAsync);
+    }
 
     /// <summary>Stops capturing but keeps the buffer, which can still be saved. The paused time will not exist in it.</summary>
-    public Task PauseAsync() => RunCommandAsync(() =>
+    public Task PauseAsync() => RunCommandAsync(async () =>
     {
         if (_started && !_paused)
         {
             _paused = true;
             CancelRetry();
-            EndCapture();
+            await EndCaptureAsync().ConfigureAwait(false);
         }
-
-        return Task.CompletedTask;
     });
 
     /// <summary>Captures again, the new audio following straight after what was kept.</summary>
@@ -235,7 +236,7 @@ public sealed class AudioEngine : IDisposable
         _options = _options with { SystemDeviceId = systemDeviceId, MicDeviceId = micDeviceId, MicEnabled = micEnabled };
         if (!micEnabled)
         {
-            CloseSource(ref _mic);
+            await CloseFlowAsync(AudioFlow.Mic).ConfigureAwait(false);
             Volatile.Write(ref _micTrack, null);
         }
 
@@ -326,22 +327,98 @@ public sealed class AudioEngine : IDisposable
         return samples;
     }
 
-    private Task RunCommandAsync(Func<Task> command)
+    private async Task RunCommandAsync(Func<Task> command)
     {
-        return Task.Run(async () =>
+        // The turn is taken on the caller's thread, so commands run in the order they were asked for.
+        await _commands.WaitAsync().ConfigureAwait(false);
+        try
         {
-            await _commands.WaitAsync().ConfigureAwait(false);
-            try
+            await Task.Run(command).ConfigureAwait(false);
+        }
+        finally
+        {
+            _commands.Release();
+        }
+
+        Publish();
+    }
+
+    // From the moment a stop is asked for, nothing waits for a device any more: the commands ahead of it give up
+    // their openings, and so reach the stop. New openings are allowed again once the last stop waiting has run.
+    private void AbortOpenings()
+    {
+        Interlocked.Increment(ref _stopsWaiting);
+        _ = Volatile.Read(ref _abortOpenings).CancelAsync();
+    }
+
+    private async Task StopCoreAsync()
+    {
+        if (Interlocked.Decrement(ref _stopsWaiting) == 0)
+        {
+            Volatile.Write(ref _abortOpenings, new CancellationTokenSource());
+        }
+
+        if (_started)
+        {
+            _tick.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            _started = false;
+            _paused = false;
+            CancelRetry();
+            await EndCaptureAsync().ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Runs a call into the device layer, which may never come back, off this thread and for a limited time. Past the
+    /// limit, or on a stop, the engine goes on without it, and <paramref name="onLate"/> takes care of a late result.
+    /// While one is stuck the same call is not tried again, so retries do not use up threads.
+    /// </summary>
+    private async Task<(bool Finished, T? Result)> CallBoundedAsync<T>(string name, Func<Task<T>> call, Action<T>? onLate = null)
+    {
+        var abort = Volatile.Read(ref _abortOpenings).Token;
+        lock (_stuckCalls)
+        {
+            if (abort.IsCancellationRequested || _stuckCalls.Contains(name))
             {
-                await command().ConfigureAwait(false);
+                return (false, default);
             }
-            finally
+        }
+
+        var running = Task.Run(call);
+        try
+        {
+            return (true, await running.WaitAsync(_openLimit, abort).ConfigureAwait(false));
+        }
+        catch (Exception exception) when (exception is TimeoutException or OperationCanceledException)
+        {
+            Debug.WriteLine($"Gave up waiting for {name}");
+            lock (_stuckCalls)
             {
-                _commands.Release();
+                _stuckCalls.Add(name);
             }
 
-            Publish();
-        });
+            _ = running.ContinueWith(
+                finished =>
+                {
+                    lock (_stuckCalls)
+                    {
+                        _stuckCalls.Remove(name);
+                    }
+
+                    if (finished.IsCompletedSuccessfully)
+                    {
+                        onLate?.Invoke(finished.Result);
+                    }
+                    else
+                    {
+                        Debug.WriteLine($"{name} failed late: {finished.Exception?.GetBaseException().Message}");
+                    }
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+            return (false, default);
+        }
     }
 
     private void StartWatching()
@@ -407,17 +484,28 @@ public sealed class AudioEngine : IDisposable
 
     private async Task RefreshSourceAsync(AudioFlow flow)
     {
-        ref var open = ref flow == AudioFlow.System ? ref _system : ref _mic;
+        var open = flow == AudioFlow.System ? _system : _mic;
         var wanted = flow == AudioFlow.System || _options.MicEnabled;
         var requestedId = flow == AudioFlow.System ? _options.SystemDeviceId : _options.MicDeviceId;
-        var deviceId = wanted ? _factory.ResolveDevice(flow, requestedId) : null;
+        var (known, deviceId) = wanted ? await ResolveDeviceAsync(flow, requestedId).ConfigureAwait(false) : (true, null);
 
-        if (open is not null && !open.Dead && open.DeviceId == deviceId)
+        // No answer says nothing about the device: a capture that works keeps working.
+        if (!known)
+        {
+            if (open is { Dead: true })
+            {
+                await CloseFlowAsync(flow).ConfigureAwait(false);
+            }
+
+            return;
+        }
+
+        if (IsLive(open) && open!.DeviceId == deviceId)
         {
             return;
         }
 
-        CloseSource(ref open);
+        await CloseFlowAsync(flow).ConfigureAwait(false);
         if (deviceId is null)
         {
             return;
@@ -432,6 +520,13 @@ public sealed class AudioEngine : IDisposable
         {
             _mic = opened;
         }
+    }
+
+    private async Task<(bool Known, string? DeviceId)> ResolveDeviceAsync(AudioFlow flow, string? requestedId)
+    {
+        return await CallBoundedAsync(
+            $"resolve {flow}",
+            () => Task.FromResult(_factory.ResolveDevice(flow, requestedId))).ConfigureAwait(false);
     }
 
     private async Task<OpenSource?> TryOpenAsync(AudioFlow flow, string deviceId, string? requestedId)
@@ -452,19 +547,51 @@ public sealed class AudioEngine : IDisposable
         ICaptureSource? source = null;
         try
         {
-            source = await _factory.OpenAsync(new CaptureRequest(flow, deviceId, exclude)).ConfigureAwait(false);
+            var request = new CaptureRequest(flow, deviceId, exclude);
+            (_, source) = await CallBoundedAsync($"open {flow} {exclude}", () => _factory.OpenAsync(request), DisposeQuietly).ConfigureAwait(false);
+            if (source is null)
+            {
+                return null;
+            }
+
             var pipeline = new CapturePipeline(source.Format, EnsureTrack(flow), _timeline);
             var open = new OpenSource(source, pipeline, deviceId, exclude, _timeline.NowTicks);
             source.PacketAvailable += pipeline.OnPacket;
             source.Stopped += exception => OnSourceStopped(open, exception);
-            source.Start();
+
+            var started = source;
+            var (finished, _) = await CallBoundedAsync($"start {flow}", () =>
+            {
+                started.Start();
+                return Task.FromResult(true);
+            }).ConfigureAwait(false);
+            if (!finished)
+            {
+                open.Closing = true;
+                source.PacketAvailable -= pipeline.OnPacket;
+                _ = Task.Run(() => DisposeQuietly(started));
+                return null;
+            }
+
             return open;
         }
         catch (Exception exception) when (IsCaptureFailure(exception))
         {
             Debug.WriteLine($"Could not open {flow} capture: {exception.Message}");
-            source?.Dispose();
+            DisposeQuietly(source);
             return null;
+        }
+    }
+
+    private static void DisposeQuietly(ICaptureSource? source)
+    {
+        try
+        {
+            source?.Dispose();
+        }
+        catch (Exception exception) when (IsCaptureFailure(exception))
+        {
+            Debug.WriteLine($"Capture did not close cleanly: {exception.Message}");
         }
     }
 
@@ -526,15 +653,7 @@ public sealed class AudioEngine : IDisposable
             return;
         }
 
-        if (open == _system)
-        {
-            CloseSource(ref _system);
-        }
-        else
-        {
-            CloseSource(ref _mic);
-        }
-
+        await CloseFlowAsync(open == _system ? AudioFlow.System : AudioFlow.Mic).ConfigureAwait(false);
         SettleTimeline();
         ArmRetry(Math.Min(++_quickDeaths, MaxTicksBetweenRetries));
     }
@@ -574,11 +693,12 @@ public sealed class AudioEngine : IDisposable
     private void OnTick() => Publish();
 
     // Stops the sources and lines both tracks up on the frame where time stopped.
-    private void EndCapture()
+    private async Task EndCaptureAsync()
     {
-        CloseSource(ref _system);
-        CloseSource(ref _mic);
+        // Both stop delivering as soon as this is called, so a device slow to close adds no silence to the buffer.
+        var closing = Task.WhenAll(CloseFlowAsync(AudioFlow.System), CloseFlowAsync(AudioFlow.Mic));
         FreezeTimeline();
+        await closing.ConfigureAwait(false);
     }
 
     private void FreezeTimeline()
@@ -589,8 +709,9 @@ public sealed class AudioEngine : IDisposable
         _micTrack?.PadTo(frame);
     }
 
-    private void CloseSource(ref OpenSource? open)
+    private async Task CloseFlowAsync(AudioFlow flow)
     {
+        ref var open = ref flow == AudioFlow.System ? ref _system : ref _mic;
         var closing = open;
         open = null;
         if (closing is null)
@@ -600,22 +721,28 @@ public sealed class AudioEngine : IDisposable
 
         closing.Closing = true;
         closing.Source.PacketAvailable -= closing.Pipeline.OnPacket;
-        try
+        var closed = Task.Run(() =>
         {
-            closing.Source.Stop();
-        }
-        catch (Exception exception) when (IsCaptureFailure(exception))
-        {
-            Debug.WriteLine($"Capture did not stop cleanly: {exception.Message}");
-        }
+            try
+            {
+                closing.Source.Stop();
+            }
+            catch (Exception exception) when (IsCaptureFailure(exception))
+            {
+                Debug.WriteLine($"Capture did not stop cleanly: {exception.Message}");
+            }
+
+            DisposeQuietly(closing.Source);
+        });
 
         try
         {
-            closing.Source.Dispose();
+            await closed.WaitAsync(CloseLimit).ConfigureAwait(false);
         }
-        catch (Exception exception) when (IsCaptureFailure(exception))
+        catch (TimeoutException)
         {
-            Debug.WriteLine($"Capture did not close cleanly: {exception.Message}");
+            // It has stopped delivering, and it closes in the background if it ever comes back.
+            Debug.WriteLine($"Gave up waiting for the {flow} capture to close");
         }
     }
 

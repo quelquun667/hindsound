@@ -274,3 +274,154 @@ public class SourceFailureTests
         Assert.InRange(factory.ResolveCalls, 1, 3);
     }
 }
+
+[Collection(nameof(TimingSensitive))]
+public class StuckDeviceTests
+{
+    // Far above what a call in these tests takes, far below the ten seconds a stuck call would be given.
+    private static readonly TimeSpan StopBound = TimeSpan.FromSeconds(5);
+
+    private static TimeSpan Seconds(double value) => TimeSpan.FromSeconds(value);
+
+    private static AudioEngine SystemOnly(TrackingFactory factory, TimeSpan? tick = null, TimeSpan? openLimit = null) =>
+        new(new AudioEngineOptions(Seconds(2), MicEnabled: false), factory, new FakeWatcher(), tickInterval: tick, openLimit: openLimit);
+
+    [Fact]
+    public async Task A_stuck_open_does_not_block_stop_and_its_late_capture_is_closed()
+    {
+        var stuck = new TaskCompletionSource();
+        var factory = new TrackingFactory { BeforeOpen = _ => stuck.Task };
+        using var engine = SystemOnly(factory);
+        var start = engine.StartAsync();
+        await Eventually.True(() => factory.OpenCalls == 1, "the opening under way");
+
+        var stop = engine.StopAsync();
+        await stop.WaitAsync(StopBound);
+        await start.WaitAsync(StopBound);
+        Assert.Equal(CaptureActivity.Stopped, engine.Status.Activity);
+
+        stuck.SetResult();
+        await Eventually.True(() => factory.Latest is not null && factory.Live == 0, "the late capture is closed");
+        Assert.Null(engine.Status.SystemDeviceName);
+    }
+
+    [Fact]
+    public async Task An_open_that_blocks_its_thread_does_not_block_stop()
+    {
+        using var release = new ManualResetEventSlim();
+        var factory = new TrackingFactory
+        {
+            BeforeOpen = _ =>
+            {
+                release.Wait();
+                return Task.CompletedTask;
+            },
+        };
+        using var engine = SystemOnly(factory);
+        var start = engine.StartAsync();
+        await Eventually.True(() => factory.OpenCalls == 1, "the opening under way");
+
+        try
+        {
+            await engine.StopAsync().WaitAsync(StopBound);
+            await start.WaitAsync(StopBound);
+        }
+        finally
+        {
+            release.Set();
+        }
+    }
+
+    [Fact]
+    public async Task A_resolver_that_blocks_its_thread_does_not_block_stop()
+    {
+        using var release = new ManualResetEventSlim();
+        var factory = new TrackingFactory
+        {
+            Resolve = _ =>
+            {
+                release.Wait();
+                return "device";
+            },
+        };
+        using var engine = SystemOnly(factory);
+        var start = engine.StartAsync();
+        await Eventually.True(() => factory.ResolveCalls == 1, "the lookup under way");
+
+        try
+        {
+            await engine.StopAsync().WaitAsync(StopBound);
+            await start.WaitAsync(StopBound);
+        }
+        finally
+        {
+            release.Set();
+        }
+    }
+
+    [Fact]
+    public async Task A_capture_that_will_not_stop_does_not_block_stop()
+    {
+        using var release = new ManualResetEventSlim();
+        var factory = new TrackingFactory { OnStop = _ => release.Wait() };
+        using var engine = SystemOnly(factory);
+        await engine.StartAsync();
+
+        try
+        {
+            await engine.StopAsync().WaitAsync(StopBound);
+            Assert.Equal(CaptureActivity.Stopped, engine.Status.Activity);
+        }
+        finally
+        {
+            release.Set();
+        }
+
+        await Eventually.True(() => factory.Live == 0, "the capture closes when it comes back");
+    }
+
+    [Fact]
+    public async Task A_capture_that_will_not_start_counts_as_missing_and_is_closed()
+    {
+        using var release = new ManualResetEventSlim();
+        var factory = new TrackingFactory { OnStart = _ => release.Wait() };
+        using var engine = SystemOnly(factory, TimeSpan.FromHours(1), TimeSpan.FromMilliseconds(50));
+
+        await engine.StartAsync().WaitAsync(StopBound);
+
+        try
+        {
+            Assert.Equal(CaptureActivity.NoDevice, engine.Status.Activity);
+            await Eventually.True(() => factory.Live == 0, "the capture is closed");
+        }
+        finally
+        {
+            release.Set();
+        }
+    }
+
+    [Fact]
+    public async Task A_stuck_open_runs_out_of_time_is_not_doubled_and_the_device_comes_back()
+    {
+        var stuck = new TaskCompletionSource();
+        var factory = new TrackingFactory { BeforeOpen = _ => stuck.Task };
+        using var engine = new AudioEngine(
+            new AudioEngineOptions(Seconds(2), MicEnabled: false, SystemDeviceId: "chosen"),
+            factory,
+            new FakeWatcher(),
+            tickInterval: TimeSpan.FromMilliseconds(10),
+            openLimit: TimeSpan.FromMilliseconds(50));
+
+        await engine.StartAsync().WaitAsync(StopBound);
+        Assert.Equal(CaptureActivity.NoDevice, engine.Status.Activity);
+
+        // Many retries have come and gone by now, and none of them asked the device again.
+        await Task.Delay(300);
+        Assert.Equal(1, factory.OpenCalls);
+
+        factory.BeforeOpen = null;
+        stuck.SetResult();
+        await Eventually.True(() => engine.Status.Activity == CaptureActivity.Capturing, "capturing again");
+        await Eventually.True(() => factory.Live == 1, "the late capture is closed, and only that one");
+    }
+}
