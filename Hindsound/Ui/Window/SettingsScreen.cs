@@ -1,4 +1,4 @@
-﻿using Hindsound.Audio;
+using Hindsound.Audio;
 using Hindsound.Input;
 using Hindsound.Settings;
 
@@ -131,6 +131,9 @@ internal sealed partial class SettingsScreen
 
     /// <summary>Off for the picture of a page at rest.</summary>
     public bool ShowFocus { get; set; } = true;
+
+    /// <summary>For a picture: no native box exists, so a field being edited draws its own text.</summary>
+    public bool NoNativeEdit { get; init; }
 
     public string? FocusId => _focusId;
 
@@ -1022,7 +1025,7 @@ internal sealed partial class SettingsScreen
     {
         var accent = Editor.AccentRgb;
         var hover = _popup is null ? Find(_hoverId) : null;
-        var ui = new UiState(accent, Focus, Find(_pressedId), hover, _mouseX, _mouseY, _scroll, ShowFocus && !_capture.Listening, _editId);
+        var ui = new UiState(accent, Focus, Find(_pressedId), hover, _mouseX, _mouseY, _scroll, ShowFocus && !_capture.Listening, NoNativeEdit ? null : _editId);
         c.SetOrigin(0);
         c.FillRect(new Box(0, 0, WindowWidth, WindowHeight), Theme.Base);
 

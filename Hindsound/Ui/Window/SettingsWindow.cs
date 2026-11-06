@@ -54,11 +54,13 @@ internal static unsafe partial class WindowNative
     [LibraryImport(U, StringMarshalling = StringMarshalling.Utf16)] public static partial int SetWindowTextW(nint hwnd, string text);
     [LibraryImport(U)] public static partial int GetWindowTextLengthW(nint hwnd);
     [LibraryImport(U)] public static partial nint CallWindowProcW(nint proc, nint hwnd, uint msg, nuint wParam, nint lParam);
-    [LibraryImport(U)] public static partial int SetClassLongPtrW(nint hwnd, int index, nint value);
+    [LibraryImport(U)] public static partial int GetClientRect(nint hwnd, Native.RECT* rect);
+    [LibraryImport(U)] public static partial uint GetGuiResources(nint process, uint flags);
     [LibraryImport(G)] public static partial int BitBlt(nint dest, int x, int y, int w, int h, nint source, int sx, int sy, uint op);
     [LibraryImport(G)] public static partial nint CreateSolidBrush(uint color);
     [LibraryImport(G)] public static partial uint SetBkColor(nint dc, uint color);
     [LibraryImport("dwmapi.dll")] public static partial int DwmSetWindowAttribute(nint hwnd, int attribute, void* value, int size);
+    [LibraryImport("kernel32.dll")] public static partial int K32EmptyWorkingSet(nint process);
     [LibraryImport("ole32.dll")] public static partial int CoCreateInstance(Guid* clsid, nint outer, uint context, Guid* iid, nint* result);
 }
 
@@ -83,7 +85,7 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
 
     private nint _hwnd;
     private nint _edit;
-    private nint _editProc;
+    private static nint _editOriginal;
     private nint _editFont;
     private nint _icon;
     private GdiCanvas _canvas;
@@ -164,6 +166,25 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
 
     public void Close() => Native.PostMessageW(_hwnd, Native.WM_CLOSE, 0, 0);
 
+    public nint EditHwnd => _edit;
+
+    /// <summary>What Windows sends when the window moves to a screen of another DPI: <c>--settings-probe</c> goes through the same code.</summary>
+    public void ProbeDpiChange(uint dpi)
+    {
+        var size = OuterSize(dpi);
+        Native.RECT now;
+        Native.GetWindowRect(_hwnd, &now);
+        Native.RECT rect = new() { Left = now.Left, Top = now.Top, Right = now.Left + size.Cx, Bottom = now.Top + size.Cy };
+        WindowNative.SendMessageW(_hwnd, WindowNative.WM_DPICHANGED, dpi | ((nuint)dpi << 16), (nint)(&rect));
+    }
+
+    public string ClientSizeText()
+    {
+        Native.RECT client;
+        WindowNative.GetClientRect(_hwnd, &client);
+        return $"{client.Width}x{client.Height}, bitmap {_canvas.Width}x{_canvas.Height}";
+    }
+
     /// <summary>The icon of the title bar: the same H as the tray, in the accent colour.</summary>
     public void SetIcon(uint accent)
     {
@@ -241,7 +262,7 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
         }
 
         WindowNative.SendMessageW(_edit, WindowNative.EM_SETLIMITTEXT, 256, 0);
-        _editProc = Native.GetWindowLongPtrW(_edit, WindowNative.GWLP_WNDPROC);
+        _editOriginal = Native.GetWindowLongPtrW(_edit, WindowNative.GWLP_WNDPROC);
         Native.SetWindowLongPtrW(_edit, WindowNative.GWLP_WNDPROC, (nint)(delegate* unmanaged<nint, uint, nuint, nint, nint>)&EditWndProc);
     }
 
@@ -558,10 +579,15 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
             case WindowNative.WM_KEYDOWN when (uint)wParam is Vk.Tab or Vk.Enter or Vk.Escape:
                 Screen.Key((uint)wParam, Modifiers());
                 return 0;
-            case WindowNative.WM_CHAR when wParam is 9 or 13 or 27:
+            case WindowNative.WM_KEYDOWN when wParam == 'A' && Modifiers() == HotkeyGesture.ModControl:
+                WindowNative.SendMessageW(_edit, WindowNative.EM_SETSEL, 0, -1);
+                return 0;
+
+            // Ctrl+A arrives as character 1. The other three would only beep.
+            case WindowNative.WM_CHAR when wParam is 1 or 9 or 13 or 27:
                 return 0;
             default:
-                return WindowNative.CallWindowProcW(_editProc, hwnd, message, wParam, lParam);
+                return WindowNative.CallWindowProcW(_editOriginal, hwnd, message, wParam, lParam);
         }
     }
 
@@ -632,9 +658,10 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
     {
         try
         {
+            // While the window is being destroyed the box still needs its own procedure, to free what it holds.
             return _current is { } window && window._edit == hwnd
                 ? window.HandleEdit(hwnd, message, wParam, lParam)
-                : Native.DefWindowProcW(hwnd, message, wParam, lParam);
+                : WindowNative.CallWindowProcW(_editOriginal, hwnd, message, wParam, lParam);
         }
         catch (Exception ex)
         {
@@ -858,6 +885,7 @@ internal static unsafe class SettingsDump
             var screen = new SettingsScreen(settings, backend, host, canvas, firstRun)
             {
                 ShowFocus = focus,
+                NoNativeEdit = true,
                 Clock = () => new DateTime(2026, 11, 6, 14, 32, 5),
             };
             screen.UpdateStatus(new Audio.AudioEngineStatus(Audio.CaptureActivity.Capturing, true, true, true, "Speakers", "Headset", true, TimeSpan.FromMinutes(5), 86_688_000));
@@ -926,7 +954,12 @@ internal static unsafe class SettingsDump
             s.Editor.SetAccentPreset(Settings.AccentPreset.Cyan);
         });
         Shot("firstrun-1", firstRun: true);
-        Shot("firstrun-2", (s, _) => s.Key(Vk.Enter, 0), firstRun: true);
+        Shot("firstrun-2", (s, _) =>
+        {
+            s.Key(Vk.Tab, 0);
+            s.Key(Vk.Tab, 0);
+            s.Key(Vk.Enter, 0);
+        }, firstRun: true);
         Shot("firstrun-3", (s, _) =>
         {
             s.Key(Vk.Tab, 0);

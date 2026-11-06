@@ -17,7 +17,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private const int CatchUpTries = 60; // 30 s
     private const int SnapshotReleaseDelayMs = 500;
     private const int SelfTestExitDelayMs = 3300;
-    private const int ProbeStepMs = 1000;
+    private const int ProbeStepMs = 300;
     private const int ProbeAfterCloseMs = 10_000;
     private static readonly TimeSpan MeterWindow = TimeSpan.FromMilliseconds(80);
     private static readonly TimeSpan QueuedClipsLimit = TimeSpan.FromSeconds(30);
@@ -693,6 +693,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
         GC.WaitForPendingFinalizers();
         GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+
+        // What the window touched (its code, the fonts) stays counted until it is let go. Whatever is still in use comes back at once.
+        WindowNative.K32EmptyWorkingSet(Native.GetCurrentProcess());
     });
 
     // The level comes from what the capture already holds. If the microphone is off this reads nothing and opens nothing.
@@ -754,47 +757,74 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         return results;
     }
 
-    // --settings-probe: opens the window off screen, goes through its pages by sending it keys, and writes what it measures.
+    // --settings-probe: opens the window off screen, sends it real messages, and writes what it measures. Never takes the focus.
     private void RunSettingsProbe()
     {
-        var folderDialog = FolderPicker.SelfCheck();
-        _journal.Write($"probe: before opening, {Journal.Memory()}, folder dialog usable {folderDialog}");
+        var gdi = WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0);
+        var user = WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1);
+        _journal.Write($"probe: before opening, {Journal.Memory()}, GDI objects {gdi}, USER objects {user}");
         OpenSettings(firstRun: false);
-        var hwnd = _window!.Hwnd;
+        var window = _window!;
+        var hwnd = window.Hwnd;
         var seen = new List<string>();
-        var step = 0;
+
+        void Key(nint target, uint vk) => Native.PostMessageW(target, WindowNative.WM_KEYDOWN, vk, 0);
+
+        var steps = new List<Action>();
+        steps.AddRange(Enumerable.Repeat<Action>(() => Key(hwnd, Vk.Down), 4));
+        steps.Add(() => Key(hwnd, Vk.Up));
+        steps.AddRange(Enumerable.Repeat<Action>(() => Key(hwnd, Vk.Tab), 5));
+        steps.Add(() => WindowNative.SetWindowTextW(window.EditHwnd, "probe {date}"));
+        steps.Add(() => seen.Add("template=" + _settings.Export.FileNameTemplate));
+        steps.Add(() => Key(window.EditHwnd, Vk.Tab));
+        steps.Add(() => window.ProbeDpiChange(144));
+        steps.Add(() => seen.Add("client at 144 dpi=" + window.ClientSizeText()));
+        steps.Add(() => window.ProbeDpiChange(96));
+        steps.Add(() => seen.Add("client at 96 dpi=" + window.ClientSizeText()));
+        var at = 0;
         _loop.After(ProbeStepMs, Next);
 
         void Next()
         {
-            if (_window is not { } window)
-            {
-                return;
-            }
-
             seen.Add($"{window.Screen.Section}/{window.Screen.FocusId}");
-            if (step++ < 4)
+            if (at < steps.Count)
             {
-                Native.PostMessageW(hwnd, WindowNative.WM_KEYDOWN, Vk.Down, 0);
-                _loop.After(ProbeStepMs, Next);
-                return;
-            }
-
-            if (step == 5)
-            {
-                Native.PostMessageW(hwnd, WindowNative.WM_KEYDOWN, Vk.Tab, 0);
+                steps[at++]();
                 _loop.After(ProbeStepMs, Next);
                 return;
             }
 
             _journal.Write($"probe: reached {string.Join(" -> ", seen)}");
-            _journal.Write($"probe: open, {Journal.Memory()}, {Journal.CpuMilliseconds():F0} ms of CPU so far");
+            _journal.Write($"probe: open, {Journal.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, {Journal.CpuMilliseconds():F0} ms of CPU so far");
             window.Close();
-            _loop.After(ProbeAfterCloseMs, () =>
+            _loop.After(ProbeAfterCloseMs, AfterClosing);
+        }
+
+        void AfterClosing()
+        {
+            _journal.Write($"probe: 10 s after closing, {Journal.Memory()}, window gone {_window is null}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
+            var cycles = 0;
+            Cycle();
+
+            void Cycle()
             {
-                _journal.Write($"probe: 10 s after closing, {Journal.Memory()}, window gone {_window is null}");
-                _loop.Quit();
-            });
+                if (_window is { } open)
+                {
+                    open.Close();
+                    _loop.After(ProbeStepMs, Cycle);
+                }
+                else if (cycles++ < 3)
+                {
+                    OpenSettings(firstRun: false);
+                    _loop.After(ProbeStepMs, Cycle);
+                }
+                else
+                {
+                    _journal.Write($"probe: after 3 more openings, {Journal.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
+                    _journal.Write($"probe: folder dialog usable {FolderPicker.SelfCheck()}");
+                    _loop.Quit();
+                }
+            }
         }
     }
 

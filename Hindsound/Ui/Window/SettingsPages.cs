@@ -249,7 +249,7 @@ internal sealed partial class SettingsScreen
 
     private void BuildHotkeys()
     {
-        const float pitch = 38, fieldWidth = 280, fieldHeight = 32;
+        const float pitch = 37, fieldWidth = 280, fieldHeight = 32;
         var y = BandHeight + 18;
         Heading("Hotkeys", y);
         y += 36;
@@ -379,7 +379,6 @@ internal sealed partial class SettingsScreen
     {
         const double range = 24;
         RowLabel(label, y);
-        var value = SliderValue(id, stored);
         SliderRow(id, new Box(Right - 300, y + 5, 300, 20), -range, range, 1, stored, v => Math.Clamp(v, AudioSettings.MinGainDb, AudioSettings.MaxGainDb), keep, StatusText.GainLabel, enabled);
     }
 
@@ -509,9 +508,7 @@ internal sealed partial class SettingsScreen
         var leftEdge = general.NotificationPosition == "left";
         Add(new Painted((c, _) => c.Notification(SampleClip.Notification(accent), Left, previewTop, accent, leftEdge)));
         y += 64 + 14;
-        Add(new Painted((c, _) => c.FillRect(new Box(Left, y - 7, Width, 1), Theme.Line)));
         var divider = y - 7;
-        _page.RemoveAt(_page.Count - 1);
         Add(new Painted((c, _) => c.FillRect(new Box(Left, divider, Width, 1), Theme.Line)));
         y += 4;
 
