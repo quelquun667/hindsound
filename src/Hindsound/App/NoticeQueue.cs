@@ -54,6 +54,7 @@ internal sealed class NoticeQueue
     private readonly List<NotificationContent> _lasting = [];
     private NotificationContent? _ordinary;
     private NotificationContent? _onScreen;
+    private bool _onScreenCeased;
 
     private bool Protected => _onScreen is { } shown && RankOf(shown.Kind) != NoticeRank.Ordinary;
 
@@ -81,13 +82,13 @@ internal sealed class NoticeQueue
 
     /// <summary>
     /// Whether a notification that is not a lasting one shows right now. Otherwise it was put in line. An answer pushes a
-    /// lasting one aside, which starts over once the answer has left.
+    /// lasting one aside, which starts over once the answer has left, unless a new look at the settings file has made it false.
     /// </summary>
     public bool ShowsNow(NotificationContent content)
     {
         if (RankOf(content.Kind) == NoticeRank.Answer)
         {
-            if (_onScreen is { } shown && RankOf(shown.Kind) == NoticeRank.Lasting)
+            if (_onScreen is { } shown && RankOf(shown.Kind) == NoticeRank.Lasting && !_onScreenCeased)
             {
                 _lasting.Insert(0, shown);
             }
@@ -124,8 +125,12 @@ internal sealed class NoticeQueue
         }
     }
 
-    /// <summary>Takes back the lasting notices that a new look at the settings file made false, before anyone reads them.</summary>
-    public void Withdraw(params NotificationKind[] kinds) => _lasting.RemoveAll(content => kinds.Contains(content.Kind));
+    /// <summary>Takes back the lasting notices that a new look at the settings file made false, before anyone reads them. One already on screen finishes its time there, but never comes back.</summary>
+    public void Withdraw(params NotificationKind[] kinds)
+    {
+        _lasting.RemoveAll(content => kinds.Contains(content.Kind));
+        _onScreenCeased |= _onScreen is { } shown && kinds.Contains(shown.Kind);
+    }
 
     /// <summary>The status in line, once what it says is no longer true: a later status may not take its place, as the Notifications setting can hide it.</summary>
     public void WithdrawCeased(AudioEngineStatus status)
@@ -151,7 +156,11 @@ internal sealed class NoticeQueue
         }
     }
 
-    public void Shown(NotificationContent content) => _onScreen = content;
+    public void Shown(NotificationContent content)
+    {
+        _onScreen = content;
+        _onScreenCeased = false;
+    }
 
     /// <summary>The notification has left the screen.</summary>
     public void Finished() => _onScreen = null;
