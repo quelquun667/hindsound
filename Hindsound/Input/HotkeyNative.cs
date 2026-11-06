@@ -1,7 +1,27 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
+[assembly: InternalsVisibleTo("Hindsound.Tests")]
+
 namespace Hindsound.Input;
+
+/// <summary>Outcome of one registration attempt at the native layer.</summary>
+public enum HotkeyRegistration
+{
+    /// <summary>The shortcut is registered under the given id.</summary>
+    Registered,
+
+    /// <summary>Windows refused it (another app holds the combination).</summary>
+    Refused,
+
+    /// <summary>
+    /// The native layer did not answer in time. The request was cancelled, or undone if it had already run: nothing
+    /// stays registered under the id.
+    /// </summary>
+    TimedOut,
+}
 
 /// <summary>The Win32 side of the shortcuts, so tests can replace it.</summary>
 public interface IHotkeyNative : IDisposable
@@ -10,6 +30,13 @@ public interface IHotkeyNative : IDisposable
     event Action<int>? HotkeyPressed;
 
     bool Register(int id, uint modifiers, uint virtualKey);
+
+    /// <summary>
+    /// Like <see cref="Register"/> but tells a refusal from a timeout. The default maps <see cref="Register"/>, so
+    /// existing implementations keep working.
+    /// </summary>
+    HotkeyRegistration TryRegister(int id, uint modifiers, uint virtualKey) =>
+        Register(id, modifiers, virtualKey) ? HotkeyRegistration.Registered : HotkeyRegistration.Refused;
 
     void Unregister(int id);
 }
@@ -27,14 +54,24 @@ internal sealed class Win32HotkeyNative : IHotkeyNative
     private const uint PmNoRemove = 0;
     private const uint ModNoRepeat = 0x4000;
 
+    private static readonly TimeSpan DefaultRequestTimeout = TimeSpan.FromSeconds(5);
+
     private readonly ConcurrentQueue<Request> _requests = new();
     private readonly Thread _thread;
     private readonly ManualResetEventSlim _ready = new();
+    private readonly TimeSpan _requestTimeout;
     private uint _threadId;
     private volatile bool _stopped;
 
     public Win32HotkeyNative()
+        : this(DefaultRequestTimeout)
     {
+    }
+
+    /// <param name="requestTimeout">How long a caller waits for the hotkey thread before giving up (tests shorten it).</param>
+    internal Win32HotkeyNative(TimeSpan requestTimeout)
+    {
+        _requestTimeout = requestTimeout;
         _thread = new Thread(Loop) { IsBackground = true, Name = "Hindsound.Hotkeys" };
         _thread.Start();
         _ready.Wait();
@@ -43,9 +80,13 @@ internal sealed class Win32HotkeyNative : IHotkeyNative
     public event Action<int>? HotkeyPressed;
 
     public bool Register(int id, uint modifiers, uint virtualKey) =>
-        Invoke(() => RegisterHotKey(IntPtr.Zero, id, modifiers | ModNoRepeat, virtualKey));
+        TryRegister(id, modifiers, virtualKey) == HotkeyRegistration.Registered;
 
-    public void Unregister(int id) => Invoke(() => UnregisterHotKey(IntPtr.Zero, id));
+    public HotkeyRegistration TryRegister(int id, uint modifiers, uint virtualKey) =>
+        Invoke(() => RegisterHotKey(IntPtr.Zero, id, modifiers | ModNoRepeat, virtualKey), () => UnregisterHotKey(IntPtr.Zero, id));
+
+    public void Unregister(int id) =>
+        Invoke(() => UnregisterHotKey(IntPtr.Zero, id), undo: null, abandonable: false);
 
     public void Dispose()
     {
@@ -59,21 +100,49 @@ internal sealed class Win32HotkeyNative : IHotkeyNative
         _thread.Join(2000);
     }
 
-    private bool Invoke(Func<bool> work)
+    /// <summary>
+    /// Runs <paramref name="work"/> on the hotkey thread and waits for it. Each request is claimed with an Interlocked
+    /// by exactly one side. If the caller gives up first, a request not started yet never runs; one already running
+    /// has its success undone with <paramref name="undo"/> when it ends, so a late registration cannot linger under
+    /// an id the caller has forgotten. A request that must run regardless (a release) is not abandonable.
+    /// </summary>
+    internal HotkeyRegistration Invoke(Func<bool> work, Action? undo, bool abandonable = true)
     {
         if (_stopped)
         {
-            return false;
+            return HotkeyRegistration.Refused;
         }
 
-        var request = new Request(work);
+        var request = new Request(work, undo);
         _requests.Enqueue(request);
         if (!PostThreadMessage(_threadId, WmApp, UIntPtr.Zero, IntPtr.Zero))
         {
-            return false;
+            Abandon(request);
+            return HotkeyRegistration.Refused;
         }
 
-        return request.Done.Wait(5000) && request.Result;
+        if (!request.Done.Wait(_requestTimeout))
+        {
+            // A release is left in the queue: it will still run, the caller just stops waiting.
+            if (!abandonable || Abandon(request))
+            {
+                return HotkeyRegistration.TimedOut;
+            }
+        }
+
+        return request.Result ? HotkeyRegistration.Registered : HotkeyRegistration.Refused;
+    }
+
+    /// <summary>The caller's claim. False if the request had already finished: its result stands.</summary>
+    private static bool Abandon(Request request)
+    {
+        if (Interlocked.CompareExchange(ref request.State, RequestState.Abandoned, RequestState.Pending) == RequestState.Pending)
+        {
+            return true; // never started, never will
+        }
+
+        // Running: the worker sees Abandoned when it ends and undoes the result. Finished: too late to abandon.
+        return Interlocked.CompareExchange(ref request.State, RequestState.Abandoned, RequestState.Running) == RequestState.Running;
     }
 
     private void Loop()
@@ -87,20 +156,13 @@ internal sealed class Win32HotkeyNative : IHotkeyNative
         {
             if (message.Message == WmHotkey)
             {
-                HotkeyPressed?.Invoke((int)message.WParam);
+                RaiseHotkeyPressed((int)message.WParam);
             }
             else if (message.Message == WmApp)
             {
                 while (_requests.TryDequeue(out var request))
                 {
-                    try
-                    {
-                        request.Result = request.Work();
-                    }
-                    finally
-                    {
-                        request.Done.Set();
-                    }
+                    Execute(request);
                 }
             }
         }
@@ -112,9 +174,75 @@ internal sealed class Win32HotkeyNative : IHotkeyNative
         }
     }
 
-    private sealed class Request(Func<bool> work)
+    private static void Execute(Request request)
+    {
+        // The caller may have abandoned it while it waited: then it must not run at all.
+        if (Interlocked.CompareExchange(ref request.State, RequestState.Running, RequestState.Pending) != RequestState.Pending)
+        {
+            request.Done.Set();
+            return;
+        }
+
+        try
+        {
+            request.Result = request.Work();
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceError("Hindsound hotkey request failed: " + ex);
+            request.Result = false;
+        }
+        finally
+        {
+            // Abandoned while running: the caller reported a timeout, so a success must not stay in force.
+            if (Interlocked.CompareExchange(ref request.State, RequestState.Finished, RequestState.Running) == RequestState.Abandoned
+                && request.Result)
+            {
+                try { request.Undo?.Invoke(); } catch (Exception) { /* nothing more to do */ }
+                request.Result = false;
+            }
+
+            request.Done.Set();
+        }
+    }
+
+    /// <summary>One failing subscriber must not stop the others, nor take the process down with the hotkey thread.</summary>
+    private void RaiseHotkeyPressed(int id)
+    {
+        var handlers = HotkeyPressed;
+        if (handlers is null)
+        {
+            return;
+        }
+
+        foreach (var handler in handlers.GetInvocationList().Cast<Action<int>>())
+        {
+            try
+            {
+                handler(id);
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceError("Hindsound hotkey handler failed: " + ex);
+            }
+        }
+    }
+
+    private static class RequestState
+    {
+        public const int Pending = 0;
+        public const int Running = 1;
+        public const int Finished = 2;
+        public const int Abandoned = 3;
+    }
+
+    private sealed class Request(Func<bool> work, Action? undo)
     {
         public Func<bool> Work { get; } = work;
+
+        public Action? Undo { get; } = undo;
+
+        public int State;
 
         public bool Result { get; set; }
 

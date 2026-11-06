@@ -150,14 +150,18 @@ public sealed class HotkeyManager : IDisposable
             _byId[id] = action;
         }
 
-        if (!_native.Register(id, gesture.Modifiers, gesture.VirtualKey))
+        var outcome = _native.TryRegister(id, gesture.Modifiers, gesture.VirtualKey);
+        if (outcome != HotkeyRegistration.Registered)
         {
             lock (_idLock)
             {
                 _byId.Remove(id);
             }
 
-            return new HotkeyResult(action, canonical, HotkeyStatus.InUse, HotkeyResult.InUseMessage);
+            // A timeout is not another app holding the combination, and the native layer left nothing registered.
+            return outcome == HotkeyRegistration.TimedOut
+                ? new HotkeyResult(action, canonical, HotkeyStatus.Unavailable, HotkeyResult.UnavailableMessage)
+                : new HotkeyResult(action, canonical, HotkeyStatus.InUse, HotkeyResult.InUseMessage);
         }
 
         Release(action);

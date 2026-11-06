@@ -27,6 +27,12 @@ public enum HotkeyStatus
 
     /// <summary>Registration is paused (shortcut being typed in the settings).</summary>
     Suspended,
+
+    /// <summary>Another action of the same settings asks for the same combination.</summary>
+    Duplicate,
+
+    /// <summary>The hotkey thread did not answer in time. Nothing was registered; trying again may work.</summary>
+    Unavailable,
 }
 
 /// <summary>Outcome of registering one action's shortcut. <see cref="Message"/> is the text for the interface.</summary>
@@ -34,6 +40,8 @@ public sealed record HotkeyResult(HotkeyAction Action, string? Gesture, HotkeySt
 {
     public const string InUseMessage = "Hotkey already in use by another app";
     public const string InvalidMessage = "Invalid hotkey";
+    public const string DuplicateMessage = "Same hotkey as another action";
+    public const string UnavailableMessage = "Hotkeys did not respond in time; try again";
 
     public bool Ok => Status is HotkeyStatus.Registered or HotkeyStatus.NotSet or HotkeyStatus.Suspended;
 }
