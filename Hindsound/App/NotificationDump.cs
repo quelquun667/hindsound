@@ -52,6 +52,8 @@ internal static class NotificationDump
             ("notcopied", NotificationStates.ForClip(Clip(30), thirty, false, false, accent)),
             ("wav", NotificationStates.ForClip(Clip(30, wav: true), thirty, true, true, accent)),
             ("rescued", NotificationStates.ForClip(Clip(30, rescued: true), thirty, true, true, accent)),
+            ("rescued-notcopied", NotificationStates.ForClip(Clip(30, rescued: true), thirty, true, false, accent)),
+            ("silent-notcopied", NotificationStates.ForClip(Clip(30, silent: true), thirty, true, false, accent)),
             ("nodevice", NotificationStates.NoDevice()),
             ("paused", NotificationStates.Paused()),
             ("on", NotificationStates.CaptureOn(300, "Ctrl+Shift+F10")),

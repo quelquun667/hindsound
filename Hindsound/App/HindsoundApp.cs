@@ -618,7 +618,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     {
         var content = NotificationStates.ForClip(result, outcome.Request.Requested, outcome.Request.CopyWanted, copied, Accent);
         _journal.Write($"clipboard: wanted {outcome.Request.CopyWanted}, copied {copied}; notification {content.Kind}");
-        ShowClip(content, saved: true, important: result.Rescued);
+        var copyFailed = outcome.Request.CopyWanted && !copied;
+        ShowClip(content, saved: true, important: result.Rescued || copyFailed, copyFailed);
         FinishSelfTest(outcome, copied);
     }
 
@@ -635,10 +636,10 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
     // ---------------------------------------------------------------- showing
 
-    private void ShowClip(NotificationContent content, bool saved, bool important)
+    private void ShowClip(NotificationContent content, bool saved, bool important, bool copyFailed = false)
     {
         var (state, covers) = Surface();
-        var decision = FullscreenPolicy.ForClip(state, covers, _settings.General, saved, important);
+        var decision = FullscreenPolicy.ForClip(state, covers, _settings.General, saved, important, copyFailed);
         _journal.Write($"presentation: state {state}, covers screen {covers}: {decision}");
         if (decision.PlaySound)
         {

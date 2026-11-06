@@ -60,6 +60,29 @@ public class FullscreenPolicyTests
         Assert.True(decision.CatchUpLater);
     }
 
+    [Theory]
+    [InlineData("always", S.AcceptsNotifications)]
+    [InlineData("always", S.RunningD3dFullScreen)]
+    [InlineData("whenNoOverlay", S.RunningD3dFullScreen)]
+    public void A_clip_saved_but_not_copied_never_sounds_like_success(string setting, S state)
+    {
+        var decision = FullscreenPolicy.ForClip(state, false, General(sound: setting), saved: true, important: true, copyFailed: true);
+        Assert.False(decision.PlaySound);
+    }
+
+    [Fact]
+    public void A_copy_that_failed_is_shown_even_with_notifications_off()
+    {
+        var onDesktop = FullscreenPolicy.ForClip(S.AcceptsNotifications, false, General(notifications: false), saved: true, important: true, copyFailed: true);
+        Assert.True(onDesktop.ShowOverlay);
+        Assert.False(onDesktop.PlaySound);
+
+        var inGame = FullscreenPolicy.ForClip(S.RunningD3dFullScreen, false, General(notifications: false), saved: true, important: true, copyFailed: true);
+        Assert.False(inGame.ShowOverlay);
+        Assert.True(inGame.CatchUpLater);
+        Assert.False(inGame.PlaySound);
+    }
+
     [Fact]
     public void Notifications_off_shows_nothing_and_keeps_nothing_for_later()
     {

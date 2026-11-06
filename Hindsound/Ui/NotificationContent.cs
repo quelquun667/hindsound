@@ -71,6 +71,7 @@ internal static class NotificationPalette
 internal static class NotificationStates
 {
     public const string RescuedBody = @"Clip kept in Hindsound\Rescued";
+    public const string RescuedNotCopiedBody = @"Kept in Hindsound\Rescued. Not copied";
 
     private static readonly string[] PasteKeys = ["Ctrl", "V"];
     private static readonly BarColumn[] NoBars = [];
@@ -83,9 +84,10 @@ internal static class NotificationStates
     /// <param name="accent">The accent colour.</param>
     public static NotificationContent ForClip(ClipResult result, TimeSpan requested, bool copyWanted, bool copied, uint accent)
     {
+        var copyFailed = copyWanted && !copied;
         if (result.Rescued)
         {
-            return Icon(NotificationKind.Rescued, "Output folder not writable", RescuedBody, NotificationPalette.Hot, NotificationVisual.Triangle, NotificationPalette.Hot);
+            return Icon(NotificationKind.Rescued, "Output folder not writable", copyFailed ? RescuedNotCopiedBody : RescuedBody, NotificationPalette.Hot, NotificationVisual.Triangle, NotificationPalette.Hot);
         }
 
         var seconds = WholeSeconds(result.Duration);
@@ -98,11 +100,11 @@ internal static class NotificationStates
 
         if (result.IsSilent)
         {
-            return new NotificationContent(NotificationKind.Silent, title, "It's silent. Check Settings > Audio.", [], NotificationPalette.Amber,
+            return new NotificationContent(NotificationKind.Silent, title, copyFailed ? "It's silent, and not copied" : "It's silent. Check Settings > Audio.", [], NotificationPalette.Amber,
                 NotificationVisual.Bars, accent, bars);
         }
 
-        if (copyWanted && !copied)
+        if (copyFailed)
         {
             // The sentence needs the wider text area, so the triangle takes the place of the bars.
             return new NotificationContent(NotificationKind.CopyFailed, title, "Couldn't copy. Use tray > Copy last clip.", [], NotificationPalette.Amber,

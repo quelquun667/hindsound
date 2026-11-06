@@ -36,13 +36,16 @@ internal readonly record struct Presentation(bool ShowOverlay, bool ClickThrough
 /// </summary>
 internal static class FullscreenPolicy
 {
-    /// <summary>The decision once a clip is saved. The sound only ever confirms a saved clip.</summary>
-    public static Presentation ForClip(UserNotificationState state, bool foregroundCoversScreen, GeneralSettings general, bool saved, bool important)
+    /// <summary>
+    /// The decision once a clip is saved. The sound only ever confirms a saved clip, and never one that Ctrl+V will not
+    /// paste: with the copy failed the silence is the warning, whatever the sound setting says, and the notification follows.
+    /// </summary>
+    public static Presentation ForClip(UserNotificationState state, bool foregroundCoversScreen, GeneralSettings general, bool saved, bool important, bool copyFailed = false)
     {
         var overlayAllowed = OverlayAllowed(state, foregroundCoversScreen, general.FullscreenGames);
         var wanted = general.Notifications || important;
         var showOverlay = overlayAllowed && wanted;
-        var sound = saved && general.ConfirmSound switch
+        var sound = saved && !copyFailed && general.ConfirmSound switch
         {
             "never" => false,
             "always" => true,

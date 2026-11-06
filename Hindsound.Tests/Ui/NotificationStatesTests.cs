@@ -71,7 +71,23 @@ public class NotificationStatesTests
 
     [Fact]
     public void Rescued_wins_over_everything_else() =>
-        AssertState(NotificationStates.ForClip(Clip(12, silent: true, rescued: true), Thirty, true, false, Accent), K.Rescued, "Output folder not writable", @"Clip kept in Hindsound\Rescued", P.Hot, NotificationVisual.Triangle);
+        AssertState(NotificationStates.ForClip(Clip(12, silent: true, rescued: true), Thirty, true, true, Accent), K.Rescued, "Output folder not writable", @"Clip kept in Hindsound\Rescued", P.Hot, NotificationVisual.Triangle);
+
+    [Fact]
+    public void Rescued_and_not_copied_says_both() =>
+        AssertState(NotificationStates.ForClip(Clip(rescued: true), Thirty, true, false, Accent), K.Rescued, "Output folder not writable", @"Kept in Hindsound\Rescued. Not copied", P.Hot, NotificationVisual.Triangle);
+
+    [Fact]
+    public void Rescued_with_no_copy_asked_claims_no_failure() =>
+        AssertState(NotificationStates.ForClip(Clip(rescued: true), Thirty, false, false, Accent), K.Rescued, "Output folder not writable", @"Clip kept in Hindsound\Rescued", P.Hot, NotificationVisual.Triangle);
+
+    [Fact]
+    public void Silent_and_not_copied_says_both() =>
+        AssertState(NotificationStates.ForClip(Clip(silent: true), Thirty, true, false, Accent), K.Silent, "Clip saved (0:30)", "It's silent, and not copied", P.Amber, NotificationVisual.Bars);
+
+    [Fact]
+    public void Silent_with_no_copy_asked_claims_no_failure() =>
+        AssertState(NotificationStates.ForClip(Clip(silent: true), Thirty, false, false, Accent), K.Silent, "Clip saved (0:30)", "It's silent. Check Settings > Audio.", P.Amber, NotificationVisual.Bars);
 
     [Fact]
     public void No_copy_asked_never_claims_a_copy()
