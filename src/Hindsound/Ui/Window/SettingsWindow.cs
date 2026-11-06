@@ -98,7 +98,7 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
     private bool _trackingLeave;
     private bool _meterOn;
     private bool _editVisible;
-    private bool _swallowSystemKeyUp;
+    private readonly CaptureKeys _captureKeys = new();
     private bool _charForEdit;
     private int _wheelRest;
     private (Face Face, float Size, uint Dpi) _editFontKey;
@@ -463,7 +463,7 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
 
             case WindowNative.WM_KEYDOWN:
             case WindowNative.WM_SYSKEYDOWN:
-                _swallowSystemKeyUp = Screen.Listening;
+                _captureKeys.KeyDown(Screen.Listening, KeyRepeat.FromLParam(lParam));
                 var editWasHidden = !_editVisible;
                 var used = Screen.Key((uint)wParam, Modifiers(), KeyRepeat.FromLParam(lParam));
 
@@ -481,10 +481,10 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
                 Screen.KeyUp((uint)wParam, Modifiers());
 
                 // An Alt typed for a hotkey must not open the window menu when it comes up.
-                return message == WindowNative.WM_KEYUP || _swallowSystemKeyUp ? 0 : Native.DefWindowProcW(hwnd, message, wParam, lParam);
+                return message == WindowNative.WM_KEYUP || _captureKeys.Swallow ? 0 : Native.DefWindowProcW(hwnd, message, wParam, lParam);
 
             case WindowNative.WM_SYSCHAR:
-                return Screen.Listening ? 0 : Native.DefWindowProcW(hwnd, message, wParam, lParam);
+                return Screen.Listening || _captureKeys.Swallow ? 0 : Native.DefWindowProcW(hwnd, message, wParam, lParam);
 
             case WindowNative.WM_CHAR:
                 if (_charForEdit)

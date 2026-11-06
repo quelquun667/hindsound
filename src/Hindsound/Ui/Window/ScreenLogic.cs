@@ -279,6 +279,20 @@ internal static class KeyRepeat
     public static bool Swallowed(uint vk) => vk is Vk.Tab or Vk.Enter or Vk.Escape or Vk.Space;
 }
 
+/// <summary>
+/// The keys typed for a hotkey stay the capture's until their last message. The capture ends on the key down, and the
+/// WM_SYSCHAR of that key comes after: Windows would open the window menu on Alt+Space, and beep on Alt+letter.
+/// </summary>
+internal sealed class CaptureKeys
+{
+    /// <summary>The last key that went down was typed for a hotkey: what follows from it stays away from Windows.</summary>
+    public bool Swallow { get; private set; }
+
+    /// <param name="listening">A hotkey was being typed when this key went down.</param>
+    /// <param name="repeat">The key was already down: it stays what it was.</param>
+    public void KeyDown(bool listening, bool repeat) => Swallow = listening || (repeat && Swallow);
+}
+
 /// <summary>Turns the wheel deltas of Windows into notches. A touchpad sends small deltas that only count together.</summary>
 internal static class WheelNotches
 {
