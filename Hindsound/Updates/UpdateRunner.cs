@@ -59,6 +59,10 @@ internal sealed class UpdateRunner(UpdateStateStore store, string folder, Action
             using var file = new FileStream(setup, FileMode.Open, FileAccess.Read, FileShare.Read);
             if (!UpdateFiles.Matches(file, pending.Size, pending.Sha256))
             {
+                // With the right size it would pass for downloaded for ever, and this version would never be fetched again.
+                file.Dispose();
+                UpdateFiles.TryDelete(setup);
+                store.Save(state with { Pending = null });
                 return RunStatus.SetupChanged;
             }
 

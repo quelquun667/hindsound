@@ -42,11 +42,19 @@ internal static class UpdateUrlPolicy
             return false;
         }
 
-        if (parsed.Scheme != Uri.UriSchemeHttps
-            || parsed.UserInfo.Length != 0
-            || parsed.Port != 443
-            || !Array.Exists(AllowedHosts, host => host == parsed.IdnHost))
+        try
         {
+            if (parsed.Scheme != Uri.UriSchemeHttps
+                || parsed.UserInfo.Length != 0
+                || parsed.Port != 443
+                || !Array.Exists(AllowedHosts, host => host == parsed.IdnHost))
+            {
+                return false;
+            }
+        }
+        catch (UriFormatException)
+        {
+            // TryCreate accepts a host like xn--é.com, and only reading IdnHost finds out it is not a name.
             return false;
         }
 

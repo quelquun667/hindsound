@@ -21,6 +21,8 @@ internal static class TransferLoops
     public const int StopTestEveryBytes = 64 * 1024;
     public const int MaxRedirects = 5;
 
+    public static readonly TimeSpan StopTestEveryTime = TimeSpan.FromSeconds(1);
+
     public static TransportResult PumpBody(BodyReader read, TransferLimits limits, BodySink sink, Func<bool> shouldStop, Func<TimeSpan> elapsed)
     {
         if (shouldStop())
@@ -31,9 +33,11 @@ internal static class TransferLoops
         var buffer = new byte[StopTestEveryBytes];
         long total = 0;
         var sinceStopTest = 0;
+        var lastStopTest = elapsed();
         while (true)
         {
-            var remaining = limits.Total - elapsed();
+            var now = elapsed();
+            var remaining = limits.Total - now;
             if (remaining <= TimeSpan.Zero)
             {
                 return new TransportResult(TransportStatus.TimedOut);
@@ -58,10 +62,12 @@ internal static class TransferLoops
 
             sink(buffer.AsSpan(0, step.Bytes));
 
+            // By time as well: a server dripping bytes stays under the stall limit, and 64 KB could take the whole 5 minutes.
             sinceStopTest += step.Bytes;
-            if (sinceStopTest >= StopTestEveryBytes)
+            if (sinceStopTest >= StopTestEveryBytes || now - lastStopTest >= StopTestEveryTime)
             {
                 sinceStopTest = 0;
+                lastStopTest = now;
                 if (shouldStop())
                 {
                     return new TransportResult(TransportStatus.Stopped);
