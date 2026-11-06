@@ -58,6 +58,9 @@ internal static class Program
         catch (Exception ex)
         {
             journal.Write("fatal: " + ex);
+
+            // The same as a normal exit: nothing may be left capturing behind a process that has given up.
+            Environment.Exit(ExitFailed);
             return ExitFailed;
         }
     }

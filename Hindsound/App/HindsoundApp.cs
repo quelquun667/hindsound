@@ -21,6 +21,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private const int ProbeAfterCloseMs = 10_000;
     private const int StartupReadTries = 3;
     private const int StartupReadGapMs = 200;
+    private const int SelfTestFailDelayMs = 1500;
     private static readonly TimeSpan MeterWindow = TimeSpan.FromMilliseconds(80);
     private static readonly TimeSpan QueuedClipsLimit = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan EngineStopLimit = TimeSpan.FromSeconds(5);
@@ -83,7 +84,22 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         }
     }
 
+    /// <summary>Whatever comes out of the running app, the icon goes and the engine stops before the exception goes on.</summary>
     public int Run()
+    {
+        try
+        {
+            RunUntilQuit();
+        }
+        finally
+        {
+            Shutdown();
+        }
+
+        return _exitCode;
+    }
+
+    private void RunUntilQuit()
     {
         UiErrors.Handler = ex => _journal.Write("error: " + ex);
         LoadSettings();
@@ -121,7 +137,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         // Only when there was no settings file: the file now exists, so this happens once.
         if ((_firstRun || _options.ForceFirstRun) && !_options.SelfTestSave)
         {
-            OpenSettings(firstRun: true);
+            OpenFirstRunCard();
         }
 
         if (_options.SettingsProbe)
@@ -134,9 +150,34 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             _loop.After((int)Math.Min(seconds * 1000, int.MaxValue), _loop.Quit);
         }
 
+        if (_options.SelfTestFail == AppOptions.FailRun)
+        {
+            // Long enough for the capture to be running, which is the case this is about.
+            Thread.Sleep(SelfTestFailDelayMs);
+            throw new InvalidOperationException("--selftest-fail " + AppOptions.FailRun);
+        }
+
         _loop.Run();
-        Shutdown();
-        return _exitCode;
+    }
+
+    // The capture is already running: a card that can't open is no reason to lose it.
+    private void OpenFirstRunCard()
+    {
+        try
+        {
+            if (_options.SelfTestFail == AppOptions.FailCard)
+            {
+                throw new InvalidOperationException("--selftest-fail " + AppOptions.FailCard);
+            }
+
+            OpenSettings(firstRun: true);
+        }
+        catch (Exception ex)
+        {
+            _journal.Write("the first-launch card could not open: " + ex);
+            Guard(() => _window?.Dispose(), "first-launch card");
+            _window = null;
+        }
     }
 
     private uint Accent
@@ -1083,12 +1124,12 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
         _quitting = true;
         Guard(() => _window?.Dispose(), "settings window");
-        Guard(() => _tray.Dispose(), "tray");
-        Guard(() => _notification.Dispose(), "notification");
+        Guard(() => _tray?.Dispose(), "tray");
+        Guard(() => _notification?.Dispose(), "notification");
         Guard(() => _hotkeys?.Dispose(), "hotkeys");
         Guard(() =>
         {
-            if (!_pipeline.WaitIdle(QueuedClipsLimit))
+            if (_pipeline?.WaitIdle(QueuedClipsLimit) == false)
             {
                 _journal.Write("leaving with clips still being written");
             }
@@ -1101,7 +1142,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
                 _journal.Write("the engine did not stop in time");
             }
         }, "engine");
-        Guard(() => _loop.Dispose(), "window");
+        Guard(() => _loop?.Dispose(), "window");
         _journal.Write($"left, {Journal.Memory()}, {Journal.CpuMilliseconds():F0} ms of CPU in all");
     }
 
