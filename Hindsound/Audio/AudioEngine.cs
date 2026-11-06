@@ -274,7 +274,7 @@ public sealed class AudioEngine : IDisposable
         var system = Volatile.Read(ref _systemTrack);
         var mic = Volatile.Read(ref _micTrack);
         var (start, frames) = WindowOf(system, mic, FramesOf(duration));
-        return new AudioSnapshot(Copy(system, start, frames), Copy(mic, start, frames));
+        return AudioSnapshot.CopyFrom(system, mic, start, frames);
     }
 
     public void Dispose()
@@ -357,18 +357,6 @@ public sealed class AudioEngine : IDisposable
         return (start, (int)Math.Max(0, end - start));
     }
 
-    private static float[] Copy(SourceTrack? track, long start, int frames)
-    {
-        if (track is null || frames == 0)
-        {
-            return [];
-        }
-
-        // Every sample gets written by the copy, real or zero, so clearing the memory first would be wasted time.
-        var samples = GC.AllocateUninitializedArray<float>(frames * track.Channels);
-        track.CopyFrames(start, samples);
-        return samples;
-    }
 
     private async Task RunCommandAsync(Func<Task> command, bool waitForListeners = true, bool evenIfDisposed = false)
     {

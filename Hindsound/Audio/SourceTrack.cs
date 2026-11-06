@@ -85,6 +85,18 @@ public sealed class SourceTrack
         return Volatile.Read(ref _ring).CopyTo((startFrame - _originFrame) * Channels, destination);
     }
 
+    /// <summary>Copies a window like <see cref="CopyFrames"/>, and says what it could not deliver.</summary>
+    /// <returns>
+    /// How many frames at the start of the window were audio once and are gone: overtaken by the writer, or dropped
+    /// by a resize. Frames from before this track began were never audio, and do not count.
+    /// </returns>
+    public int CopyWindow(long startFrame, Span<float> destination)
+    {
+        var position = (startFrame - _originFrame) * Channels;
+        Volatile.Read(ref _ring).CopyTo(position, destination, out var firstHeld);
+        return (int)(Math.Max(0, firstHeld - Math.Max(0, position)) / Channels);
+    }
+
     /// <summary>
     /// Changes how much is kept, keeping the newest audio. The copy runs outside the lock and only the few frames
     /// written during it are moved under the lock, so the audio thread is not held up.

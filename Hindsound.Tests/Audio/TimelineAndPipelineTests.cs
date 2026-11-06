@@ -424,3 +424,98 @@ public class DeviceWatcherTests
         Assert.Equal(1, Volatile.Read(ref fired));
     }
 }
+
+public class SnapshotTruthTests
+{
+    private static SourceTrack Track(int channels, int capacity, long origin, long firstFrame, int frames)
+    {
+        var track = new SourceTrack(channels, capacity, origin);
+        var samples = new float[frames * channels];
+        for (var frame = 0; frame < frames; frame++)
+        {
+            for (var channel = 0; channel < channels; channel++)
+            {
+                samples[frame * channels + channel] = Ramp.Value(firstFrame + frame);
+            }
+        }
+
+        track.Append(firstFrame, samples, exact: true);
+        return track;
+    }
+
+    [Fact]
+    public void A_window_overtaken_by_the_writer_loses_the_same_head_on_both_sources()
+    {
+        // Both hold 1000 + 48000 frames: the PC from frame 11 000, the microphone from frame 21 000.
+        var system = Track(2, 1000, 0, 0, 60_000);
+        var mic = Track(1, 1000, 0, 0, 70_000);
+
+        var snapshot = AudioSnapshot.CopyFrom(system, mic, 5000, 50_000);
+
+        Assert.Equal(34_000, snapshot.Mic.Length);
+        Assert.Equal(68_000, snapshot.System.Length);
+        Assert.Equal(Ramp.ThroughBuffer(21_000), snapshot.Mic[0]);
+        Assert.Equal(Ramp.ThroughBuffer(21_000), snapshot.System[0]);
+        Assert.Equal(Ramp.ThroughBuffer(54_999), snapshot.Mic[^1]);
+        Assert.DoesNotContain(0f, snapshot.Mic);
+        Assert.DoesNotContain(0f, snapshot.System);
+    }
+
+    [Fact]
+    public void A_resize_between_the_window_and_the_copy_shortens_the_clip_and_adds_no_silence()
+    {
+        var system = Track(2, 100_000, 0, 0, 90_000);
+        var mic = Track(1, 100_000, 0, 0, 90_000);
+        var start = system.EndFrame - 80_000;
+
+        system.Resize(1000);
+        mic.Resize(1000);
+        var snapshot = AudioSnapshot.CopyFrom(system, mic, start, 80_000);
+
+        Assert.Equal(49_000, snapshot.Mic.Length);
+        Assert.Equal(98_000, snapshot.System.Length);
+        Assert.Equal(Ramp.ThroughBuffer(41_000), snapshot.Mic[0]);
+        Assert.Equal(Ramp.ThroughBuffer(89_999), snapshot.System[^1]);
+        Assert.DoesNotContain(0f, snapshot.Mic);
+        Assert.DoesNotContain(0f, snapshot.System);
+    }
+
+    [Fact]
+    public void A_window_entirely_gone_gives_an_empty_clip()
+    {
+        var system = Track(2, 1000, 0, 0, 200_000);
+        var mic = Track(1, 1000, 0, 0, 200_000);
+
+        var snapshot = AudioSnapshot.CopyFrom(system, mic, 1000, 5000);
+
+        Assert.Empty(snapshot.System);
+        Assert.Empty(snapshot.Mic);
+    }
+
+    [Fact]
+    public void A_lost_head_with_the_mic_off_leaves_the_mic_empty()
+    {
+        var system = Track(2, 1000, 0, 0, 60_000);
+
+        var snapshot = AudioSnapshot.CopyFrom(system, null, 5000, 50_000);
+
+        Assert.Empty(snapshot.Mic);
+        Assert.Equal(88_000, snapshot.System.Length);
+    }
+
+    [Fact]
+    public void Real_silence_is_kept_a_source_that_began_later_or_ended_earlier_cuts_nothing()
+    {
+        var late = Track(1, 10_000, 3000, 3000, 2000);
+        var early = Track(2, 10_000, 0, 0, 2000);
+
+        var snapshot = AudioSnapshot.CopyFrom(early, late, 0, 5000);
+
+        Assert.Equal(5000, snapshot.Mic.Length);
+        Assert.Equal(10_000, snapshot.System.Length);
+        Assert.Equal(0f, snapshot.Mic[2999]);
+        Assert.Equal(Ramp.ThroughBuffer(3000), snapshot.Mic[3000]);
+        Assert.Equal(Ramp.ThroughBuffer(1999), snapshot.System[3999]);
+        Assert.Equal(0f, snapshot.System[4000]);
+    }
+}
