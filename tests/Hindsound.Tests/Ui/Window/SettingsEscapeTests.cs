@@ -181,4 +181,19 @@ public sealed class SettingsEscapeTests : IDisposable
         Assert.Equal("from the file", Template);
         Assert.Equal("from the file", _rig.Host.EditText);
     }
+
+    [Fact]
+    public void Leaving_on_an_invalid_value_ends_what_escape_goes_back_to()
+    {
+        FocusTheTemplate();
+
+        Screen.EditChanged("good");
+        Screen.EditChanged("a<b");
+        Screen.Key(Vk.Tab, 0);
+        Screen.Key(Vk.Tab, HotkeyGesture.ModShift);
+        Screen.EditChanged("a<c");
+        Screen.Key(Vk.Escape, 0);
+
+        Assert.Equal("good", Template);
+    }
 }

@@ -520,7 +520,7 @@ internal sealed class TextField(FieldState state, Func<string, FieldCheck> check
     /// <summary>Escape: the setting goes back to what it held when the typing began, and the field with it.</summary>
     public void Revert()
     {
-        if (state.Entered is { } entered && entered != stored())
+        if (state.Entered is { } entered)
         {
             keep?.Invoke(entered);
         }
