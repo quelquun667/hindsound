@@ -614,15 +614,26 @@ public class AudioEngineTests
     {
         using var rig = new AudioTestRig();
         var seen = new List<CaptureActivity>();
+        var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         rig.Engine.StatusChanged += _ => throw new InvalidOperationException("listener bug");
-        rig.Engine.StatusChanged += status => seen.Add(status.Activity);
+        rig.Engine.StatusChanged += status =>
+        {
+            seen.Add(status.Activity);
+            if (status.Activity == CaptureActivity.Stopped)
+            {
+                stopped.TrySetResult();
+            }
+        };
 
         await rig.Engine.StartAsync();
         await rig.Engine.PauseAsync();
         await rig.Engine.ResumeAsync();
         await rig.Engine.StopAsync();
 
+        // The listener after the broken one hears everything, up to the stop, which is sent after StopAsync returns.
+        await stopped.Task.WaitAsync(TimeSpan.FromSeconds(20));
         Assert.Equal(CaptureActivity.Stopped, rig.Engine.Status.Activity);
+        Assert.Equal([CaptureActivity.Capturing, CaptureActivity.Paused, CaptureActivity.Capturing, CaptureActivity.Stopped], seen);
     }
 
     [Fact]

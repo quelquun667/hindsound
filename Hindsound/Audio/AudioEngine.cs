@@ -898,11 +898,26 @@ public sealed class AudioEngine : IDisposable
 
             // Once the buffer is full this stops firing, and only real changes get through.
             _lastPublished = status;
-            StatusChanged?.Invoke(status);
+            foreach (var listener in StatusChanged?.GetInvocationList() ?? [])
+            {
+                Notify((Action<AudioEngineStatus>)listener, status);
+            }
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            // A broken listener must not take the capture down with it.
+            Debug.WriteLine($"Could not send the status: {exception}");
+        }
+    }
+
+    // A broken listener must not take the capture down with it, nor deprive the other listeners of the status.
+    private static void Notify(Action<AudioEngineStatus> listener, AudioEngineStatus status)
+    {
+        try
+        {
+            listener(status);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
             Debug.WriteLine($"StatusChanged handler failed: {exception}");
         }
     }
