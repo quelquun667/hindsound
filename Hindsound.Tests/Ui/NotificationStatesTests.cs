@@ -26,6 +26,30 @@ public class NotificationStatesTests
     }
 
     [Fact]
+    public void Settings_damaged() =>
+        AssertState(NotificationStates.SettingsDamaged(copyKept: true), K.SettingsDamaged, "Settings file was damaged", "Defaults restored, mic off. Copy kept as .bak", P.Hot, NotificationVisual.Triangle);
+
+    [Fact]
+    public void Settings_damaged_without_a_copy() =>
+        AssertState(NotificationStates.SettingsDamaged(copyKept: false), K.SettingsDamaged, "Settings file was damaged", "Defaults restored, mic off", P.Hot, NotificationVisual.Triangle);
+
+    [Fact]
+    public void Settings_unreadable() =>
+        AssertState(NotificationStates.SettingsUnreadable(), K.SettingsUnreadable, "Can't read the settings file", "Using defaults, mic off, until it can be read", P.Hot, NotificationVisual.Triangle);
+
+    [Fact]
+    public void Settings_has_an_error() =>
+        AssertState(NotificationStates.SettingsHasError(), K.SettingsHasError, "Settings file has an error", "Keeping the current settings", P.Hot, NotificationVisual.Triangle);
+
+    [Fact]
+    public void Settings_not_saved() =>
+        AssertState(NotificationStates.SettingsNotSaved(), K.SettingsNotSaved, "Couldn't save your settings", "This change is lost at the next start", P.Hot, NotificationVisual.Triangle);
+
+    [Fact]
+    public void Startup_not_changed() =>
+        AssertState(NotificationStates.StartupNotChanged(), K.StartupNotChanged, "Couldn't change Start with Windows", "It stays as it was", P.Hot, NotificationVisual.Triangle);
+
+    [Fact]
     public void Saved_and_copied() =>
         AssertState(NotificationStates.ForClip(Clip(), Thirty, true, true, Accent), K.Saved, "Clip saved (0:30)", "Copied. Paste", Accent, NotificationVisual.Bars, "Ctrl", "V");
 

@@ -19,6 +19,11 @@ public enum NotificationKind
     Saving,
     NothingToSave,
     SaveFailed,
+    SettingsDamaged,
+    SettingsUnreadable,
+    SettingsHasError,
+    SettingsNotSaved,
+    StartupNotChanged,
 }
 
 /// <summary>What sits on the inner side of the tab, before the text.</summary>
@@ -146,6 +151,23 @@ internal static class NotificationStates
     public static NotificationContent SaveFailed() =>
         Icon(NotificationKind.SaveFailed, "Couldn't save the clip", "The reason is in hindsound.log", NotificationPalette.Hot, NotificationVisual.Triangle, NotificationPalette.Hot);
 
+    /// <summary>The start found a broken settings file.</summary>
+    /// <param name="copyKept">A copy of it exists; otherwise it stayed in its place.</param>
+    public static NotificationContent SettingsDamaged(bool copyKept) =>
+        Problem(NotificationKind.SettingsDamaged, "Settings file was damaged", copyKept ? "Defaults restored, mic off. Copy kept as .bak" : "Defaults restored, mic off");
+
+    public static NotificationContent SettingsUnreadable() =>
+        Problem(NotificationKind.SettingsUnreadable, "Can't read the settings file", "Using defaults, mic off, until it can be read");
+
+    public static NotificationContent SettingsHasError() =>
+        Problem(NotificationKind.SettingsHasError, "Settings file has an error", "Keeping the current settings");
+
+    public static NotificationContent SettingsNotSaved() =>
+        Problem(NotificationKind.SettingsNotSaved, "Couldn't save your settings", "This change is lost at the next start");
+
+    public static NotificationContent StartupNotChanged() =>
+        Problem(NotificationKind.StartupNotChanged, "Couldn't change Start with Windows", "It stays as it was");
+
     /// <summary><c>m:ss</c>.</summary>
     public static string FormatDuration(int seconds) => $"{seconds / 60}:{seconds % 60:00}";
 
@@ -154,6 +176,9 @@ internal static class NotificationStates
 
     private static NotificationContent Icon(NotificationKind kind, string title, string body, uint stripe, NotificationVisual visual, uint color) =>
         new(kind, title, body, [], stripe, visual, color, NoBars);
+
+    private static NotificationContent Problem(NotificationKind kind, string title, string body) =>
+        Icon(kind, title, body, NotificationPalette.Hot, NotificationVisual.Triangle, NotificationPalette.Hot);
 }
 
 /// <summary>Turns the 24 values of <see cref="ClipResult.Bars"/> into the 24 columns drawn.</summary>

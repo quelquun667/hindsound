@@ -19,6 +19,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private const int SelfTestExitDelayMs = 3300;
     private const int ProbeStepMs = 300;
     private const int ProbeAfterCloseMs = 10_000;
+    private const int StartupReadTries = 3;
+    private const int StartupReadGapMs = 200;
     private static readonly TimeSpan MeterWindow = TimeSpan.FromMilliseconds(80);
     private static readonly TimeSpan QueuedClipsLimit = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan EngineStopLimit = TimeSpan.FromSeconds(5);
@@ -36,7 +38,12 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private volatile AudioEngine? _engine;
 
     private AppSettings _settings = new();
-    private DateTime _settingsWritten;
+    private readonly SettingsFileState _settingsFile = new();
+    private readonly NoticeQueue _notices = new();
+    private bool _canShowNotices;
+    private bool _noticeRetrying;
+    private int _noticeRetries;
+    private bool _startTouchesRunKey;
     private AudioEngineOptions? _engineOptions;
     private SettingsWindow? _window;
     private bool _firstRun;
@@ -99,7 +106,14 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             _journal.Write("the tray icon could not be added");
         }
 
-        ApplyStartupRegistration();
+        _canShowNotices = true;
+        ShowNextNotice();
+
+        if (_startTouchesRunKey)
+        {
+            ApplyStartupRegistration();
+        }
+
         StartHotkeys();
         _journal.Write($"ready, before the capture: {Journal.Memory()}");
         StartEngine();
@@ -138,25 +152,90 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
     private void LoadSettings()
     {
-        _settings = _store.Load();
-        if (_store.LastStatus == SettingsLoadStatus.Missing)
+        _settings = _store.LoadPatiently(StartupReadTries, () => Thread.Sleep(StartupReadGapMs));
+        var start = _settingsFile.Started(_store.LastStatus, _store.LastBackupPath);
+        _firstRun = start.FirstRun;
+        _startTouchesRunKey = start.TouchRunKey;
+        if (start.MakeSafe)
         {
-            _firstRun = true;
+            SettingsFileState.MakeSafe(_settings, ReadRunKey());
+            _journal.Write($"settings not usable ({_store.LastStatus}): defaults with the mic off, kept as {_store.LastBackupPath ?? "(not moved)"}");
+        }
+
+        if (start.Write)
+        {
             TrySaveSettings();
         }
 
-        _settingsWritten = SettingsFileTime();
+        _settingsFile.Note(SettingsFileTime());
+        TellAboutSettings(start.Notice);
+    }
+
+    // A test run with its own settings file never touches the registry, for reading either.
+    private bool? ReadRunKey()
+    {
+        if (_options.SettingsPath is not null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return new StartupRegistration(new RegistryRunKey()).IsEnabled();
+        }
+        catch (Exception ex)
+        {
+            _journal.Write("startup registration: " + ex.Message);
+            return null;
+        }
     }
 
     private void TrySaveSettings()
     {
-        try
+        var saved = false;
+        switch (_settingsFile.NextWrite())
         {
-            _store.Save(_settings);
+            case WriteStep.Refuse:
+                _journal.Write("settings not written: the file could not be read yet");
+                break;
+            case WriteStep.KeepBrokenFirst when !KeepBrokenFile():
+                _journal.Write("settings not written: no copy of the broken file could be made");
+                break;
+            default:
+                try
+                {
+                    _store.Save(_settings);
+                    saved = true;
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    _journal.Write("settings not written: " + ex.Message);
+                }
+
+                break;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+
+        TellAboutSettings(_settingsFile.WriteEnded(saved, SettingsFileTime()));
+    }
+
+    private bool KeepBrokenFile()
+    {
+        if (_store.KeepCopyOfBrokenFile() is not { } copy)
         {
-            _journal.Write("settings not written: " + ex.Message);
+            return false;
+        }
+
+        _journal.Write("the broken settings file was kept as " + copy);
+        _settingsFile.BrokenKept();
+        return true;
+    }
+
+    private void TellAboutSettings(SettingsNotice notice)
+    {
+        if (SettingsFileState.ContentOf(notice, copyKept: !_settingsFile.BrokenOnDisk) is { } content)
+        {
+            _notices.Add(content);
+            ShowNextNotice();
         }
     }
 
@@ -176,12 +255,12 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private void ReloadSettingsIfChanged()
     {
         var written = SettingsFileTime();
-        if (written == _settingsWritten)
+        if (!_settingsFile.ShouldRead(written))
         {
             return;
         }
 
-        _settingsWritten = written;
+        _settingsFile.Note(written);
         _settings = _store.Load();
         _journal.Write($"settings read again ({_store.LastStatus})");
         ApplyStartupRegistration();
@@ -514,6 +593,64 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
     private void Present(NotificationContent content, bool clickThrough)
     {
+        if (_notices.ShowsNow(content))
+        {
+            PresentNow(content, clickThrough);
+        }
+    }
+
+    /// <summary>Shows what is next in line, if nothing on screen must stay. A lasting notice stays in line until it can be shown.</summary>
+    private void ShowNextNotice()
+    {
+        if (!_canShowNotices)
+        {
+            return;
+        }
+
+        while (_notices.Next() is { } next)
+        {
+            var (state, covers) = Surface();
+            var lasting = NoticeQueue.RankOf(next.Kind) == NoticeRank.Lasting;
+            var decision = lasting
+                ? FullscreenPolicy.ForClip(state, covers, _settings.General, saved: false, important: true)
+                : FullscreenPolicy.ForStatus(state, covers, _settings.General, important: next.Kind == NotificationKind.NoDevice);
+            if (decision.ShowOverlay)
+            {
+                _notices.Remove(next);
+                _noticeRetries = 0;
+                PresentNow(next, decision.ClickThrough);
+                return;
+            }
+
+            if (lasting)
+            {
+                RetryNoticeLater();
+                return;
+            }
+
+            _notices.Remove(next);
+        }
+    }
+
+    // The same pace and the same limit as a clip waiting for the desktop; past it, the next press or menu looks again.
+    private void RetryNoticeLater()
+    {
+        if (_noticeRetrying || _noticeRetries >= CatchUpTries)
+        {
+            return;
+        }
+
+        _noticeRetrying = true;
+        _noticeRetries++;
+        _loop.After(CatchUpPollMs, () =>
+        {
+            _noticeRetrying = false;
+            ShowNextNotice();
+        });
+    }
+
+    private void PresentNow(NotificationContent content, bool clickThrough)
+    {
         Native.RECT area;
         uint dpi;
         if (_options.Offscreen)
@@ -533,6 +670,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         _cpuBeforeNotification = Journal.CpuMilliseconds();
         var leftEdge = string.Equals(_settings.General.NotificationPosition, "left", StringComparison.OrdinalIgnoreCase);
         _notification.Present(content, new NotificationPlacement(area, dpi, clickThrough, leftEdge), Accent);
+        _notices.Shown(content);
     }
 
     private void OnNotificationFinished()
@@ -541,6 +679,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         {
             _journal.Write($"notification left the screen: {Journal.CpuMilliseconds() - _cpuBeforeNotification:F0} ms of process CPU while it was up (capture included), {Journal.Memory()}");
         }
+
+        _notices.Finished();
+        ShowNextNotice();
     }
 
     /// <summary>The check only runs here, every 500 ms for 30 s at most. A newer clip replaces the one waiting.</summary>
@@ -728,7 +869,6 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     void ISettingsBackend.Applied(SettingsChange change)
     {
         TrySaveSettings();
-        _settingsWritten = SettingsFileTime();
         if ((change & SettingsChange.Startup) != 0)
         {
             ApplyStartupRegistration();

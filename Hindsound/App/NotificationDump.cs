@@ -61,6 +61,12 @@ internal static class NotificationDump
             ("saving", NotificationStates.Saving(thirty)),
             ("nothing", NotificationStates.NothingToSave()),
             ("failed", NotificationStates.SaveFailed()),
+            ("settings-damaged", NotificationStates.SettingsDamaged(copyKept: true)),
+            ("settings-damaged-nocopy", NotificationStates.SettingsDamaged(copyKept: false)),
+            ("settings-unreadable", NotificationStates.SettingsUnreadable()),
+            ("settings-error", NotificationStates.SettingsHasError()),
+            ("settings-notsaved", NotificationStates.SettingsNotSaved()),
+            ("startup-notchanged", NotificationStates.StartupNotChanged()),
         ];
     }
 }
