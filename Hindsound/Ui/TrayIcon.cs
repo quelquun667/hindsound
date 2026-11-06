@@ -31,9 +31,25 @@ internal enum TrayCommand : uint
 /// <summary>One line of the tray menu. <see cref="TrayCommand.None"/> is a separator.</summary>
 internal readonly record struct TrayMenuItem(TrayCommand Command, string Text = "", bool Enabled = true);
 
+/// <summary>What a message of the icon asks for.</summary>
+internal enum TrayGesture
+{
+    None,
+    Menu,
+    OpenSettings,
+}
+
 /// <summary>What the tray menu offers. Pure: tested without any window.</summary>
 internal static class TrayMenu
 {
+    /// <summary>With NOTIFYICON_VERSION_4 the code is one of these, whatever the mouse did: a left click or Enter is a selection.</summary>
+    public static TrayGesture GestureOf(uint code) => code switch
+    {
+        Native.WM_CONTEXTMENU => TrayGesture.Menu,
+        Native.NIN_SELECT or Native.NIN_KEYSELECT => TrayGesture.OpenSettings,
+        _ => TrayGesture.None,
+    };
+
     /// <param name="paused">The capture is paused.</param>
     /// <param name="hasLastClip">There is a clip to copy.</param>
     /// <param name="closingAfterClip">Quit was asked for and a clip is still being written: a second Quit is all that is left to do.</param>

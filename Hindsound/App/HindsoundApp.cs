@@ -967,11 +967,20 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
     private void OnTrayMessage(uint code, nuint wParam)
     {
-        if (code != Native.WM_CONTEXTMENU)
+        switch (TrayMenu.GestureOf(code))
         {
-            return;
+            case TrayGesture.Menu:
+                OnTrayMenu(wParam);
+                break;
+            case TrayGesture.OpenSettings:
+                ReloadSettingsIfChanged();
+                OpenSettings(firstRun: false);
+                break;
         }
+    }
 
+    private void OnTrayMenu(nuint wParam)
+    {
         ReloadSettingsIfChanged();
         var paused = _lastStatus?.Activity == CaptureActivity.Paused;
         var command = _tray.ShowMenu((short)(wParam & 0xFFFF), (short)((wParam >> 16) & 0xFFFF), TrayMenu.Items(paused, _lastClip is not null, _leave.Waiting));
