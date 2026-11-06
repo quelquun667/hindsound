@@ -118,6 +118,9 @@ internal enum ClipFailure
 
     /// <summary>The snapshot or the writing threw.</summary>
     Failed,
+
+    /// <summary>The clips waiting to be written already hold too much memory: this press copied nothing.</summary>
+    Busy,
 }
 
 /// <summary>How one press ended. <see cref="Result"/> is null unless the clip was written.</summary>
@@ -126,12 +129,22 @@ internal sealed record ClipOutcome(ClipRequest Request, ClipResult? Result, Clip
 /// <summary>
 /// From the press to the written file. The moment is copied first: a snapshot is taken at once on its own queue, even
 /// while an earlier clip is encoding, and the encoding waits in a queue with a single encoder. Nothing here can throw
-/// into the caller, and an empty snapshot never reaches the encoder.
+/// into the caller, and an empty snapshot never reaches the encoder. Each snapshot waits in memory until its clip is
+/// written, so presses that come faster than the encoder stop being copied past <see cref="MaxWaitingBytes"/>.
 /// </summary>
 internal sealed class ClipPipeline
 {
     /// <summary>Under this time the writing goes unannounced.</summary>
     public const int SavingNoticeMs = 150;
+
+    /// <summary>What snapshots may hold while they wait. A single clip goes through whatever its size: it is what the user asked for.</summary>
+    public const long MaxWaitingBytes = 1_200_000_000;
+
+    private const long BytesPerSecond = 48_000L * 3 * sizeof(float); // the system's two channels and the microphone
+
+    private readonly object _waitingLock = new();
+    private long _waitingBytes;
+    private int _waitingPieces;
 
     private readonly IClipBackend _backend;
     private readonly Action<Action> _post;
@@ -167,8 +180,18 @@ internal sealed class ClipPipeline
     public bool WaitIdle(TimeSpan timeout) =>
         _snapshots.WaitIdle(timeout) && _encoder.WaitIdle(timeout);
 
+    /// <summary>What a snapshot of this length holds at most, known before anything is copied.</summary>
+    public static long EstimatedBytes(TimeSpan requested) => (long)(BytesPerSecond * requested.TotalSeconds);
+
     private void TakeSnapshot(ClipRequest request)
     {
+        var bytes = EstimatedBytes(request.Requested);
+        if (!TryHold(bytes))
+        {
+            Finish(new ClipOutcome(request, null, ClipFailure.Busy));
+            return;
+        }
+
         AudioSnapshot snapshot;
         try
         {
@@ -176,6 +199,7 @@ internal sealed class ClipPipeline
         }
         catch (Exception ex)
         {
+            LetGo(bytes);
             _report(ex);
             Finish(new ClipOutcome(request, null, ClipFailure.Failed));
             return;
@@ -183,27 +207,52 @@ internal sealed class ClipPipeline
 
         if (snapshot.System.Length == 0 && snapshot.Mic.Length == 0)
         {
+            LetGo(bytes);
             Finish(new ClipOutcome(request, null, ClipFailure.NothingCaptured));
             return;
         }
 
-        _encoder.Enqueue(() => Encode(request, snapshot));
+        _encoder.Enqueue(() => Encode(request, snapshot, bytes));
     }
 
-    private void Encode(ClipRequest request, AudioSnapshot snapshot)
+    private bool TryHold(long bytes)
+    {
+        lock (_waitingLock)
+        {
+            if (_waitingPieces > 0 && _waitingBytes + bytes > MaxWaitingBytes)
+            {
+                return false;
+            }
+
+            _waitingPieces++;
+            _waitingBytes += bytes;
+            return true;
+        }
+    }
+
+    private void LetGo(long bytes)
+    {
+        lock (_waitingLock)
+        {
+            _waitingPieces--;
+            _waitingBytes -= bytes;
+        }
+    }
+
+    private void Encode(ClipRequest request, AudioSnapshot snapshot, long bytes)
     {
         var done = new StrongBox();
-        _post(() => _after(SavingNoticeMs, () =>
-        {
-            if (!done.Value)
-            {
-                SavingSlowly?.Invoke(request);
-            }
-        }));
-
         ClipOutcome outcome;
         try
         {
+            _post(() => _after(SavingNoticeMs, () =>
+            {
+                if (!done.Value)
+                {
+                    SavingSlowly?.Invoke(request);
+                }
+            }));
+
             var result = _backend.Save(snapshot, request.Options, request.AppName);
             outcome = new ClipOutcome(request, result, ClipFailure.None);
         }
@@ -214,6 +263,9 @@ internal sealed class ClipPipeline
         }
 
         done.Value = true;
+
+        // Before the news of the end: whoever hears it can press again at once.
+        LetGo(bytes);
         Finish(outcome);
     }
 

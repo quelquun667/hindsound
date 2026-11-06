@@ -24,6 +24,7 @@ public enum NotificationKind
     SettingsHasError,
     SettingsNotSaved,
     StartupNotChanged,
+    StillSaving,
 }
 
 /// <summary>What sits on the inner side of the tab, before the text.</summary>
@@ -150,6 +151,9 @@ internal static class NotificationStates
 
     public static NotificationContent SaveFailed() =>
         Icon(NotificationKind.SaveFailed, "Couldn't save the clip", "The reason is in hindsound.log", NotificationPalette.Hot, NotificationVisual.Triangle, NotificationPalette.Hot);
+
+    public static NotificationContent StillSaving() =>
+        Icon(NotificationKind.StillSaving, "Still saving your last clip", "Try again in a moment", NotificationPalette.Amber, NotificationVisual.Triangle, NotificationPalette.Amber);
 
     /// <summary>The start found a broken settings file.</summary>
     /// <param name="copyKept">A copy of it exists; otherwise it stayed in its place.</param>

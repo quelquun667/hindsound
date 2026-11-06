@@ -584,7 +584,12 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         _loop.After(SnapshotReleaseDelayMs, ReleaseSnapshotMemory);
         if (outcome.Result is not { } result)
         {
-            var content = outcome.Failure == ClipFailure.NothingCaptured ? NotificationStates.NothingToSave() : NotificationStates.SaveFailed();
+            var content = outcome.Failure switch
+            {
+                ClipFailure.NothingCaptured => NotificationStates.NothingToSave(),
+                ClipFailure.Busy => NotificationStates.StillSaving(),
+                _ => NotificationStates.SaveFailed(),
+            };
             _journal.Write($"clip not saved: {outcome.Failure}");
             ShowClip(content, saved: false, important: outcome.Failure == ClipFailure.Failed);
             FinishSelfTest(outcome, false);

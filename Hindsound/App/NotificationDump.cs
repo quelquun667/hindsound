@@ -67,6 +67,7 @@ internal static class NotificationDump
             ("settings-error", NotificationStates.SettingsHasError()),
             ("settings-notsaved", NotificationStates.SettingsNotSaved()),
             ("startup-notchanged", NotificationStates.StartupNotChanged()),
+            ("stillsaving", NotificationStates.StillSaving()),
         ];
     }
 }

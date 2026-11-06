@@ -50,6 +50,10 @@ public class NotificationStatesTests
         AssertState(NotificationStates.StartupNotChanged(), K.StartupNotChanged, "Couldn't change Start with Windows", "It stays as it was", P.Hot, NotificationVisual.Triangle);
 
     [Fact]
+    public void Still_saving() =>
+        AssertState(NotificationStates.StillSaving(), K.StillSaving, "Still saving your last clip", "Try again in a moment", P.Amber, NotificationVisual.Triangle);
+
+    [Fact]
     public void Saved_and_copied() =>
         AssertState(NotificationStates.ForClip(Clip(), Thirty, true, true, Accent), K.Saved, "Clip saved (0:30)", "Copied. Paste", Accent, NotificationVisual.Bars, "Ctrl", "V");
 
