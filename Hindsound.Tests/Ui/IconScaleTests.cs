@@ -7,7 +7,6 @@ namespace Hindsound.Tests.Ui;
 public class IconScaleTests
 {
     private const uint Accent = 0xD4F53C;
-    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(5);
 
     [Theory]
     [InlineData(Native.WM_DPICHANGED, 0u)]
@@ -27,34 +26,6 @@ public class IconScaleTests
     public void These_do_not(uint message, uint wParam)
     {
         Assert.False(UiLoop.MeansScaleChange(message, wParam));
-    }
-
-    [Fact]
-    public void A_real_message_to_the_hidden_window_reaches_the_listener()
-    {
-        using var ended = new ManualResetEventSlim();
-        var heard = 0;
-        var thread = new Thread(() =>
-        {
-            using var loop = new UiLoop();
-            loop.ScaleMayHaveChanged = () => heard++;
-
-            // Sent, as Windows does: a message whose lParam can be a pointer cannot be posted.
-            WindowNative.SendMessageW(loop.Hwnd, Native.WM_DPICHANGED, 144 | (144 << 16), 0);
-            WindowNative.SendMessageW(loop.Hwnd, Native.WM_SETTINGCHANGE, 0, 0);
-            WindowNative.SendMessageW(loop.Hwnd, Native.WM_SETTINGCHANGE, Native.SPI_SETLOGICALDPIOVERRIDE, 0);
-            loop.After(100, loop.Quit);
-            loop.Run();
-            ended.Set();
-        })
-        {
-            IsBackground = true,
-        };
-
-        thread.Start();
-
-        Assert.True(ended.Wait(Bound));
-        Assert.Equal(2, heard);
     }
 
     [Theory]

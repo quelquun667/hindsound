@@ -1,4 +1,5 @@
 using Hindsound.Ui;
+using Hindsound.Ui.Window;
 
 namespace Hindsound.Tests.Ui;
 
@@ -105,6 +106,26 @@ public class UiLoopTests
 
         Assert.True(ended);
         Assert.Equal(1, asked);
+    }
+
+    [Fact]
+    public void A_message_about_the_scale_reaches_the_listener_and_another_setting_does_not()
+    {
+        var heard = 0;
+
+        var ended = LoopEnds(loop =>
+        {
+            loop.ScaleMayHaveChanged = () => heard++;
+
+            // Sent, as Windows does: a message whose lParam can be a pointer cannot be posted.
+            WindowNative.SendMessageW(loop.Hwnd, Native.WM_DPICHANGED, 144 | (144 << 16), 0);
+            WindowNative.SendMessageW(loop.Hwnd, Native.WM_SETTINGCHANGE, 0, 0);
+            WindowNative.SendMessageW(loop.Hwnd, Native.WM_SETTINGCHANGE, Native.SPI_SETLOGICALDPIOVERRIDE, 0);
+            loop.After(100, loop.Quit);
+        });
+
+        Assert.True(ended);
+        Assert.Equal(2, heard);
     }
 
     [Fact]
