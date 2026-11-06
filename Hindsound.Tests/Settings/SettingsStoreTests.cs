@@ -273,6 +273,14 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public void Read_MissingFolder_IsMissing()
+    {
+        var read = new SettingsStore(Path.Combine(_folder, "not there", "settings.json")).Read();
+
+        Assert.Equal(SettingsLoadStatus.Missing, read.Status);
+    }
+
+    [Fact]
     public void Read_GoodFile_GivesTheNormalizedSettings()
     {
         File.WriteAllText(FilePath, "{ \"clipSeconds\": -5 }");

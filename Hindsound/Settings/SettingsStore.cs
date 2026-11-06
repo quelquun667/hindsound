@@ -93,11 +93,6 @@ public sealed class SettingsStore
     {
         try
         {
-            if (!File.Exists(Path))
-            {
-                return new SettingsRead(SettingsLoadStatus.Missing, null);
-            }
-
             var settings = JsonSerializer.Deserialize(File.ReadAllText(Path), TypeInfo);
             return settings is null
                 ? new SettingsRead(SettingsLoadStatus.Corrupt, null)
@@ -109,7 +104,6 @@ public sealed class SettingsStore
         }
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
         {
-            // Gone between the check and the opening.
             return new SettingsRead(SettingsLoadStatus.Missing, null);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
