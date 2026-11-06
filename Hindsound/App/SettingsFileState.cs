@@ -83,6 +83,34 @@ internal static class StartupSwitch
 }
 
 /// <summary>
+/// A file the start could not read gets read as soon as it can be, without waiting for the user: a shortcut of the file is
+/// not registered yet, so its press would never come. The pace drops, it never stops, and it ends with the first real read.
+/// </summary>
+/// <param name="awaitingRead">The file is still to be read.</param>
+/// <param name="nowMs">The time.</param>
+/// <param name="after">Runs an action later, on the loop's thread.</param>
+/// <param name="read">Reads the file. Never throws.</param>
+internal sealed class SettingsRetry(Func<bool> awaitingRead, Func<long> nowMs, Action<int, Action> after, Action read)
+{
+    private readonly NoticeRetry _pace = new();
+
+    public void Arm()
+    {
+        if (!awaitingRead() || _pace.Arm(nowMs()) is not { } delay)
+        {
+            return;
+        }
+
+        after(delay, () =>
+        {
+            _pace.Fired();
+            read();
+            Arm();
+        });
+    }
+}
+
+/// <summary>
 /// What the app knows about the settings file between two looks at it (PLAN section 7: an app that records never turns
 /// back on a microphone that may have been turned off). Decisions only, no file and no window: tested without either.
 /// </summary>

@@ -186,6 +186,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             throw new InvalidOperationException("--selftest-fail " + AppOptions.FailRun);
         }
 
+        new SettingsRetry(() => _settingsFile.AwaitingRead, () => NowMs, _loop.After, ReloadSettingsIfChanged).Arm();
         _loop.Run();
     }
 
@@ -322,8 +323,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     }
 
     /// <summary>
-    /// The file can still be edited by hand: a change counts at the next press or menu. Never throws: whatever happens
-    /// here, the press that called it goes on.
+    /// The file can still be edited by hand: a change counts at the next press or menu. A file the start could not read
+    /// also comes here by itself, see <see cref="SettingsRetry"/>. Never throws: whatever happens here, the press that
+    /// called it goes on.
     /// </summary>
     private void ReloadSettingsIfChanged()
     {
