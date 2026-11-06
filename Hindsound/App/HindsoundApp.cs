@@ -251,18 +251,50 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         }
     }
 
-    /// <summary>The file can still be edited by hand: a change counts at the next press or menu.</summary>
+    /// <summary>
+    /// The file can still be edited by hand: a change counts at the next press or menu. Never throws: whatever happens
+    /// here, the press that called it goes on.
+    /// </summary>
     private void ReloadSettingsIfChanged()
     {
+        try
+        {
+            ReadSettingsAgain();
+            ShowNextNotice();
+        }
+        catch (Exception ex)
+        {
+            _journal.Write("reading the settings again: " + ex);
+        }
+    }
+
+    private void ReadSettingsAgain()
+    {
+        if (_options.SelfTestFail == AppOptions.FailReload)
+        {
+            throw new InvalidOperationException("--selftest-fail " + AppOptions.FailReload);
+        }
+
         var written = SettingsFileTime();
         if (!_settingsFile.ShouldRead(written))
         {
             return;
         }
 
-        _settingsFile.Note(written);
-        _settings = _store.Load();
-        _journal.Write($"settings read again ({_store.LastStatus})");
+        var read = _store.Read();
+        var decision = _settingsFile.Reread(read.Status, written);
+        if (decision.JournalLine is { } line)
+        {
+            _journal.Write(line);
+        }
+
+        TellAboutSettings(decision.Notice);
+        if (!decision.Apply || read.Settings is not { } settings)
+        {
+            return;
+        }
+
+        _settings = settings;
         ApplyStartupRegistration();
         ApplyHotkeys();
         ApplyEngineOptions();
