@@ -13,7 +13,7 @@ public sealed class SettingsStoreTests : IDisposable
     public void Dispose() => Directory.Delete(_folder, recursive: true);
 
     [Fact]
-    public void Defaults_MatchThePlan()
+    public void Defaults_AreTheExpectedValues()
     {
         var s = new AppSettings();
 

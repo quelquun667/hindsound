@@ -288,7 +288,7 @@ public class NotificationBitmapTests
 
     [Theory]
     [MemberData(nameof(Scales))]
-    public void The_tab_has_the_size_of_the_plan_at_every_scale(int dpi)
+    public void The_tab_has_the_designed_size_at_every_scale(int dpi)
     {
         using var bitmap = new NotificationBitmap(Saved(), dpi / 96.0, Accent, false);
         Assert.Equal((int)Math.Round(360 * dpi / 96.0), bitmap.Width);
@@ -324,7 +324,7 @@ public class NotificationBitmapTests
     [Theory]
     [InlineData(false, 14, 122)]
     [InlineData(true, 250, 18)]
-    public void The_layout_follows_the_plan_for_bars(bool mirrored, float visual, float text)
+    public void The_layout_is_the_designed_one_for_bars(bool mirrored, float visual, float text)
     {
         Assert.Equal(visual, NotificationBitmap.VisualLeft(Saved(), mirrored));
         Assert.Equal(text, NotificationBitmap.TextLeft(Saved(), mirrored));

@@ -11,7 +11,7 @@ public class AccentColorsTests
     [InlineData("#B79CFF")]
     [InlineData("#FF6FB5")]
     [InlineData("#F2F4F7")]
-    public void PlanColors_AreAllValid(string hex)
+    public void AccentColors_AreAllValid(string hex)
     {
         Assert.Equal(AccentCheck.Valid, AccentColors.Validate(hex));
         Assert.Equal(hex, AccentColors.Resolve(hex));

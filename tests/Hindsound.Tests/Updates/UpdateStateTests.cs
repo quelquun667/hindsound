@@ -54,7 +54,7 @@ public class UpdateStateTests
     }
 
     [Fact]
-    public void TheFileUsesTheNamesOfThePlan()
+    public void TheFileUsesTheExpectedNames()
     {
         using var folder = new TempFolder();
         var path = folder.File("state.json");
