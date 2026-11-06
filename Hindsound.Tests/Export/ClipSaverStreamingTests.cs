@@ -97,6 +97,21 @@ public sealed class ClipSaverStreamingTests : IDisposable
     // ---------------------------------------------------------------- streaming limiter
 
     [Fact]
+    public void A_limited_clip_keeps_every_frame_including_the_tail_held_back_by_the_look_ahead()
+    {
+        // Constant 1.5 (+3.5 dBFS) in both channels: the limiter works from the first frame to the last.
+        var snapshot = new AudioSnapshot(Signals.Constant(1.5f, 48000 + 123), []);
+        var options = new ExportOptions { Format = ExportFormat.Wav, Normalization = NormalizationMode.Off, OutputFolder = OutputFolder };
+
+        var result = new ClipSaver(RescueFolder, () => Moment).Save(snapshot, options, null);
+
+        var raw = Signals.ReadWavRaw(result.PrimaryPath);
+        Assert.Equal((48000 + 123) * 2, raw.Length);
+        Assert.Equal(32767, raw[^1]); // the last frame is there, held at the ceiling (constant input, so a flat gain of 2/3)
+        Assert.All(raw, s => Assert.InRange((int)s, 0, 32767));
+    }
+
+    [Fact]
     public void The_streaming_limiter_gives_the_same_samples_in_pieces_as_in_one_go()
     {
         var random = new Random(99);
