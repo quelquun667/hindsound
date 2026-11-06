@@ -134,6 +134,9 @@ internal static class NotificationStates
             partial ? NotificationPalette.Amber : accent, NotificationVisual.Bars, accent, bars);
     }
 
+    /// <summary>The notification tells the user to paste: the clip really is on the clipboard.</summary>
+    public static bool SaysPaste(NotificationContent content) => ReferenceEquals(content.Keys, PasteKeys);
+
     public static NotificationContent NoDevice() =>
         Icon(NotificationKind.NoDevice, "No audio device", "Nothing is being captured", NotificationPalette.Hot, NotificationVisual.Triangle, NotificationPalette.Hot);
 

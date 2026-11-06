@@ -657,13 +657,20 @@ internal sealed partial class SettingsScreen
                 var gesture = Editor.Settings.Hotkeys.SaveDefault ?? string.Empty;
                 FirstRunNote("Say something, then press your hotkey.", inner, top);
                 Add(new Painted((c, _) => c.Keycaps(gesture, inner, top + 42)), scrolls: false);
-                if (done)
+                if (done && _lastClip is { } clip)
                 {
-                    Add(new Painted((c, _) =>
+                    if (clip.Notice is { } notice && !NotificationStates.SaysPaste(notice))
                     {
-                        c.TextMid("Now paste it anywhere.", Face.Medium, 14, inner, top + 84, Theme.Text);
-                        c.Keycaps("Ctrl+V", inner + 8 + c.Measure("Now paste it anywhere.", Face.Medium, 14), top + 84);
-                    }), scrolls: false);
+                        Add(new Painted((c, _) => c.TextMid(c.Fit(notice.Body, Face.Medium, 14, width), Face.Medium, 14, inner, top + 84, Theme.Text)), scrolls: false);
+                    }
+                    else
+                    {
+                        Add(new Painted((c, _) =>
+                        {
+                            c.TextMid("Now paste it anywhere.", Face.Medium, 14, inner, top + 84, Theme.Text);
+                            c.Keycaps("Ctrl+V", inner + 8 + c.Measure("Now paste it anywhere.", Face.Medium, 14), top + 84);
+                        }), scrolls: false);
+                    }
                 }
 
                 break;

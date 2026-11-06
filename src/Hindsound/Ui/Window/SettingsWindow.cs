@@ -1091,6 +1091,15 @@ internal static unsafe class SettingsDump
             s.Key(Vk.Enter, 0);
             s.SetLastClip(new LastClipInfo(TimeSpan.FromSeconds(30), DateTime.Now, 720_000));
         }, firstRun: true);
+        Shot("firstrun-3-not-copied", (s, _) =>
+        {
+            s.Key(Vk.Tab, 0);
+            s.Key(Vk.Tab, 0);
+            s.Key(Vk.Enter, 0);
+            s.Key(Vk.Enter, 0);
+            var clip = new Hindsound.Export.ClipResult(["clip.mp3"], TimeSpan.FromSeconds(30), 720_000, false, [], false);
+            s.SetLastClip(new LastClipInfo(clip.Duration, DateTime.Now, clip.SizeBytes) { Notice = NotificationStates.ForClip(clip, clip.Duration, true, false, Theme.Amber) });
+        }, firstRun: true);
 
         return FolderPicker.SelfCheck() ? 0 : 3;
     }

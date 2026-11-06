@@ -199,6 +199,9 @@ internal static class StatusText
 /// <summary>What the foot of the window shows about the last clip.</summary>
 internal sealed record LastClipInfo(TimeSpan Duration, DateTime Time, long SizeBytes)
 {
+    /// <summary>What the notification says about this clip now: the first-launch card says the same. Null when it was copied without a word.</summary>
+    public NotificationContent? Notice { get; init; }
+
     public string DurationText => NotificationStates.FormatDuration(NotificationStates.WholeSeconds(Duration));
 
     public string TimeText => Time.ToString("HH:mm", CultureInfo.InvariantCulture);

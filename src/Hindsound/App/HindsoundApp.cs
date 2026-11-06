@@ -73,6 +73,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private ClipResult? _lastClip;
     private DateTime _lastClipTime;
     private TimeSpan _lastRequested;
+    private NotificationContent? _lastClipNotice;
 
     private double _cpuBeforeNotification;
     private int _exitCode;
@@ -704,6 +705,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         _lastClip = result;
         _lastClipTime = DateTime.Now;
         _lastRequested = outcome.Request.Requested;
+
+        // What is true until the copy has been tried: the clip is in its folder.
+        _lastClipNotice = NotificationStates.ForClip(result, _lastRequested, copyWanted: false, copied: false, Accent);
         _window?.Screen.SetLastClip(LastClipShown());
         _journal.Write($"clip saved: {string.Join(", ", result.Paths)}, {result.Duration.TotalSeconds:F2} s of {outcome.Request.Requested.TotalSeconds:F0} s, {result.SizeBytes} bytes, silent {result.IsSilent}, rescued {result.Rescued}, fell back to WAV {result.FellBackToWav}, {Journal.Memory()}");
         if (outcome.Request.CopyWanted)
@@ -730,6 +734,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         {
             var content = NotificationStates.ForClip(result, outcome.Request.Requested, outcome.Request.CopyWanted, copied, Accent);
             _journal.Write($"clipboard: wanted {outcome.Request.CopyWanted}, copied {copied}; notification {content.Kind}");
+            NoteLastClipNotice(result, content);
             var copyFailed = outcome.Request.CopyWanted && !copied;
             ShowClip(content, saved: true, important: result.Rescued || copyFailed, copyFailed, outcome.Request.Screen);
             FinishSelfTest(outcome, copied);
@@ -737,6 +742,16 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         finally
         {
             LeaveIfClipsDone();
+        }
+    }
+
+    // The first-launch card says what the notification says. Only about the last clip: a copy can end after a newer one is written.
+    private void NoteLastClipNotice(ClipResult clip, NotificationContent content)
+    {
+        if (ReferenceEquals(_lastClip, clip))
+        {
+            _lastClipNotice = content;
+            _window?.Screen.SetLastClip(LastClipShown());
         }
     }
 
@@ -758,7 +773,12 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         }
 
         // The answer to a press: the sound is only for a new clip, and a copy that failed is said whatever the settings.
-        CopyClip(clip, copied => ShowClip(NotificationStates.ForClip(clip, _lastRequested, true, copied, Accent), saved: false, important: !copied, copyFailed: !copied, screen));
+        CopyClip(clip, copied =>
+        {
+            var content = NotificationStates.ForClip(clip, _lastRequested, true, copied, Accent);
+            NoteLastClipNotice(clip, content);
+            ShowClip(content, saved: false, important: !copied, copyFailed: !copied, screen);
+        });
     }
 
     // ---------------------------------------------------------------- showing
@@ -1184,7 +1204,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     });
 
     private LastClipInfo? LastClipShown() =>
-        _lastClip is { } clip ? new LastClipInfo(clip.Duration, _lastClipTime, clip.SizeBytes) : null;
+        _lastClip is { } clip ? new LastClipInfo(clip.Duration, _lastClipTime, clip.SizeBytes) { Notice = _lastClipNotice } : null;
 
     private void OnSettingsClosed()
     {
