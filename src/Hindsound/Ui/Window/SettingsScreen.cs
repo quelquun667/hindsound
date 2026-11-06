@@ -221,10 +221,13 @@ internal sealed partial class SettingsScreen
         Editor.Settings = settings;
         _clipField.Draft = ClipFieldText();
         _clipField.Message = null;
+        _clipField.Entered = null;
         _hexField.Draft = Editor.AccentHex;
         _hexField.Message = null;
+        _hexField.Entered = null;
         _templateField.Draft = settings.Export.FileNameTemplate;
         _templateField.Message = null;
+        _templateField.Entered = null;
         _customClipOpen = Editor.ClipSegment == SettingsEditor.CustomClip;
         _customAccentOpen = AccentColors.PresetOf(Editor.AccentHex) == AccentPreset.Custom;
         _forceEditText = true;
@@ -370,6 +373,7 @@ internal sealed partial class SettingsScreen
         if (Focus is TextField field)
         {
             field.Commit();
+            field.State.Entered = null;
         }
     }
 

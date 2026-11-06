@@ -464,6 +464,9 @@ internal sealed class FieldState(string draft)
     public string Draft { get; set; } = draft;
 
     public string? Message { get; set; }
+
+    /// <summary>What the setting held when the typing began: a valid value is written as it is typed, and Escape gives this back.</summary>
+    public string? Entered { get; set; }
 }
 
 /// <summary>
@@ -492,6 +495,7 @@ internal sealed class TextField(FieldState state, Func<string, FieldCheck> check
     /// <summary>The text changed: the verdict is live, and a valid value goes in straight away if this field says so.</summary>
     public void Typed(string text, Action<string>? keepNow)
     {
+        state.Entered ??= stored();
         state.Draft = text;
         var verdict = check(text);
         state.Message = verdict.Message;
@@ -501,7 +505,7 @@ internal sealed class TextField(FieldState state, Func<string, FieldCheck> check
         }
     }
 
-    /// <summary>Enter, or the focus leaving.</summary>
+    /// <summary>Enter, or the focus leaving. A value kept here is what Escape gives back from now on.</summary>
     public void Commit()
     {
         var verdict = check(state.Draft);
@@ -509,11 +513,19 @@ internal sealed class TextField(FieldState state, Func<string, FieldCheck> check
         if (verdict.Ok)
         {
             keep?.Invoke(state.Draft);
+            state.Entered = null;
         }
     }
 
+    /// <summary>Escape: the setting goes back to what it held when the typing began, and the field with it.</summary>
     public void Revert()
     {
+        if (state.Entered is { } entered && entered != stored())
+        {
+            keep?.Invoke(entered);
+        }
+
+        state.Entered = null;
         state.Draft = stored();
         state.Message = null;
     }
