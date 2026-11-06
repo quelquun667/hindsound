@@ -40,3 +40,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The tray icon comes back when the shell was not ready for it, shows its tooltip, and is redrawn when the display scale changes.
 - The notification stays off the taskbar and goes to the screen of the click after a tray menu.
 - Opening a folder no longer holds up the hotkeys, and the settings window keeps the latest list of audio devices and apps.
+- In the settings window, a held key repeats only what moves or types: it never saves, toggles or opens again.
+- A touchpad scrolls the settings: small wheel steps add up.
+- The first click on a half-hidden widget counts, and the scroll thumb is redrawn when its drag ends.
+- A field scrolled away comes back at the first key, with that key typed in it.
+- Text on the accent color stays readable whatever the color, and the accent is no longer used as text where it would not read.
