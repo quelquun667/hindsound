@@ -958,6 +958,17 @@ internal static unsafe class SettingsDump
             s.Key(Vk.Tab, 0);
             s.Key(Vk.Enter, 0);
         }, focus: true);
+        Shot("hotkeys-listening-dimred", (s, _) =>
+        {
+            s.Editor.SetAccentHex("#BF2828");
+            s.Key(Vk.Tab, 0);
+            s.Key(Vk.Enter, 0);
+        }, focus: true);
+        Shot("durations-grey", (s, _) =>
+        {
+            s.Editor.SetAccentHex("#646464");
+            s.ShowSection(Section.Durations);
+        });
         Shot("hotkeys-errors", (s, b) =>
         {
             s.Key(Vk.Tab, 0);

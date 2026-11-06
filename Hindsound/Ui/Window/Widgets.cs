@@ -1,4 +1,5 @@
 using Hindsound.Input;
+using Hindsound.Settings;
 
 namespace Hindsound.Ui.Window;
 
@@ -8,6 +9,9 @@ internal readonly record struct UiState(uint Accent, Widget? Focus, Widget? Pres
     public bool Focused(Widget widget) => ShowFocus && ReferenceEquals(Focus, widget);
 
     public bool Hovered(Widget widget) => ReferenceEquals(Hover, widget);
+
+    /// <summary>What is laid on the accent: text, the check mark, the knob of a toggle.</summary>
+    public uint OnAccent => AccentColors.TextOn(Accent);
 
     /// <summary>The mouse, in the coordinates this widget is laid out in.</summary>
     public float LocalY(Widget widget) => widget.Scrolls ? MouseY + Scroll : MouseY;
@@ -112,15 +116,15 @@ internal class Button(string label, Action click) : Widget
             c.FillRound(box, 4, ui.Accent);
             if (SubLabel is null)
             {
-                c.TextCentered(label, Face.Medium, FontSize, box, Theme.OnAccent);
+                c.TextCentered(label, Face.Medium, FontSize, box, ui.OnAccent);
             }
             else
             {
                 var labelWidth = c.Measure(label, Face.Medium, FontSize);
                 var subWidth = c.Measure(SubLabel, Face.Mono, 11);
                 var x = box.MidX - Math.Max(labelWidth, subWidth) / 2;
-                c.TextMid(label, Face.Medium, FontSize, x, box.MidY - 9, Theme.OnAccent);
-                c.TextMid(SubLabel, Face.Mono, 11, x, box.MidY + 10, Theme.OnAccent);
+                c.TextMid(label, Face.Medium, FontSize, x, box.MidY - 9, ui.OnAccent);
+                c.TextMid(SubLabel, Face.Mono, 11, x, box.MidY + 10, ui.OnAccent);
             }
         }
         else
@@ -228,7 +232,7 @@ internal sealed class Segmented(IReadOnlyList<string> labels, Func<int> selected
                 }
             }
 
-            var color = i == chosen ? (Enabled ? Theme.OnAccent : Theme.Muted) : Enabled ? Theme.Text : Theme.Faded;
+            var color = i == chosen ? (Enabled ? ui.OnAccent : Theme.Muted) : Enabled ? Theme.Text : Theme.Faded;
             c.TextCentered(labels[i], Face.Medium, 14, cell, color);
         }
 
@@ -347,7 +351,7 @@ internal sealed class Toggle(Func<bool> on, Action<bool> set) : Widget
         if (on())
         {
             c.FillRound(box, 11, ui.Accent);
-            c.FillRound(new Box(box.Right - 19, box.Y + 3, 16, 16), 8, Theme.OnAccent);
+            c.FillRound(new Box(box.Right - 19, box.Y + 3, 16, 16), 8, ui.OnAccent);
         }
         else
         {
@@ -581,13 +585,14 @@ internal sealed class HotkeyField(HotkeyAction action, Func<HotkeyFieldView> vie
         var box = Bounds;
         var state = view();
         var border = state.Listening ? ui.Accent : state.Failed ? Theme.Hot : Theme.Control;
-        c.Frame(box, 4, ui.Hovered(this) ? Theme.Hover : Theme.Raised, border);
+        var fill = ui.Hovered(this) ? Theme.Hover : Theme.Raised;
+        c.Frame(box, 4, fill, border);
         var x = box.X + 8;
         if (state.Listening)
         {
             if (string.IsNullOrEmpty(state.Held))
             {
-                c.TextMid(HotkeyCapture.Prompt, Face.Body, 13, x, box.MidY, ui.Accent);
+                c.TextMid(HotkeyCapture.Prompt, Face.Body, 13, x, box.MidY, AccentColors.AccentAsText(ui.Accent, fill, Theme.Text));
             }
             else
             {

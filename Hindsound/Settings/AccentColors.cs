@@ -29,6 +29,14 @@ public static class AccentColors
     /// <summary>Minimum contrast ratio against the background (WCAG large-text / graphics threshold).</summary>
     public const double MinContrast = 3.0;
 
+    /// <summary>The two colours of what is laid on the accent: the dark of the mockup, and the window's text.</summary>
+    public const uint DarkOnAccent = 0x14170A, LightOnAccent = 0xF2F4F7;
+
+    /// <summary>Minimum contrast ratio of the text laid on the accent (WCAG body text).</summary>
+    public const double MinTextContrast = 4.5;
+
+    private const uint Black = 0x000000, White = 0xFFFFFF;
+
     public static IReadOnlyDictionary<AccentPreset, string> Presets { get; } = new Dictionary<AccentPreset, string>
     {
         [AccentPreset.Lime] = LimeHex,
@@ -91,6 +99,34 @@ public static class AccentColors
         var b = RelativeLuminance(r2, g2, b2);
         return (Math.Max(a, b) + 0.05) / (Math.Min(a, b) + 0.05);
     }
+
+    /// <summary>WCAG contrast ratio between two colours given as 0xRRGGBB, 1 to 21.</summary>
+    public static double ContrastRatio(uint firstRgb, uint secondRgb)
+    {
+        var a = RelativeLuminance((byte)(firstRgb >> 16), (byte)(firstRgb >> 8), (byte)firstRgb);
+        var b = RelativeLuminance((byte)(secondRgb >> 16), (byte)(secondRgb >> 8), (byte)secondRgb);
+        return (Math.Max(a, b) + 0.05) / (Math.Min(a, b) + 0.05);
+    }
+
+    /// <summary>
+    /// What to lay on the accent: the more readable of the two colours of the app. A mid grey such as #777777 only
+    /// gets about 4:1 from either, so there pure black or pure white takes over: one of those always reaches 4.58:1.
+    /// </summary>
+    public static uint TextOn(uint accentRgb)
+    {
+        var dark = ContrastRatio(accentRgb, DarkOnAccent);
+        var light = ContrastRatio(accentRgb, LightOnAccent);
+        if (Math.Max(dark, light) >= MinTextContrast)
+        {
+            return dark >= light ? DarkOnAccent : LightOnAccent;
+        }
+
+        return ContrastRatio(accentRgb, Black) >= ContrastRatio(accentRgb, White) ? Black : White;
+    }
+
+    /// <summary>The accent as a colour of text on this background, or the fallback if it would not read there.</summary>
+    public static uint AccentAsText(uint accentRgb, uint backgroundRgb, uint fallbackRgb) =>
+        ContrastRatio(accentRgb, backgroundRgb) >= MinContrast ? accentRgb : fallbackRgb;
 
     public static AccentCheck Validate(string? hex)
     {
