@@ -68,8 +68,11 @@ WizardStyle=modern
 [Files]
 ; In this order on purpose. A rollback removes new files but does not bring back the ones it replaced (trial of 06/11/2026:
 ; DLL locked, exe already new, version in the Uninstall key still old). With the exe last, any failure leaves the old exe.
-Source: "{#RepoRoot}\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "{#RepoRoot}\THIRD-PARTY-NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+; The names and the licenses folder stay as in the repo, because THIRD-PARTY-NOTICES.md links to them.
+; A missing file stops the compilation: a Setup never ships without its licences.
+Source: "{#RepoRoot}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#RepoRoot}\THIRD-PARTY-NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#RepoRoot}\licenses\*.txt"; DestDir: "{app}\licenses"; Flags: ignoreversion
 Source: "{#PublishDir}\libmp3lame.64.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PublishDir}\Hindsound.exe"; DestDir: "{app}"; Flags: ignoreversion
 

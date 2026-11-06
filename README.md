@@ -74,7 +74,7 @@ This screen comes back for each new version.
 
 Quit Hindsound first: the uninstaller refuses while it runs. Then go to Windows Settings > Apps, find Hindsound, and uninstall it.
 
-<!-- TO CONFIRM when the installer exists: this whole section. -->
+<!-- TO CONFIRM with the first release: this whole section. -->
 
 | | What happens |
 |---|---|
@@ -206,4 +206,3 @@ This is not a promise about any anti-cheat: no anti-cheat publisher guarantees i
 
 [MIT](LICENSE). Hindsound uses NAudio, NAudio.Lame and System.Numerics.Tensors (MIT), the .NET runtime, and LAME (LGPL) for MP3. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
-<!-- TO CONFIRM before the first release: THIRD-PARTY-NOTICES.md exists and matches this list. -->

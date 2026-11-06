@@ -28,7 +28,8 @@ dotnet publish src/Hindsound/Hindsound.csproj -p:PublishProfile=win-x64 "-p:Publ
 
 Measured: exe 17.66 MB, DLL 1.03 MB, Setup 8.23 MB, 7 s for step 3.
 
-`LICENSE` and `THIRD-PARTY-NOTICES.md` are taken from the root of the repo, each only if it exists.
+`LICENSE`, `THIRD-PARTY-NOTICES.md` and `licenses\*.txt` are taken from the root of the repo and installed next to the exe,
+under the same names and with the `licenses` folder, because the notices link to them. If one is missing, ISCC fails.
 
 `src/Hindsound/Assets/icon.ico` holds 16, 20, 24, 32, 48, 64 and 128 px as 32-bit BMP, and 256 px as PNG, from the final logo.
 
@@ -136,6 +137,9 @@ Results of 06/11/2026:
 | Uninstall, app closed | `unins000.exe` | Exit 0, after a failed update too. Files, key and shortcut gone; log, `updates` and the Run value gone, another Run value kept; `Rescued` and the settings kept. Without `Rescued`, `%LocalAppData%\Hindsound` goes too. |
 | Delete the settings | `unins000.exe`, Setup built with `/DTrialDeleteSettings=1` | `settings.json`, its `.bak` and `.tmp` files gone, the folder too. `Rescued` kept. |
 | Delete the settings, clips in that folder | same | The settings files gone. The clips and the folder kept. Deleting the whole folder lost them. |
+
+These trials ran when the only licence file was `LICENSE.txt`. The present list of licence files was checked in the output
+of ISCC, not by a new installation.
 
 Not tried: anything with a window, so the wizard, its launch box and the question about the settings; the uninstaller and
 the Setup of a release build, which would touch the real log and Run value; a real clip being written while Setup waits:
