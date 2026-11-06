@@ -360,6 +360,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             _journal.Write(line);
         }
 
+        _notices.Withdraw(SettingsFileState.CeasedBy(read.Status));
         TellAboutSettings(decision.Notice);
         if (!decision.Apply || read.Settings is not { } settings)
         {

@@ -216,6 +216,14 @@ internal sealed class SettingsFileState
         };
     }
 
+    /// <summary>The notices still waiting in line that a later read of the file makes false. A missing file still leaves the defaults running, with the microphone off.</summary>
+    public static NotificationKind[] CeasedBy(SettingsLoadStatus status) => status switch
+    {
+        SettingsLoadStatus.Loaded => [NotificationKind.SettingsUnreadable, NotificationKind.SettingsHasError],
+        SettingsLoadStatus.Missing => [NotificationKind.SettingsHasError],
+        _ => [],
+    };
+
     /// <summary>The file has a date the app never read, and the app is about to write over it.</summary>
     public bool ChangedUnread(DateTime written) => !AwaitingRead && written != Noted;
 

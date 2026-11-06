@@ -123,6 +123,9 @@ internal sealed class NoticeQueue
         }
     }
 
+    /// <summary>Takes back the lasting notices that a new look at the settings file made false, before anyone reads them.</summary>
+    public void Withdraw(params NotificationKind[] kinds) => _lasting.RemoveAll(content => kinds.Contains(content.Kind));
+
     public void Shown(NotificationContent content) => _onScreen = content;
 
     /// <summary>The notification has left the screen.</summary>
