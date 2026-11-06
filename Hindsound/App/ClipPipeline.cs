@@ -126,6 +126,13 @@ internal enum ClipFailure
 /// <summary>How one press ended. <see cref="Result"/> is null unless the clip was written.</summary>
 internal sealed record ClipOutcome(ClipRequest Request, ClipResult? Result, ClipFailure Failure);
 
+/// <summary>The files of a clip can be moved or deleted at any time after it was written. Pure: tested without any disk.</summary>
+internal static class ClipFiles
+{
+    /// <summary>A copy to the clipboard needs every one of them.</summary>
+    public static bool AllThere(IReadOnlyList<string> paths, Func<string, bool> exists) => paths.Count > 0 && paths.All(exists);
+}
+
 /// <summary>
 /// From the press to the written file. The moment is copied first: a snapshot is taken at once on its own queue, even
 /// while an earlier clip is encoding, and the encoding waits in a queue with a single encoder. Nothing here can throw

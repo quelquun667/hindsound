@@ -70,6 +70,7 @@ internal static class NotificationDump
             ("settings-notsaved", NotificationStates.SettingsNotSaved()),
             ("startup-notchanged", NotificationStates.StartupNotChanged()),
             ("stillsaving", NotificationStates.StillSaving()),
+            ("lastclip-gone", NotificationStates.LastClipGone()),
         ];
     }
 }

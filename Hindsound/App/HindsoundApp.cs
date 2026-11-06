@@ -631,7 +631,17 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             return;
         }
 
-        CopyClip(clip, copied => ShowStatus(NotificationStates.ForClip(clip, _lastRequested, true, copied, Accent), important: false));
+        if (!ClipFiles.AllThere(clip.Paths, File.Exists))
+        {
+            _journal.Write($"last clip gone: {string.Join(", ", clip.Paths)}");
+            _lastClip = null;
+            _window?.Screen.SetLastClip(null);
+            ShowClip(NotificationStates.LastClipGone(), saved: false, important: true, copyFailed: true);
+            return;
+        }
+
+        // The answer to a press: the sound is only for a new clip, and a copy that failed is said whatever the settings.
+        CopyClip(clip, copied => ShowClip(NotificationStates.ForClip(clip, _lastRequested, true, copied, Accent), saved: false, important: !copied, copyFailed: !copied));
     }
 
     // ---------------------------------------------------------------- showing

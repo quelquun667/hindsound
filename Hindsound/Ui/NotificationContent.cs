@@ -25,6 +25,7 @@ public enum NotificationKind
     SettingsNotSaved,
     StartupNotChanged,
     StillSaving,
+    LastClipGone,
 }
 
 /// <summary>What sits on the inner side of the tab, before the text.</summary>
@@ -156,6 +157,9 @@ internal static class NotificationStates
 
     public static NotificationContent StillSaving() =>
         Icon(NotificationKind.StillSaving, "Still saving your last clip", "Try again in a moment", NotificationPalette.Amber, NotificationVisual.Triangle, NotificationPalette.Amber);
+
+    public static NotificationContent LastClipGone() =>
+        Icon(NotificationKind.LastClipGone, "Last clip is gone", "It was moved or deleted", NotificationPalette.Amber, NotificationVisual.Triangle, NotificationPalette.Amber);
 
     /// <summary>The start found a broken settings file.</summary>
     /// <param name="copyKept">A copy of it exists; otherwise it stayed in its place.</param>

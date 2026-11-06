@@ -5,6 +5,29 @@ using Hindsound.Export;
 
 namespace Hindsound.Tests.App;
 
+public class ClipFilesTests
+{
+    [Fact]
+    public void A_clip_with_all_its_files_can_be_copied()
+    {
+        Assert.True(ClipFiles.AllThere(["a_system.wav", "a_mic.wav"], _ => true));
+    }
+
+    [Theory]
+    [InlineData("a_system.wav")]
+    [InlineData("a_mic.wav")]
+    public void One_file_missing_is_enough_to_say_no(string missing)
+    {
+        Assert.False(ClipFiles.AllThere(["a_system.wav", "a_mic.wav"], path => path != missing));
+    }
+
+    [Fact]
+    public void A_clip_without_files_cannot_be_copied()
+    {
+        Assert.False(ClipFiles.AllThere([], _ => true));
+    }
+}
+
 public class ClipPipelineTests
 {
     private static readonly TimeSpan Wait = TimeSpan.FromSeconds(20);

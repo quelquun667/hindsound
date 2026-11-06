@@ -54,6 +54,10 @@ public class NotificationStatesTests
         AssertState(NotificationStates.StillSaving(), K.StillSaving, "Still saving your last clip", "Try again in a moment", P.Amber, NotificationVisual.Triangle);
 
     [Fact]
+    public void Last_clip_gone() =>
+        AssertState(NotificationStates.LastClipGone(), K.LastClipGone, "Last clip is gone", "It was moved or deleted", P.Amber, NotificationVisual.Triangle);
+
+    [Fact]
     public void Saved_and_copied() =>
         AssertState(NotificationStates.ForClip(Clip(), Thirty, true, true, Accent), K.Saved, "Clip saved (0:30)", "Copied. Paste", Accent, NotificationVisual.Bars, "Ctrl", "V");
 
