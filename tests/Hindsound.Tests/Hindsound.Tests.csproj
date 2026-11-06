@@ -15,7 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="coverlet.collector" Version="10.1.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <!-- Mp3FileReader, to read back the MP3 files in the tests. The app itself only needs NAudio.Wasapi. -->
     <PackageReference Include="NAudio" Version="3.3.0" />
