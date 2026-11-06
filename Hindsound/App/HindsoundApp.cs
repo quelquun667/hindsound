@@ -1204,13 +1204,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             _settingsFile.SawBeforeWriting(_store.Read().Status);
         }
 
-        // Before the write: if Windows refuses, the file gets what the entry really is.
-        if ((change & SettingsChange.Startup) != 0)
-        {
-            ApplyStartupRegistration();
-        }
-
-        TrySaveSettings();
+        StartupSwitch.ApplyThenSave((change & SettingsChange.Startup) != 0, ApplyStartupRegistration, TrySaveSettings);
         if ((change & SettingsChange.Accent) != 0)
         {
             UpdateTray();

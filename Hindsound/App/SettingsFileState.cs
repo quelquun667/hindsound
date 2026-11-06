@@ -43,6 +43,17 @@ public enum WriteStep
 /// <summary>Makes the Windows startup entry follow the setting, or the setting follow the entry when Windows refuses.</summary>
 internal static class StartupSwitch
 {
+    /// <summary>A change from the window: the entry first, so that when Windows refuses, the file gets what the entry really is.</summary>
+    public static void ApplyThenSave(bool startupChanged, Action applyEntry, Action save)
+    {
+        if (startupChanged)
+        {
+            applyEntry();
+        }
+
+        save();
+    }
+
     /// <summary>False if the entry could not change: the setting then says what the entry really is. Faked key in tests.</summary>
     /// <param name="general">The settings, changed in place on a refusal.</param>
     /// <param name="key">The Run key.</param>
