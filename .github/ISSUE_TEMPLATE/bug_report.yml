@@ -1,0 +1,50 @@
+name: Bug report
+description: Something does not work as it should.
+labels:
+  - bug
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Hindsound version
+      description: Shown in Windows, under Settings > Apps > Installed apps.
+      placeholder: 0.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      description: Press Win+R and run `winver`.
+      placeholder: Windows 11 24H2
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        **Read your log before pasting it.** It contains window titles and file paths, which can show what you were doing, your user name or the names of your files. This page is public: remove anything you do not want to share.
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: The relevant part of `%LOCALAPPDATA%\Hindsound\hindsound.log`.
+      render: text
+
+  - type: checkboxes
+    id: log-reviewed
+    attributes:
+      label: Before you send
+      options:
+        - label: If I pasted my log, I read it and removed what I do not want to make public.
+          required: true
