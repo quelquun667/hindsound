@@ -231,13 +231,11 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
     private void LoadSettings()
     {
-        _settings = _store.LoadPatiently(StartupReadTries, () => Thread.Sleep(StartupReadGapMs));
-        var start = _settingsFile.Started(_store.LastStatus, _store.LastBackupPath);
+        (_settings, var start) = _settingsFile.Load(_store, StartupReadTries, () => Thread.Sleep(StartupReadGapMs), ReadRunKey);
         _firstRun = start.FirstRun;
         _startTouchesRunKey = start.TouchRunKey;
         if (start.MakeSafe)
         {
-            SettingsFileState.MakeSafe(_settings, ReadRunKey());
             _journal.Write($"settings not usable ({_store.LastStatus}): defaults with the mic off, kept as {_store.LastBackupPath ?? "(not moved)"}");
         }
 
@@ -269,32 +267,20 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         }
     }
 
-    private void TrySaveSettings()
+    private void TrySaveSettings() => TellAboutSettings(_settingsFile.TrySave(KeepBrokenFile, WriteSettings, SettingsFileTime, _journal.Write));
+
+    private bool WriteSettings()
     {
-        var saved = false;
-        switch (_settingsFile.NextWrite())
+        try
         {
-            case WriteStep.Refuse:
-                _journal.Write("settings not written: the file could not be read yet");
-                break;
-            case WriteStep.KeepBrokenFirst when !KeepBrokenFile():
-                _journal.Write("settings not written: no copy of the broken file could be made");
-                break;
-            default:
-                try
-                {
-                    _store.Save(_settings);
-                    saved = true;
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                    _journal.Write("settings not written: " + ex.Message);
-                }
-
-                break;
+            _store.Save(_settings);
+            return true;
         }
-
-        TellAboutSettings(_settingsFile.WriteEnded(saved, SettingsFileTime()));
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _journal.Write("settings not written: " + ex.Message);
+            return false;
+        }
     }
 
     private bool KeepBrokenFile()

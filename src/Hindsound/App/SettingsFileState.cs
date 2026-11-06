@@ -164,6 +164,23 @@ internal sealed class SettingsFileState
         _ => null,
     };
 
+    /// <summary>The first look at the file, when the app starts: the settings to run on, and what else the start has to do.</summary>
+    /// <param name="store">The file.</param>
+    /// <param name="tries">How many reads a locked file gets.</param>
+    /// <param name="wait">What happens between two of them.</param>
+    /// <param name="readRunKey">What the Run key says, if it may be read. Only asked when the real settings are unknown.</param>
+    public (AppSettings Settings, StartDecision Start) Load(SettingsStore store, int tries, Action wait, Func<bool?> readRunKey)
+    {
+        var settings = store.LoadPatiently(tries, wait);
+        var start = Started(store.LastStatus, store.LastBackupPath);
+        if (start.MakeSafe)
+        {
+            MakeSafe(settings, readRunKey());
+        }
+
+        return (settings, start);
+    }
+
     /// <summary>The first read of the file, by <see cref="SettingsStore.LoadPatiently"/>.</summary>
     /// <param name="status">What it found.</param>
     /// <param name="backupPath">Where a damaged file was moved; null if it could not be, so it is still in its place.</param>
@@ -257,6 +274,30 @@ internal sealed class SettingsFileState
         }
 
         return BrokenOnDisk ? WriteStep.KeepBrokenFirst : WriteStep.Write;
+    }
+
+    /// <summary>A write of the settings, if it may happen at all. What it returns is to be told to the user.</summary>
+    /// <param name="keepBrokenFile">Copies the broken file in place. False if no copy could be made.</param>
+    /// <param name="save">Writes the settings. False if that failed.</param>
+    /// <param name="fileTime">The date of the file now.</param>
+    /// <param name="journal">Where it says why nothing was written.</param>
+    public SettingsNotice TrySave(Func<bool> keepBrokenFile, Func<bool> save, Func<DateTime> fileTime, Action<string> journal)
+    {
+        var saved = false;
+        switch (NextWrite())
+        {
+            case WriteStep.Refuse:
+                journal("settings not written: the file could not be read yet");
+                break;
+            case WriteStep.KeepBrokenFirst when !keepBrokenFile():
+                journal("settings not written: no copy of the broken file could be made");
+                break;
+            default:
+                saved = save();
+                break;
+        }
+
+        return WriteEnded(saved, fileTime());
     }
 
     /// <summary>The copy of the broken file exists: it is not made a second time, whatever becomes of the write.</summary>
