@@ -18,7 +18,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private const int SnapshotReleaseDelayMs = 500;
     private const int SelfTestExitDelayMs = 3300;
     private const int SelfTestLeaveCheckMs = 500;
-    private const int SelfTestLongestWaitMs = 30_000;
+    private const int SelfTestLongestWaitMs = 60_000;
     private const int ProbeStepMs = 300;
     private const int ProbeAfterCloseMs = 10_000;
     private const int StartupReadTries = 3;
