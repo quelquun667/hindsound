@@ -96,6 +96,7 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
     private bool _meterOn;
     private bool _editVisible;
     private bool _swallowSystemKeyUp;
+    private int _wheelRest;
     private (Face Face, float Size, uint Dpi) _editFontKey;
     private Box _editBox;
     private float _editSize;
@@ -466,7 +467,12 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
                 return 0;
 
             case WindowNative.WM_MOUSEWHEEL:
-                Screen.Wheel((short)((wParam >> 16) & 0xFFFF) / 120);
+                (var notches, _wheelRest) = WheelNotches.Add(_wheelRest, (short)((wParam >> 16) & 0xFFFF));
+                if (notches != 0)
+                {
+                    Screen.Wheel(notches);
+                }
+
                 return 0;
 
             case Native.WM_TIMER:

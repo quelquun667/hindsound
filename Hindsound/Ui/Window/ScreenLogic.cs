@@ -248,6 +248,22 @@ internal sealed class MicMeter
     }
 }
 
+/// <summary>Turns the wheel deltas of Windows into notches. A touchpad sends small deltas that only count together.</summary>
+internal static class WheelNotches
+{
+    public const int PerNotch = 120;
+
+    /// <param name="rest">What the last call left over.</param>
+    /// <param name="delta">The delta of this message.</param>
+    /// <returns>The whole notches, and what to pass as the rest next time. A change of direction forgets the rest.</returns>
+    public static (int Notches, int LeftOver) Add(int rest, int delta)
+    {
+        var total = Math.Sign(rest) * Math.Sign(delta) < 0 ? delta : rest + delta;
+        var notches = total / PerNotch;
+        return (notches, total - notches * PerNotch);
+    }
+}
+
 /// <summary>Moves a focus over a list where some entries cannot take it. Wraps around.</summary>
 internal static class FocusRing
 {
