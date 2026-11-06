@@ -6,7 +6,7 @@ namespace Hindsound.Ui;
 internal static unsafe partial class Native
 {
     public const uint WM_CLOSE = 0x0010, WM_QUERYENDSESSION = 0x0011, WM_ENDSESSION = 0x0016, WM_TIMER = 0x0113,
-        WM_LBUTTONUP = 0x0202, WM_RBUTTONUP = 0x0205, WM_MOUSEACTIVATE = 0x0021, WM_NULL = 0, WM_CONTEXTMENU = 0x007B,
+        WM_LBUTTONUP = 0x0202, WM_MOUSEACTIVATE = 0x0021, WM_NULL = 0, WM_CONTEXTMENU = 0x007B,
         WM_APP = 0x8000;
     public const uint NIN_SELECT = 0x0400, NIN_KEYSELECT = 0x0401;
     public const nint MA_NOACTIVATE = 3;
