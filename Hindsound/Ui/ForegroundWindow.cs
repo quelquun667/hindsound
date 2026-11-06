@@ -1,5 +1,11 @@
 namespace Hindsound.Ui;
 
+/// <summary>A screen, in physical pixels.</summary>
+/// <param name="Monitor">All of it.</param>
+/// <param name="Work">What the taskbar leaves.</param>
+/// <param name="Dpi">Its own DPI.</param>
+internal readonly record struct ScreenInfo(Native.RECT Monitor, Native.RECT Work, uint Dpi);
+
 /// <summary>What the active window looks like from outside.</summary>
 /// <param name="Title">Its title, for <c>{app}</c>. Empty if it has none.</param>
 /// <param name="CoversMonitor">It covers its whole screen, and is not the desktop itself.</param>
@@ -22,16 +28,25 @@ internal static unsafe class ForegroundWindow
         return new ForegroundInfo(TitleOf(hwnd), Covers(hwnd));
     }
 
-    /// <summary>The rectangle and DPI of the screen under the active window.</summary>
-    public static (Native.RECT Area, uint Dpi) ActiveMonitor()
+    /// <summary>The screen under the active window.</summary>
+    public static ScreenInfo ActiveScreen() =>
+        ScreenOf(Native.MonitorFromWindow(Native.GetForegroundWindow(), Native.MONITOR_DEFAULTTOPRIMARY));
+
+    /// <summary>Whether the active window covers that screen, which need not be the one it is on.</summary>
+    public static bool CoversScreen(ScreenInfo screen)
     {
-        var monitor = Native.MonitorFromWindow(Native.GetForegroundWindow(), Native.MONITOR_DEFAULTTOPRIMARY);
+        var hwnd = Native.GetForegroundWindow();
+        return hwnd != 0 && Covers(hwnd, screen.Monitor);
+    }
+
+    private static ScreenInfo ScreenOf(nint monitor)
+    {
         Native.MONITORINFO info = default;
         info.Size = sizeof(Native.MONITORINFO);
         Native.GetMonitorInfoW(monitor, &info);
         uint dpi = 96, dpiY;
         Native.GetDpiForMonitor(monitor, 0, &dpi, &dpiY);
-        return (info.Monitor, dpi == 0 ? 96 : dpi);
+        return new ScreenInfo(info.Monitor, info.Work, dpi == 0 ? 96 : dpi);
     }
 
     /// <summary>The shell's own windows cover the screen too, and clicks on them must stay clicks.</summary>
@@ -52,6 +67,14 @@ internal static unsafe class ForegroundWindow
 
     private static bool Covers(nint hwnd)
     {
+        var monitor = Native.MonitorFromWindow(hwnd, Native.MONITOR_DEFAULTTOPRIMARY);
+        Native.MONITORINFO info = default;
+        info.Size = sizeof(Native.MONITORINFO);
+        return Native.GetMonitorInfoW(monitor, &info) != 0 && Covers(hwnd, info.Monitor);
+    }
+
+    private static bool Covers(nint hwnd, Native.RECT monitor)
+    {
         const int capacity = 64;
         var text = stackalloc char[capacity];
         var length = Native.GetClassNameW(hwnd, text, capacity);
@@ -61,14 +84,6 @@ internal static unsafe class ForegroundWindow
         }
 
         Native.RECT window;
-        if (Native.GetWindowRect(hwnd, &window) == 0)
-        {
-            return false;
-        }
-
-        var monitor = Native.MonitorFromWindow(hwnd, Native.MONITOR_DEFAULTTOPRIMARY);
-        Native.MONITORINFO info = default;
-        info.Size = sizeof(Native.MONITORINFO);
-        return Native.GetMonitorInfoW(monitor, &info) != 0 && RectCovers(window, info.Monitor);
+        return Native.GetWindowRect(hwnd, &window) != 0 && RectCovers(window, monitor);
     }
 }

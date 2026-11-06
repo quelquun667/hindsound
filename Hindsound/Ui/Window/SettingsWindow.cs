@@ -110,7 +110,8 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
         var instance = Native.GetModuleHandleW(null);
         RegisterClass(instance);
 
-        var (area, dpi) = offscreen ? OffscreenArea() : ForegroundWindow.ActiveMonitor();
+        var active = ForegroundWindow.ActiveScreen();
+        var (area, dpi) = offscreen ? OffscreenArea() : (active.Work, active.Dpi);
         _dpi = dpi;
         var size = OuterSize(dpi);
         var exStyle = offscreen ? Native.WS_EX_NOACTIVATE | Native.WS_EX_TOOLWINDOW : 0;

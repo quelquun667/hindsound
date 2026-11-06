@@ -854,8 +854,11 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
     private void PresentNow(NotificationContent content, bool clickThrough)
     {
-        Native.RECT area;
-        uint dpi;
+        var screen = ForegroundWindow.ActiveScreen();
+        var covers = ForegroundWindow.CoversScreen(screen);
+        var area = NotificationPlacement.AreaOn(screen, covers);
+        var dpi = screen.Dpi;
+        _journal.Write($"notification area: {area.Left},{area.Top},{area.Right},{area.Bottom} at {dpi} dpi, foreground covers the screen {covers}{(_options.Offscreen ? ", drawn off screen instead" : string.Empty)}");
         if (_options.Offscreen)
         {
             var right = Native.GetSystemMetrics(Native.SM_XVIRTUALSCREEN) - 4000;
@@ -863,10 +866,6 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             area = new Native.RECT { Left = right - 1920, Top = top, Right = right, Bottom = top + 1080 };
             dpi = 96;
             clickThrough = true;
-        }
-        else
-        {
-            (area, dpi) = ForegroundWindow.ActiveMonitor();
         }
 
         _journal.Write($"notification {content.Kind}: {content.Title} / {content.Body}");

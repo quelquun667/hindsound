@@ -4,11 +4,25 @@ using System.Runtime.InteropServices;
 namespace Hindsound.Ui;
 
 /// <summary>Where a notification goes.</summary>
-/// <param name="Area">The monitor rectangle, in physical pixels.</param>
+/// <param name="Area">The rectangle it sticks to, in physical pixels: see <see cref="AreaOn"/>.</param>
 /// <param name="Dpi">The DPI of that monitor.</param>
 /// <param name="ClickThrough">Clicks pass through to whatever is below: the active window covers the screen.</param>
 /// <param name="LeftEdge">Stuck to the left edge of the screen instead of the right one.</param>
-internal readonly record struct NotificationPlacement(Native.RECT Area, uint Dpi, bool ClickThrough, bool LeftEdge);
+internal readonly record struct NotificationPlacement(Native.RECT Area, uint Dpi, bool ClickThrough, bool LeftEdge)
+{
+    /// <summary>The top of the tab: 30 % down the area.</summary>
+    public int Top => Area.Top + (int)Math.Round(Area.Height * 0.30);
+
+    /// <summary>
+    /// The work area, or a taskbar on that side would cover the tab. Over a full-screen window there is no taskbar to
+    /// avoid, and the tab sticks to the edge of the screen itself.
+    /// </summary>
+    public static Native.RECT AreaOn(ScreenInfo screen, bool foregroundCoversScreen) =>
+        foregroundCoversScreen ? screen.Monitor : screen.Work;
+
+    /// <summary>The left of the part of the tab that shows, from the edge it comes out of.</summary>
+    public int LeftWhenShowing(int visible) => LeftEdge ? Area.Left : Area.Right - visible;
+}
 
 /// <summary>
 /// The notification: one layered window, created on first use, replaced in place, never activated. It grows out of the
@@ -25,9 +39,7 @@ internal sealed unsafe class Notification : IDisposable
 
     private nint _hwnd;
     private NotificationBitmap? _bitmap;
-    private Native.RECT _area;
-    private bool _leftEdge;
-    private int _top;
+    private NotificationPlacement _placement;
     private long _start;
     private int _lastVisible = -1;
     private bool _shown, _holding;
@@ -57,9 +69,7 @@ internal sealed unsafe class Notification : IDisposable
             Native.SetWindowLongPtrW(_hwnd, Native.GWL_EXSTYLE, wanted);
         }
 
-        _area = placement.Area;
-        _leftEdge = placement.LeftEdge;
-        _top = placement.Area.Top + (int)Math.Round(placement.Area.Height * 0.30);
+        _placement = placement;
         _lastVisible = -1;
         _holding = false;
 
@@ -145,16 +155,12 @@ internal sealed unsafe class Notification : IDisposable
         Native.SIZE size;
         size.Cy = bitmap.Height;
         size.Cx = visible;
-        destination.Y = _top;
-        if (_leftEdge)
+        destination.Y = _placement.Top;
+        destination.X = _placement.LeftWhenShowing(visible);
+        if (_placement.LeftEdge)
         {
             // The mirror of the right edge: the inner part of the tab comes out first, the stripe last.
-            destination.X = _area.Left;
             source.X = bitmap.Width - visible;
-        }
-        else
-        {
-            destination.X = _area.Right - visible;
         }
 
         Native.BLENDFUNCTION blend = default;
