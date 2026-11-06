@@ -1,7 +1,7 @@
 namespace Hindsound.Export;
 
 /// <summary>
-/// Volume normalization at export (PLAN section 3 ter). Works on 48 kHz interleaved float audio,
+/// Volume normalization at export. Works on 48 kHz interleaved float audio,
 /// after gains and mixing and before encoding.
 /// </summary>
 public static class Normalizer

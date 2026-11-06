@@ -2,7 +2,7 @@ using Hindsound.Settings;
 
 namespace Hindsound.Ui.Window;
 
-/// <summary>The colours of the mockup (PLAN section 3 quater). The accent is a setting, so it is not here, nor what is laid on it: see <see cref="UiState.OnAccent"/>.</summary>
+/// <summary>The colours of the interface. The accent is a setting, so it is not here, nor what is laid on it: see <see cref="UiState.OnAccent"/>.</summary>
 internal static class Theme
 {
     public const uint Base = 0x0D0F13, Panel = 0x15181E, Raised = 0x21252D, Hover = 0x2B303A, Line = 0x3A404C, Control = 0x6B7382,

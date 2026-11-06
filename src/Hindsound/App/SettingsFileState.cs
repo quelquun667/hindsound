@@ -111,8 +111,8 @@ internal sealed class SettingsRetry(Func<bool> awaitingRead, Func<long> nowMs, A
 }
 
 /// <summary>
-/// What the app knows about the settings file between two looks at it (PLAN section 7: an app that records never turns
-/// back on a microphone that may have been turned off). Decisions only, no file and no window: tested without either.
+/// What the app knows about the settings file between two looks at it: an app that records never turns
+/// back on a microphone that may have been turned off. Decisions only, no file and no window: tested without either.
 /// </summary>
 internal sealed class SettingsFileState
 {

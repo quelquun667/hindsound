@@ -4,13 +4,13 @@ using Hindsound.Ui;
 namespace Hindsound.App;
 
 /// <summary>
-/// What waits for the return to the desktop, because no window may go over a game in exclusive full screen (PLAN sections
-/// 3 quater and 4.8). Three places, so nothing here grows however long the game lasts. Pure: tested without any window.
+/// What waits for the return to the desktop, because no window may go over a game in exclusive full screen.
+/// Three places, so nothing here grows however long the game lasts. Pure: tested without any window.
 /// </summary>
 /// <param name="journal">Where it says what it lets go of.</param>
 internal sealed class PendingNotices(Action<string> journal)
 {
-    /// <summary>"Clip saved, paste it" means little after this long (PLAN section 3 quater).</summary>
+    /// <summary>"Clip saved, paste it" means little after this long.</summary>
     public const long OrdinaryClipLimitMs = 30_000;
 
     /// <summary>The time after the last arrival during which the return to the desktop is looked for often.</summary>

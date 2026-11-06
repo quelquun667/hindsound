@@ -3,7 +3,7 @@ using Hindsound.Settings;
 
 namespace Hindsound.Ui.Window;
 
-/// <summary>What is on each page, top to bottom. The sizes are those of the mockup (FenetreB).</summary>
+/// <summary>What is on each page, top to bottom. The sizes are those of the design mockup.</summary>
 internal sealed partial class SettingsScreen
 {
     public const string LegalNote = "Recording a conversation without telling the people in it can be illegal. Let them know before you keep it.";

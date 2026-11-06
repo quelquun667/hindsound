@@ -88,7 +88,7 @@ internal sealed class MicLossWatch
 }
 
 /// <summary>
-/// "Capture on" is promised at every launch and after every pause (PLAN section 7), but a device that arrives only says
+/// "Capture on" is promised at every launch and after every pause, but a device that arrives only says
 /// "device changed", which the Notifications setting can hide. So until the reminder has really been shown, that news is the
 /// reminder. Pure: tested without any window.
 /// </summary>

@@ -31,7 +31,7 @@ public enum UserNotificationState
 internal readonly record struct Presentation(bool ShowOverlay, bool ClickThrough, bool PlaySound, bool CatchUpLater);
 
 /// <summary>
-/// PLAN sections 3 quater and 4.8: a window over an exclusive full-screen game could throw the game out of full screen.
+/// A window over an exclusive full-screen game could throw the game out of full screen.
 /// So there, a sound alone, and the notification on the return to the desktop. Pure: tested without any window.
 /// </summary>
 internal static class FullscreenPolicy

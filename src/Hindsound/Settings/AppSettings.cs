@@ -2,7 +2,7 @@ using Hindsound.Input;
 
 namespace Hindsound.Settings;
 
-/// <summary>Everything stored in settings.json (PLAN section 3 bis). Defaults are the plan's values.</summary>
+/// <summary>Everything stored in settings.json, with its default values.</summary>
 public sealed class AppSettings
 {
     public const int MinClipSeconds = 1;

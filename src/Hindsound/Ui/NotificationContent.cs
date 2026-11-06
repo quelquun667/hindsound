@@ -2,7 +2,7 @@ using Hindsound.Export;
 
 namespace Hindsound.Ui;
 
-/// <summary>Every state of the notification (PLAN section 3 quater).</summary>
+/// <summary>Every state of the notification.</summary>
 public enum NotificationKind
 {
     Saved,

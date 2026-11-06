@@ -13,7 +13,7 @@ internal readonly record struct ForegroundInfo(string? AppName, bool CoversMonit
 
 /// <summary>
 /// Only reads the window manager: GetForegroundWindow, GetWindowText and the window's rectangle. No handle to the game's
-/// process, no hook, nothing injected (PLAN section 4.8).
+/// process, no hook, nothing injected.
 /// </summary>
 internal static unsafe class ForegroundWindow
 {
