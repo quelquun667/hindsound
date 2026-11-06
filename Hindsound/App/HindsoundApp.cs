@@ -556,6 +556,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         _lastStatus = status;
         _engineFailed = false;
         var withdrawn = _pending.WithdrawCeased(status);
+        _notices.WithdrawCeased(status);
         _window?.Screen.UpdateStatus(status);
         switch (notice)
         {

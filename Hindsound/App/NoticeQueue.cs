@@ -1,3 +1,4 @@
+using Hindsound.Audio;
 using Hindsound.Ui;
 
 namespace Hindsound.App;
@@ -125,6 +126,15 @@ internal sealed class NoticeQueue
 
     /// <summary>Takes back the lasting notices that a new look at the settings file made false, before anyone reads them.</summary>
     public void Withdraw(params NotificationKind[] kinds) => _lasting.RemoveAll(content => kinds.Contains(content.Kind));
+
+    /// <summary>The status in line, once what it says is no longer true: a later status may not take its place, as the Notifications setting can hide it.</summary>
+    public void WithdrawCeased(AudioEngineStatus status)
+    {
+        if (_ordinary is { } waiting && StatusTransitions.HasCeased(waiting.Kind, status))
+        {
+            _ordinary = null;
+        }
+    }
 
     public void Shown(NotificationContent content) => _onScreen = content;
 
