@@ -850,8 +850,13 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         window.Show();
         LoadChoices();
 
-        // An app started while the window was in the background gets offered on the way back.
-        window.Activated = LoadChoices;
+        // On the way back: a click activates the window first, so a file edited by hand meanwhile is read before that
+        // click changes anything; and an app started while the window was in the background gets offered.
+        window.Activated = () =>
+        {
+            ReloadSettingsIfChanged();
+            LoadChoices();
+        };
         _journal.Write($"settings window opened, first launch {firstRun}, {Journal.Memory()}");
         if (_options.Offscreen && firstRun)
         {
@@ -902,6 +907,13 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
     void ISettingsBackend.Applied(SettingsChange change)
     {
+        // Only the keyboard gets here without the window having come back first.
+        if (_settingsFile.ChangedUnread(SettingsFileTime()))
+        {
+            _journal.Write("the settings file changed and was not read: this change from the window writes over it");
+            _settingsFile.SawBeforeWriting(_store.Read().Status);
+        }
+
         TrySaveSettings();
         if ((change & SettingsChange.Startup) != 0)
         {
