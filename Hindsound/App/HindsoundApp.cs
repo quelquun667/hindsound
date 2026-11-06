@@ -300,6 +300,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         ApplyEngineOptions();
         _tray.Update(_trayState, Accent, _trayTip);
         _window?.Screen.ReplaceSettings(_settings);
+        _window?.Screen.SetHotkeyResults(_hotkeyResults);
+        _window?.SetIcon(Accent);
     }
 
     /// <summary>Tells the engine what changed since it was last told, and nothing else.</summary>
@@ -969,6 +971,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         steps.Add(() => seen.Add("client at 144 dpi=" + window.ClientSizeText()));
         steps.Add(() => window.ProbeDpiChange(96));
         steps.Add(() => seen.Add("client at 96 dpi=" + window.ClientSizeText()));
+        steps.Add(() => window.Screen.ShowSection(Section.Hotkeys));
+        steps.Add(() => window.ProbePicture(Path.ChangeExtension(_journal.Path, ".hotkeys.png")));
         var at = 0;
         _loop.After(ProbeStepMs, Next);
 
