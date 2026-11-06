@@ -28,6 +28,14 @@ public class AppOptionsTests
         Assert.Null(AppOptions.Parse([]).SelfTestFail);
     }
 
+    [Fact]
+    public void A_pretend_game_for_the_self_test_is_read()
+    {
+        Assert.Equal(12.5, AppOptions.Parse(["--selftest-game", "12.5"]).SelfTestGameSeconds);
+        Assert.Null(AppOptions.Parse(["--selftest-game", "soon"]).SelfTestGameSeconds);
+        Assert.Null(AppOptions.Parse([]).SelfTestGameSeconds);
+    }
+
     [Theory]
     [InlineData("--exit-after")]
     [InlineData("--settings")]
@@ -73,6 +81,35 @@ public class StatusTransitionsTests
     {
         var previous = from is { } activity ? Status(activity) : null;
         Assert.Equal(expected, StatusTransitions.Decide(previous, Status(to)));
+    }
+
+    [Theory]
+    [InlineData(CaptureActivity.Capturing, false)]
+    [InlineData(CaptureActivity.Paused, true)]
+    [InlineData(CaptureActivity.NoDevice, true)]
+    [InlineData(CaptureActivity.Stopped, true)]
+    public void Capture_on_stops_being_true_when_the_capture_stops(CaptureActivity activity, bool ceased)
+    {
+        Assert.Equal(ceased, StatusTransitions.HasCeased(NotificationKind.CaptureOn, Status(activity)));
+    }
+
+    [Theory]
+    [InlineData(CaptureActivity.NoDevice, false)]
+    [InlineData(CaptureActivity.Capturing, true)]
+    [InlineData(CaptureActivity.Paused, true)]
+    public void No_device_stops_being_true_when_the_activity_changes(CaptureActivity activity, bool ceased)
+    {
+        Assert.Equal(ceased, StatusTransitions.HasCeased(NotificationKind.NoDevice, Status(activity)));
+    }
+
+    [Theory]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, true)]
+    [InlineData(false, false, true)]
+    public void Mic_lost_stops_being_true_when_the_mic_is_back_or_not_wanted(bool enabled, bool capturing, bool ceased)
+    {
+        var status = Status(CaptureActivity.Capturing) with { MicEnabled = enabled, MicCapturing = capturing };
+        Assert.Equal(ceased, StatusTransitions.HasCeased(NotificationKind.MicLost, status));
     }
 
     [Fact]

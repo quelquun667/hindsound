@@ -109,6 +109,50 @@ public class FullscreenPolicyTests
     }
 
     [Theory]
+    [InlineData(S.RunningD3dFullScreen, false)]
+    [InlineData(S.PresentationMode, false)]
+    [InlineData(S.NotPresent, false)]
+    public void An_important_status_waits_when_no_overlay_can_show(S state, bool covers)
+    {
+        var decision = FullscreenPolicy.ForStatus(state, covers, General(), important: true);
+        Assert.Equal(new Presentation(false, false, false, true), decision);
+    }
+
+    [Fact]
+    public void An_important_status_also_waits_when_games_only_get_a_sound()
+    {
+        var decision = FullscreenPolicy.ForStatus(S.Busy, false, General(fullscreen: "soundOnly"), important: true);
+        Assert.Equal(new Presentation(false, false, false, true), decision);
+    }
+
+    [Theory]
+    [InlineData(S.AcceptsNotifications, false, true, false)]
+    [InlineData(S.Busy, false, true, true)]
+    public void An_important_status_shows_at_once_when_it_can(S state, bool covers, bool overlay, bool clickThrough)
+    {
+        var decision = FullscreenPolicy.ForStatus(state, covers, General(), important: true);
+        Assert.Equal(new Presentation(overlay, clickThrough, false, false), decision);
+    }
+
+    [Fact]
+    public void Notifications_off_never_silences_an_important_status()
+    {
+        var onDesktop = FullscreenPolicy.ForStatus(S.AcceptsNotifications, false, General(notifications: false), important: true);
+        Assert.True(onDesktop.ShowOverlay);
+
+        var inGame = FullscreenPolicy.ForStatus(S.RunningD3dFullScreen, false, General(notifications: false), important: true);
+        Assert.True(inGame.CatchUpLater);
+    }
+
+    [Fact]
+    public void Notifications_off_silences_an_ordinary_status_for_good()
+    {
+        var onDesktop = FullscreenPolicy.ForStatus(S.AcceptsNotifications, false, General(notifications: false), important: false);
+        Assert.False(onDesktop.ShowOverlay);
+        Assert.False(onDesktop.CatchUpLater);
+    }
+
+    [Theory]
     [InlineData(S.AcceptsNotifications, false, true)]
     [InlineData(S.QuietTime, false, true)]
     [InlineData(S.AcceptsNotifications, true, false)]

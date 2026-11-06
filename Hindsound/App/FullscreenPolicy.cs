@@ -54,14 +54,18 @@ internal static class FullscreenPolicy
         return new Presentation(showOverlay, showOverlay && ClickThrough(state, foregroundCoversScreen), sound, !overlayAllowed && wanted);
     }
 
-    /// <summary>The decision for a status (capture on, paused, device changed): silent, and dropped when no overlay can show.</summary>
+    /// <summary>
+    /// The decision for a status: silent. When no overlay can show, an important one (capture on, no device, microphone
+    /// lost) waits for the desktop and any other is dropped. The notifications setting only speaks for the ordinary ones.
+    /// </summary>
     public static Presentation ForStatus(UserNotificationState state, bool foregroundCoversScreen, GeneralSettings general, bool important)
     {
-        var showOverlay = OverlayAllowed(state, foregroundCoversScreen, general.FullscreenGames) && (general.Notifications || important);
-        return new Presentation(showOverlay, showOverlay && ClickThrough(state, foregroundCoversScreen), false, false);
+        var overlayAllowed = OverlayAllowed(state, foregroundCoversScreen, general.FullscreenGames);
+        var showOverlay = overlayAllowed && (general.Notifications || important);
+        return new Presentation(showOverlay, showOverlay && ClickThrough(state, foregroundCoversScreen), false, !overlayAllowed && important);
     }
 
-    /// <summary>Has the user come back, so a clip kept waiting can be shown?</summary>
+    /// <summary>Has the user come back, so what was kept waiting can be shown?</summary>
     public static bool BackOnDesktop(UserNotificationState state, bool foregroundCoversScreen) =>
         !foregroundCoversScreen && !IsFullScreenState(state) && !NoOneThere(state);
 

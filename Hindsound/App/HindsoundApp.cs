@@ -42,6 +42,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private readonly SettingsFileState _settingsFile = new();
     private readonly NoticeQueue _notices = new();
     private readonly PendingNotices _pending;
+    private readonly long _pretendGameUntilMs;
     private bool _pendingPollArmed;
     private bool _canShowNotices;
     private bool _noticeRetrying;
@@ -69,6 +70,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         _journal = journal;
         _store = new SettingsStore(options.SettingsPath);
         _pending = new PendingNotices(journal.Write);
+        _pretendGameUntilMs = options.SelfTestGameSeconds is { } game ? NowMs + (long)(game * 1000) : 0;
         _saver = new ClipSaver(openMp3: OpenMp3);
     }
 
@@ -495,7 +497,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             catch (Exception ex)
             {
                 _journal.Write("engine start: " + ex);
-                _loop.Post(() => ShowStatus(NotificationStates.NoDevice(), important: true));
+                _loop.Post(() => ShowStatus(NotificationStates.NoDevice()));
             }
         });
     }
@@ -522,21 +524,22 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
         var notice = StatusTransitions.Decide(_lastStatus, status);
         _lastStatus = status;
+        _pending.WithdrawCeased(status);
         _window?.Screen.UpdateStatus(status);
         SetTray(StatusTransitions.TrayStateOf(status.Activity), _trayTip);
         switch (notice)
         {
             case StatusNotice.CaptureOn:
-                ShowStatus(NotificationStates.CaptureOn(_settings.BufferSeconds, _settings.Hotkeys.SaveDefault), important: false);
+                ShowStatus(NotificationStates.CaptureOn(_settings.BufferSeconds, _settings.Hotkeys.SaveDefault));
                 break;
             case StatusNotice.Paused:
-                ShowStatus(NotificationStates.Paused(), important: false);
+                ShowStatus(NotificationStates.Paused());
                 break;
             case StatusNotice.NoDevice:
-                ShowStatus(NotificationStates.NoDevice(), important: true);
+                ShowStatus(NotificationStates.NoDevice());
                 break;
             case StatusNotice.DeviceChanged:
-                ShowStatus(NotificationStates.DeviceChanged(status.SystemDeviceName ?? "the default output"), important: false);
+                ShowStatus(NotificationStates.DeviceChanged(status.SystemDeviceName ?? "the default output"));
                 break;
         }
     }
@@ -569,7 +572,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         _saver.Save(snapshot, options, appName);
 
     private void OnSavingSlowly(ClipRequest request) =>
-        ShowStatus(NotificationStates.Saving(request.Requested), important: false);
+        ShowStatus(NotificationStates.Saving(request.Requested));
 
     // A snapshot is one large array, and only a full collection gives it back. An app that sits in the background for
     // hours should not keep the last clip in memory; off this thread, and only once no other clip is on its way.
@@ -629,7 +632,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     {
         if (_lastClip is not { } clip)
         {
-            ShowStatus(NotificationStates.NothingToSave(), important: false);
+            ShowStatus(NotificationStates.NothingToSave());
             return;
         }
 
@@ -673,18 +676,29 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         }
     }
 
-    private void ShowStatus(NotificationContent content, bool important)
+    private void ShowStatus(NotificationContent content)
     {
         var (state, covers) = Surface();
-        var decision = FullscreenPolicy.ForStatus(state, covers, _settings.General, important);
+        var decision = FullscreenPolicy.ForStatus(state, covers, _settings.General, PendingNotices.IsImportantStatus(content.Kind));
         if (decision.ShowOverlay)
         {
             Present(content, decision.ClickThrough);
         }
+
+        if (decision.CatchUpLater)
+        {
+            _pending.AddStatus(content, NowMs);
+            ArmPendingPoll();
+        }
     }
 
-    private static unsafe (UserNotificationState State, bool Covers) Surface()
+    private unsafe (UserNotificationState State, bool Covers) Surface()
     {
+        if (NowMs < _pretendGameUntilMs)
+        {
+            return (UserNotificationState.RunningD3dFullScreen, true);
+        }
+
         int raw;
         var state = Native.SHQueryUserNotificationState(&raw) == 0 ? (UserNotificationState)raw : UserNotificationState.Unknown;
         return (state, ForegroundWindow.Read().CoversMonitor);
@@ -712,7 +726,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             var lasting = NoticeQueue.RankOf(next.Kind) == NoticeRank.Lasting;
             var decision = lasting
                 ? FullscreenPolicy.ForClip(state, covers, _settings.General, saved: false, important: true)
-                : FullscreenPolicy.ForStatus(state, covers, _settings.General, important: next.Kind == NotificationKind.NoDevice);
+                : FullscreenPolicy.ForStatus(state, covers, _settings.General, PendingNotices.IsImportantStatus(next.Kind));
             if (decision.ShowOverlay)
             {
                 _notices.Remove(next);
@@ -728,10 +742,15 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             }
 
             _notices.Remove(next);
+            if (decision.CatchUpLater)
+            {
+                _pending.AddStatus(next, NowMs);
+                ArmPendingPoll();
+            }
         }
     }
 
-    // The same pace and the same limit as a clip waiting for the desktop; past it, the next press or menu looks again.
+    // Every 500 ms for 30 s; past it, the next press or menu looks again.
     private void RetryNoticeLater()
     {
         if (_noticeRetrying || _noticeRetries >= NoticeRetries)
