@@ -9,15 +9,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Keeps the last minutes of PC audio and microphone in memory, stored as 16-bit samples to stay light.
-- Hindsound's own sounds stay out of the capture.
+- Hindsound's own sounds stay out of the capture of the default output, from Windows 10 version 2004. On a chosen output or an older Windows they can be heard in a clip.
 - Record one chosen application instead of the whole PC. If it closes, its silence is kept, and the capture attaches again when it comes back.
 - Global hotkey that saves the past to a file: mix or separate tracks, WAV or MP3, with peak or loudness normalization.
 - The clip goes to the clipboard, ready to paste into Discord.
 - A notification drawn by the app, which does not take the focus. In exclusive fullscreen, a sound instead, and the notification when back on the desktop.
 - Tray icon and menu.
-- A clip is never lost: if the output folder cannot be written, it goes to a rescue folder; if the MP3 encoder fails, it is saved as WAV.
+- A clip has a way out when saving goes wrong: if the output folder cannot be written, it goes to a rescue folder; if the MP3 encoder fails, it is saved as WAV. If the rescue folder fails too, or a press comes while too much is already waiting to be written, the app says the clip was not saved.
 - Settings stored in `%AppData%\Hindsound\settings.json`, with a choice of accent color.
 - Repository setup: README, MIT license, changelog.
+- Command-line options to look into a problem without touching what the user relies on: `--no-mic`, `--no-clipboard` and `--no-hotkeys` keep this run away from the microphone, the clipboard and the global shortcuts, whatever the settings say.
 
 ### Changed
 
@@ -27,7 +28,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- A damaged or locked settings file starts the app with the mic off and says so, and the broken file is kept as a copy.
+- A damaged settings file starts the app with the mic off and says so, and is kept as a copy when one can be made. A locked one starts the same way and is left as it is.
+- A settings file locked at the start is read by itself once it can be, and watched until a real read has replaced the defaults, also if it first turns out broken or gone. Until then the icon says that the defaults are running with the mic off.
+- The settings notices that a later read made false are taken back, and no longer come back after another notification.
+- Quit stays until a clip with a problem can be read: 5 seconds on screen, or until it has been shown or given up on back from a game. Only a clip keeps the app: "Saving your clip" no longer holds it up or shows after the clip is done.
+- The "Capture on" reminder stays due until it has really been shown, and says the length and the hotkey of that moment.
+- A status that is no longer true leaves the line, and an important one replaced by a settings notice comes back after it.
 - A settings file edited by hand is read when the settings window comes back, before the window can write over it.
 - Says when the settings can't be saved, and puts the Start with Windows switch back when Windows refuses.
 - Important messages wait for the desktop until they can be read, whatever the Notifications setting says: no audio device, mic lost, a clip with a problem, settings problems.
@@ -46,3 +52,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The first click on a half-hidden widget counts, and the scroll thumb is redrawn when its drag ends.
 - A field scrolled away comes back at the first key, with that key typed in it.
 - Text on the accent color stays readable whatever the color, and the accent is no longer used as text where it would not read.
+- Alt+Space and Alt+letter typed for a hotkey no longer open the window menu or beep.
+- A click on Custom, for the clip length or the color, puts the cursor in its field.
+- Escape in File name or Color code gives back the value from before the typing, as each valid value is written as it is typed.
+- A click on a notification about the settings opens the settings, not the clips folder.
+- The first-launch card only says to paste a clip that was really copied, and otherwise says what the notification says.
+- The list of audio devices and apps runs twice at the same time at most.
