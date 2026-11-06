@@ -102,6 +102,7 @@ internal sealed partial class SettingsScreen
     private bool _forceEditText;
     private float _mouseX = -1, _mouseY = -1;
     private float _scroll;
+    private float _pressScroll;
     private float _contentBottom;
     private bool _draggingScroll;
     private float _dragGrabY;
@@ -742,6 +743,8 @@ internal sealed partial class SettingsScreen
             return;
         }
 
+        // Taking the focus may scroll a half-hidden widget into view, under a mouse that has not moved.
+        _pressScroll = _scroll;
         if (widget.CanFocus)
         {
             SetFocus(widget.Id);
@@ -750,7 +753,7 @@ internal sealed partial class SettingsScreen
 
         _pressedId = widget.Id;
         _host.CaptureMouse();
-        widget.OnPress(x, LocalY(widget, y));
+        widget.OnPress(x, PressY(widget, y));
     }
 
     public void MouseUp(float x, float y)
@@ -765,7 +768,7 @@ internal sealed partial class SettingsScreen
         var pressed = Find(_pressedId);
         _pressedId = null;
         _host.ReleaseMouse();
-        pressed?.OnRelease(pressed.Bounds.Contains(x, LocalY(pressed, y)));
+        pressed?.OnRelease(pressed.Bounds.Contains(x, PressY(pressed, y)));
     }
 
     /// <summary>The mouse was taken away while a button was held.</summary>
@@ -792,6 +795,9 @@ internal sealed partial class SettingsScreen
     }
 
     private float LocalY(Widget widget, float y) => widget.Scrolls ? y + _scroll : y;
+
+    /// <summary>Where the mouse is on a widget, as the page lay when the button went down.</summary>
+    private float PressY(Widget widget, float y) => widget.Scrolls ? y + _pressScroll : y;
 
     private Widget? HitTest(float x, float y)
     {
