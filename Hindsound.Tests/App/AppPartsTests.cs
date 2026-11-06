@@ -81,6 +81,34 @@ public class StatusTransitionsTests
         Assert.Equal(StatusNotice.None, StatusTransitions.Decide(Status(CaptureActivity.Capturing, "Speakers"), Status(CaptureActivity.Capturing, null)));
     }
 
+    private static AudioEngineStatus Recording(string app, bool running = true) =>
+        Status(CaptureActivity.Capturing, running ? app : null) with { SourceApp = app, SourceAppMissing = !running };
+
+    [Fact]
+    public void An_app_that_closes_or_comes_back_is_no_device_change()
+    {
+        Assert.Equal(StatusNotice.None, StatusTransitions.Decide(Recording("Discord.exe"), Recording("Discord.exe", running: false)));
+        Assert.Equal(StatusNotice.None, StatusTransitions.Decide(Recording("Discord.exe", running: false), Recording("Discord.exe")));
+    }
+
+    [Fact]
+    public void Choosing_what_to_record_is_no_device_change()
+    {
+        var wholePc = Status(CaptureActivity.Capturing, "Speakers");
+
+        Assert.Equal(StatusNotice.None, StatusTransitions.Decide(wholePc, Recording("Discord.exe")));
+        Assert.Equal(StatusNotice.None, StatusTransitions.Decide(Recording("Discord.exe"), Recording("Game.exe")));
+        Assert.Equal(StatusNotice.None, StatusTransitions.Decide(Recording("Discord.exe"), wholePc));
+    }
+
+    [Fact]
+    public void An_app_capture_that_recovers_says_the_capture_is_on()
+    {
+        var failed = Status(CaptureActivity.NoDevice, null) with { SourceApp = "Discord.exe" };
+
+        Assert.Equal(StatusNotice.CaptureOn, StatusTransitions.Decide(failed, Recording("Discord.exe")));
+    }
+
     [Theory]
     [InlineData(CaptureActivity.Capturing, TrayState.Active)]
     [InlineData(CaptureActivity.Stopped, TrayState.Active)]

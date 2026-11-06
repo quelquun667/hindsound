@@ -124,6 +124,9 @@ internal enum StatusMark
     /// <summary>The triangle of the errors.</summary>
     Warning,
 
+    /// <summary>The same triangle in amber: nothing is broken, but what was asked for is not there.</summary>
+    Caution,
+
     /// <summary>Nothing yet.</summary>
     None,
 }
@@ -140,13 +143,7 @@ internal static class StatusText
             return new StatusBand(StatusMark.None, "Starting", string.Empty, string.Empty, string.Empty, "Pause", false);
         }
 
-        var (mark, title) = status.Activity switch
-        {
-            CaptureActivity.Capturing => (StatusMark.Dot, "Capturing"),
-            CaptureActivity.Paused => (StatusMark.Pause, "Paused"),
-            CaptureActivity.NoDevice => (StatusMark.Warning, "No audio device"),
-            _ => (StatusMark.None, "Not capturing"),
-        };
+        var (mark, title) = Headline(status);
         var mic = !status.MicEnabled ? "mic off" : status.MicCapturing ? "mic on" : "mic not captured";
         var paused = status.Activity == CaptureActivity.Paused;
         return new StatusBand(
@@ -157,6 +154,21 @@ internal static class StatusText
             Megabytes(status.MemoryBytes),
             paused ? "Resume" : "Pause",
             status.Activity != CaptureActivity.Stopped);
+    }
+
+    private static (StatusMark Mark, string Title) Headline(AudioEngineStatus status)
+    {
+        var app = status.SourceApp is { } exe ? Path.GetFileNameWithoutExtension(exe) : null;
+        return status.Activity switch
+        {
+            CaptureActivity.Paused => (StatusMark.Pause, "Paused"),
+            CaptureActivity.NoDevice => (StatusMark.Warning, app is null ? "No audio device" : "Can't capture " + app),
+            CaptureActivity.Capturing when app is null => (StatusMark.Dot, "Capturing"),
+            CaptureActivity.Capturing when status.SourceAppMissing => (StatusMark.Caution, app + " not running"),
+            CaptureActivity.Capturing when status.SystemCapturing => (StatusMark.Dot, "Capturing " + app),
+            CaptureActivity.Capturing => (StatusMark.Warning, "Can't capture " + app),
+            _ => (StatusMark.None, "Not capturing"),
+        };
     }
 
     public static string Megabytes(long bytes) =>

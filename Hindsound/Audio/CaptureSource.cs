@@ -116,28 +116,29 @@ public sealed class WasapiCaptureSourceFactory : ICaptureSourceFactory
     }
 
     /// <summary>
-    /// The applications to offer: those with an audio session on the default output, without this app. The sessions
-    /// come from the audio API and the names from the process list: nothing here opens a handle to any application.
+    /// The applications to offer: those with an audio session on any output, as an app can be set to play on one that
+    /// is not the default, without this app. The sessions come from the audio API and the names from the process list:
+    /// nothing here opens a handle to any application.
     /// </summary>
     public static IReadOnlyList<AudioAppInfo> ListApps()
     {
         try
         {
             using var enumerator = new MMDeviceEnumerator();
-            if (!enumerator.HasDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia))
-            {
-                return [];
-            }
-
-            using var device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-            var sessions = device.AudioSessionManager.Sessions;
             var found = new List<(int ProcessId, string? DisplayName)>();
-            for (var i = 0; i < sessions.Count; i++)
+            foreach (var device in enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active))
             {
-                var session = sessions[i];
-                if (!session.IsSystemSoundsSession)
+                using (device)
                 {
-                    found.Add(((int)session.GetProcessID, session.DisplayName));
+                    var sessions = device.AudioSessionManager.Sessions;
+                    for (var i = 0; i < sessions.Count; i++)
+                    {
+                        using var session = sessions[i];
+                        if (!session.IsSystemSoundsSession)
+                        {
+                            found.Add(((int)session.GetProcessID, session.DisplayName));
+                        }
+                    }
                 }
             }
 

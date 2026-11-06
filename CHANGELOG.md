@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Keeps the last minutes of PC audio and microphone in memory, stored as 16-bit samples to stay light.
 - Hindsound's own sounds stay out of the capture.
+- Record one chosen application instead of the whole PC. If it closes, its silence is kept, and the capture attaches again when it comes back.
 - Global hotkey that saves the past to a file: mix or separate tracks, WAV or MP3, with peak or loudness normalization.
 - The clip goes to the clipboard, ready to paste into Discord.
 - A notification drawn by the app, which does not take the focus. In exclusive fullscreen, a sound instead, and the notification when back on the desktop.

@@ -18,7 +18,8 @@ internal static class SettingsMapping
             TimeSpan.FromSeconds(Math.Max(1, settings.BufferSeconds)),
             devices.MicEnabled,
             devices.SystemDeviceId,
-            devices.MicDeviceId);
+            devices.MicDeviceId,
+            SourceApp(settings.Audio.SourceApp));
     }
 
     /// <summary>The devices alone: what <see cref="AudioEngine.SetDevicesAsync"/> takes.</summary>
@@ -69,6 +70,12 @@ internal static class SettingsMapping
     {
         var id = Clean(stored);
         return id.Length == 0 || string.Equals(id, AudioSettings.DefaultDevice, StringComparison.OrdinalIgnoreCase) ? null : id;
+    }
+
+    private static string? SourceApp(string? stored)
+    {
+        var app = Clean(stored);
+        return app.Length == 0 ? null : app;
     }
 
     private static string Clean(string? text) => text?.Trim() ?? string.Empty;

@@ -57,19 +57,19 @@ internal sealed partial class SettingsScreen
     private void BuildBand()
     {
         var band = StatusText.From(_status);
-        Chrome(new Painted((c, ui) => PaintBand(c, ui, band)) { Bounds = new Box(0, 0, WindowWidth, BandHeight) });
-
         var saveLabel = StatusText.SaveLabel(Editor.Settings.ClipSeconds);
         var saveGesture = Editor.Settings.Hotkeys.SaveDefault ?? string.Empty;
         var saveWidth = Math.Max(_canvas.Measure(saveLabel, Face.Medium, 16), _canvas.Measure(saveGesture, Face.Mono, 11)) + 36;
         var saveBox = new Box(WindowWidth - 24 - MathF.Ceiling(saveWidth), 10, MathF.Ceiling(saveWidth), 52);
         var pauseWidth = Button.WidthFor(_canvas, "Resume", icon: true);
+        var pauseLeft = saveBox.X - 20 - pauseWidth;
+        Chrome(new Painted((c, ui) => PaintBand(c, ui, band, pauseLeft)) { Bounds = new Box(0, 0, WindowWidth, BandHeight) });
         Chrome(new Button(band.PauseLabel, _backend.TogglePause)
         {
             Id = "band.pause",
             Icon = band.PauseLabel == "Resume" ? ButtonIcon.Play : ButtonIcon.Pause,
             Enabled = band.PauseEnabled,
-            Bounds = new Box(saveBox.X - 20 - pauseWidth, 18, pauseWidth, 36),
+            Bounds = new Box(pauseLeft, 18, pauseWidth, 36),
         });
         Chrome(new Button(saveLabel, _backend.SaveNow)
         {
@@ -81,7 +81,7 @@ internal sealed partial class SettingsScreen
         });
     }
 
-    private static void PaintBand(ICanvas c, UiState ui, StatusBand band)
+    private static void PaintBand(ICanvas c, UiState ui, StatusBand band, float pauseLeft)
     {
         c.FillRect(new Box(0, 0, WindowWidth, BandHeight), Theme.Panel);
         c.FillRect(new Box(0, 0, WindowWidth, 1), Theme.Line);
@@ -106,10 +106,19 @@ internal sealed partial class SettingsScreen
                 c.WarningIcon(x, mid - 8, 16, Theme.Hot);
                 x += 22;
                 break;
+            case StatusMark.Caution:
+                c.WarningIcon(x, mid - 8, 16, Theme.Amber);
+                x += 22;
+                break;
         }
 
-        c.TextMid(band.Title, Face.Title, 22, x, mid, Theme.Text);
-        x += c.Measure(band.Title, Face.Title, 22) + 20;
+        // An exe name can be of any length, and the figures and the buttons come after it.
+        const float gap = 20;
+        var figures = band.Mic.Length == 0 ? 0
+            : c.Measure(band.Mic, Face.Body, 14) + gap + c.Measure(band.Duration, Face.Mono, 13) + gap + c.Measure(band.Ram, Face.Mono, 13) + gap;
+        var title = c.Fit(band.Title, Face.Title, 22, pauseLeft - gap - figures - x);
+        c.TextMid(title, Face.Title, 22, x, mid, Theme.Text);
+        x += c.Measure(title, Face.Title, 22) + 20;
         if (band.Mic.Length > 0)
         {
             c.TextMid(band.Mic, Face.Body, 14, x, mid, Theme.Muted);
@@ -213,13 +222,13 @@ internal sealed partial class SettingsScreen
     private Segmented Group(string id, IReadOnlyList<string> labels, Box box, Func<int> selected, Action<int> pick, bool enabled = true) =>
         Add(new Segmented(labels, selected, pick) { Id = id, Bounds = box, Enabled = enabled });
 
-    private Dropdown List(string id, Box box, Func<IReadOnlyList<DropItem>> items, Func<string> selected, Action<string> pick) =>
-        Add(new Dropdown(items, selected, pick, OpenPopup) { Id = id, Bounds = box });
+    private Dropdown List(string id, Box box, Func<IReadOnlyList<DropItem>> items, Func<string> selected, Action<string> pick, bool enabled = true) =>
+        Add(new Dropdown(items, selected, pick, OpenPopup) { Id = id, Bounds = box, Enabled = enabled });
 
-    private void Row(string label, string id, float y, Func<IReadOnlyList<DropItem>> items, Func<string> selected, Action<string> pick)
+    private void Row(string label, string id, float y, Func<IReadOnlyList<DropItem>> items, Func<string> selected, Action<string> pick, bool enabled = true)
     {
         RowLabel(label, y);
-        List(id, new Box(Right - FieldWidth, y, FieldWidth, RowHeight), items, selected, pick);
+        List(id, new Box(Right - FieldWidth, y, FieldWidth, RowHeight), items, selected, pick, enabled);
     }
 
     private void ToggleRow(string label, string id, float y, Func<bool> on, Action<bool> set)
@@ -358,9 +367,10 @@ internal sealed partial class SettingsScreen
         var y = BandHeight + 18;
         Heading("Audio", y);
         y += 36;
-        Row("Record", "audio.record", y, () => SettingsEditor.RecordChoices(_apps, Editor.Settings.Audio.SourceApp), () => Editor.Settings.Audio.SourceApp ?? string.Empty, Editor.SetSourceApp);
+        Row("Record", "audio.record", y, () => SettingsEditor.RecordChoices(_apps, Editor.Settings.Audio.SourceApp, _status is { SourceApp: not null, SourceAppMissing: false }), () => Editor.Settings.Audio.SourceApp ?? string.Empty, Editor.SetSourceApp);
         y += pitch;
-        Row("Output", "audio.output", y, () => SettingsEditor.OutputChoices(_outputs, Editor.Settings.Audio.OutputDeviceId), () => Editor.Settings.Audio.OutputDeviceId, Editor.SetOutput);
+        // One application is captured wherever it plays, so the output has no say.
+        Row("Output", "audio.output", y, () => SettingsEditor.OutputChoices(_outputs, Editor.Settings.Audio.OutputDeviceId), () => Editor.Settings.Audio.OutputDeviceId, Editor.SetOutput, audio.SourceApp is null);
         y += pitch;
         Row("Microphone", "audio.mic", y, () => SettingsEditor.MicChoices(_mics, Editor.Settings.Audio.MicDeviceId), () => Editor.Settings.Audio.MicDeviceId, Editor.SetMic);
         y += pitch;

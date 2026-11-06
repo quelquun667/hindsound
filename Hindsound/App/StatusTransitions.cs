@@ -35,7 +35,13 @@ internal static class StatusTransitions
 
                 if (from == CaptureActivity.NoDevice)
                 {
-                    return next.SystemDeviceName is null ? StatusNotice.CaptureOn : StatusNotice.DeviceChanged;
+                    return next.SystemDeviceName is null || next.SourceApp is not null ? StatusNotice.CaptureOn : StatusNotice.DeviceChanged;
+                }
+
+                // An application that closes, comes back or gets chosen changes no device.
+                if (next.SourceApp is not null || previous?.SourceApp is not null)
+                {
+                    return StatusNotice.None;
                 }
 
                 return next.SystemDeviceName is not null

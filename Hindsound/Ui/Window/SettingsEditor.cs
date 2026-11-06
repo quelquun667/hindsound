@@ -312,13 +312,14 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
     }
 
     /// <summary>The list of the "Record" row. An app chosen earlier and not running now stays listed.</summary>
-    public static IReadOnlyList<DropItem> RecordChoices(IReadOnlyList<AudioAppInfo> apps, string? selected)
+    public static IReadOnlyList<DropItem> RecordChoices(IReadOnlyList<AudioAppChoice> apps, string? selected, bool selectedRunning = false)
     {
         var items = new List<DropItem> { new(string.Empty, "Whole PC") };
-        items.AddRange(apps.Select(a => new DropItem(a.ExeName, a.DisplayName)));
-        if (!string.IsNullOrEmpty(selected) && !items.Any(i => i.Value == selected))
+        items.AddRange(apps.Select(a => new DropItem(a.ExeName, a.Name)));
+        if (!string.IsNullOrEmpty(selected) && !items.Any(i => string.Equals(i.Value, selected, StringComparison.OrdinalIgnoreCase)))
         {
-            items.Add(new DropItem(selected, selected + " (not running)"));
+            // An app that has not played anything yet has no session, so it can be running and still not be listed.
+            items.Add(new DropItem(selected, selectedRunning ? Path.GetFileNameWithoutExtension(selected) : selected + " (not running)"));
         }
 
         return items;
@@ -503,19 +504,7 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
 }
 
 /// <summary>An app with a session in the mixer: the name of its exe for the settings, a name for the user.</summary>
-internal sealed record AudioAppInfo(string ExeName, string DisplayName);
+internal sealed record AudioAppChoice(string ExeName, string Name);
 
 /// <summary>A device of the lists, apart from the engine's type so the screen stays free of NAudio.</summary>
 internal sealed record AudioDeviceChoice(string Id, string Name);
-
-/// <summary>The apps that can be recorded on their own.</summary>
-internal interface IAudioAppList
-{
-    IReadOnlyList<AudioAppInfo> List();
-}
-
-/// <summary>Until the engine can list the audio sessions: only "Whole PC" is offered.</summary>
-internal sealed class EmptyAudioAppList : IAudioAppList
-{
-    public IReadOnlyList<AudioAppInfo> List() => [];
-}

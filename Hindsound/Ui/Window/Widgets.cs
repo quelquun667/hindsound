@@ -393,6 +393,8 @@ internal sealed class Dropdown(Func<IReadOnlyList<DropItem>> items, Func<string>
 
     public void Pick(int index) => pick(items()[index].Value);
 
+    public void PickValue(string value) => pick(value);
+
     public override bool CanFocus => Enabled;
 
     public override bool OnKey(uint vk)

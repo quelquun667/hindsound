@@ -93,7 +93,7 @@ internal sealed partial class SettingsScreen
     private LastClipInfo? _lastClip;
     private IReadOnlyList<AudioDeviceChoice> _outputs = [];
     private IReadOnlyList<AudioDeviceChoice> _mics = [];
-    private IReadOnlyList<AudioAppInfo> _apps = [];
+    private IReadOnlyList<AudioAppChoice> _apps = [];
 
     private string? _focusId;
     private string? _pressedId;
@@ -184,7 +184,7 @@ internal sealed partial class SettingsScreen
         Refresh();
     }
 
-    public void SetChoices(IReadOnlyList<AudioDeviceChoice> outputs, IReadOnlyList<AudioDeviceChoice> mics, IReadOnlyList<AudioAppInfo> apps)
+    public void SetChoices(IReadOnlyList<AudioDeviceChoice> outputs, IReadOnlyList<AudioDeviceChoice> mics, IReadOnlyList<AudioAppChoice> apps)
     {
         _outputs = outputs;
         _mics = mics;
@@ -953,7 +953,8 @@ internal sealed partial class SettingsScreen
             _screen.ClosePopup();
             if (index < _items.Count)
             {
-                _owner.Pick(index);
+                // What the user saw: the list of the owner may have changed since this one opened.
+                _owner.PickValue(_items[index].Value);
             }
         }
 

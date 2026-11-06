@@ -142,6 +142,9 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
 
     public Action Closed { get; }
 
+    /// <summary>The window came back to the foreground.</summary>
+    public Action? Activated { get; set; }
+
     /// <summary>Shows the window. Off screen for a test: never activated, no taskbar button, never takes the focus.</summary>
     public void Show()
     {
@@ -478,6 +481,10 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
                 if ((int)(wParam & 0xFFFF) == WindowNative.WA_INACTIVE)
                 {
                     Screen.Deactivated();
+                }
+                else
+                {
+                    Activated?.Invoke();
                 }
 
                 return Native.DefWindowProcW(hwnd, message, wParam, lParam);
@@ -890,6 +897,7 @@ internal static unsafe class SettingsDump
         var width = (int)Math.Round(SettingsScreen.WindowWidth * scale);
         var height = (int)Math.Round(SettingsScreen.WindowHeight * scale);
         using var canvas = new GdiCanvas(width, height, scale);
+        var sampleStatus = new Audio.AudioEngineStatus(Audio.CaptureActivity.Capturing, true, true, true, "Speakers", "Headset", true, TimeSpan.FromMinutes(5), 86_688_000);
 
         void Shot(string name, Action<SettingsScreen, SampleBackend>? prepare = null, bool firstRun = false, bool focus = false)
         {
@@ -901,12 +909,12 @@ internal static unsafe class SettingsDump
                 NoNativeEdit = true,
                 Clock = () => new DateTime(2026, 11, 6, 14, 32, 5),
             };
-            screen.UpdateStatus(new Audio.AudioEngineStatus(Audio.CaptureActivity.Capturing, true, true, true, "Speakers", "Headset", true, TimeSpan.FromMinutes(5), 86_688_000));
+            screen.UpdateStatus(sampleStatus);
             screen.SetLastClip(new LastClipInfo(TimeSpan.FromSeconds(30), new DateTime(2026, 11, 6, 14, 32, 0), 720_000));
             screen.SetChoices(
                 [new AudioDeviceChoice("out-1", "Speakers (Realtek High Definition Audio)"), new AudioDeviceChoice("out-2", "Headset Earphone")],
                 [new AudioDeviceChoice("mic-1", "Headset Microphone")],
-                [new AudioAppInfo("Discord.exe", "Discord"), new AudioAppInfo("chrome.exe", "Google Chrome")]);
+                [new AudioAppChoice("Discord.exe", "Discord"), new AudioAppChoice("chrome.exe", "Google Chrome")]);
             prepare?.Invoke(screen, backend);
             screen.Paint(canvas);
             PngFile.Write(Path.Combine(folder, name + suffix + ".png"), canvas.Bits, canvas.Width, canvas.Height);
@@ -939,6 +947,18 @@ internal static unsafe class SettingsDump
             s.EditChanged("nine");
         }, focus: true);
         Shot("audio", (s, _) => s.ShowSection(Section.Audio));
+        Shot("audio-app", (s, _) =>
+        {
+            s.Editor.SetSourceApp("Discord.exe");
+            s.UpdateStatus(sampleStatus with { SystemDeviceName = "Discord.exe", OwnSoundsExcluded = false, SourceApp = "Discord.exe" });
+            s.ShowSection(Section.Audio);
+        });
+        Shot("audio-app-missing", (s, _) =>
+        {
+            s.Editor.SetSourceApp("RobloxPlayerBeta.exe");
+            s.UpdateStatus(sampleStatus with { SystemCapturing = false, SystemDeviceName = null, OwnSoundsExcluded = false, SourceApp = "RobloxPlayerBeta.exe", SourceAppMissing = true });
+            s.ShowSection(Section.Audio);
+        });
         Shot("audio-list", (s, _) =>
         {
             s.ShowSection(Section.Audio);

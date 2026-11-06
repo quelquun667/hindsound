@@ -28,6 +28,19 @@ public class SettingsMappingTests
     }
 
     [Theory]
+    [InlineData(null, null)]
+    [InlineData("", null)]
+    [InlineData("   ", null)]
+    [InlineData("Discord.exe", "Discord.exe")]
+    [InlineData(" Discord.exe ", "Discord.exe")]
+    public void The_recorded_app_reaches_the_engine(string? stored, string? expected)
+    {
+        var settings = new AppSettings { Audio = new AudioSettings { SourceApp = stored } };
+
+        Assert.Equal(expected, SettingsMapping.ToEngineOptions(settings).SourceApp);
+    }
+
+    [Theory]
     [InlineData(1, 1)]
     [InlineData(300, 300)]
     [InlineData(0, 1)]

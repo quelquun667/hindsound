@@ -354,7 +354,7 @@ public sealed class SettingsScreenTests : IDisposable
     [Fact]
     public void The_record_list_chooses_an_app_by_the_name_of_its_exe()
     {
-        Screen.SetChoices([], [], [new AudioAppInfo("Discord.exe", "Discord")]);
+        Screen.SetChoices([], [], [new AudioAppChoice("Discord.exe", "Discord")]);
         Screen.ShowSection(Section.Audio);
         _rig.FocusOn("audio.record");
 
@@ -364,6 +364,38 @@ public sealed class SettingsScreenTests : IDisposable
 
         _rig.Press(Vk.Up);
         Assert.Null(_rig.Settings.Audio.SourceApp);
+    }
+
+    [Fact]
+    public void The_output_has_no_say_while_one_app_is_recorded()
+    {
+        Screen.SetChoices([], [], [new AudioAppChoice("Discord.exe", "Discord")]);
+        Screen.ShowSection(Section.Audio);
+        Assert.Contains("audio.output", Screen.StopIds());
+        _rig.FocusOn("audio.record");
+
+        _rig.Press(Vk.Down);
+        Assert.DoesNotContain("audio.output", Screen.StopIds());
+
+        _rig.Press(Vk.Up);
+        Assert.Contains("audio.output", Screen.StopIds());
+    }
+
+    [Fact]
+    public void An_open_list_picks_what_it_shows_even_if_the_apps_changed_meanwhile()
+    {
+        Screen.SetChoices([], [], [new AudioAppChoice("Discord.exe", "Discord")]);
+        Screen.ShowSection(Section.Audio);
+        _rig.FocusOn("audio.record");
+        _rig.Press(Vk.Enter);
+        Assert.True(Screen.PopupOpen);
+
+        // Coming back to the window lists the apps again, and this answer arrives once the list is open.
+        Screen.SetChoices([], [], [new AudioAppChoice("Game.exe", "Game"), new AudioAppChoice("Discord.exe", "Discord")]);
+        _rig.Press(Vk.Down, Vk.Enter);
+
+        Assert.False(Screen.PopupOpen);
+        Assert.Equal("Discord.exe", _rig.Settings.Audio.SourceApp);
     }
 
     [Fact]

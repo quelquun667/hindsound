@@ -27,7 +27,6 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private readonly Journal _journal;
     private readonly SettingsStore _store;
     private readonly ClipSaver _saver;
-    private readonly IAudioAppList _audioApps = new EmptyAudioAppList();
 
     private UiLoop _loop = null!;
     private TrayIcon _tray = null!;
@@ -202,9 +201,14 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         }
 
         _engineOptions = next;
-        if (previous with { BufferDuration = next.BufferDuration } != next)
+        if (previous with { BufferDuration = next.BufferDuration, SourceApp = next.SourceApp } != next)
         {
             Watch(engine.SetDevicesAsync(next.SystemDeviceId, next.MicDeviceId, next.MicEnabled), "changing the devices");
+        }
+
+        if (!string.Equals(previous.SourceApp, next.SourceApp, StringComparison.OrdinalIgnoreCase))
+        {
+            Watch(engine.SetSourceAppAsync(next.SourceApp), "changing the recorded app");
         }
 
         if (previous.BufferDuration != next.BufferDuration)
@@ -316,7 +320,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     {
         var options = SettingsMapping.ToEngineOptions(_settings);
         _engineOptions = options;
-        _journal.Write($"engine: buffer {options.BufferDuration}, system {options.SystemDeviceId ?? "(default)"}, mic enabled {options.MicEnabled}, mic {options.MicDeviceId ?? "(default)"}");
+        _journal.Write($"engine: buffer {options.BufferDuration}, system {options.SystemDeviceId ?? "(default)"}, app {options.SourceApp ?? "(whole PC)"}, mic enabled {options.MicEnabled}, mic {options.MicDeviceId ?? "(default)"}");
 
         // Off this thread: the loop is a single-threaded apartment, and the audio objects belong in the thread pool's.
         _ = Task.Run(async () =>
@@ -353,6 +357,11 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
     private void OnStatus(AudioEngineStatus status)
     {
+        if (status.SourceApp is { } app && (_lastStatus?.SourceApp != app || _lastStatus.SourceAppMissing != status.SourceAppMissing))
+        {
+            _journal.Write($"recorded app {app}: {(status.SourceAppMissing ? "not running" : "running")}, captured as {status.SystemDeviceName ?? "(nothing)"}");
+        }
+
         var notice = StatusTransitions.Decide(_lastStatus, status);
         _lastStatus = status;
         _window?.Screen.UpdateStatus(status);
@@ -381,7 +390,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             return;
         }
 
-        Watch(_lastStatus?.Activity == CaptureActivity.Paused ? engine.ResumeAsync() : engine.PauseAsync(), "pause or resume");
+        Watch(engine.TogglePauseAsync(), "pause or resume");
     }
 
     private void Watch(Task task, string what) =>
@@ -665,6 +674,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         window.SetIcon(Accent);
         window.Show();
         LoadChoices();
+
+        // An app started while the window was in the background gets offered on the way back.
+        window.Activated = LoadChoices;
         _journal.Write($"settings window opened, first launch {firstRun}, {Journal.Memory()}");
         if (_options.Offscreen && firstRun)
         {
@@ -677,7 +689,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     {
         var outputs = WasapiCaptureSourceFactory.ListDevices(AudioFlow.System).Select(d => new AudioDeviceChoice(d.Id, d.Name)).ToList();
         var mics = WasapiCaptureSourceFactory.ListDevices(AudioFlow.Mic).Select(d => new AudioDeviceChoice(d.Id, d.Name)).ToList();
-        var apps = _audioApps.List();
+        var apps = WasapiCaptureSourceFactory.ListApps().Select(a => new AudioAppChoice(a.ExeName, a.Name)).ToList();
+        _journal.Write($"choices listed: {outputs.Count} outputs, {mics.Count} mics, {apps.Count} apps");
         _loop.Post(() => _window?.Screen.SetChoices(outputs, mics, apps));
     });
 
@@ -727,7 +740,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             _window?.SetIcon(Accent);
         }
 
-        if ((change & (SettingsChange.Buffer | SettingsChange.Devices)) != 0)
+        if ((change & (SettingsChange.Buffer | SettingsChange.Devices | SettingsChange.SourceApp)) != 0)
         {
             ApplyEngineOptions();
         }

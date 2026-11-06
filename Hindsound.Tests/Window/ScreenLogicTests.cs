@@ -126,6 +126,36 @@ public class StatusTextTests
     }
 
     [Fact]
+    public void Capturing_one_app_names_it()
+    {
+        var band = StatusText.From(ScreenRig.Capturing() with { SourceApp = "Discord.exe" });
+
+        Assert.Equal(StatusMark.Dot, band.Mark);
+        Assert.Equal("Capturing Discord", band.Title);
+    }
+
+    [Fact]
+    public void An_app_not_running_is_said_and_is_no_error()
+    {
+        var band = StatusText.From(ScreenRig.Capturing() with { SystemCapturing = false, SourceApp = "Discord.exe", SourceAppMissing = true });
+
+        Assert.Equal(StatusMark.Caution, band.Mark);
+        Assert.Equal("Discord not running", band.Title);
+    }
+
+    [Fact]
+    public void An_app_that_cannot_be_captured_is_never_called_captured()
+    {
+        var withMic = StatusText.From(ScreenRig.Capturing() with { SystemCapturing = false, SourceApp = "Discord.exe" });
+        Assert.Equal(StatusMark.Warning, withMic.Mark);
+        Assert.Equal("Can't capture Discord", withMic.Title);
+
+        var alone = StatusText.From(ScreenRig.Capturing(false, CaptureActivity.NoDevice) with { SystemCapturing = false, SourceApp = "Discord.exe" });
+        Assert.Equal(StatusMark.Warning, alone.Mark);
+        Assert.Equal("Can't capture Discord", alone.Title);
+    }
+
+    [Fact]
     public void No_device_is_a_warning_shape()
     {
         var band = StatusText.From(ScreenRig.Capturing(false, CaptureActivity.NoDevice));

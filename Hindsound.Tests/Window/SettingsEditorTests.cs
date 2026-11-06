@@ -291,7 +291,7 @@ public class SettingsEditorTests
     [Fact]
     public void The_record_list_starts_on_the_whole_pc_and_keeps_an_app_not_running()
     {
-        var apps = new[] { new AudioAppInfo("Discord.exe", "Discord") };
+        var apps = new[] { new AudioAppChoice("Discord.exe", "Discord") };
 
         var items = SettingsEditor.RecordChoices(apps, "Game.exe");
 
@@ -301,9 +301,20 @@ public class SettingsEditorTests
     }
 
     [Fact]
-    public void Until_the_engine_lists_them_no_app_is_offered()
+    public void An_app_listed_with_another_case_gets_no_second_row()
     {
-        Assert.Empty(new EmptyAudioAppList().List());
+        var items = SettingsEditor.RecordChoices([new AudioAppChoice("Discord.exe", "Discord")], "discord.EXE");
+
+        Assert.Equal([string.Empty, "Discord.exe"], items.Select(i => i.Value));
+    }
+
+    [Fact]
+    public void An_app_running_without_a_session_yet_is_not_called_not_running()
+    {
+        var items = SettingsEditor.RecordChoices([], "Game.exe", selectedRunning: true);
+
+        Assert.Equal("Game.exe", items[1].Value);
+        Assert.Equal("Game", items[1].Label);
     }
 
     [Fact]
