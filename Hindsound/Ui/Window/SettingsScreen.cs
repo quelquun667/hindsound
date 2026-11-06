@@ -423,6 +423,18 @@ internal sealed partial class SettingsScreen
 
     // ---------------------------------------------------------------- keyboard
 
+    /// <summary>Tabs forward until the focus is on this widget, with the modifiers said here and not read from the real keyboard. False if it never gets there.</summary>
+    public bool TabTo(string id)
+    {
+        const int mostTabs = 40;
+        for (var i = 0; i < mostTabs && FocusId != id; i++)
+        {
+            Key(Vk.Tab, 0);
+        }
+
+        return FocusId == id;
+    }
+
     /// <summary>A key went down. Returns false if nothing here wanted it, so Windows can do what it does with it.</summary>
     /// <param name="vk">The virtual key.</param>
     /// <param name="modifiers">The modifiers held, as <see cref="HotkeyGesture"/> flags.</param>

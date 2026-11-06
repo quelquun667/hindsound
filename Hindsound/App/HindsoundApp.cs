@@ -20,6 +20,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private const int SelfTestLeaveCheckMs = 500;
     private const int SelfTestLongestWaitMs = 60_000;
     private const int ProbeStepMs = 300;
+    private const string ProbeTextField = "export.template";
     private const int ProbeAfterCloseMs = 10_000;
     private const int StartupReadTries = 3;
     private const int StartupReadGapMs = 200;
@@ -1254,8 +1255,19 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         var steps = new List<Action>();
         steps.AddRange(Enumerable.Repeat<Action>(() => Key(hwnd, Vk.Down), 4));
         steps.Add(() => Key(hwnd, Vk.Up));
-        steps.AddRange(Enumerable.Repeat<Action>(() => Key(hwnd, Vk.Tab), 5));
-        steps.Add(() => WindowNative.SetWindowTextW(window.EditHwnd, "probe {date}"));
+        steps.Add(() =>
+        {
+            // Not by posted keys: the window reads the modifiers from the real keyboard, and the PC may be in use.
+            if (window.Screen.TabTo(ProbeTextField))
+            {
+                WindowNative.SetWindowTextW(window.EditHwnd, "probe {date}");
+            }
+            else
+            {
+                _exitCode = 1;
+                _journal.Write($"probe: FAILED, the focus never reached {ProbeTextField}: it is on {window.Screen.Section}/{window.Screen.FocusId}, and nothing was typed");
+            }
+        });
         steps.Add(() => seen.Add("template=" + _settings.Export.FileNameTemplate));
         steps.Add(() => window.ProbePicture(Path.ChangeExtension(_journal.Path, ".export.png")));
         steps.Add(() => Key(window.EditHwnd, Vk.Tab));
