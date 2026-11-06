@@ -61,6 +61,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private TrayState _trayState = TrayState.Active;
     private string _trayTip = "Hindsound";
     private bool _quitting;
+    private readonly SessionEndBlock _sessionEndBlock = new();
+    private TimeSpan _clipsLimit = QueuedClipsLimit;
+    private int _copying;
 
     private ClipResult? _lastClip;
     private DateTime _lastClipTime;
@@ -125,7 +128,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         _tray = new TrayIcon(_loop.Hwnd, UiLoop.TrayCallbackMessage);
         _loop.TrayMessage = OnTrayMessage;
         _loop.TaskbarCreated = () => _tray.Add(_trayState, Accent, _trayTip);
-        _loop.SessionEnding = Shutdown;
+        _loop.SessionEnding = OnSessionEnding;
+        _loop.SessionEndAsked = OnSessionEndAsked;
+        _loop.SessionKept = TakeBackSessionEndReason;
         if (!_tray.Add(_trayState, Accent, _trayTip))
         {
             _journal.Write("the tray icon could not be added");
@@ -620,6 +625,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private void OnSavingSlowly(ClipRequest request) =>
         ShowStatus(NotificationStates.Saving(request.Requested));
 
+    // A clip is not over until it has been copied too: that goes on after the pipeline is done with it.
+    private bool ClipsInProgress => _pipeline.Busy || _copying > 0;
+
     // A snapshot is one large array, and only a full collection gives it back. An app that sits in the background for
     // hours should not keep the last clip in memory; off this thread, and only once no other clip is on its way.
     private void ReleaseSnapshotMemory() => _ = Task.Run(() =>
@@ -654,7 +662,12 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         _journal.Write($"clip saved: {string.Join(", ", result.Paths)}, {result.Duration.TotalSeconds:F2} s of {outcome.Request.Requested.TotalSeconds:F0} s, {result.SizeBytes} bytes, silent {result.IsSilent}, rescued {result.Rescued}, fell back to WAV {result.FellBackToWav}, {Journal.Memory()}");
         if (outcome.Request.CopyWanted)
         {
-            CopyClip(result, copied => FinishClip(outcome, result, copied));
+            _copying++;
+            CopyClip(result, copied =>
+            {
+                _copying--;
+                FinishClip(outcome, result, copied);
+            });
         }
         else
         {
@@ -1257,6 +1270,31 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
     // ---------------------------------------------------------------- leaving
 
+    // The answer is yes whatever happens: the reason only tells the user what Windows is waiting for.
+    private void OnSessionEndAsked()
+    {
+        if (_sessionEndBlock.Asked(ClipsInProgress))
+        {
+            var given = Native.ShutdownBlockReasonCreate(_loop.Hwnd, SessionEndBlock.Reason) != 0;
+            _journal.Write($"the session may end, with clips being written: reason given {given}");
+        }
+    }
+
+    private void TakeBackSessionEndReason()
+    {
+        if (_sessionEndBlock.Over())
+        {
+            var taken = Native.ShutdownBlockReasonDestroy(_loop.Hwnd) != 0;
+            _journal.Write($"the reason to wait at the end of the session is gone: {taken}");
+        }
+    }
+
+    private void OnSessionEnding()
+    {
+        _clipsLimit = SessionEndBlock.ClipsLimit;
+        Shutdown();
+    }
+
     /// <summary>Icon first, so the user sees the app gone; then the shortcuts; queued clips get written; the engine last.</summary>
     private void Shutdown()
     {
@@ -1272,11 +1310,12 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         Guard(() => _hotkeys?.Dispose(), "hotkeys");
         Guard(() =>
         {
-            if (_pipeline?.WaitIdle(QueuedClipsLimit) == false)
+            if (_pipeline?.WaitIdle(_clipsLimit) == false)
             {
                 _journal.Write("leaving with clips still being written");
             }
         }, "queued clips");
+        Guard(TakeBackSessionEndReason, "reason at the end of the session");
         Guard(() =>
         {
             var stopping = Task.Run(() => _engine?.Dispose());

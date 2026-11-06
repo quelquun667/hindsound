@@ -152,6 +152,7 @@ internal sealed class ClipPipeline
     private readonly object _waitingLock = new();
     private long _waitingBytes;
     private int _waitingPieces;
+    private int _inFlight;
 
     private readonly IClipBackend _backend;
     private readonly Action<Action> _post;
@@ -180,12 +181,26 @@ internal sealed class ClipPipeline
     /// <summary>A press has ended, one way or another. On the thread of the message loop.</summary>
     public Action<ClipOutcome>? Finished { get; set; }
 
-    /// <summary>Takes the press. Returns at once.</summary>
-    public void Press(ClipRequest request) => _snapshots.Enqueue(() => TakeSnapshot(request));
+    /// <summary>
+    /// A press has yet to end. It stops counting just before <see cref="Finished"/> hears of it: the queues only go empty
+    /// a moment after, so whoever hears of the last clip must not ask them.
+    /// </summary>
+    public bool Busy => Volatile.Read(ref _inFlight) > 0;
 
-    /// <summary>Lets queued clips finish. False if the time ran out.</summary>
-    public bool WaitIdle(TimeSpan timeout) =>
-        _snapshots.WaitIdle(timeout) && _encoder.WaitIdle(timeout);
+    /// <summary>Takes the press. Returns at once.</summary>
+    public void Press(ClipRequest request)
+    {
+        Interlocked.Increment(ref _inFlight);
+        _snapshots.Enqueue(() => TakeSnapshot(request));
+    }
+
+    /// <summary>Lets queued clips finish, in that time for the two queues together. False if the time ran out.</summary>
+    public bool WaitIdle(TimeSpan timeout)
+    {
+        var deadline = Environment.TickCount64 + (long)timeout.TotalMilliseconds;
+        return _snapshots.WaitIdle(timeout)
+            && _encoder.WaitIdle(TimeSpan.FromMilliseconds(Math.Max(0, deadline - Environment.TickCount64)));
+    }
 
     /// <summary>What a snapshot of this length holds at most, known before anything is copied.</summary>
     public static long EstimatedBytes(TimeSpan requested) => (long)(BytesPerSecond * requested.TotalSeconds);
@@ -276,7 +291,11 @@ internal sealed class ClipPipeline
         Finish(outcome);
     }
 
-    private void Finish(ClipOutcome outcome) => _post(() => Finished?.Invoke(outcome));
+    private void Finish(ClipOutcome outcome) => _post(() =>
+    {
+        Interlocked.Decrement(ref _inFlight);
+        Finished?.Invoke(outcome);
+    });
 
     private sealed class StrongBox
     {

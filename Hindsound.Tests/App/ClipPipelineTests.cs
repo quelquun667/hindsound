@@ -402,6 +402,69 @@ public class ClipPipelineTests
     }
 
     [Fact]
+    public void Leaving_gives_the_two_queues_one_deadline_not_one_each()
+    {
+        var rig = new Rig();
+        using var hold = new ManualResetEventSlim(false);
+        rig.Backend.HoldSave = hold;
+        rig.Backend.NextSnapshot = () =>
+        {
+            Thread.Sleep(1500);
+            return new AudioSnapshot(new float[2], []);
+        };
+        rig.Pipeline.Press(Request());
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var idle = rig.Pipeline.WaitIdle(TimeSpan.FromSeconds(2));
+        watch.Stop();
+        hold.Set();
+
+        Assert.False(idle);
+        Assert.True(watch.ElapsedMilliseconds < 3000, $"waited {watch.ElapsedMilliseconds} ms for a limit of 2000 ms");
+        rig.NextOutcome();
+    }
+
+    [Fact]
+    public void Busy_holds_from_the_press_until_the_last_clip_is_heard_of()
+    {
+        var rig = new Rig();
+        using var hold = new ManualResetEventSlim(false);
+        rig.Backend.HoldSave = hold;
+        var busyWhenHeard = new ConcurrentQueue<bool>();
+        rig.Pipeline.Finished = outcome =>
+        {
+            busyWhenHeard.Enqueue(rig.Pipeline.Busy);
+            rig.Outcomes.Add(outcome);
+        };
+
+        Assert.False(rig.Pipeline.Busy);
+        rig.Pipeline.Press(Request());
+        rig.Pipeline.Press(Request());
+        Assert.True(rig.Pipeline.Busy);
+        hold.Set();
+        rig.NextOutcome();
+        rig.NextOutcome();
+
+        // The first one still has the second behind it. The last one can already leave, the queues being a step behind.
+        Assert.Equal([true, false], busyWhenHeard);
+        Assert.False(rig.Pipeline.Busy);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_press_that_ends_without_a_clip_stops_being_busy(bool snapshotThrows)
+    {
+        var rig = new Rig();
+        rig.Backend.NextSnapshot = () => snapshotThrows ? throw new InvalidOperationException("on purpose") : new AudioSnapshot([], []);
+
+        rig.Pipeline.Press(Request());
+
+        Assert.Equal(snapshotThrows ? ClipFailure.Failed : ClipFailure.NothingCaptured, rig.NextOutcome().Failure);
+        Assert.False(rig.Pipeline.Busy);
+    }
+
+    [Fact]
     public void A_queue_survives_a_piece_that_throws()
     {
         var errors = new ConcurrentQueue<Exception>();

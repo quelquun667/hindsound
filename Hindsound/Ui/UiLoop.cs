@@ -56,6 +56,12 @@ internal sealed unsafe class UiLoop : IDisposable
     /// </summary>
     public Action? SessionEnding { get; set; }
 
+    /// <summary>Windows asks if the session may end. The answer is always yes.</summary>
+    public Action? SessionEndAsked { get; set; }
+
+    /// <summary>Windows had asked, and the session goes on after all.</summary>
+    public Action? SessionKept { get; set; }
+
     /// <summary>Runs the action on the loop's thread, soon. Safe from any thread.</summary>
     public void Post(Action action)
     {
@@ -112,6 +118,15 @@ internal sealed unsafe class UiLoop : IDisposable
                 return 0;
 
             case Native.WM_QUERYENDSESSION:
+                try
+                {
+                    SessionEndAsked?.Invoke();
+                }
+                catch (Exception ex)
+                {
+                    UiErrors.Report(ex);
+                }
+
                 return 1;
 
             case Native.WM_ENDSESSION:
@@ -125,6 +140,10 @@ internal sealed unsafe class UiLoop : IDisposable
                     {
                         Quit();
                     }
+                }
+                else
+                {
+                    SessionKept?.Invoke();
                 }
 
                 return 0;

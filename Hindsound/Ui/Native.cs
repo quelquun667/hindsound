@@ -189,6 +189,8 @@ internal static unsafe partial class Native
     [LibraryImport(U)] public static partial int EmptyClipboard();
     [LibraryImport(U)] public static partial nint SetClipboardData(uint format, nint data);
     [LibraryImport(U)] public static partial int CloseClipboard();
+    [LibraryImport(U, StringMarshalling = StringMarshalling.Utf16)] public static partial int ShutdownBlockReasonCreate(nint hwnd, string reason);
+    [LibraryImport(U)] public static partial int ShutdownBlockReasonDestroy(nint hwnd);
 
     [LibraryImport("shcore.dll")] public static partial int GetDpiForMonitor(nint monitor, int type, uint* x, uint* y);
 

@@ -60,16 +60,34 @@ public class UiLoopTests
     public void A_session_that_goes_on_after_all_does_not_end_the_loop()
     {
         var shutdowns = 0;
+        var kept = 0;
 
         var ended = LoopEnds(loop =>
         {
             loop.SessionEnding = () => shutdowns++;
+            loop.SessionKept = () => kept++;
             PostEndSession(loop, 0);
-            loop.Post(() => { });
-            loop.After(300, () => Native.PostMessageW(loop.Hwnd, Native.WM_CLOSE, 0, 0));
+            loop.After(300, loop.Quit);
         });
 
         Assert.True(ended);
         Assert.Equal(0, shutdowns);
+        Assert.Equal(1, kept);
+    }
+
+    [Fact]
+    public void The_question_of_the_session_end_is_passed_on()
+    {
+        var asked = 0;
+
+        var ended = LoopEnds(loop =>
+        {
+            loop.SessionEndAsked = () => asked++;
+            Native.PostMessageW(loop.Hwnd, Native.WM_QUERYENDSESSION, 0, (nint)CloseApp);
+            loop.After(100, loop.Quit);
+        });
+
+        Assert.True(ended);
+        Assert.Equal(1, asked);
     }
 }
