@@ -158,6 +158,160 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal(content, File.ReadAllText(FilePath + ".bak"));
     }
 
+    private FileStream Lock() => new(FilePath, FileMode.Open, FileAccess.Read, FileShare.None);
+
+    [Fact]
+    public void LockedFile_GivesDefaultsAndStaysWhereItIs()
+    {
+        const string good = "{ \"clipSeconds\": 60 }";
+        File.WriteAllText(FilePath, good);
+        var store = new SettingsStore(FilePath);
+
+        AppSettings s;
+        using (Lock())
+        {
+            s = store.Load();
+        }
+
+        Assert.Equal(SettingsLoadStatus.Unreadable, store.LastStatus);
+        Assert.Null(store.LastBackupPath);
+        Assert.Equal(30, s.ClipSeconds);
+        Assert.Equal(good, File.ReadAllText(FilePath));
+        Assert.Equal([FilePath], Directory.GetFiles(_folder));
+    }
+
+    [Fact]
+    public void LoadPatiently_LooksAgainUntilTheLockIsGone()
+    {
+        File.WriteAllText(FilePath, "{ \"clipSeconds\": 60 }");
+        var store = new SettingsStore(FilePath);
+        var held = Lock();
+        var waits = 0;
+
+        var s = store.LoadPatiently(3, () =>
+        {
+            if (++waits == 2)
+            {
+                held.Dispose();
+            }
+        });
+
+        Assert.Equal(2, waits);
+        Assert.Equal(SettingsLoadStatus.Loaded, store.LastStatus);
+        Assert.Equal(60, s.ClipSeconds);
+    }
+
+    [Fact]
+    public void LoadPatiently_GivesUpAfterTheLastTry()
+    {
+        File.WriteAllText(FilePath, "{ \"clipSeconds\": 60 }");
+        var store = new SettingsStore(FilePath);
+        var waits = 0;
+
+        using (Lock())
+        {
+            store.LoadPatiently(3, () => waits++);
+        }
+
+        Assert.Equal(2, waits);
+        Assert.Equal(SettingsLoadStatus.Unreadable, store.LastStatus);
+    }
+
+    [Fact]
+    public void LoadPatiently_DoesNotWaitForABrokenFile()
+    {
+        File.WriteAllText(FilePath, "not json");
+        var store = new SettingsStore(FilePath);
+        var waits = 0;
+
+        store.LoadPatiently(3, () => waits++);
+
+        Assert.Equal(0, waits);
+        Assert.Equal(SettingsLoadStatus.Corrupt, store.LastStatus);
+    }
+
+    [Fact]
+    public void Read_BrokenFile_ChangesNothing()
+    {
+        const string broken = "{ \"clipSeconds\": \"30\", \"audio\": { \"micDeviceId\": \"disabled\" } }";
+        File.WriteAllText(FilePath, broken);
+        var store = new SettingsStore(FilePath);
+
+        var read = store.Read();
+
+        Assert.Equal(SettingsLoadStatus.Corrupt, read.Status);
+        Assert.Null(read.Settings);
+        Assert.Equal(broken, File.ReadAllText(FilePath));
+        Assert.Equal([FilePath], Directory.GetFiles(_folder));
+    }
+
+    [Fact]
+    public void Read_LockedFile_IsUnreadable()
+    {
+        File.WriteAllText(FilePath, "{ \"clipSeconds\": 60 }");
+        var store = new SettingsStore(FilePath);
+
+        using (Lock())
+        {
+            var read = store.Read();
+
+            Assert.Equal(SettingsLoadStatus.Unreadable, read.Status);
+            Assert.Null(read.Settings);
+        }
+
+        Assert.Equal([FilePath], Directory.GetFiles(_folder));
+    }
+
+    [Fact]
+    public void Read_MissingFile_IsMissingAndCreatesNothing()
+    {
+        var read = new SettingsStore(FilePath).Read();
+
+        Assert.Equal(SettingsLoadStatus.Missing, read.Status);
+        Assert.Null(read.Settings);
+        Assert.Empty(Directory.GetFiles(_folder));
+    }
+
+    [Fact]
+    public void Read_GoodFile_GivesTheNormalizedSettings()
+    {
+        File.WriteAllText(FilePath, "{ \"clipSeconds\": -5 }");
+
+        var read = new SettingsStore(FilePath).Read();
+
+        Assert.Equal(SettingsLoadStatus.Loaded, read.Status);
+        Assert.Equal(1, read.Settings!.ClipSeconds);
+    }
+
+    [Fact]
+    public void KeepCopyOfBrokenFile_LeavesTheFileAndNeverOverwritesABak()
+    {
+        var store = new SettingsStore(FilePath);
+        File.WriteAllText(FilePath + ".bak", "older");
+        File.WriteAllText(FilePath, "broken");
+
+        var copy = store.KeepCopyOfBrokenFile();
+
+        Assert.Equal(FilePath + ".1.bak", copy);
+        Assert.Equal("broken", File.ReadAllText(FilePath));
+        Assert.Equal("broken", File.ReadAllText(copy!));
+        Assert.Equal("older", File.ReadAllText(FilePath + ".bak"));
+    }
+
+    [Fact]
+    public void KeepCopyOfBrokenFile_SaysSoWhenTheFileCannotBeCopied()
+    {
+        File.WriteAllText(FilePath, "broken");
+        var store = new SettingsStore(FilePath);
+
+        using (Lock())
+        {
+            Assert.Null(store.KeepCopyOfBrokenFile());
+        }
+
+        Assert.Equal([FilePath], Directory.GetFiles(_folder));
+    }
+
     [Fact]
     public void MissingKeys_TakeTheirDefaults()
     {

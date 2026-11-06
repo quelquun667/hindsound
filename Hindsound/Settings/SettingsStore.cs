@@ -14,9 +14,15 @@ public enum SettingsLoadStatus
     Loaded,
     Missing,
 
-    /// <summary>The file could not be read as settings; it was kept next to the original as a .bak file.</summary>
+    /// <summary>The file holds no valid settings. <see cref="SettingsStore.Load"/> kept it next to the original as a .bak file.</summary>
     Corrupt,
+
+    /// <summary>The file is there but could not be opened (an editor, an antivirus, a sync tool). It was left as it is.</summary>
+    Unreadable,
 }
+
+/// <summary>What one look at the file found. <paramref name="Settings"/> is null unless the status is <see cref="SettingsLoadStatus.Loaded"/>.</summary>
+public readonly record struct SettingsRead(SettingsLoadStatus Status, AppSettings? Settings);
 
 /// <summary>Reads and writes settings.json. The path is a parameter so tests never touch the real %AppData%.</summary>
 public sealed class SettingsStore
@@ -47,33 +53,91 @@ public sealed class SettingsStore
     /// <summary>Path of the preserved copy when the last load found a broken file.</summary>
     public string? LastBackupPath { get; private set; }
 
-    /// <summary>Never throws for a bad file: absent or broken gives defaults (a broken file is moved to a .bak first).</summary>
+    /// <summary>
+    /// Never throws for a bad file: absent, broken or locked gives defaults. A broken file is moved to a .bak first; a
+    /// locked one is left alone.
+    /// </summary>
     public AppSettings Load()
     {
         LastBackupPath = null;
-        if (!File.Exists(Path))
+        var read = Read();
+        LastStatus = read.Status;
+        if (read.Status == SettingsLoadStatus.Corrupt)
         {
-            LastStatus = SettingsLoadStatus.Missing;
-            return new AppSettings().Normalize();
+            LastBackupPath = KeepBrokenFile();
         }
 
+        return read.Settings ?? new AppSettings().Normalize();
+    }
+
+    /// <summary>The same as <see cref="Load"/>, with another look at a locked file: what locks it often lets go within a moment.</summary>
+    /// <param name="tries">How many looks at most.</param>
+    /// <param name="wait">Called between two looks.</param>
+    public AppSettings LoadPatiently(int tries, Action wait)
+    {
+        var settings = Load();
+        for (var i = 1; i < tries && LastStatus == SettingsLoadStatus.Unreadable; i++)
+        {
+            wait();
+            settings = Load();
+        }
+
+        return settings;
+    }
+
+    /// <summary>
+    /// Looks at the file and changes nothing, neither on disk nor in this object: the file may be in the middle of an edit.
+    /// Never throws for a bad or locked file.
+    /// </summary>
+    public SettingsRead Read()
+    {
         try
         {
-            var settings = JsonSerializer.Deserialize(File.ReadAllText(Path), TypeInfo);
-            if (settings is not null)
+            if (!File.Exists(Path))
             {
-                LastStatus = SettingsLoadStatus.Loaded;
-                return settings.Normalize();
+                return new SettingsRead(SettingsLoadStatus.Missing, null);
             }
+
+            var settings = JsonSerializer.Deserialize(File.ReadAllText(Path), TypeInfo);
+            return settings is null
+                ? new SettingsRead(SettingsLoadStatus.Corrupt, null)
+                : new SettingsRead(SettingsLoadStatus.Loaded, settings.Normalize());
         }
         catch (Exception ex) when (ex is JsonException or NotSupportedException or InvalidOperationException)
         {
-            // Fall through to the broken-file handling below.
+            return new SettingsRead(SettingsLoadStatus.Corrupt, null);
         }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            // Gone between the check and the opening.
+            return new SettingsRead(SettingsLoadStatus.Missing, null);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new SettingsRead(SettingsLoadStatus.Unreadable, null);
+        }
+    }
 
-        LastStatus = SettingsLoadStatus.Corrupt;
-        LastBackupPath = KeepBrokenFile();
-        return new AppSettings().Normalize();
+    /// <summary>
+    /// Copies the broken file to a .bak, for a write about to replace it. A copy, not a move: if that write fails, the file
+    /// is still in its place. Null if the copy could not be made, in which case the file must not be replaced.
+    /// </summary>
+    public string? KeepCopyOfBrokenFile()
+    {
+        try
+        {
+            var target = FreeBackupPath();
+            File.Copy(Path, target, overwrite: false);
+            return target;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     /// <summary>Writes the settings atomically: temporary file in the same folder, then replace.</summary>
@@ -106,7 +170,7 @@ public sealed class SettingsStore
     }
 
     // Never overwrites an earlier .bak: settings.json.bak, then settings.json.1.bak, .2.bak, ...
-    private string? KeepBrokenFile()
+    private string FreeBackupPath()
     {
         var target = Path + ".bak";
         for (var i = 1; File.Exists(target); i++)
@@ -114,8 +178,14 @@ public sealed class SettingsStore
             target = $"{Path}.{i}.bak";
         }
 
+        return target;
+    }
+
+    private string? KeepBrokenFile()
+    {
         try
         {
+            var target = FreeBackupPath();
             File.Move(Path, target);
             return target;
         }
