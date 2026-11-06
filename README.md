@@ -24,12 +24,7 @@ paste into a Discord message.
 </p>
 
 **Status:** early development. No version is published yet, but you can [build it from source](#build-from-source) today.
-It has been tried on one Windows 11 PC. Not tried for real yet: pasting a clip into the Discord app, recording only a real
-game or Discord, the notification in real games in exclusive fullscreen, the settings window with a real mouse and on a
-second screen, typing a hotkey and the Browse button, changing the audio output, a damaged settings file with Start with
-Windows on, the tray menu on a second screen, a taskbar on the left or right, a change of display scale, unplugging a
-headset, Windows 10, and the windows of the Setup and its uninstaller. The build and release workflows in `.github` have
-not run on GitHub yet.
+It has been tried on one Windows 11 PC, and some things are [not tried yet](#not-tried-yet).
 
 ## Features
 
@@ -59,8 +54,7 @@ not run on GitHub yet.
 ## Requirements
 
 - 64-bit Windows, version 10 2004 or later: that is what the capture code asks for. Only Windows 11 has been tried.
-  Recording one application may need a newer build of Windows 10 than 2004; this has not been checked. The status at the top
-  of this page says what has been tried.
+  Recording one application may need a newer build of Windows 10 than 2004; this has not been checked.
 - About 62 MB of RAM for the whole app with a 5:00 buffer and no microphone, 94 MB with it. The audio alone is 58 MB, or
   87 MB with the microphone. See [Memory](#memory).
 - To build it: the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). To run it: nothing else, .NET comes with it.
@@ -157,7 +151,7 @@ Everything Hindsound writes:
 1. Start Hindsound. A notification says `Capture on` and how much it keeps. It does so at every launch.
 2. Something happens that you want to keep. Press `Ctrl+Shift+F10`.
 3. A notification says `Clip saved (0:30)` and `Copied. Paste Ctrl V`.
-4. In Discord, click the message box and press `Ctrl+V`. (Pasting into the Discord app has not been tried yet, see Status at the top of this page.)
+4. In Discord, click the message box and press `Ctrl+V`. (Pasting into the Discord app has [not been tried yet](#not-tried-yet).)
 
 Good to know:
 
@@ -276,11 +270,30 @@ If something else goes wrong, [open an issue](https://github.com/quelquun667/hin
 `%LOCALAPPDATA%\Hindsound\hindsound.log`. Read it before you paste it: it holds window titles and file paths, and issues are
 public.
 
+## Not tried yet
+
+Hindsound has only run on one Windows 11 PC so far. These have not been tried for real:
+
+- pasting a clip into the Discord app
+- recording only a real game or Discord
+- the notification in real games in exclusive fullscreen
+- the settings window with a real mouse and on a second screen
+- typing a hotkey, and the Browse button
+- changing the audio output
+- a damaged settings file with Start with Windows on
+- the tray menu on a second screen
+- a taskbar on the left or right
+- a change of display scale
+- unplugging a headset
+- Windows 10
+- the windows of the Setup and its uninstaller
+- the release workflow in `.github`: no release has been made with it yet
+
 ## Roadmap
 
 - The first release, with the Setup
-
-Ideas, with no date: automatic updates, Mac and Linux versions.
+- Automatic updates
+- Mac and Linux versions, with no date yet
 
 ## License
 
