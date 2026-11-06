@@ -231,7 +231,7 @@ public class SourceAppCaptureTests
     }
 
     [Fact]
-    public async Task While_it_is_missing_it_is_looked_for_every_three_ticks_and_not_once_it_is_there()
+    public async Task It_is_looked_for_every_three_ticks_whether_it_is_there_or_not()
     {
         var processes = new FakeProcesses();
         using var rig = new AudioTestRig(micEnabled: false, tick: TimeSpan.FromMilliseconds(100), sourceApp: App, processes: processes);
@@ -245,8 +245,34 @@ public class SourceAppCaptureTests
         Assert.False(rig.Engine.Status.SourceAppMissing);
 
         var takes = processes.Takes;
-        await Task.Delay(500);
-        Assert.Equal(takes, processes.Takes);
+        await Task.Delay(1000);
+        Assert.InRange(processes.Takes - takes, 1, 4);
+    }
+
+    [Fact]
+    public async Task An_application_that_closes_is_noticed_even_if_its_capture_says_nothing_and_comes_back()
+    {
+        var processes = new FakeProcesses(Running);
+        using var rig = new AudioTestRig(tick: TimeSpan.FromMilliseconds(20), sourceApp: App, processes: processes);
+        await rig.Engine.StartAsync();
+        var first = rig.SystemSource;
+        rig.Run(1);
+
+        // A real process capture goes on delivering silence after its process has gone, and raises nothing.
+        processes.Set();
+        await Eventually.True(() => rig.Engine.Status.SourceAppMissing, "reported as missing");
+        Assert.True(first.Disposed);
+        Assert.Equal(CaptureActivity.Capturing, rig.Engine.Status.Activity);
+        rig.Run(1, system: false);
+
+        processes.Set(Restarted);
+        await Eventually.True(() => rig.Engine.Status.SystemCapturing, "attached to the new instance");
+        Assert.Equal(60, rig.SystemSource.Request.TargetProcessId);
+        rig.Run(1);
+
+        var snapshot = rig.Engine.Snapshot(Seconds(3));
+        AssertAligned(snapshot);
+        Assert.Equal(Rate, ZeroFrames(snapshot.System));
     }
 
     [Theory]

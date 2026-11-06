@@ -151,6 +151,8 @@ public sealed class AudioEngine : IDisposable
     private bool _exclusionDiedEarly;
     private int _quickDeaths;
     private int _refreshQueued;
+    private int _appCheckQueued;
+    private int _ticksSinceAppCheck;
     private int _disposed;
     private AudioEngineStatus? _lastPublished;
 
@@ -544,7 +546,11 @@ public sealed class AudioEngine : IDisposable
 
         await RefreshSourceAsync(AudioFlow.System).ConfigureAwait(false);
         await RefreshSourceAsync(AudioFlow.Mic).ConfigureAwait(false);
+        SettleAfterRefresh();
+    }
 
+    private void SettleAfterRefresh()
+    {
         if (!IsLive(_system) || (_options.MicEnabled && !IsLive(_mic)))
         {
             ArmRetry(MaxTicksBetweenRetries);
@@ -879,7 +885,35 @@ public sealed class AudioEngine : IDisposable
         }
     }
 
-    private void OnTick() => RequestPublish();
+    private void OnTick()
+    {
+        RequestPublish();
+        if (WantedApp is not null && IsLive(_system) && Interlocked.Increment(ref _ticksSinceAppCheck) >= MaxTicksBetweenRetries)
+        {
+            Volatile.Write(ref _ticksSinceAppCheck, 0);
+            QueueAppCheck();
+        }
+    }
+
+    // A process capture does not end when its process does: measured on 06/11/2026 with a process killed, it went on
+    // delivering silent packets 8 s later with no Stopped event. Only the process list can tell, and it opens nothing.
+    private void QueueAppCheck()
+    {
+        if (IsDisposed || Interlocked.Exchange(ref _appCheckQueued, 1) == 1)
+        {
+            return;
+        }
+
+        _ = RunQuietlyAsync(async () =>
+        {
+            Volatile.Write(ref _appCheckQueued, 0);
+            if (_started && !_paused && WantedApp is { } app)
+            {
+                await RefreshAppSourceAsync(app).ConfigureAwait(false);
+                SettleAfterRefresh();
+            }
+        });
+    }
 
     // Stops the sources and lines both tracks up on the frame where time stopped.
     private async Task EndCaptureAsync()
