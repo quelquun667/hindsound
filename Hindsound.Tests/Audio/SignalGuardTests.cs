@@ -100,6 +100,7 @@ internal static class SignalMath
     }
 }
 
+[Collection(nameof(TimingSensitive))]
 public class ResamplerGuardTests
 {
     [Theory]
@@ -328,6 +329,7 @@ public class ChannelMapGuardTests
 /// What a drift correction does to a pure tone, the signal it shows on most. A high-pass filter at 8 kHz takes the
 /// 1 kHz tone away, so whatever is left is the click.
 /// </summary>
+[Collection(nameof(TimingSensitive))]
 public class DriftCorrectionTests(Xunit.Abstractions.ITestOutputHelper output)
 {
     private const double Amplitude = 0.5;
