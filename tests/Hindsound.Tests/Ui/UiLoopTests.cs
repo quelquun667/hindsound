@@ -143,4 +143,23 @@ public class UiLoopTests
         Assert.True(ended);
         Assert.Equal(1, asked);
     }
+
+    [Fact]
+    public void The_session_may_end_whatever_the_app_does_with_the_question()
+    {
+        nint quiet = 0, failing = 0;
+
+        var ended = LoopEnds(loop =>
+        {
+            loop.SessionEndAsked = () => { };
+            quiet = WindowNative.SendMessageW(loop.Hwnd, Native.WM_QUERYENDSESSION, 0, (nint)CloseApp);
+            loop.SessionEndAsked = () => throw new InvalidOperationException("--on the question");
+            failing = WindowNative.SendMessageW(loop.Hwnd, Native.WM_QUERYENDSESSION, 0, (nint)CloseApp);
+            loop.After(100, loop.Quit);
+        });
+
+        Assert.True(ended);
+        Assert.Equal(1, quiet);
+        Assert.Equal(1, failing);
+    }
 }
