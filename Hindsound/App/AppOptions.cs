@@ -39,6 +39,9 @@ internal sealed record AppOptions(
     /// <summary><c>--no-mic</c>: the microphone stays off whatever the settings file says, at the start and at every read of the file. The file keeps its own value.</summary>
     public bool NoMic { get; init; }
 
+    /// <summary><c>--no-clipboard</c>: the clipboard is never touched, whatever the settings file says, for a new clip and for Copy last clip alike. The file keeps its own value.</summary>
+    public bool NoClipboard { get; init; }
+
     /// <summary><c>--selftest-slow-save seconds</c>: every clip takes that much longer to write. To check on the real exe what leaving does while a clip is being written.</summary>
     public double? SelfTestSlowSaveSeconds { get; init; }
 
@@ -101,6 +104,9 @@ internal sealed record AppOptions(
                     break;
                 case "--no-mic":
                     options = options with { NoMic = true };
+                    break;
+                case "--no-clipboard":
+                    options = options with { NoClipboard = true };
                     break;
                 case "--offscreen":
                     options = options with { Offscreen = true };

@@ -1,6 +1,7 @@
 using Hindsound.Audio;
 using Hindsound.Export;
 using Hindsound.Settings;
+using Hindsound.Ui;
 
 namespace Hindsound.App;
 
@@ -27,6 +28,21 @@ internal static class SettingsMapping
     {
         var engine = ToEngineOptions(settings);
         return options.NoMic ? engine with { MicEnabled = false, MicDeviceId = null } : engine;
+    }
+
+    /// <summary>Whether a new clip asks for the clipboard: <c>--no-clipboard</c> wins over the file, and nothing of it reaches the settings.</summary>
+    public static bool CopyWanted(AppSettings settings, AppOptions options) => !options.NoClipboard && settings.Export.CopyToClipboard;
+
+    /// <summary>The one way to the clipboard. With <c>--no-clipboard</c> the attempt never runs, and the copy simply did not happen.</summary>
+    public static void CopyToClipboard(AppOptions options, Func<bool> attempt, Action<int, Action> after, Action<bool> done)
+    {
+        if (options.NoClipboard)
+        {
+            done(false);
+            return;
+        }
+
+        ClipboardFiles.CopyWithRetries(attempt, after, done);
     }
 
     /// <summary>The devices alone: what <see cref="AudioEngine.SetDevicesAsync"/> takes.</summary>

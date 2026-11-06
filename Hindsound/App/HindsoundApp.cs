@@ -125,6 +125,10 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         UiErrors.Handler = ex => _journal.Write("error: " + ex);
         LoadSettings();
         _journal.Write($"started, settings: {_store.Path} ({_store.LastStatus}), {Journal.Memory()}");
+        if (_options.NoClipboard)
+        {
+            _journal.Write("clipboard: never touched in this run (--no-clipboard), whatever the settings say");
+        }
 
         _loop = new UiLoop();
         _notification = new Notification { Clicked = OnNotificationClicked, Finished = OnNotificationFinished };
@@ -634,7 +638,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     }
 
     private void SaveClip(TimeSpan requested, string? appName, ScreenInfo? screen) =>
-        _pipeline.Press(new ClipRequest(requested, SettingsMapping.ToExportOptions(_settings), appName, _settings.Export.CopyToClipboard) { Screen = screen });
+        _pipeline.Press(new ClipRequest(requested, SettingsMapping.ToExportOptions(_settings), appName, SettingsMapping.CopyWanted(_settings, _options)) { Screen = screen });
 
     AudioSnapshot IClipBackend.Snapshot(TimeSpan duration) =>
         _engine?.Snapshot(duration) ?? new AudioSnapshot([], []);
@@ -711,7 +715,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     }
 
     private void CopyClip(ClipResult result, Action<bool> done) =>
-        ClipboardFiles.CopyWithRetries(() => ClipboardFiles.TrySet(_loop.Hwnd, result.Paths), _loop.After, done);
+        SettingsMapping.CopyToClipboard(_options, () => ClipboardFiles.TrySet(_loop.Hwnd, result.Paths), _loop.After, done);
 
     private void FinishClip(ClipOutcome outcome, ClipResult result, bool copied)
     {
