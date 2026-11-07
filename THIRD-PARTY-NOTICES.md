@@ -2,7 +2,7 @@
 
 Hindsound itself is under the MIT licence: see [LICENSE](LICENSE).
 
-The Windows build of Hindsound contains or ships the components below. Every file in [licenses/](licenses) is an unchanged copy of the upstream text; the table says where each one comes from. This document records what the project checked on 2026-11-06. It is not legal advice.
+The Windows build of Hindsound contains or ships the components below. Every file in [licenses/](licenses) is an unchanged copy of the upstream text; the table says where each one comes from. This document records what the project checked on 2026-11-06 and 2026-11-07. It is not legal advice.
 
 | Component | Version | Licence | Copyright | Text | Copied from |
 |---|---|---|---|---|---|
@@ -57,6 +57,8 @@ Hindsound's own source is this repository, with one tag per release.
 - It runs `nmake` on the archive's own `Makefile.MSVC`, target `libmp3lame.dll`, with three settings on the command line: `MSVCVER=Win64`, `MACHINE=/machine:X64`, and `ADDL_OBJ=kernel32.lib` in place of a library that current Visual Studio does not have.
 - The compiler is Microsoft's, from the Visual Studio of the GitHub runner. The Microsoft C runtime is linked statically into the DLL (`/MT`, set by that makefile), so it needs no redistributable.
 - This DLL has no version resource: the makefile does not add one. Its function `get_lame_short_version` returns `3.100`.
+
+What has run: the workflow `lame.yml` built and checked this DLL on GitHub once, on 2026-11-07, for the commit `c6fb54d` (run 42318035034), on a `windows-latest` runner with Visual Studio 18 and MSVC 14.51.36231. Its log shows the archive downloaded from SourceForge with the SHA-256 above, `nmake` with the command line above, a 64-bit DLL that imports `KERNEL32.dll` only, 220 exports with the same names as the DLL of the package and the 190 that NAudio.Lame calls among them, `get_lame_short_version` returning `3.100`, and 6 tests that write an MP3 with this DLL through NAudio.Lame and read it back. `/MT` and the lack of a version resource come from reading `Makefile.MSVC`, not from a check: the imports show only that the DLL needs no C runtime DLL. No release has been made yet: no Setup holds a compiled DLL so far.
 
 **In a build from source** (`dotnet publish`), the DLL is the one below, from the NuGet package.
 
