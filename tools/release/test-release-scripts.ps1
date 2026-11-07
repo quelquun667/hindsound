@@ -665,6 +665,7 @@ try {
     $firstToken = @($release | Select-String 'GH_TOKEN:')[0].LineNumber
     $draftStep = @($release | Select-String '- name: Create the draft release')[0].LineNumber
     Report 'no step before the draft gets the token' ($firstToken -gt $draftStep)
+    Report 'the release job ends by itself after 60 minutes' ($releaseText -cmatch '(?m)^    timeout-minutes: 60$')
     Report 'no step of the release is conditional' (-not ($releaseText -match '(?m)^\s+if:'))
     Report 'the release runs the tests' ($releaseText -cmatch '- name: Test\n\s+run: dotnet test Hindsound\.slnx -c Release --filter "Category!=Device"')
     Report 'the release tests its scripts' ($releaseText -cmatch '- name: Test the release scripts\n\s+run: \./tools/release/test-release-scripts\.ps1')

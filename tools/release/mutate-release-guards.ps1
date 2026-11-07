@@ -171,6 +171,9 @@ $mutations = @(
     # The latest release, which the app reads
     @($release, '--draft=false --latest', '--draft=false')
 
+    # The job ends by itself
+    @($release, '    timeout-minutes: 60', '    # timeout-minutes: 60')
+
     # A failure of gh release view that is not "release not found"
     @($release, 'if ($viewExit -ne 0 -and "$view" -notmatch ''release not found'') {', 'if ($false) {')
     @($release, '$viewExit = $LASTEXITCODE', '$viewExit = 0')
