@@ -265,11 +265,19 @@ internal sealed partial class SettingsScreen
 
         LeaveFocused();
         _popup = null;
+        var leftCard = Section == Section.UpdateCard;
         Section = section;
         _scroll = 0;
         if (_focusId is not null && _focusId != NavId && !_focusId.StartsWith("band.", StringComparison.Ordinal) && !_focusId.StartsWith("foot.", StringComparison.Ordinal))
         {
             _focusId = NavId;
+        }
+
+        // A restart only ever follows a card on screen: whatever takes the window off it, a notification click as much as
+        // Cancel, drops the click. After the section changed, so the panel finds the window already off the card.
+        if (leftCard)
+        {
+            _updates?.CancelUpdate();
         }
 
         Refresh();
@@ -330,7 +338,8 @@ internal sealed partial class SettingsScreen
     {
         var back = _cardReturnFocus;
         _cardReturnFocus = null;
-        _updates?.CancelUpdate();
+
+        // Leaving the card cancels the update.
         ShowUpdates();
 
         // Back where the card was opened from, when that was the section: Tab goes on from there.

@@ -1673,11 +1673,11 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         _window?.Screen.RefreshUpdates();
     }
 
+    // The window calls it once it is off the card, wherever it went: moving it here would undo a click in the side bar.
     void IUpdatesPanel.CancelUpdate()
     {
         _updates?.CardClosed();
         _saveThenUpdate.Stop();
-        _window?.Screen.ShowUpdates();
     }
 
     void IUpdatesPanel.WhatsNew()

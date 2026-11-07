@@ -32,6 +32,7 @@ internal interface IUpdatesPanel
 
     void ConfirmUpdate(bool saveFirst);
 
+    /// <summary>The window left the card, by Cancel or any other way: the click no longer stands.</summary>
     void CancelUpdate();
 
     void WhatsNew();
