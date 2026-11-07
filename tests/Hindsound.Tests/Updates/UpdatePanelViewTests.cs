@@ -41,10 +41,12 @@ public class UpdatePanelViewTests
     }
 
     [Theory]
-    [InlineData(UpdateMode.Auto)]
-    [InlineData(UpdateMode.Ask)]
-    public void Never_checked(UpdateMode mode)
+    [InlineData("Auto")]
+    [InlineData("Ask")]
+    public void Never_checked(string modeName)
     {
+        var mode = Enum.Parse<UpdateMode>(modeName);
+
         Assert.Equal("Not checked yet.", View(Facts(mode) with { LastCheck = null }).StatusLine);
     }
 
@@ -113,11 +115,13 @@ public class UpdatePanelViewTests
     }
 
     [Theory]
-    [InlineData(UpdateMode.Auto, "Couldn't check. It will try again tomorrow.")]
-    [InlineData(UpdateMode.Ask, "Couldn't check. It will try again tomorrow.")]
-    [InlineData(UpdateMode.Off, "Couldn't check.")]
-    public void A_failed_check(UpdateMode mode, string line)
+    [InlineData("Auto", "Couldn't check. It will try again tomorrow.")]
+    [InlineData("Ask", "Couldn't check. It will try again tomorrow.")]
+    [InlineData("Off", "Couldn't check.")]
+    public void A_failed_check(string modeName, string line)
     {
+        var mode = Enum.Parse<UpdateMode>(modeName);
+
         Assert.Equal(line, View(Facts(mode) with { Problem = UpdateProblem.CheckFailed }).StatusLine);
     }
 
@@ -130,19 +134,23 @@ public class UpdatePanelViewTests
     }
 
     [Theory]
-    [InlineData(UpdateMode.Ask)]
-    [InlineData(UpdateMode.Off)]
-    public void Ready_without_auto(UpdateMode mode)
+    [InlineData("Ask")]
+    [InlineData("Off")]
+    public void Ready_without_auto(string modeName)
     {
+        var mode = Enum.Parse<UpdateMode>(modeName);
+
         Assert.Equal("Version 0.2.0 is ready.", View(Facts(mode) with { Downloaded = Next, HighestSeen = Next }).StatusLine);
     }
 
     [Theory]
-    [InlineData(UpdateMode.Ask, "Version 0.2.0 is available.")]
-    [InlineData(UpdateMode.Auto, "Version 0.2.0 is available.")]
-    [InlineData(UpdateMode.Off, "Version 0.2.0 is available. Switch to Ask me to download it.")]
-    public void Seen_but_not_downloaded(UpdateMode mode, string line)
+    [InlineData("Ask", "Version 0.2.0 is available.")]
+    [InlineData("Auto", "Version 0.2.0 is available.")]
+    [InlineData("Off", "Version 0.2.0 is available. Switch to Ask me to download it.")]
+    public void Seen_but_not_downloaded(string modeName, string line)
     {
+        var mode = Enum.Parse<UpdateMode>(modeName);
+
         Assert.Equal(line, View(Facts(mode) with { Manifest = Next, HighestSeen = Next }).StatusLine);
     }
 
@@ -183,12 +191,14 @@ public class UpdatePanelViewTests
     }
 
     [Theory]
-    [InlineData(RunStatus.SetupChanged, "Couldn't open the update file. Try again in a moment.")]
-    [InlineData(RunStatus.SetupMissing, "The update file is gone. Use Check now.")]
-    [InlineData(RunStatus.StateNotSaved, "Couldn't write the update state. Nothing changed.")]
-    [InlineData(RunStatus.StartFailed, "Windows refused to start the update.")]
-    public void A_setup_that_did_not_start(RunStatus status, string line)
+    [InlineData("SetupChanged", "Couldn't open the update file. Try again in a moment.")]
+    [InlineData("SetupMissing", "The update file is gone. Use Check now.")]
+    [InlineData("StateNotSaved", "Couldn't write the update state. Nothing changed.")]
+    [InlineData("StartFailed", "Windows refused to start the update.")]
+    public void A_setup_that_did_not_start(string statusName, string line)
     {
+        var status = Enum.Parse<RunStatus>(statusName);
+
         var view = View(Facts() with { Downloaded = Next, HighestSeen = Next, Run = status, Card = UpdateCardNote.NotStarted });
 
         Assert.Equal(line, view.StatusLine);
@@ -293,11 +303,13 @@ public class UpdatePanelViewTests
     }
 
     [Theory]
-    [InlineData(UpdateCardNote.NotNow, "Not now: a game or a clip is running.")]
-    [InlineData(UpdateCardNote.DownloadFailed, "Download failed. Nothing changed.")]
-    [InlineData(UpdateCardNote.None, null)]
-    public void A_dropped_click(UpdateCardNote note, string? line)
+    [InlineData("NotNow", "Not now: a game or a clip is running.")]
+    [InlineData("DownloadFailed", "Download failed. Nothing changed.")]
+    [InlineData("None", null)]
+    public void A_dropped_click(string noteName, string? line)
     {
+        var note = Enum.Parse<UpdateCardNote>(noteName);
+
         var view = View(Facts(UpdateMode.Ask) with { Card = note });
 
         Assert.Equal(line, view.CardLine);
@@ -328,10 +340,12 @@ public class UpdatePanelViewTests
     }
 
     [Theory]
-    [InlineData(UpdateMode.Auto)]
-    [InlineData(UpdateMode.Ask)]
-    public void Menu_with_a_skipped_version_offers_nothing(UpdateMode mode)
+    [InlineData("Auto")]
+    [InlineData("Ask")]
+    public void Menu_with_a_skipped_version_offers_nothing(string modeName)
     {
+        var mode = Enum.Parse<UpdateMode>(modeName);
+
         Assert.Null(UpdatePanel.MenuVersion(mode, Installed, Next, Next, Next, Next));
     }
 
