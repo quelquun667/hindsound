@@ -104,7 +104,7 @@ function Assert-Mp3Folder([string]$Folder) {
     }
     $root = (Get-Item -LiteralPath $Folder).FullName.TrimEnd('\', '/')
     if ($mp3[0].DirectoryName -ne $root) {
-        throw "The installed exe wrote the MP3 in $($mp3[0].DirectoryName), not in $root: the clip went to the rescue folder."
+        throw "The installed exe wrote the MP3 in $($mp3[0].DirectoryName), not in ${root}: the clip went to the rescue folder."
     }
     Write-Output "The installed exe wrote an MP3: $($mp3[0].Name), $($mp3[0].Length) bytes."
 }
