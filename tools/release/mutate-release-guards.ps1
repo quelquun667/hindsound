@@ -160,6 +160,9 @@ $mutations = @(
 
     # The list of exports
     @($dll, 'if ($required.Count -eq 0) {', 'if ($false) {')
+
+    # The version read as text in the changelog
+    @('tools/release/extract-changelog.ps1', '[regex]::Escape($Version)', '$Version')
 )
 
 $repository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).ProviderPath

@@ -192,8 +192,12 @@ try {
         Assert-Refused "$label section empty" { & $extract -Version '1.1.0' -Path $changelog } 'is empty'
         Assert-Refused "$label section with only headings" { & $extract -Version '1.0.1' -Path $changelog } 'is empty'
         Assert-Refused "$label partial version" { & $extract -Version '1.2' -Path $changelog } 'has no section'
-        Assert-Refused "$label dot is not a wildcard" { & $extract -Version '1x2x0' -Path $changelog } 'has no section'
     }
+
+    # A heading that only a dot taken as a wildcard would match.
+    $wildcard = Join-Path $temp 'changelog-wildcard.md'
+    [IO.File]::WriteAllText($wildcard, "# Changelog`n`n## [1x2x0] - 2026-11-06`n`n- Other.`n")
+    Assert-Refused 'dot is not a wildcard' { & $extract -Version '1.2.0' -Path $wildcard } 'has no section'
 
     $emptyAtEnd = Join-Path $temp 'changelog-empty-end.md'
     [IO.File]::WriteAllText($emptyAtEnd, "# Changelog`n`n## [2.0.0]`n`n- Entry.`n`n## [1.0.0]`n`n[2.0.0]: https://example.invalid/2.0.0`n")
