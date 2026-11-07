@@ -40,8 +40,16 @@ public class ManifestFromScriptTests
         }
 
         using var process = Process.Start(start)!;
-        var errors = process.StandardError.ReadToEnd();
-        Assert.True(process.WaitForExit(60_000), "write-manifest.ps1 did not finish in 60 s.");
+        // Read in the background: ReadToEnd before the wait would never return if the script hung, and the delay would not apply.
+        var errorsTask = process.StandardError.ReadToEndAsync();
+        if (!process.WaitForExit(60_000))
+        {
+            process.Kill(entireProcessTree: true);
+            process.WaitForExit();
+            Assert.Fail("write-manifest.ps1 did not finish in 60 s.");
+        }
+
+        var errors = errorsTask.GetAwaiter().GetResult();
         Assert.True(process.ExitCode == 0, $"write-manifest.ps1 ended with exit code {process.ExitCode}: {errors}");
     }
 
