@@ -560,6 +560,11 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
 
         if (result.Status == CheckStatus.TransportFailed && result.Transport.Status == TransportStatus.Stopped)
         {
+            if (StoppedByOff("check"))
+            {
+                return;
+            }
+
             // It did not happen: no check time, and another try once the game is over.
             host.Journal("update check: stopped, waits 30 min");
             _problem = UpdateProblem.Paused;
@@ -655,6 +660,11 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
 
         if (result.Status == DownloadStatus.Interrupted && result.Transport.Status == TransportStatus.Stopped)
         {
+            if (StoppedByOff("download"))
+            {
+                return;
+            }
+
             host.Journal("update download: stopped, waits 30 min");
             _problem = UpdateProblem.Paused;
             DropClick(UpdateCardNote.NotNow);
@@ -671,6 +681,23 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
         DropClick(UpdateCardNote.DownloadFailed);
         ArmTimer();
         host.Changed();
+    }
+
+    // A switch to Off stopped the automatic pass, not a game: no pause to tell, and nothing to try again in 30 minutes.
+    // A check the user asked for is only stopped by a game, even in Off.
+    private bool StoppedByOff(string what)
+    {
+        if (host.Mode != UpdateMode.Off || _passIsManual)
+        {
+            return false;
+        }
+
+        host.Journal($"update {what}: stopped, updates are off");
+
+        // Off: arms nothing, and the timer armed before does nothing.
+        ArmTimer();
+        host.Changed();
+        return true;
     }
 
     // Decided again, not applied as clicked: a game or a clip may have come during the download. True when Setup started.
