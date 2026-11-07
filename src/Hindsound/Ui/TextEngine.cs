@@ -58,6 +58,9 @@ internal sealed unsafe partial class TextEngine : IDisposable
     private readonly HashSet<string> _told = [];
     private nint _d2d, _dwrite, _collection;
 
+    // The objects taken for a while (families, fonts, faces, font tables, layouts, targets and brushes) and not given back yet.
+    private long _held;
+
     /// <summary>Where the engine writes its few lines: the app's journal, set at start.</summary>
     public static Action<string>? Log { get; set; }
 
@@ -159,8 +162,28 @@ internal sealed unsafe partial class TextEngine : IDisposable
         var vtbl = Vtbl(font);
         // IDWriteFont::GetWeight, index 4; GetStretch, index 5.
         var result = (((delegate* unmanaged<nint, int>)vtbl[4])(font), ((delegate* unmanaged<nint, int>)vtbl[5])(font));
-        Release(font);
+        Drop(font);
         return result;
+    }
+
+    /// <summary>
+    /// The objects taken and not given back: 0 once nothing is drawing. A target and its brush only count as given back when
+    /// their last reference goes, so one kept by mistake is seen too.
+    /// </summary>
+    internal long HeldForTests => Interlocked.Read(ref _held);
+
+    /// <summary>Gives back a target and its brush made by <see cref="CreateTarget"/>.</summary>
+    public void ReleaseTarget(nint target, nint brush)
+    {
+        if (brush != 0 && Release(brush) == 0)
+        {
+            Interlocked.Decrement(ref _held);
+        }
+
+        if (target != 0 && Release(target) == 0)
+        {
+            Interlocked.Decrement(ref _held);
+        }
     }
 
     public float LineHeight(FontSpec font) => FormatOf(font).LineHeight;
@@ -179,7 +202,7 @@ internal sealed unsafe partial class TextEngine : IDisposable
         }
         finally
         {
-            Release(layout);
+            Drop(layout);
         }
     }
 
@@ -208,6 +231,8 @@ internal sealed unsafe partial class TextEngine : IDisposable
             return false;
         }
 
+        Hold(created);
+
         // ID2D1RenderTarget::SetTextAntialiasMode, index 34.
         ((delegate* unmanaged<nint, int, void>)Vtbl(created)[34])(created, clearType ? TextAntialiasClearType : TextAntialiasGrayscale);
         ColorF white = new() { R = 1, G = 1, B = 1, A = 1 };
@@ -216,13 +241,13 @@ internal sealed unsafe partial class TextEngine : IDisposable
         hr = ((delegate* unmanaged<nint, ColorF*, void*, nint*, int>)Vtbl(created)[8])(created, &white, null, &solid);
         if (hr < 0)
         {
-            Release(created);
+            ReleaseTarget(created, 0);
             TellOnce("brush", $"text: no Direct2D brush (0x{hr:X8}), drawing with GDI");
             return false;
         }
 
         target = created;
-        brush = solid;
+        brush = Hold(solid);
         return true;
     }
 
@@ -271,7 +296,7 @@ internal sealed unsafe partial class TextEngine : IDisposable
         }
         finally
         {
-            Release(layout);
+            Drop(layout);
         }
     }
 
@@ -295,12 +320,27 @@ internal sealed unsafe partial class TextEngine : IDisposable
         }
     }
 
-    public static void Release(nint unknown)
+    /// <summary>Releases one reference and gives the count left, 0 once the object is gone.</summary>
+    public static uint Release(nint unknown) =>
+        // IUnknown::Release, index 2.
+        unknown == 0 ? 0 : ((delegate* unmanaged<nint, uint>)Vtbl(unknown)[2])(unknown);
+
+    private nint Hold(nint unknown)
     {
         if (unknown != 0)
         {
-            // IUnknown::Release, index 2.
-            ((delegate* unmanaged<nint, uint>)Vtbl(unknown)[2])(unknown);
+            Interlocked.Increment(ref _held);
+        }
+
+        return unknown;
+    }
+
+    private void Drop(nint unknown)
+    {
+        if (unknown != 0)
+        {
+            Release(unknown);
+            Interlocked.Decrement(ref _held);
         }
     }
 
@@ -356,7 +396,7 @@ internal sealed unsafe partial class TextEngine : IDisposable
                 _dwrite, chars, (uint)text.Length, format, 100000, 100000, &layout), "CreateTextLayout");
         }
 
-        return layout;
+        return Hold(layout);
     }
 
     private Format FormatOf(FontSpec font)
@@ -423,13 +463,13 @@ internal sealed unsafe partial class TextEngine : IDisposable
             (ascent, descent) = (MathF.Max(ascent, gdiAscent / em), MathF.Max(descent, gdiDescent / em));
         }
 
-        Release(font);
+        Drop(font);
         return (MathF.Round(ascent * emPixels), MathF.Round(descent * emPixels));
     }
 
     // In design units: the larger of DirectWrite's GDI-compatible metrics at this em and of usWinAscent and usWinDescent in
     // the OS/2 table, where GDI's TEXTMETRIC Ascent and Descent come from.
-    private static (float Ascent, float Descent)? GdiMetrics(nint font, float emPixels)
+    private (float Ascent, float Descent)? GdiMetrics(nint font, float emPixels)
     {
         nint face;
         // IDWriteFont::CreateFontFace, index 13.
@@ -438,6 +478,7 @@ internal sealed unsafe partial class TextEngine : IDisposable
             return null;
         }
 
+        Hold(face);
         try
         {
             FontMetrics compatible;
@@ -454,6 +495,7 @@ internal sealed unsafe partial class TextEngine : IDisposable
                 return hasCompatible ? (compatible.Ascent, compatible.Descent) : null;
             }
 
+            Interlocked.Increment(ref _held);
             float winAscent = 0, winDescent = 0;
             if (size >= 78)
             {
@@ -461,13 +503,20 @@ internal sealed unsafe partial class TextEngine : IDisposable
                 winDescent = (table[76] << 8) | table[77];
             }
 
-            ((delegate* unmanaged<nint, void*, void>)Vtbl(face)[13])(face, context);
+            ReleaseFontTable(face, context);
             return hasCompatible ? (MathF.Max(winAscent, compatible.Ascent), MathF.Max(winDescent, compatible.Descent)) : (winAscent, winDescent);
         }
         finally
         {
-            Release(face);
+            Drop(face);
         }
+    }
+
+    private void ReleaseFontTable(nint face, void* context)
+    {
+        // IDWriteFontFace::ReleaseFontTable, index 13.
+        ((delegate* unmanaged<nint, void*, void>)Vtbl(face)[13])(face, context);
+        Interlocked.Decrement(ref _held);
     }
 
     private nint MatchFont(string family, int weight, int stretch)
@@ -484,14 +533,15 @@ internal sealed unsafe partial class TextEngine : IDisposable
             return 0;
         }
 
+        Hold(fontFamily);
         // IDWriteFontFamily::GetFirstMatchingFont, index 7. Style 0 is upright.
         if (((delegate* unmanaged<nint, int, int, int, nint*, int>)Vtbl(fontFamily)[7])(fontFamily, weight, stretch, 0, &font) < 0)
         {
             font = 0;
         }
 
-        Release(fontFamily);
-        return font;
+        Drop(fontFamily);
+        return Hold(font);
     }
 
     private bool TryFindFamily(string family, out uint index)
@@ -701,8 +751,7 @@ internal sealed unsafe class TextPainter : IDisposable
 
     public void Dispose()
     {
-        TextEngine.Release(_brush);
-        TextEngine.Release(_target);
+        _engine?.ReleaseTarget(_target, _brush);
         if (_gdiFonts.Count > 0)
         {
             Native.SelectObject(_dc, Native.GetStockObject(StockSystemFont));

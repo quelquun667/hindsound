@@ -352,6 +352,27 @@ public class TextLeakTests
         Assert.Equal(references, engine.FactoryReferences());
         Assert.Equal(gdi, Native.GetGuiResources(process, Native.GR_GDIOBJECTS));
         Assert.Equal(user, Native.GetGuiResources(process, Native.GR_USEROBJECTS));
+        // Every target, brush and layout given back, to its last reference: a kept one leaks nothing the counts above see.
+        Assert.Equal(0, engine.HeldForTests);
+    }
+
+    // Each new size makes a format: a family, a font, a face and its OS/2 table are taken to read the line, and all given back.
+    [Fact]
+    public void Formats_of_every_size_give_back_their_families_fonts_faces_and_tables()
+    {
+        using var engine = TextEngine.TryCreate(_ => { }, missingForTests: [])!;
+        var references = engine.FactoryReferences();
+        foreach (var face in new[] { Face.Title, Face.Body, Face.Medium, Face.Mono })
+        {
+            for (var size = 8f; size < 40; size += 0.75f)
+            {
+                Assert.True(engine.LineHeight(new FontSpec(face, size)) > 0);
+                engine.MatchedStyleOf(face);
+            }
+        }
+
+        Assert.Equal(0, engine.HeldForTests);
+        Assert.Equal(references, engine.FactoryReferences());
     }
 
     private static void Draw(TextEngine engine)
