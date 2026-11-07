@@ -700,26 +700,26 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
     }
 
     // A switch to Off stopped the automatic pass, not a game: no pause to tell, and nothing to try again in 30 minutes.
-    // A check the user asked for is only stopped by a game, even in Off.
+    // A check the user asked for is only stopped by a game, even in Off: the switch never marks it.
     private bool StoppedByOff(string what)
     {
-        if (!_stoppedForOff || _passIsManual)
+        if (!_stoppedForOff)
         {
             return false;
         }
 
-        if (host.Mode == UpdateMode.Off)
+        if (host.Mode != UpdateMode.Off)
+        {
+            // Back on before the pass ended: decide again soon, as a switch back on with no pass running does.
+            host.Journal($"update {what}: stopped by a switch to Off");
+            Arm(TimeSpan.Zero, Step);
+        }
+        else
         {
             host.Journal($"update {what}: stopped, updates are off");
 
             // Off: arms nothing, and the timer armed before does nothing.
             ArmTimer();
-        }
-        else
-        {
-            // Back on before the pass ended: decide again soon, as a switch back on with no pass running does.
-            host.Journal($"update {what}: stopped by a switch to Off");
-            Arm(TimeSpan.Zero, Step);
         }
 
         host.Changed();
