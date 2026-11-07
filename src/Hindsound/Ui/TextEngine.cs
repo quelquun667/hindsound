@@ -186,6 +186,18 @@ internal sealed unsafe partial class TextEngine : IDisposable
         }
     }
 
+    /// <summary>
+    /// Whether Windows smooths the fonts with ClearType (Adjust ClearType text): the window follows it, grey when it is off.
+    /// The layout of the subpixels (RGB, BGR, a turned screen) comes with Direct2D's default rendering parameters.
+    /// </summary>
+    public static bool SystemUsesClearType()
+    {
+        int smoothing = 0;
+        uint type = 0;
+        return Native.SystemParametersInfoW(Native.SPI_GETFONTSMOOTHING, 0, &smoothing, 0) != 0 && smoothing != 0
+            && Native.SystemParametersInfoW(Native.SPI_GETFONTSMOOTHINGTYPE, 0, &type, 0) != 0 && type == Native.FE_FONTSMOOTHINGCLEARTYPE;
+    }
+
     /// <summary>The family a face is drawn with, once a missing one is replaced.</summary>
     public string FamilyOf(Face face)
     {

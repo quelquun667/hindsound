@@ -236,7 +236,18 @@ public unsafe class TextEngineTests
         canvas.FillRect(new Box(0, 0, 240, 40), 0x000000);
         canvas.Text("Clip length 5:00", Face.Body, 20, 6, 6, 0xFFFFFF);
         var window = Fringes(canvas.Bits, 240 * 40);
-        Assert.True(window > 20, $"{window} fringes in the window");
+        Assert.True(TextEngine.SystemUsesClearType() ? window > 20 : window == 0, $"{window} fringes in the window, ClearType in Windows {TextEngine.SystemUsesClearType()}");
+    }
+
+    // On this PC Windows smooths with ClearType, as on most: the window follows what the system reads.
+    [Fact]
+    public void The_window_follows_the_ClearType_setting_of_Windows()
+    {
+        int smoothing = 0;
+        uint type = 0;
+        Assert.NotEqual(0, Native.SystemParametersInfoW(Native.SPI_GETFONTSMOOTHING, 0, &smoothing, 0));
+        Assert.NotEqual(0, Native.SystemParametersInfoW(Native.SPI_GETFONTSMOOTHINGTYPE, 0, &type, 0));
+        Assert.Equal(smoothing != 0 && type == 2, TextEngine.SystemUsesClearType());
     }
 
     // An opaque black bitmap selected in a memory DC, for a painter of its own.

@@ -44,8 +44,9 @@ internal sealed unsafe class GdiCanvas : ICanvas, IDisposable
 
         _oldBitmap = Native.SelectObject(_dc, _dib);
         _pixels = new Pixels((uint*)bits, width, height);
-        // ClearType: the window is opaque, as the page of the mockup (v1.png) that Chrome draws with ClearType.
-        _text = new TextPainter(_dc, _pixels, engine, clearType: true);
+        // The window is opaque: ClearType, as the page of the mockup (v1.png) that Chrome draws, unless the user turned ClearType
+        // off in Windows, which Chrome follows too.
+        _text = new TextPainter(_dc, _pixels, engine, clearType: TextEngine.SystemUsesClearType(), opaque: true);
     }
 
     public int Width { get; }

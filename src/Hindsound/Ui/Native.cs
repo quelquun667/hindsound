@@ -239,6 +239,8 @@ internal static unsafe partial class Native
     public static partial int GetTextExtentPoint32W(nint dc, string text, int length, SIZE* size);
     [LibraryImport(G)] public static partial int GetTextMetricsW(nint dc, TEXTMETRICW* metrics);
     [LibraryImport(G)] public static partial int GetTextFaceW(nint dc, int count, char* face);
+    [LibraryImport(U)] public static partial int SystemParametersInfoW(uint action, uint param, void* value, uint winIni);
+    public const uint SPI_GETFONTSMOOTHING = 0x004A, SPI_GETFONTSMOOTHINGTYPE = 0x200A, FE_FONTSMOOTHINGCLEARTYPE = 2;
 
     [LibraryImport(K, StringMarshalling = StringMarshalling.Utf16)] public static partial nint GetModuleHandleW(string? name);
     [LibraryImport(K)] public static partial nint GlobalAlloc(uint flags, nuint bytes);
