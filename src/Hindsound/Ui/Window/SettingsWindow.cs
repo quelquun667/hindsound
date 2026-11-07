@@ -962,6 +962,59 @@ internal static unsafe class SettingsDump
             [.. Enum.GetValues<HotkeyAction>().Select(a => new HotkeyResult(a, null, NextStatus, NextStatus == HotkeyStatus.InUse ? HotkeyResult.InUseMessage : null))];
     }
 
+    /// <summary>An updater that does nothing: it only gives the pictures a section, a card and the first-launch line.</summary>
+    private sealed class SamplePanel(Updates.UpdatePanelView view, bool clipBusy = false) : Updates.IUpdatesPanel
+    {
+        private static readonly Updates.UpdateVersion Installed = new(0, 1, 0), Next = new(0, 2, 0);
+
+        public Updates.UpdatePanelView View => view;
+
+        public bool ClipBusy => clipBusy;
+
+        public int BufferSeconds => 300;
+
+        public static SamplePanel Ready(bool clipBusy = false) => new(Updates.UpdatePanel.Compute(Facts(Updates.UpdateMode.Auto) with
+        {
+            LastCheck = new DateTimeOffset(2026, 11, 6, 14, 2, 0, TimeSpan.Zero),
+            HighestSeen = Next,
+            Manifest = Next,
+            Downloaded = Next,
+        }), clipBusy);
+
+        public static SamplePanel Downloading() => new(Updates.UpdatePanel.Compute(Facts(Updates.UpdateMode.Ask) with
+        {
+            LastCheck = new DateTimeOffset(2026, 11, 6, 14, 2, 0, TimeSpan.Zero),
+            HighestSeen = Next,
+            Manifest = Next,
+            Pass = Updates.UpdatePassKind.Download,
+            PassVersion = Next,
+            ClickStands = true,
+        }));
+
+        private static Updates.UpdatePanelFacts Facts(Updates.UpdateMode mode) =>
+            new() { Installed = Installed, Mode = mode, Now = new DateTimeOffset(2026, 11, 6, 14, 32, 5, TimeSpan.Zero) };
+
+        public void CheckNow()
+        {
+        }
+
+        public void ConfirmUpdate(bool saveFirst)
+        {
+        }
+
+        public void CancelUpdate()
+        {
+        }
+
+        public void WhatsNew()
+        {
+        }
+
+        public void SkipThisVersion()
+        {
+        }
+    }
+
     public static int Write(string folder, double scale)
     {
         Directory.CreateDirectory(folder);
@@ -1070,6 +1123,41 @@ internal static unsafe class SettingsDump
             s.ShowSection(Section.General);
             s.Editor.SetAccentPreset(Settings.AccentPreset.Cyan);
         });
+        var ready = SamplePanel.Ready();
+        Shot("general-updates", (s, _) =>
+        {
+            s.SetUpdates(ready);
+            s.ShowUpdates();
+        });
+        Shot("general-updates-copy", (s, _) =>
+        {
+            s.SetUpdates(new SamplePanel(Updates.UpdatePanel.Inactive(new Updates.UpdateVersion(0, 1, 0))));
+            s.ShowUpdates();
+        });
+        Shot("update-card", (s, _) =>
+        {
+            s.SetUpdates(ready);
+            s.ShowUpdateCard();
+        }, focus: true);
+        Shot("update-card-clip", (s, _) =>
+        {
+            s.SetUpdates(SamplePanel.Ready(clipBusy: true));
+            s.ShowUpdateCard();
+        }, focus: true);
+        Shot("update-card-downloading", (s, _) =>
+        {
+            s.SetUpdates(SamplePanel.Downloading());
+            s.ShowUpdateCard();
+        }, focus: true);
+        Shot("firstrun-1-updates", (s, _) => s.SetUpdates(ready), firstRun: true);
+        Shot("firstrun-3-updates", (s, _) =>
+        {
+            s.SetUpdates(ready);
+            s.Key(Vk.Tab, 0);
+            s.Key(Vk.Tab, 0);
+            s.Key(Vk.Enter, 0);
+            s.Key(Vk.Enter, 0);
+        }, firstRun: true);
         Shot("firstrun-1", firstRun: true);
         Shot("firstrun-2", (s, _) =>
         {

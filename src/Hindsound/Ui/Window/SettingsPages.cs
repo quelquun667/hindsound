@@ -1,5 +1,6 @@
 using Hindsound.Input;
 using Hindsound.Settings;
+using Hindsound.Updates;
 
 namespace Hindsound.Ui.Window;
 
@@ -9,6 +10,11 @@ internal sealed partial class SettingsScreen
     public const string LegalNote = "Recording a conversation without telling the people in it can be illegal. Let them know before you keep it.";
     public const string ShorterBufferNote = "A shorter buffer drops the oldest audio";
     public const string SoundHelp = "The beep can be heard in your next clip if you capture a specific output.";
+    public const string GitHubNote = "Once a day, Hindsound asks GitHub for the latest version. GitHub sees your IP address and the time, nothing else.";
+    public const string FirstRunUpdatesNote = "Hindsound checks GitHub for updates once a day. GitHub sees your IP address. Change it in Settings > General.";
+    public const string ClipBusyNote = "A clip is still being saved";
+    public const string FirstRunUpdatesId = "run.updates";
+    private const string CardPrefix = "card.";
 
     private const float Left = 200, Right = 728, Width = Right - Left, RowHeight = 30, FieldWidth = 220;
     private const string HexFieldId = "general.hex", TemplateFieldId = "export.template", ClipFieldId = "durations.custom", SwatchId = "general.accent";
@@ -21,6 +27,9 @@ internal sealed partial class SettingsScreen
     private string? _folderMessage;
     private int _firstRunStep;
     private bool _firstRunClipDone;
+    private IUpdatesPanel? _updates;
+    private float? _updatesTop;
+    private string? _cardReturnFocus;
 
     /// <summary>When the name preview is taken. A parameter so a picture or a test does not depend on the hour.</summary>
     public Func<DateTime> Clock { get; set; } = () => DateTime.Now;
@@ -201,6 +210,9 @@ internal sealed partial class SettingsScreen
                 break;
             case Section.General:
                 BuildGeneral();
+                break;
+            case Section.UpdateCard:
+                BuildUpdateCard();
                 break;
             default:
                 BuildFirstRun();
@@ -478,6 +490,7 @@ internal sealed partial class SettingsScreen
     private void BuildGeneral()
     {
         const float pitch = 36;
+        _updatesTop = null;
         var general = Editor.Settings.General;
         var y = BandHeight + 18;
         Heading("Accent color", y);
@@ -538,10 +551,170 @@ internal sealed partial class SettingsScreen
         var testWidth = Button.WidthFor(_canvas, "Show test notification");
         Add(new Button("Show test notification", _backend.ShowTestNotification) { Id = "general.test", Bounds = new Box(Left, y, testWidth, 34) });
         y += 34 + 14;
+        if (_updates is { } updates)
+        {
+            y = BuildUpdates(updates.View, y);
+        }
+
         var noteTop = y;
         Add(new Painted((c, _) => c.Wrapped(LegalNote, Face.Body, 13, Left, noteTop, Width, Theme.Muted)));
         y += 2 * _canvas.LineHeight(Face.Body, 13);
         _contentBottom = y;
+    }
+
+    private static readonly DropItem[] UpdateChoices = [new("auto", "Install automatically"), new("ask", "Ask me"), new("off", "Off")];
+
+    /// <summary>The Updates section, under the test button. Returns where the next line starts.</summary>
+    private float BuildUpdates(UpdatePanelView view, float y)
+    {
+        var divider = y - 7;
+        Add(new Painted((c, _) => c.FillRect(new Box(Left, divider, Width, 1), Theme.Line)));
+        y += 8;
+        _updatesTop = y;
+        Heading("Updates", y);
+        var top = y;
+        var version = view.VersionLine;
+        Add(new Painted((c, _) => c.TextRight(version, Face.Body, 13, Right, top + 15, Theme.Muted)));
+        y += 38;
+
+        // A copy that does not update itself only says so: no list, no buttons, no word about GitHub.
+        if (view.Active)
+        {
+            Row("Updates", "general.updates", y, () => UpdateChoices, () => Editor.Settings.General.Updates.Mode, Editor.SetUpdateMode);
+            y += RowHeight + 12;
+        }
+
+        var status = view.StatusLine;
+        var statusMid = y;
+        Add(new Painted((c, _) => c.TextMid(c.Fit(status, Face.Body, 13, Width), Face.Body, 13, Left, statusMid, Theme.Muted)) { Id = "updates.status" });
+        if (!view.Active)
+        {
+            return y + 20 + 14;
+        }
+
+        y += 20;
+        var buttons = new List<(string Id, string Label, Action Click, bool Enabled)> { ("updates.check", "Check now", CheckNow, view.CheckEnabled) };
+        if (view.ShowUpdate)
+        {
+            buttons.Add(("updates.now", "Update now", ShowUpdateCard, view.UpdateEnabled));
+        }
+
+        if (view.ShowWhatsNew)
+        {
+            buttons.Add(("updates.whatsnew", "What's new", () => _updates?.WhatsNew(), true));
+        }
+
+        if (view.ShowSkip)
+        {
+            buttons.Add(("updates.skip", "Skip this version", SkipThisVersion, view.SkipEnabled));
+        }
+
+        // One line while they fit, which they do at the design's sizes; a wider font puts the last ones under.
+        var x = Left;
+        foreach (var (id, label, click, enabled) in buttons)
+        {
+            var width = Button.WidthFor(_canvas, label);
+            if (x > Left && x + width > Right)
+            {
+                x = Left;
+                y += 34 + 10;
+            }
+
+            Add(new Button(label, click) { Id = id, Enabled = enabled, Bounds = new Box(x, y, width, 34) });
+            x += width + 12;
+        }
+
+        y += 34 + 14;
+        var noteTop = y;
+        Add(new Painted((c, _) => c.Wrapped(GitHubNote, Face.Body, 13, Left, noteTop, Width, Theme.Muted)) { Id = "updates.github" });
+        y += WrapLines(_canvas, GitHubNote, Face.Body, 13, Width).Count * _canvas.LineHeight(Face.Body, 13) + 14;
+        return y;
+    }
+
+    private void CheckNow()
+    {
+        _updates?.CheckNow();
+        Refresh();
+    }
+
+    private void SkipThisVersion()
+    {
+        _updates?.SkipThisVersion();
+        Refresh();
+    }
+
+    /// <summary>The lines that Wrapped draws, cut the same way: what a page must leave room for.</summary>
+    private static List<string> WrapLines(ICanvas c, string text, Face face, float size, float width)
+    {
+        var lines = new List<string>();
+        var line = string.Empty;
+        foreach (var word in text.Split(' '))
+        {
+            var attempt = line.Length == 0 ? word : line + " " + word;
+            if (c.Measure(attempt, face, size) > width && line.Length > 0)
+            {
+                lines.Add(line);
+                line = word;
+            }
+            else
+            {
+                line = attempt;
+            }
+        }
+
+        lines.Add(line);
+        return lines;
+    }
+
+    // ---------------------------------------------------------------- the update card
+
+    private void BuildUpdateCard()
+    {
+        const float cardLeft = 130, cardRight = WindowWidth - 130, cardTop = BandHeight + 60, inner = cardLeft + 28, textWidth = cardRight - cardLeft - 56;
+        var panel = _updates;
+        var view = panel?.View;
+        var busy = view?.CardBusy == true;
+        var clipBusy = panel?.ClipBusy == true;
+        var title = view?.Offered is { } offered ? $"Update to {offered}" : "Update";
+        var body = $"Updating restarts Hindsound. The last {NotificationStates.FormatDuration(panel?.BufferSeconds ?? 0)} in memory will be lost.";
+
+        // A download under way speaks first; then a clip still being written, which greys the two buttons.
+        var line = busy ? view!.CardLine : clipBusy ? ClipBusyNote : view?.CardLine;
+        var bodyTop = cardTop + 66;
+        var bodyHeight = WrapLines(_canvas, body, Face.Body, 14, textWidth).Count * _canvas.LineHeight(Face.Body, 14);
+        var lineMid = bodyTop + bodyHeight + 18;
+        var buttonY = lineMid + 26;
+        var cardHeight = buttonY + 34 + 24 - cardTop;
+        Add(new Painted((c, _) =>
+        {
+            c.Frame(new Box(cardLeft, cardTop, cardRight - cardLeft, cardHeight), 6, Theme.Panel, Theme.Line);
+            c.Text(title, Face.Title, 22, inner, cardTop + 22, Theme.Text);
+            c.Wrapped(body, Face.Body, 14, inner, bodyTop, textWidth, Theme.Muted);
+            if (line is not null)
+            {
+                c.TextMid(c.Fit(line, Face.Medium, 14, textWidth), Face.Medium, 14, inner, lineMid, Theme.Text);
+            }
+        }) { Id = "card.text" }, scrolls: false);
+
+        var canUpdate = view is { UpdateEnabled: true } && !busy && !clipBusy;
+        var cancelWidth = Button.WidthFor(_canvas, "Cancel", padding: 22);
+        var updateWidth = Button.WidthFor(_canvas, "Update", padding: 22);
+        var saveWidth = Button.WidthFor(_canvas, "Save it, then update", padding: 22);
+        var cancelBox = new Box(cardRight - 28 - cancelWidth, buttonY, cancelWidth, 34);
+        var updateBox = new Box(cancelBox.X - 12 - updateWidth, buttonY, updateWidth, 34);
+        var saveBox = new Box(updateBox.X - 12 - saveWidth, buttonY, saveWidth, 34);
+        Add(new Button("Save it, then update", () => Confirm(saveFirst: true)) { Id = "card.save", Enabled = canUpdate, Bounds = saveBox }, scrolls: false);
+
+        // Greyed, the accent would still say "press me": it only goes on a button that can be pressed.
+        Add(new Button("Update", () => Confirm(saveFirst: false)) { Id = "card.update", Accented = canUpdate, Enabled = canUpdate, Bounds = updateBox }, scrolls: false);
+        Add(new Button("Cancel", CloseUpdateCard) { Id = "card.cancel", Bounds = cancelBox }, scrolls: false);
+        _contentBottom = WindowHeight;
+    }
+
+    private void Confirm(bool saveFirst)
+    {
+        _updates?.ConfirmUpdate(saveFirst);
+        Refresh();
     }
 
     private static readonly DropItem[] FullscreenChoices = [new("auto", "Auto"), new("soundOnly", "Sound only")];
@@ -690,6 +863,35 @@ internal sealed partial class SettingsScreen
         var last = step == FirstRunSteps.Length - 1;
         var nextLabel = last ? "Done" : "Next";
         var nextWidth = Button.WidthFor(_canvas, nextLabel, padding: 22);
+
+        // The card has no height left: the word about GitHub goes left of the buttons, and stays at every step. A run
+        // that cannot update says nothing about it.
+        if (_updates?.View.Active == true)
+        {
+            var room = panelRight - nextWidth - Button.WidthFor(_canvas, "Back", padding: 22) - 28 - x;
+            var lines = WrapLines(_canvas, FirstRunUpdatesNote, Face.Body, 13, room);
+            if (lines.Count > 2)
+            {
+                lines = [lines[0], _canvas.Fit(string.Join(' ', lines.Skip(1)), Face.Body, 13, room)];
+            }
+
+            var lineHeight = _canvas.LineHeight(Face.Body, 13);
+            var mentionTop = buttonY + (34 - lines.Count * lineHeight) / 2;
+            Add(
+                new Painted((c, _) =>
+                {
+                    for (var i = 0; i < lines.Count; i++)
+                    {
+                        c.Text(lines[i], Face.Body, 13, x, mentionTop + i * lineHeight, Theme.Muted);
+                    }
+                })
+                {
+                    Id = FirstRunUpdatesId,
+                    Bounds = new Box(x, mentionTop, room, lines.Count * lineHeight),
+                },
+                scrolls: false);
+        }
+
         if (step > 0)
         {
             var backWidth = Button.WidthFor(_canvas, "Back", padding: 22);

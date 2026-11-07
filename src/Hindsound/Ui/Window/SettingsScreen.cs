@@ -13,6 +13,9 @@ internal enum Section
     Export,
     General,
     FirstRun,
+
+    /// <summary>Confirms an update. Not in the side bar: it opens from the Updates section, the tray menu or a notification.</summary>
+    UpdateCard,
 }
 
 /// <summary>What the screen asks of the app. The real one is <see cref="App.HindsoundApp"/>.</summary>
@@ -151,10 +154,16 @@ internal sealed partial class SettingsScreen
 
     public float Scroll => _scroll;
 
-    public float MaxScroll => Section == Section.FirstRun ? 0 : Math.Max(0, _contentBottom + 24 - ViewBottom);
+    public float MaxScroll => IsCard ? 0 : Math.Max(0, _contentBottom + 24 - ViewBottom);
 
     /// <summary>The tab stops, in the order Tab goes through them.</summary>
     public IReadOnlyList<string> StopIds() => _stops.Where(w => w.CanFocus).Select(w => w.Id).ToList();
+
+    /// <summary>Any widget of the window by its id, painted ones included. Null when there is none.</summary>
+    public Widget? WidgetById(string id) => _page.Concat(_chrome).FirstOrDefault(w => w.Id == id);
+
+    /// <summary>A whole-window card, with no side bar, no foot and no scrolling.</summary>
+    private bool IsCard => Section is Section.FirstRun or Section.UpdateCard;
 
     public bool Listening => _capture.Listening;
 
@@ -278,22 +287,64 @@ internal sealed partial class SettingsScreen
     /// <summary>The Updates section of General draws from this panel. Null, the default, leaves General as it is.</summary>
     public void SetUpdates(IUpdatesPanel? panel)
     {
+        _updates = panel;
+        if (panel is null && Section == Section.UpdateCard)
+        {
+            ShowUpdates();
+            return;
+        }
+
+        Refresh();
     }
 
     /// <summary>The panel's view changed: draws the section and the card again, keeping the focus.</summary>
-    public void RefreshUpdates()
-    {
-    }
+    public void RefreshUpdates() => Refresh();
 
     /// <summary>Shows General, scrolled to the Updates section.</summary>
     public void ShowUpdates()
     {
+        ShowSection(Section.General);
+        if (_updatesTop is { } top)
+        {
+            ScrollTo(top - 12 - BandHeight);
+        }
     }
 
-    /// <summary>Shows the card that confirms an update.</summary>
+    /// <summary>Shows the card that confirms an update. The keyboard lands on its first button.</summary>
     public void ShowUpdateCard()
     {
+        if (_updates is null || Section == Section.UpdateCard)
+        {
+            return;
+        }
+
+        CancelCapture();
+        _cardReturnFocus = Section == Section.General ? _focusId : null;
+        ShowSection(Section.UpdateCard);
+        _focusId = CardStops().FirstOrDefault();
+        Refresh();
     }
+
+    /// <summary>Cancel, or Escape: the click no longer stands, and General shows the section again.</summary>
+    private void CloseUpdateCard()
+    {
+        var back = _cardReturnFocus;
+        _cardReturnFocus = null;
+        _updates?.CancelUpdate();
+        ShowUpdates();
+
+        // Back where the card was opened from, when that was the section: Tab goes on from there.
+        if (back is not null && Find(back) is { CanFocus: true })
+        {
+            _focusId = back;
+            Refresh();
+            Reveal();
+        }
+    }
+
+    /// <summary>Where Tab goes on a card. The update card keeps the keyboard on its own buttons.</summary>
+    private IReadOnlyList<string> CardStops() =>
+        Section == Section.UpdateCard ? StopIds().Where(id => id.StartsWith(CardPrefix, StringComparison.Ordinal)).ToList() : StopIds();
 
     private void OnSettingChanged(SettingsChange change)
     {
@@ -308,13 +359,13 @@ internal sealed partial class SettingsScreen
         _page.Clear();
         _stops.Clear();
         BuildBand();
-        if (Section != Section.FirstRun)
+        if (!IsCard)
         {
             BuildNav();
         }
 
         BuildPage();
-        if (Section != Section.FirstRun)
+        if (!IsCard)
         {
             BuildFoot();
         }
@@ -327,7 +378,7 @@ internal sealed partial class SettingsScreen
         Rebuild();
         if (_focusId is not null && Find(_focusId) is not { CanFocus: true })
         {
-            _focusId = Section == Section.FirstRun ? StopIds().FirstOrDefault() : NavId;
+            _focusId = IsCard ? CardStops().FirstOrDefault() : NavId;
         }
 
         SyncEdit();
@@ -358,8 +409,8 @@ internal sealed partial class SettingsScreen
     /// <summary>Tab and Shift+Tab.</summary>
     public void MoveFocus(bool forward)
     {
-        var stops = _stops;
-        var current = _stops.FindIndex(w => w.Id == _focusId);
+        var stops = Section == Section.UpdateCard ? _stops.FindAll(w => w.Id.StartsWith(CardPrefix, StringComparison.Ordinal)) : _stops;
+        var current = stops.FindIndex(w => w.Id == _focusId);
         var next = FocusRing.Next(stops.Count, current, forward, i => stops[i].CanFocus);
         if (next >= 0)
         {
@@ -497,6 +548,12 @@ internal sealed partial class SettingsScreen
         if (_popup is { } popup)
         {
             return PopupKey(popup, vk, modifiers);
+        }
+
+        if (vk == Vk.Escape && modifiers == 0 && Section == Section.UpdateCard)
+        {
+            CloseUpdateCard();
+            return true;
         }
 
         if (vk == Vk.Tab && (modifiers & ~HotkeyGesture.ModShift) == 0)
@@ -907,7 +964,7 @@ internal sealed partial class SettingsScreen
             }
         }
 
-        var viewBottom = Section == Section.FirstRun ? WindowHeight : ViewBottom;
+        var viewBottom = IsCard ? WindowHeight : ViewBottom;
         if (y < BandHeight || y >= viewBottom)
         {
             return null;
