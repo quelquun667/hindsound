@@ -281,6 +281,46 @@ public unsafe class TextEngineTests
         Assert.Contains("Cascadia Mono not installed, using Consolas", lines[0]);
     }
 
+    // Never a proportional font for the keys and durations. Courier New comes with every Windows.
+    [Fact]
+    public void Without_Cascadia_Mono_nor_Consolas_the_mono_text_takes_Courier_New()
+    {
+        var lines = new List<string>();
+        using var engine = TextEngine.TryCreate(lines.Add, missingForTests: ["Cascadia Mono", "Consolas"])!;
+
+        Assert.Equal("Courier New", engine.FamilyOf(Face.Mono));
+        var small = new FontSpec(Face.Mono, 12);
+        Assert.Equal(engine.Measure(small, "iiii"), engine.Measure(small, "WWWW"), 0.01f);
+        Assert.Single(lines);
+        Assert.Contains("Cascadia Mono not installed, using Courier New", lines[0]);
+    }
+
+    // GDI (the text box, or all the text without DirectWrite) gives a font for any name: the face it chose is checked.
+    [Fact]
+    public void GDI_takes_the_first_mono_family_installed_the_same_one_as_DirectWrite()
+    {
+        var font = GdiFonts.CreateFirstInstalled(["Cascadia MonoX", "ConsolasX", "Courier New"], 16, Native.ANTIALIASED_QUALITY, out var used);
+        var dc = Native.CreateCompatibleDC(0);
+        var old = Native.SelectObject(dc, font);
+        try
+        {
+            Assert.Equal("Courier New", used);
+            Native.SIZE thin, wide;
+            Native.GetTextExtentPoint32W(dc, "iiii", 4, &thin);
+            Native.GetTextExtentPoint32W(dc, "WWWW", 4, &wide);
+            Assert.Equal(thin.Cx, wide.Cx);
+        }
+        finally
+        {
+            Native.SelectObject(dc, old);
+            Native.DeleteObject(font);
+            Native.DeleteDC(dc);
+        }
+
+        Native.DeleteObject(GdiFonts.Create(Face.Mono, 16, Native.ANTIALIASED_QUALITY, out var mono));
+        Assert.Equal(TextEngine.Shared!.FamilyOf(Face.Mono), mono);
+    }
+
     [Fact]
     public void When_Direct2D_does_not_start_the_text_is_drawn_by_GDI()
     {

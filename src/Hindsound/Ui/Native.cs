@@ -238,6 +238,7 @@ internal static unsafe partial class Native
     [LibraryImport(G, StringMarshalling = StringMarshalling.Utf16)]
     public static partial int GetTextExtentPoint32W(nint dc, string text, int length, SIZE* size);
     [LibraryImport(G)] public static partial int GetTextMetricsW(nint dc, TEXTMETRICW* metrics);
+    [LibraryImport(G)] public static partial int GetTextFaceW(nint dc, int count, char* face);
 
     [LibraryImport(K, StringMarshalling = StringMarshalling.Utf16)] public static partial nint GetModuleHandleW(string? name);
     [LibraryImport(K)] public static partial nint GlobalAlloc(uint flags, nuint bytes);

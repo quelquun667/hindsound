@@ -12,23 +12,76 @@ internal readonly record struct FontSpec(Face Face, float Size);
 /// </summary>
 internal static class FontFaces
 {
+    // Cascadia Mono is not on every Windows 10: Consolas (since Vista), then Courier New (every Windows) keep the digits and
+    // keys at a fixed pitch, never a proportional font picked in their place.
+    public static readonly string[] MonoFamilies = ["Cascadia Mono", "Consolas", "Courier New"];
+
     // DWRITE_FONT_STRETCH: 4 is SemiCondensed, 5 is Normal.
-    public static (string Family, int Weight, int Stretch, string? Fallback) Of(Face face) => face switch
+    public static (string Family, int Weight, int Stretch, string[] Fallbacks) Of(Face face) => face switch
     {
-        Face.Title => ("Bahnschrift", 600, 4, null),
-        Face.Medium => ("Segoe UI", 600, 5, null),
-        // Cascadia Mono is not on every Windows 10: Consolas keeps the digits and keys at a fixed pitch.
-        Face.Mono => ("Cascadia Mono", 400, 5, "Consolas"),
-        _ => ("Segoe UI", 400, 5, null),
+        Face.Title => ("Bahnschrift", 600, 4, []),
+        Face.Medium => ("Segoe UI", 600, 5, []),
+        Face.Mono => (MonoFamilies[0], 400, 5, MonoFamilies[1..]),
+        _ => ("Segoe UI", 400, 5, []),
     };
 
     public static string GdiName(Face face) => face switch
     {
         Face.Title => "Bahnschrift SemiBold SemiConden",
         Face.Medium => "Segoe UI Semibold",
-        Face.Mono => "Cascadia Mono",
+        Face.Mono => MonoFamilies[0],
         _ => "Segoe UI",
     };
+}
+
+/// <summary>The fonts GDI draws with: the text box of the window, and all the text when DirectWrite did not start.</summary>
+internal static unsafe class GdiFonts
+{
+    /// <summary>The font of a face, its em <paramref name="height"/> pixels. A mono face takes the first of its families GDI has.</summary>
+    public static nint Create(Face face, int height, uint quality, out string used)
+    {
+        if (face == Face.Mono)
+        {
+            return CreateFirstInstalled(FontFaces.MonoFamilies, height, quality, out used);
+        }
+
+        used = FontFaces.GdiName(face);
+        return Native.CreateFontW(-height, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, quality, 0, used);
+    }
+
+    /// <summary>
+    /// The first family of the list GDI really has, at a fixed pitch: GDI gives a font for any name, so the face it chose is read
+    /// back. The last one is kept if none is there.
+    /// </summary>
+    internal static nint CreateFirstInstalled(IReadOnlyList<string> families, int height, uint quality, out string used)
+    {
+        var dc = Native.CreateCompatibleDC(0);
+        try
+        {
+            for (var i = 0; i < families.Count; i++)
+            {
+                var font = Native.CreateFontW(-height, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, quality, (uint)Native.FIXED_PITCH_MODERN, families[i]);
+                var old = Native.SelectObject(dc, font);
+                var chosen = stackalloc char[64];
+                chosen[0] = '\0';
+                Native.GetTextFaceW(dc, 64, chosen);
+                Native.SelectObject(dc, old);
+                if (i == families.Count - 1 || new string(chosen).Equals(families[i], StringComparison.OrdinalIgnoreCase))
+                {
+                    used = families[i];
+                    return font;
+                }
+
+                Native.DeleteObject(font);
+            }
+
+            throw new ArgumentException("no family", nameof(families));
+        }
+        finally
+        {
+            Native.DeleteDC(dc);
+        }
+    }
 }
 
 /// <summary>
@@ -140,8 +193,8 @@ internal sealed unsafe partial class TextEngine : IDisposable
         {
             if (!_families.TryGetValue(face, out var name))
             {
-                var (family, _, _, fallback) = FontFaces.Of(face);
-                name = Resolve(family, fallback);
+                var (family, _, _, fallbacks) = FontFaces.Of(face);
+                name = Resolve(family, fallbacks);
                 _families[face] = name;
             }
 
@@ -567,20 +620,25 @@ internal sealed unsafe partial class TextEngine : IDisposable
         return exists != 0;
     }
 
-    private string Resolve(string family, string? fallback)
+    private string Resolve(string family, string[] fallbacks)
     {
         if (TryFindFamily(family, out _))
         {
             return family;
         }
 
-        if (fallback is not null && TryFindFamily(fallback, out _))
+        foreach (var fallback in fallbacks)
         {
-            TellOnce("font " + family, $"text: font {family} not installed, using {fallback}");
-            return fallback;
+            if (TryFindFamily(fallback, out _))
+            {
+                TellOnce("font " + family, $"text: font {family} not installed, using {fallback}");
+                return fallback;
+            }
         }
 
-        TellOnce("font " + family, $"text: font {family} not installed, DirectWrite picks the nearest one");
+        TellOnce("font " + family, fallbacks.Length == 0
+            ? $"text: font {family} not installed, DirectWrite picks the nearest one"
+            : $"text: font {family} not installed, nor {string.Join(" nor ", fallbacks)}: DirectWrite picks the nearest one");
         return family;
     }
 
@@ -740,9 +798,7 @@ internal sealed unsafe class TextPainter : IDisposable
     {
         if (!_gdiFonts.TryGetValue(font, out var handle))
         {
-            var mono = font.Face == Face.Mono;
-            handle = Native.CreateFontW(-(int)MathF.Floor(font.Size + 0.5f), 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, Native.ANTIALIASED_QUALITY,
-                mono ? (uint)Native.FIXED_PITCH_MODERN : 0, FontFaces.GdiName(font.Face));
+            handle = GdiFonts.Create(font.Face, (int)MathF.Floor(font.Size + 0.5f), Native.ANTIALIASED_QUALITY, out _);
             _gdiFonts[font] = handle;
         }
 

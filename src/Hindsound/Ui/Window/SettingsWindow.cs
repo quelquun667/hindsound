@@ -357,10 +357,9 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
         if (_editFont == 0 || _editFontKey != key)
         {
             var old = _editFont;
-            // The text box is a native control, so GDI draws it: the same family as the drawn text (Consolas where Cascadia Mono
-            // is missing), in ClearType like the rest of the window.
-            var name = face == Face.Mono ? TextEngine.Shared?.FamilyOf(Face.Mono) ?? "Cascadia Mono" : "Segoe UI";
-            _editFont = Native.CreateFontW(-(int)MathF.Round(size * Scale), 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, Native.CLEARTYPE_QUALITY, face == Face.Mono ? (uint)Native.FIXED_PITCH_MODERN : 0, name);
+            // The text box is a native control, so GDI draws it: the same family as the drawn text (for the mono face, the first
+            // of Cascadia Mono, Consolas and Courier New that is installed), in ClearType like the rest of the window.
+            _editFont = GdiFonts.Create(face == Face.Mono ? Face.Mono : Face.Body, (int)MathF.Round(size * Scale), Native.CLEARTYPE_QUALITY, out _);
             _editFontKey = key;
             WindowNative.SendMessageW(_edit, WindowNative.WM_SETFONT, (nuint)_editFont, 1);
             if (old != 0)
