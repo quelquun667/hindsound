@@ -185,6 +185,9 @@ internal sealed class ClipPipeline
     /// <summary>A press has ended, one way or another. On the thread of the message loop.</summary>
     public Action<ClipOutcome>? Finished { get; set; }
 
+    /// <summary>A press is taken, and <see cref="Busy"/> already counts it. On the thread that pressed, the message loop's.</summary>
+    public Action? Started { get; set; }
+
     /// <summary>
     /// A press has yet to end. It stops counting just before <see cref="Finished"/> hears of it: the queues only go empty
     /// a moment after, so whoever hears of the last clip must not ask them.
@@ -196,6 +199,7 @@ internal sealed class ClipPipeline
     {
         Interlocked.Increment(ref _inFlight);
         _snapshots.Enqueue(() => TakeSnapshot(request));
+        Started?.Invoke();
     }
 
     /// <summary>Lets queued clips finish, in that time for the two queues together. False if the time ran out.</summary>

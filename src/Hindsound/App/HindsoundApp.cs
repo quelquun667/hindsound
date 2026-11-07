@@ -165,6 +165,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         {
             SavingSlowly = OnSavingSlowly,
             Finished = OnClipFinished,
+            Started = OnClipStarted,
         };
 
         _tray = new TrayIcon(_loop.Hwnd, UiLoop.TrayCallbackMessage);
@@ -680,6 +681,16 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         }
 
         return _saver.Save(snapshot, options, appName);
+    }
+
+    // The update card greys "Save it, then update" and "Update" while a clip is being written: from the press on, not
+    // only once the first clip is over. Other pages draw nothing from it.
+    private void OnClipStarted()
+    {
+        if (_window?.Screen is { Section: Section.UpdateCard } screen)
+        {
+            screen.RefreshUpdates();
+        }
     }
 
     private void OnSavingSlowly(ClipRequest request) =>
