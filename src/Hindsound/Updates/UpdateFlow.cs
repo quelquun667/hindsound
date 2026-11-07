@@ -651,6 +651,7 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
                     // The pass took the timer away: without a new one, nothing would check again until a restart.
                     if (!ApplyStandingClick())
                     {
+                        AnnounceAfterClick();
                         ArmTimer();
                     }
                 }
@@ -720,6 +721,16 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
 
         host.LeaveForSetup();
         return true;
+    }
+
+    // Told as a download without a click is told: once per version, by the same rules, waiting for the desktop. Not Step:
+    // a Setup that did not start would be downloaded again at once, where it waits for the next due check.
+    private void AnnounceAfterClick()
+    {
+        if (!host.FirstRunCardOpen && WouldAnnounce(Situation(UpdateEvent.Tick, host.Surface())))
+        {
+            AnnounceOnce();
+        }
     }
 
     private void DropClick(UpdateCardNote note)
