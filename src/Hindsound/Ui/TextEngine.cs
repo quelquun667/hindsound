@@ -56,13 +56,14 @@ internal static unsafe class GdiFonts
     internal static nint CreateFirstInstalled(IReadOnlyList<string> families, int height, uint quality, out string used)
     {
         var dc = Native.CreateCompatibleDC(0);
+        // Once, out of the loop: a stackalloc in a loop grows the stack at each turn.
+        var chosen = stackalloc char[64];
         try
         {
             for (var i = 0; i < families.Count; i++)
             {
                 var font = Native.CreateFontW(-height, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, quality, (uint)Native.FIXED_PITCH_MODERN, families[i]);
                 var old = Native.SelectObject(dc, font);
-                var chosen = stackalloc char[64];
                 chosen[0] = '\0';
                 Native.GetTextFaceW(dc, 64, chosen);
                 Native.SelectObject(dc, old);
@@ -194,9 +195,13 @@ internal sealed unsafe partial class TextEngine : IDisposable
     {
         int smoothing = 0;
         uint type = 0;
-        return Native.SystemParametersInfoW(Native.SPI_GETFONTSMOOTHING, 0, &smoothing, 0) != 0 && smoothing != 0
-            && Native.SystemParametersInfoW(Native.SPI_GETFONTSMOOTHINGTYPE, 0, &type, 0) != 0 && type == Native.FE_FONTSMOOTHINGCLEARTYPE;
+        return Native.SystemParametersInfoW(Native.SPI_GETFONTSMOOTHING, 0, &smoothing, 0) != 0
+            && Native.SystemParametersInfoW(Native.SPI_GETFONTSMOOTHINGTYPE, 0, &type, 0) != 0
+            && SystemUsesClearType(smoothing, type);
     }
+
+    /// <summary>ClearType is on when the fonts are smoothed (SPI_GETFONTSMOOTHING) and the smoothing is of the ClearType type (SPI_GETFONTSMOOTHINGTYPE).</summary>
+    internal static bool SystemUsesClearType(int smoothing, uint type) => smoothing != 0 && type == Native.FE_FONTSMOOTHINGCLEARTYPE;
 
     /// <summary>The family a face is drawn with, once a missing one is replaced.</summary>
     public string FamilyOf(Face face)

@@ -250,6 +250,17 @@ public unsafe class TextEngineTests
         Assert.Equal(smoothing != 0 && type == 2, TextEngine.SystemUsesClearType());
     }
 
+    // The four settings of Windows: the window is in ClearType only when the fonts are smoothed and the smoothing is ClearType.
+    [Theory]
+    [InlineData(0, 0u, false)]
+    [InlineData(0, 2u, false)]
+    [InlineData(1, 1u, false)]
+    [InlineData(1, 2u, true)]
+    public void ClearType_is_on_only_when_the_fonts_are_smoothed_in_ClearType(int smoothing, uint type, bool expected)
+    {
+        Assert.Equal(expected, TextEngine.SystemUsesClearType(smoothing, type));
+    }
+
     // An opaque black bitmap selected in a memory DC, for a painter of its own.
     private sealed class BlackBitmap : IDisposable
     {
@@ -342,6 +353,28 @@ public unsafe class TextEngineTests
 
         Assert.Contains(lines, line => line.Contains("DirectWrite failed to draw (0x80004005), this bitmap goes on with GDI"));
         Assert.Equal(0, engine.HeldForTests);
+    }
+
+    // The count is of failures in a row: a success between two failures starts it again, so failure, success, failure, failure stays.
+    [Fact]
+    public void A_success_between_failures_starts_the_count_again_so_the_painter_stays_on_Direct2D()
+    {
+        using var engine = TextEngine.TryCreate(_ => { }, missingForTests: [])!;
+        using var bitmap = new BlackBitmap(240, 160);
+        using var painter = new TextPainter(bitmap.Dc, bitmap.Pixels, engine, clearType: true);
+        int[] results = [unchecked((int)0x80004005), 0, unchecked((int)0x80004005), unchecked((int)0x80004005)];
+        for (var i = 0; i < results.Length; i++)
+        {
+            painter.EndDrawResultForTests = results[i];
+            painter.Text(new FontSpec(Face.Body, 20), "Clip length", 6, 6 + i * 36, 0xFFFFFF);
+            Assert.True(bitmap.Ink(i * 36, i * 36 + 36) > 50, $"draw {i}: no ink");
+            Assert.True(painter.UsesDirectWrite, $"left Direct2D after draw {i}");
+        }
+
+        // A third failure in a row does leave it.
+        painter.EndDrawResultForTests = unchecked((int)0x80004005);
+        painter.Text(new FontSpec(Face.Body, 20), "Clip length", 6, 6 + 4 * 36 - 144, 0xFFFFFF);
+        Assert.False(painter.UsesDirectWrite);
     }
 
     // A COMException of DirectWrite (a layout or a format it could not make) never leaves the painter, which goes on with GDI.
@@ -536,6 +569,58 @@ public class TextLeakTests
         Assert.Equal(user, Native.GetGuiResources(process, Native.GR_USEROBJECTS));
         // Every target, brush and layout given back, to its last reference: a kept one leaks nothing the counts above see.
         Assert.Equal(0, engine.HeldForTests);
+    }
+
+    // A layout is made for each Measure: given back at once, so the width of a text costs nothing that stays. The five sizes
+    // are used once first, as each makes its format, which the engine keeps.
+    [Fact]
+    public void Two_hundred_measures_and_line_heights_leave_no_layout_behind()
+    {
+        using var engine = TextEngine.TryCreate(_ => { }, missingForTests: [])!;
+        var process = Native.GetCurrentProcess();
+        for (var i = 0; i < 5; i++)
+        {
+            MeasureOnce(engine, i);
+        }
+
+        var references = engine.FactoryReferences();
+        var gdi = Native.GetGuiResources(process, Native.GR_GDIOBJECTS);
+        var user = Native.GetGuiResources(process, Native.GR_USEROBJECTS);
+
+        for (var i = 0; i < 200; i++)
+        {
+            MeasureOnce(engine, i);
+        }
+
+        Assert.Equal(0, engine.HeldForTests);
+        Assert.Equal(references, engine.FactoryReferences());
+        Assert.Equal(gdi, Native.GetGuiResources(process, Native.GR_GDIOBJECTS));
+        Assert.Equal(user, Native.GetGuiResources(process, Native.GR_USEROBJECTS));
+    }
+
+    private static void MeasureOnce(TextEngine engine, int i)
+    {
+        Assert.True(engine.Measure(new FontSpec(Face.Body, 13 + i % 5), "Clip length " + i) > 0);
+        Assert.True(engine.LineHeight(new FontSpec(Face.Mono, 12 + i % 5)) > 0);
+    }
+
+    // Each call makes a font, tries it in a memory DC and gives it back or keeps it for the caller: none is left behind.
+    [Fact]
+    public void Two_hundred_searches_of_a_GDI_font_leave_no_GDI_object_behind()
+    {
+        var process = Native.GetCurrentProcess();
+        string[] families = ["Famille inexistante", "Consolas"];
+        Native.DeleteObject(GdiFonts.CreateFirstInstalled(families, 16, Native.ANTIALIASED_QUALITY, out _));
+        var gdi = Native.GetGuiResources(process, Native.GR_GDIOBJECTS);
+
+        for (var i = 0; i < 200; i++)
+        {
+            var font = GdiFonts.CreateFirstInstalled(families, 16, Native.ANTIALIASED_QUALITY, out var used);
+            Assert.Equal("Consolas", used);
+            Native.DeleteObject(font);
+        }
+
+        Assert.Equal(gdi, Native.GetGuiResources(process, Native.GR_GDIOBJECTS));
     }
 
     // Each new size makes a format: a family, a font, a face and its OS/2 table are taken to read the line, and all given back.
