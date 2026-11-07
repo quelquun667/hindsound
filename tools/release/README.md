@@ -90,6 +90,14 @@ gh variable delete RELEASE_CONFIRM_VERSION
 
 If the tag is already pushed and refused, set the variable, then rerun the run as below.
 
+A tag pushed by mistake, such as `v9.0.0`, is refused, but it stays on GitHub, and every later version is refused against it
+too. A higher tag on a branch other than `main` does the same. If it has no published release, delete it:
+
+```powershell
+git push origin :refs/tags/v9.0.0
+git tag -d v9.0.0
+```
+
 ## Rerun a failed run
 
 ```powershell

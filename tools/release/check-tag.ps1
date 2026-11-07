@@ -91,7 +91,7 @@ if ($CheckVersionJump) {
     }
     else {
         if ((Compare-VersionParts $parts $highest) -le 0) {
-            throw "Version $version is not above the highest tag, $highestName. The app would never offer it to anyone who read that one."
+            throw "Version $version is not above the highest tag, $highestName. The app would never offer it to anyone who read that one. If $highestName was a mistake and has no published release, delete that tag: see tools/release/README.md."
         }
         $sameMinor = $parts[0] -eq $highest[0] -and $parts[1] -eq $highest[1]
         $isNextPatch = $sameMinor -and $parts[2] -eq ($highest[2] + 1)

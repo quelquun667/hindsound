@@ -325,6 +325,7 @@ try {
         Assert-Refused 'a rerun below the highest refused' { & $jump 'v0.0.9' } 'not above'
         Assert-Refused 'a lower version refused' { & $jump 'v0.0.8' } 'not above'
         Assert-Refused 'a lower version refused, even confirmed' { & $jump 'v0.0.8' '0.0.8' } 'not above'
+        Assert-Refused 'a lower version names the tag to delete if it was a mistake' { & $jump 'v0.0.8' } 'If v0.0.10 was a mistake'
 
         # As text, 0.9.0 is above 0.10.0.
         Invoke-Git tag v0.9.0
