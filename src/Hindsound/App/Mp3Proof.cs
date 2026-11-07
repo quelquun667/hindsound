@@ -17,6 +17,12 @@ internal static class Mp3Proof
 
     public static int Write(string folder, Journal journal) => Write(folder, journal, openMp3: null);
 
+    /// <summary>
+    /// The rescue folder of the proof: always inside the folder given, so that a folder that cannot be written fails the proof
+    /// without a clip reaching the real rescue folder of the player (%LocalAppData%\Hindsound\Rescued).
+    /// </summary>
+    internal static string RescueFolderFor(string fullFolder) => Path.Combine(fullFolder, "rescued");
+
     /// <param name="openMp3">For the tests of the fallback. Default: LAME, as for a real clip.</param>
     internal static int Write(string folder, Journal journal, Func<string, int, int, IAudioFileWriter>? openMp3)
     {
@@ -25,7 +31,7 @@ internal static class Mp3Proof
             var fullFolder = Path.GetFullPath(folder);
 
             // The rescue folder inside it: a folder that cannot be written fails here, and nothing reaches %LocalAppData%.
-            var saver = new ClipSaver(Path.Combine(fullFolder, "rescued"), openMp3: openMp3);
+            var saver = new ClipSaver(RescueFolderFor(fullFolder), openMp3: openMp3);
             var options = new ExportOptions { Format = ExportFormat.Mp3, TrackMode = TrackMode.Mix, OutputFolder = fullFolder };
             var result = saver.Save(new AudioSnapshot(Sine(), []), options);
 

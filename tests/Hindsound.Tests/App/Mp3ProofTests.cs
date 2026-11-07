@@ -1,4 +1,5 @@
 using Hindsound.App;
+using Hindsound.Export;
 using Hindsound.Tests.Export;
 
 namespace Hindsound.Tests.App;
@@ -37,6 +38,19 @@ public class Mp3ProofTests
 
         Assert.Equal(Mp3Proof.ExitFellBackToWav, code);
         Assert.EndsWith(".wav", Assert.Single(Directory.GetFiles(folder, "*", SearchOption.AllDirectories)), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_rescue_folder_stays_inside_the_folder_given()
+    {
+        using var temp = new TempFolder();
+        var folder = Path.GetFullPath(temp.Combine("proof"));
+
+        var rescue = Mp3Proof.RescueFolderFor(folder);
+
+        Assert.False(Path.GetRelativePath(folder, rescue).StartsWith("..", StringComparison.Ordinal));
+        Assert.NotEqual(folder, rescue);
+        Assert.NotEqual(Path.GetFullPath(ClipSaver.DefaultRescueFolder), rescue);
     }
 
     [Fact]
