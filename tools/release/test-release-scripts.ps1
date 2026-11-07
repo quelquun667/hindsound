@@ -581,7 +581,10 @@ try {
     Test-Mp3Folder 'a WAV beside the MP3 refused' @{ 'clip.mp3' = 25000; 'clip.wav' = 100 } 'WAV in place of MP3'
     Test-Mp3Folder 'an empty MP3 refused' @{ 'clip.mp3' = 0 } 'expected one MP3'
     Test-Mp3Folder 'two MP3 refused' @{ 'a.mp3' = 25000; 'b.mp3' = 25000 } 'expected one MP3'
-    Test-Mp3Folder 'an MP3 in the rescue folder refused' @{ 'rescued\clip.mp3' = 25000 } 'rescue folder'
+    Test-Mp3Folder 'an MP3 without the start of a frame refused' @{ 'clip.mp3' = 25000 } 'MPEG audio frame' @(0x49, 0x44)
+    Test-Mp3Folder 'a truncated MP3 refused' @{ 'clip.mp3' = 5000 } 'expected 20 000 to 30 000'
+    Test-Mp3Folder 'a far too long MP3 refused' @{ 'clip.mp3' = 100000 } 'expected 20 000 to 30 000'
+    Test-Mp3Folder 'an MP3 in the rescue folder refused'  @{ 'rescued\clip.mp3' = 25000 } 'rescue folder'
     Test-Mp3Folder 'an empty MP3 folder refused' @{} 'expected one MP3'
     Assert-Refused 'no MP3 folder refused' { & $checkSetup -CheckMp3Folder (Join-Path $temp 'no-mp3') } 'expected one MP3'
     $setupText = [IO.File]::ReadAllText($checkSetup)

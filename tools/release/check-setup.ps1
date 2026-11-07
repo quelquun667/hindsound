@@ -94,6 +94,14 @@ function Assert-Mp3Folder([string]$Folder) {
         throw "The installed exe wrote $($files.Count) file(s) in $Folder, expected one MP3 that is not empty: $(($files | ForEach-Object Name) -join ', ')."
     }
     # The exe writes the clip in the folder itself: a clip under it, in rescued, was saved in the rescue folder.
+    # One second at 192 kb/s is about 25 000 bytes (25 344 measured), and an MPEG frame starts with 11 bits set.
+    $bytes = [IO.File]::ReadAllBytes($mp3[0].FullName)
+    if ($bytes.Length -lt 2 -or $bytes[0] -ne 0xFF -or ($bytes[1] -band 0xF0) -ne 0xF0) {
+        throw "$($mp3[0].Name) does not start with an MPEG audio frame: it is not an MP3."
+    }
+    if ($bytes.Length -lt 20000 -or $bytes.Length -gt 30000) {
+        throw "$($mp3[0].Name) has $($bytes.Length) bytes, expected 20 000 to 30 000 for one second at 192 kb/s."
+    }
     $root = (Get-Item -LiteralPath $Folder).FullName.TrimEnd('\', '/')
     if ($mp3[0].DirectoryName -ne $root) {
         throw "The installed exe wrote the MP3 in $($mp3[0].DirectoryName), not in $root: the clip went to the rescue folder."

@@ -178,6 +178,13 @@ $mutations = @(
     @($release, 'if ($viewExit -ne 0 -and "$view" -notmatch ''release not found'') {', 'if ($false) {')
     @($release, '$viewExit = $LASTEXITCODE', '$viewExit = 0')
 
+    # The clip must be a real MP3 of about one second
+    @($setup, 'if ($bytes.Length -lt 2 -or $bytes[0] -ne 0xFF -or ($bytes[1] -band 0xF0) -ne 0xF0) {', 'if ($false) {')
+    @($setup, '$bytes[0] -ne 0xFF -or ($bytes[1] -band 0xF0) -ne 0xF0', '$bytes[0] -ne 0xFF')
+    @($setup, 'if ($bytes.Length -lt 20000 -or $bytes.Length -gt 30000) {', 'if ($false) {')
+    @($setup, '$bytes.Length -lt 20000 -or ', '')
+    @($setup, ' -or $bytes.Length -gt 30000', '')
+
     # The clip must be in the folder itself, not in the rescue folder
     @($setup, 'if ($mp3[0].DirectoryName -ne $root) {', 'if ($false) {')
 )
