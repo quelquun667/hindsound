@@ -2,11 +2,20 @@
 
 A tag `vX.Y.Z` on `main` is all it takes: GitHub Actions builds the Setup and the manifest, and publishes the Release.
 
-Last checked: 2026-11-07, on Windows 11 for the scripts, by reading and with stand-ins.
+Last checked: 2026-11-07, on Windows 11 for the scripts, by reading and with stand-ins, and on GitHub for `lame.yml`.
 
-**What has never run, as of 2026-11-07: no real release has been made, and neither `release.yml` nor `lame.yml` has run on
-GitHub. The compilation of LAME and the installation test in `check-setup.ps1` have never run at all.** The first push of
-`lame.yml` to `main` runs the compilation, without publishing anything: check that run before the first tag.
+**What has run on GitHub, as of 2026-11-07: `lame.yml`, once, on the push of `c6fb54d` to `main` (run 42318035034, green):
+the download of the LAME archive and its SHA-256, the compilation, the checks of the DLL and the 6 encoding tests. What has
+never run: `release.yml`. No release has been made, and the installation test of `check-setup.ps1`, the MP3 of the installed
+exe, the upload, the download back and the publication have never run.**
+
+```powershell
+gh run list --workflow lame.yml --limit 1
+# If no run started, or to run it again on main:
+gh workflow run lame.yml --ref main
+```
+
+The first tag waits until the last run of `lame.yml` is green.
 
 ## Before the first release
 
