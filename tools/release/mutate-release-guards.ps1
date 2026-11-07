@@ -138,6 +138,17 @@ $mutations = @(
     @($build, 'elseif ((Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant() -ceq $ExpectedSha256) {', 'elseif ($true) {')
     @($build, 'if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive }', '')
     @($build, 'if (-not (Test-Path -LiteralPath $archive)) {', 'if ($false) {')
+
+    # The guards of the release workflow itself
+    @($release, "if (`$isDraft -eq 'false') {", 'if ($false) {')
+    @($release, "if (`$isDraft -eq 'true') {", 'if ($false) {')
+    @($release, '--draft --verify-tag', '--verify-tag')
+    @($release, '--draft --verify-tag', '--draft')
+    @($release, 'persist-credentials: false', 'persist-credentials: true')
+    @($release, 'permissions: {}', 'permissions: write-all')
+    @($release, 'run: dotnet test Hindsound.slnx', 'run: Write-Output Hindsound.slnx')
+    @($release, 'run: ./tools/release/test-release-scripts.ps1', 'run: Write-Output')
+    @($release, '"VERSION=$version" >> $env:GITHUB_ENV', '"VERSION=0.1.0" >> $env:GITHUB_ENV')
 )
 
 $repository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).ProviderPath
