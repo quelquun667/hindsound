@@ -220,7 +220,10 @@ for ($index = $From; $index -le $last; $index++) {
     $totalFailures += $failures.Count
     $state = if ($exit -ne 0 -and $failures.Count -gt 0) { 'caught' } else { 'MISSED' }
     if ($state -eq 'MISSED') { $missed += $index }
-    Write-Output ('{0,3} {1} {2,3} fail(s)  {3}: {4}' -f $index, $state, $failures.Count, (Split-Path -Leaf $file), $find)
+    # Several entries look for the same text: the replacement tells which variant this one is.
+    $label = if ($replace) { $replace } else { '(removed)' }
+    if ($label.Length -gt 70) { $label = $label.Substring(0, 70) + '...' }
+    Write-Output ('{0,3} {1} {2,3} fail(s)  {3}: {4}  =>  {5}' -f $index, $state, $failures.Count, (Split-Path -Leaf $file), $find, $label)
     foreach ($failure in $failures | Select-Object -First 2) {
         $short = "$failure"
         if ($short.Length -gt 110) { $short = $short.Substring(0, 110) }
