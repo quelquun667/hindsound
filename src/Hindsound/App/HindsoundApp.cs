@@ -1477,8 +1477,21 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         _updateWhy = UpdateWiring.Why(_updaterMayRun, _options, ExeFolder);
         _updates = UpdateWiring.Create(_updaterMayRun, _options, ExeFolder, this, DateTimeOffset.Now);
         _journal.Write($"updates: active {_updateWhy == UpdateWiring.Installed} ({_updateWhy})");
-        if (_updates?.AtLaunch(_options.UpdateFailed, UpdateSurface()) is not { } report)
+        LaunchReport report;
+        try
         {
+            if (_updates?.AtLaunch(_options.UpdateFailed, UpdateSurface()) is not { } launched)
+            {
+                return false;
+            }
+
+            report = launched;
+        }
+        catch (Exception ex)
+        {
+            // The capture is what the user started the app for: an updater that breaks goes, the rest starts.
+            _journal.Write("updates: the launch step failed, no updates in this run: " + ex);
+            _updates = null;
             return false;
         }
 
