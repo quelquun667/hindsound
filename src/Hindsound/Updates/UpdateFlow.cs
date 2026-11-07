@@ -82,6 +82,7 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
     private bool _clickStands;
     private int _timerGeneration;
     private volatile bool _stopPass;
+    private bool _stoppedForOff;
     private bool _leaving;
     private bool _stateKnown;
     private bool _started;
@@ -190,6 +191,9 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
                 if (_passRunning && !_passIsManual)
                 {
                     _stopPass = true;
+
+                    // Remembered rather than read from the mode at the end: the mode may be back on by then.
+                    _stoppedForOff = true;
                 }
             }
             else if (!_passRunning)
@@ -530,6 +534,7 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
 
         // Set by a switch to Off or by Quit. Left set, every later pass would stop itself.
         _stopPass = false;
+        _stoppedForOff = false;
         _problem = UpdateProblem.None;
         _runProblem = null;
         host.Changed();
@@ -698,15 +703,25 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
     // A check the user asked for is only stopped by a game, even in Off.
     private bool StoppedByOff(string what)
     {
-        if (host.Mode != UpdateMode.Off || _passIsManual)
+        if (!_stoppedForOff || _passIsManual)
         {
             return false;
         }
 
-        host.Journal($"update {what}: stopped, updates are off");
+        if (host.Mode == UpdateMode.Off)
+        {
+            host.Journal($"update {what}: stopped, updates are off");
 
-        // Off: arms nothing, and the timer armed before does nothing.
-        ArmTimer();
+            // Off: arms nothing, and the timer armed before does nothing.
+            ArmTimer();
+        }
+        else
+        {
+            // Back on before the pass ended: decide again soon, as a switch back on with no pass running does.
+            host.Journal($"update {what}: stopped by a switch to Off");
+            Arm(TimeSpan.Zero, Step);
+        }
+
         host.Changed();
         return true;
     }
