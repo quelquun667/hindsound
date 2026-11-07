@@ -87,6 +87,7 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
     private bool _started;
     private bool _updateFailedFlag;
     private UpdateVersion? _announcing;
+    private UpdateMode _announcingMode;
     private UpdatePassKind _passKind;
     private UpdateVersion? _passVersion;
     private UpdateProblem _problem;
@@ -173,6 +174,14 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
     {
         if (_started && !_leaving && _stateKnown)
         {
+            // A waiting announcement says what its mode does: "Installs when Hindsound closes" only holds in Auto. Taken
+            // back, the next step announces again in the new words, or not at all in Off.
+            if (_announcing is { } waiting && _announcingMode != host.Mode && Parse(_state.AnnouncedVersion) != waiting)
+            {
+                host.Withdraw();
+                _announcing = null;
+            }
+
             if (host.Mode == UpdateMode.Off)
             {
                 _timerGeneration++;
@@ -448,7 +457,8 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
         }
 
         _announcing = version;
-        host.Announce(version, host.Mode);
+        _announcingMode = host.Mode;
+        host.Announce(version, _announcingMode);
     }
 
     private ClickAnswer Click()

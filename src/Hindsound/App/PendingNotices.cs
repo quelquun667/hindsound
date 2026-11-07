@@ -72,13 +72,13 @@ internal sealed class PendingNotices(Action<string> journal)
         _update = content;
     }
 
-    /// <summary>The announcement no longer holds: the version was skipped.</summary>
+    /// <summary>The announcement no longer holds: the version was skipped, or the mode its words were picked for changed.</summary>
     public void WithdrawUpdate()
     {
         if (_update is { } waiting)
         {
             _update = null;
-            journal($"notification {waiting.Kind} no longer waits: the version was skipped");
+            journal($"notification {waiting.Kind} no longer waits: the version was skipped, or the mode changed");
         }
     }
 
