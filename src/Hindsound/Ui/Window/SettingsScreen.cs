@@ -305,12 +305,21 @@ internal sealed partial class SettingsScreen
         Refresh();
     }
 
+    // A click on an update notice or on "Update to X..." only brings the first-launch card back: it goes by its own buttons.
+    // Left, its steps would never come back, and the updater, which waits for them, would start at once.
+    private bool KeepsFirstRun => Section == Section.FirstRun;
+
     /// <summary>The panel's view changed: draws the section and the card again, keeping the focus.</summary>
     public void RefreshUpdates() => Refresh();
 
-    /// <summary>Shows General, scrolled to the Updates section.</summary>
+    /// <summary>Shows General, scrolled to the Updates section. Not over the first-launch card: see <see cref="KeepsFirstRun"/>.</summary>
     public void ShowUpdates()
     {
+        if (KeepsFirstRun)
+        {
+            return;
+        }
+
         ShowSection(Section.General);
         if (_updatesTop is { } top)
         {
@@ -321,7 +330,7 @@ internal sealed partial class SettingsScreen
     /// <summary>Shows the card that confirms an update. The keyboard lands on its first button.</summary>
     public void ShowUpdateCard()
     {
-        if (_updates is null || Section == Section.UpdateCard)
+        if (_updates is null || Section == Section.UpdateCard || KeepsFirstRun)
         {
             return;
         }
