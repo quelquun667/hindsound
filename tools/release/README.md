@@ -112,7 +112,15 @@ A rerun uses the commit of the tag. If the fix is in the code or in a workflow, 
 release was never published:
 
 ```powershell
-gh release delete v0.1.0 --yes    # only if a draft exists
+# Deletes the release only if it is a draft, and prints whether it was one.
+$isDraft = gh release view v0.1.0 --json isDraft --jq .isDraft
+$isDraft
+if ($isDraft -eq 'true') { gh release delete v0.1.0 --yes }
+```
+
+If this printed `false`, stop: the release is public, go to the next version. Otherwise:
+
+```powershell
 git push origin :refs/tags/v0.1.0
 git tag -d v0.1.0
 # Commit the fix on main and push it, then make the tag again as above.
