@@ -20,6 +20,7 @@ internal enum SettingsChange
     General = 64,
     Accent = 128,
     Startup = 256,
+    Updates = 512,
 }
 
 /// <summary>Whether a typed value can be kept; if not, the sentence shown next to the field.</summary>
@@ -492,6 +493,16 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
     public void SetFullscreenGames(string mode) => SetGeneral(Settings.General.FullscreenGames != mode, () => Settings.General.FullscreenGames = mode);
 
     public void SetConfirmSound(string mode) => SetGeneral(Settings.General.ConfirmSound != mode, () => Settings.General.ConfirmSound = mode);
+
+    /// <summary>"auto", "ask" or "off". The updater has to hear of it: it arms or stops its timer.</summary>
+    public void SetUpdateMode(string mode)
+    {
+        if (Settings.General.Updates.Mode != mode)
+        {
+            Settings.General.Updates.Mode = mode;
+            changed(SettingsChange.General | SettingsChange.Updates);
+        }
+    }
 
     private void SetGeneral(bool different, Action apply)
     {

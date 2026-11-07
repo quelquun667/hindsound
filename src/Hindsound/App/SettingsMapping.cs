@@ -2,6 +2,7 @@ using Hindsound.Audio;
 using Hindsound.Export;
 using Hindsound.Settings;
 using Hindsound.Ui;
+using Hindsound.Updates;
 
 namespace Hindsound.App;
 
@@ -88,6 +89,18 @@ internal static class SettingsMapping
 
     private static bool IsDefaultFolder(string folder) =>
         string.Equals(folder.Replace('/', '\\').TrimEnd('\\'), ExportSettings.DefaultFolder, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The mode the updater runs on. The settings have been normalized, so anything else is a value set in code: no network.</summary>
+    public static UpdateMode ToUpdateMode(GeneralSettings general) => general.Updates?.Mode switch
+    {
+        UpdateSettings.Auto => UpdateMode.Auto,
+        UpdateSettings.Ask => UpdateMode.Ask,
+        _ => UpdateMode.Off,
+    };
+
+    /// <summary>The version the user chose to skip, or null.</summary>
+    public static UpdateVersion? ToSkipped(GeneralSettings general) =>
+        UpdateVersion.TryParse(general.Updates?.SkippedVersion, out var version) ? version : null;
 
     private static string? DeviceId(string? stored)
     {

@@ -139,12 +139,15 @@ internal sealed class SettingsFileState
     /// <summary>The file in place is broken, and no copy of it exists yet.</summary>
     public bool BrokenOnDisk { get; private set; }
 
-    /// <summary>The unknown settings of a damaged or unreadable file: defaults, no microphone, and the startup entry as it is.</summary>
+    /// <summary>The unknown settings of a damaged or unreadable file: defaults, no microphone, no updates, and the startup entry as it is.</summary>
     /// <param name="settings">The defaults, changed in place.</param>
     /// <param name="runKeyEnabled">What the Run key says; null if it was not read (a test run with its own settings file).</param>
     public static void MakeSafe(AppSettings settings, bool? runKeyEnabled)
     {
         settings.Audio.MicDeviceId = AudioSettings.DisabledMic;
+
+        // The user may have turned updates off, and nothing says so any more: like the microphone, the doubt turns them off.
+        settings.General.Updates = new UpdateSettings { Mode = UpdateSettings.Off };
         if (runKeyEnabled is { } enabled)
         {
             settings.General.StartWithWindows = enabled;

@@ -43,6 +43,16 @@ internal static unsafe class ForegroundWindow
         && className is not ("NotifyIconOverflowWindow" or "TopLevelWindowForOverflowXamlIsland" or "TaskListThumbnailWnd")
         && !className.StartsWith("Hindsound", StringComparison.Ordinal);
 
+    /// <summary>
+    /// Whether the active window covers its screen, without reading its title. Safe from another thread: GetWindowText on a
+    /// window of this process sends a message to its loop and waits for the answer.
+    /// </summary>
+    public static bool ForegroundCovers()
+    {
+        var hwnd = Native.GetForegroundWindow();
+        return hwnd != 0 && Covers(hwnd);
+    }
+
     /// <summary>The screen under the active window.</summary>
     public static ScreenInfo ActiveScreen() =>
         ScreenOf(Native.MonitorFromWindow(Native.GetForegroundWindow(), Native.MONITOR_DEFAULTTOPRIMARY));

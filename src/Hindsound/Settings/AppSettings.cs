@@ -191,11 +191,35 @@ public sealed class GeneralSettings
     /// <summary>"whenNoOverlay", "always" or "never".</summary>
     public string ConfirmSound { get; set; } = "whenNoOverlay";
 
+    public UpdateSettings Updates { get; set; } = new();
+
     internal void Normalize()
     {
         AccentColor = AccentColors.Resolve(AccentColor);
         NotificationPosition = AppSettings.OneOf(NotificationPosition, "right", "right", "left");
         FullscreenGames = AppSettings.OneOf(FullscreenGames, "auto", "auto", "soundOnly");
         ConfirmSound = AppSettings.OneOf(ConfirmSound, "whenNoOverlay", "whenNoOverlay", "always", "never");
+        Updates ??= new();
+        Updates.Normalize();
+    }
+}
+
+/// <summary>How the app keeps itself up to date. A file without this key has never been asked: it updates by itself.</summary>
+public sealed class UpdateSettings
+{
+    public const string Auto = "auto", Ask = "ask", Off = "off";
+
+    /// <summary>"auto" (install automatically), "ask" (ask me) or "off".</summary>
+    public string Mode { get; set; } = Auto;
+
+    /// <summary>"X.Y.Z", or null.</summary>
+    public string? SkippedVersion { get; set; }
+
+    internal void Normalize()
+    {
+        // Anything unreadable means no network: a hand-written "never" must not reach GitHub. Unlike the other values of
+        // the file, which fall back to their default.
+        Mode = AppSettings.OneOf(Mode, Off, Auto, Ask, Off);
+        SkippedVersion = Hindsound.Updates.UpdateVersion.TryParse(SkippedVersion, out _) ? SkippedVersion : null;
     }
 }

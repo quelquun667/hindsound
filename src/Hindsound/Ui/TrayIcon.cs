@@ -26,6 +26,9 @@ internal enum TrayCommand : uint
     OpenFolder,
     Settings,
     Quit,
+
+    // Last, so the numbers above never move: the --offscreen tests post them.
+    UpdateNow,
 }
 
 /// <summary>One line of the tray menu. <see cref="TrayCommand.None"/> is a separator.</summary>
@@ -81,14 +84,15 @@ internal static class TrayMenu
     /// <param name="paused">The capture is paused.</param>
     /// <param name="hasLastClip">There is a clip to copy.</param>
     /// <param name="closingAfterClip">Quit was asked for and a clip is still being written: a second Quit is all that is left to do.</param>
-    public static IReadOnlyList<TrayMenuItem> Items(bool paused, bool hasLastClip, bool closingAfterClip)
+    /// <param name="updateText">The line that offers a new version, such as "Update to 0.2.0..."; null when there is none to offer.</param>
+    public static IReadOnlyList<TrayMenuItem> Items(bool paused, bool hasLastClip, bool closingAfterClip, string? updateText = null)
     {
         if (closingAfterClip)
         {
             return [new(TrayCommand.Quit, "Quit")];
         }
 
-        return
+        List<TrayMenuItem> items =
         [
             new(TrayCommand.Save30s, "Save last 30s"),
             new(TrayCommand.Save15s, "Save last 15s"),
@@ -100,8 +104,15 @@ internal static class TrayMenu
             new(TrayCommand.OpenFolder, "Open clips folder"),
             new(TrayCommand.Settings, "Settings"),
             new(TrayCommand.None),
-            new(TrayCommand.Quit, "Quit"),
         ];
+
+        if (updateText is not null)
+        {
+            items.Add(new(TrayCommand.UpdateNow, updateText));
+        }
+
+        items.Add(new(TrayCommand.Quit, "Quit"));
+        return items;
     }
 }
 

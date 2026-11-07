@@ -7,8 +7,11 @@ internal static class Program
     private const int ExitAnotherInstance = 2;
     private const int ExitFailed = 3;
 
-    /// <summary>A test run with its own settings file never reaches for the user's real instance.</summary>
-    internal static bool WakesTheFirstInstance(AppOptions options) => options.SettingsPath is null;
+    /// <summary>
+    /// A test run with its own settings file never reaches for the user's real instance. Nor does a version Setup started
+    /// again after a failed update: waking the running one would open its settings in front of whatever the user is doing.
+    /// </summary>
+    internal static bool WakesTheFirstInstance(AppOptions options) => options.SettingsPath is null && !options.UpdateFailed;
 
     [STAThread]
     private static int Main(string[] args)

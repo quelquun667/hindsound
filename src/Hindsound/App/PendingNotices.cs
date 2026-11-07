@@ -5,7 +5,7 @@ namespace Hindsound.App;
 
 /// <summary>
 /// What waits for the return to the desktop, because no window may go over a game in exclusive full screen.
-/// Three places, so nothing here grows however long the game lasts. Pure: tested without any window.
+/// Four places, so nothing here grows however long the game lasts. Pure: tested without any window.
 /// </summary>
 /// <param name="journal">Where it says what it lets go of.</param>
 internal sealed class PendingNotices(Action<string> journal)
@@ -22,15 +22,18 @@ internal sealed class PendingNotices(Action<string> journal)
     private NotificationContent? _status;
     private NotificationContent? _importantClip;
     private NotificationContent? _ordinaryClip;
+
+    // A place of its own: in the place of the status, the announcement would wipe out "Capture on", which is promised.
+    private NotificationContent? _update;
     private long _ordinaryClipSince;
     private long _lastArrival;
 
     /// <summary>Anything at all waits: without this, nothing looks at the screen.</summary>
-    public bool Any => _status is not null || _importantClip is not null || _ordinaryClip is not null;
+    public bool Any => _status is not null || _importantClip is not null || _ordinaryClip is not null || _update is not null;
 
     public bool ImportantClipWaiting => _importantClip is not null;
 
-    /// <summary>A clip waits, ordinary or important. Unlike <see cref="Any"/>, a status does not count: none is worth keeping an app that is leaving.</summary>
+    /// <summary>A clip waits, ordinary or important. Unlike <see cref="Any"/>, a status or an update does not count: none is worth keeping an app that is leaving.</summary>
     public bool ClipWaiting => _importantClip is not null || _ordinaryClip is not null;
 
     /// <summary>A status that must reach the user, whatever the notifications setting says, and even if it has to wait.</summary>
@@ -60,6 +63,23 @@ internal sealed class PendingNotices(Action<string> journal)
     {
         _lastArrival = nowMs;
         _status = content;
+    }
+
+    /// <summary>A new version to announce, once the user is back. A later one replaces it.</summary>
+    public void AddUpdate(NotificationContent content, long nowMs)
+    {
+        _lastArrival = nowMs;
+        _update = content;
+    }
+
+    /// <summary>The announcement no longer holds: the version was skipped.</summary>
+    public void WithdrawUpdate()
+    {
+        if (_update is { } waiting)
+        {
+            _update = null;
+            journal($"notification {waiting.Kind} no longer waits: the version was skipped");
+        }
     }
 
     /// <summary>The waiting status, once what it says is no longer true. It is returned, or null if nothing changed.</summary>
@@ -100,7 +120,8 @@ internal sealed class PendingNotices(Action<string> journal)
 
     /// <summary>
     /// The next one to show, now that the user is back: the status, then the important clip. The ordinary clip only if no
-    /// important clip was waiting: it would come on top of a problem and say all is well.
+    /// important clip was waiting: it would come on top of a problem and say all is well. The update last: it can wait,
+    /// what the clips say cannot.
     /// </summary>
     public NotificationContent? TakeNext(long nowMs)
     {
@@ -123,9 +144,15 @@ internal sealed class PendingNotices(Action<string> journal)
             return important;
         }
 
-        var ordinary = _ordinaryClip;
-        _ordinaryClip = null;
-        return ordinary;
+        if (_ordinaryClip is { } ordinary)
+        {
+            _ordinaryClip = null;
+            return ordinary;
+        }
+
+        var update = _update;
+        _update = null;
+        return update;
     }
 
     /// <summary>How long until the next look at the screen. A game can last for hours: the pace drops, it never stops.</summary>

@@ -60,10 +60,12 @@ internal sealed class NoticeQueue
 
     public static NoticeRank RankOf(NotificationKind kind) => kind switch
     {
+        // A failed update must be read: "Capture on", a moment later, does not wipe it out.
         NotificationKind.SettingsDamaged or NotificationKind.SettingsUnreadable or NotificationKind.SettingsHasError or NotificationKind.SettingsNotSaved
-            or NotificationKind.StartupNotChanged => NoticeRank.Lasting,
+            or NotificationKind.StartupNotChanged or NotificationKind.UpdateFailed => NoticeRank.Lasting,
+        // A version ready is news, not an answer: a clip replaces it in place.
         NotificationKind.NoDevice or NotificationKind.Paused or NotificationKind.CaptureOn or NotificationKind.DeviceChanged
-            or NotificationKind.MicLost or NotificationKind.MicBack => NoticeRank.Ordinary,
+            or NotificationKind.MicLost or NotificationKind.MicBack or NotificationKind.UpdateReady => NoticeRank.Ordinary,
         _ => NoticeRank.Answer,
     };
 

@@ -57,7 +57,26 @@ internal sealed record AppOptions(
     /// <summary><c>--selftest-slow-save seconds</c>: every clip takes that much longer to write. To check on the real exe what leaving does while a clip is being written.</summary>
     public double? SelfTestSlowSaveSeconds { get; init; }
 
+    /// <summary><c>--update-failed</c>: passed by Setup to the version it started again after failing to install a new one.</summary>
+    public bool UpdateFailed { get; init; }
+
+    /// <summary><c>--selftest-update folder</c>: with --settings, the whole updater on the files of that folder, with no network, and no Setup is ever started. Without --settings, nothing.</summary>
+    public string? SelfTestUpdateFolder { get; init; }
+
+    /// <summary><c>--selftest-update-check</c>: with --settings, one real GET of the manifest, written to the log, then leaves. Without --settings, nothing.</summary>
+    public bool SelfTestUpdateCheck { get; init; }
+
     public const string FailCard = "card", FailReload = "reload", FailRun = "run";
+
+    /// <summary>The only argument a real run may carry: Setup passes it to the version it started again.</summary>
+    public const string UpdateFailedOption = "--update-failed";
+
+    /// <summary>
+    /// Started as a user starts it: the raw command line is empty, or holds only what Setup passes. Anything else, even an
+    /// option nobody reads or a value equal to the default, means a test run, which never reaches the network nor a Setup.
+    /// The parsed options could not tell: an unknown or incomplete option is ignored, so a typing error would pass for a real run.
+    /// </summary>
+    public static bool UpdaterMayRun(IReadOnlyList<string> args) => args.All(arg => arg == UpdateFailedOption);
 
     /// <summary>A folder after an option: a value that starts with "--" is the next option, the folder was forgotten.</summary>
     private static bool IsFolder(string? value) => value is not null && !value.StartsWith("--", StringComparison.Ordinal);
@@ -155,7 +174,24 @@ internal sealed record AppOptions(
                     options = options with { ProveMp3Folder = next };
                     i++;
                     break;
+                case UpdateFailedOption:
+                    options = options with { UpdateFailed = true };
+                    break;
+                case "--selftest-update" when IsFolder(next):
+                    options = options with { SelfTestUpdateFolder = next };
+                    i++;
+                    break;
+                case "--selftest-update-check":
+                    options = options with { SelfTestUpdateCheck = true };
+                    break;
             }
+        }
+
+        // The update self-tests write the state of the updater and may reach GitHub: only a run with its own settings file,
+        // and so its own log, may ask for them. Alone, they are ignored like an unknown option.
+        if (options.SettingsPath is null)
+        {
+            options = options with { SelfTestUpdateFolder = null, SelfTestUpdateCheck = false };
         }
 
         return options;

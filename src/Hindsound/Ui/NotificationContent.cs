@@ -29,6 +29,8 @@ public enum NotificationKind
     MicLost,
     MicBack,
     ClosingAfterClip,
+    UpdateReady,
+    UpdateFailed,
 }
 
 /// <summary>What sits on the inner side of the tab, before the text.</summary>
@@ -58,6 +60,9 @@ internal sealed record NotificationContent(
 {
     /// <summary>A click opens the settings, where the problem gets solved, instead of the folder of the clips.</summary>
     public bool ClickOpensSettings { get; init; }
+
+    /// <summary>A click opens the Updates section of the settings.</summary>
+    public bool ClickShowsUpdates { get; init; }
 
     /// <summary>The capture-on row holds three keys, so they are drawn smaller.</summary>
     public bool SmallKeys => Keys.Count > 2;
@@ -146,11 +151,13 @@ internal static class NotificationStates
     /// <param name="bufferSeconds">How much is kept.</param>
     /// <param name="saveGesture">The save shortcut, such as <c>Ctrl+Shift+F10</c>.</param>
     /// <param name="saveHotkeyProblem">Said instead of the keys when pressing them would do nothing: the user finds out now, not when the moment is gone.</param>
-    public static NotificationContent CaptureOn(int bufferSeconds, string? saveGesture, string? saveHotkeyProblem = null)
+    /// <param name="updatedTo">The version an update just installed: said in the title, the rest is the usual line.</param>
+    public static NotificationContent CaptureOn(int bufferSeconds, string? saveGesture, string? saveHotkeyProblem = null, string? updatedTo = null)
     {
+        var title = updatedTo is null ? "Capture on" : $"Updated to {updatedTo}";
         if (saveHotkeyProblem is not null)
         {
-            return new NotificationContent(NotificationKind.CaptureOn, "Capture on", $"Keeping the last {FormatDuration(bufferSeconds)}. {saveHotkeyProblem}", [], NotificationPalette.Amber,
+            return new NotificationContent(NotificationKind.CaptureOn, title, $"Keeping the last {FormatDuration(bufferSeconds)}. {saveHotkeyProblem}", [], NotificationPalette.Amber,
                 NotificationVisual.Dot, NotificationPalette.Hot, NoBars)
             {
                 ClickOpensSettings = true,
@@ -159,7 +166,7 @@ internal static class NotificationStates
 
         var keys = string.IsNullOrWhiteSpace(saveGesture) ? [] : saveGesture.Split('+');
         var body = keys.Length == 0 ? $"Keeping the last {FormatDuration(bufferSeconds)}" : $"Keeping the last {FormatDuration(bufferSeconds)}. Save:";
-        return new NotificationContent(NotificationKind.CaptureOn, "Capture on", body, keys, NotificationPalette.Hot, NotificationVisual.Dot, NotificationPalette.Hot, NoBars);
+        return new NotificationContent(NotificationKind.CaptureOn, title, body, keys, NotificationPalette.Hot, NotificationVisual.Dot, NotificationPalette.Hot, NoBars);
     }
 
     public static NotificationContent DeviceChanged(string deviceName) =>
@@ -188,6 +195,24 @@ internal static class NotificationStates
 
     public static NotificationContent MicBack() =>
         Icon(NotificationKind.MicBack, "Microphone back", "Clips have your voice again", NotificationPalette.Muted, NotificationVisual.Headset, NotificationPalette.Muted);
+
+    /// <summary>A new version is downloaded, and installs by itself when the app leaves.</summary>
+    public static NotificationContent UpdateReady(string version, uint accent) =>
+        Icon(NotificationKind.UpdateReady, $"Update ready ({version})", "Installs when Hindsound closes. Click for details.", accent, NotificationVisual.Pending, accent)
+            with { ClickShowsUpdates = true };
+
+    /// <summary>A new version is known, and nothing installs until the user says so: "installs when it closes" would be false.</summary>
+    public static NotificationContent UpdateAvailable(string version, uint accent) =>
+        Icon(NotificationKind.UpdateReady, $"Update available ({version})", "Click to see what's new.", accent, NotificationVisual.Pending, accent)
+            with { ClickShowsUpdates = true };
+
+    /// <summary>Setup did not install the new version, and the app came back on the one it had.</summary>
+    /// <param name="installed">The version that runs.</param>
+    /// <param name="willRetry">Something tries again by itself; otherwise only the button can.</param>
+    public static NotificationContent UpdateFailed(string installed, bool willRetry) =>
+        Problem(NotificationKind.UpdateFailed, "Update failed",
+            willRetry ? $"Still on {installed}. It will try again later." : $"Still on {installed}. Update from Settings > General.")
+            with { ClickShowsUpdates = true };
 
     /// <summary>The start found a broken settings file.</summary>
     /// <param name="copyKept">A copy of it exists; otherwise it stayed in its place.</param>

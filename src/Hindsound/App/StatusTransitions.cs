@@ -183,12 +183,16 @@ internal static class StatusTransitions
     };
 
     /// <summary>"Capture on", with the length and the keys of now: the settings are read again while it waits for its turn.</summary>
-    public static NotificationContent CaptureOnNow(AppSettings settings, IReadOnlyList<HotkeyResult> hotkeys) =>
-        NotificationStates.CaptureOn(settings.BufferSeconds, settings.Hotkeys.SaveDefault, SaveHotkeyProblem(hotkeys));
+    /// <param name="updatedTo">The version an update just installed, said in the title; null for the usual one.</param>
+    public static NotificationContent CaptureOnNow(AppSettings settings, IReadOnlyList<HotkeyResult> hotkeys, string? updatedTo = null) =>
+        NotificationStates.CaptureOn(settings.BufferSeconds, settings.Hotkeys.SaveDefault, SaveHotkeyProblem(hotkeys), updatedTo);
 
-    /// <summary>What to show of something that waited: only "Capture on" names settings that may have changed.</summary>
-    public static NotificationContent Fresh(NotificationContent waited, AppSettings settings, IReadOnlyList<HotkeyResult> hotkeys) =>
-        waited.Kind == NotificationKind.CaptureOn ? CaptureOnNow(settings, hotkeys) : waited;
+    /// <summary>
+    /// What to show of something that waited: only "Capture on" names settings that may have changed. It is made again, so
+    /// the version of an update that waited with it is given again too.
+    /// </summary>
+    public static NotificationContent Fresh(NotificationContent waited, AppSettings settings, IReadOnlyList<HotkeyResult> hotkeys, string? updatedTo = null) =>
+        waited.Kind == NotificationKind.CaptureOn ? CaptureOnNow(settings, hotkeys, updatedTo) : waited;
 
     /// <summary>
     /// The icon and its tip, from everything that is true now, so that nothing stays out of date. The tip names the first

@@ -76,6 +76,11 @@ internal static class NotificationDump
             ("lastclip-gone", NotificationStates.LastClipGone()),
             ("miclost", NotificationStates.MicLost()),
             ("micback", NotificationStates.MicBack()),
+            ("update-ready", NotificationStates.UpdateReady("0.2.0", accent)),
+            ("update-available", NotificationStates.UpdateAvailable("0.2.0", accent)),
+            ("updated", NotificationStates.CaptureOn(300, "Ctrl+Shift+F10", updatedTo: "0.2.0")),
+            ("update-failed", NotificationStates.UpdateFailed("0.1.0", willRetry: true)),
+            ("update-failed-noretry", NotificationStates.UpdateFailed("0.1.0", willRetry: false)),
         ];
     }
 }
