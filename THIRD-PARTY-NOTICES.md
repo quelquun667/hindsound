@@ -11,6 +11,7 @@ The Windows build of Hindsound contains or ships the components below. Every fil
 | NAudio.Lame | 2.1.0 | MIT | Copyright (c) 2013-2019 Corey Murtagh | [NAudio.Lame-LICENSE.txt](licenses/NAudio.Lame-LICENSE.txt) | `LICENSE.txt` in the NuGet package |
 | System.Numerics.Tensors | 9.0.0 | MIT | Copyright (c) .NET Foundation and Contributors | [System.Numerics.Tensors-LICENSE.txt](licenses/System.Numerics.Tensors-LICENSE.txt), [System.Numerics.Tensors-THIRD-PARTY-NOTICES.txt](licenses/System.Numerics.Tensors-THIRD-PARTY-NOTICES.txt) | `LICENSE.TXT` and `THIRD-PARTY-NOTICES.TXT` in the NuGet package |
 | .NET runtime | 10 (texts from 10.0.14) | MIT, with the third-party notices listed in its own file | Copyright (c) .NET Foundation and Contributors | [dotnet-runtime-LICENSE.txt](licenses/dotnet-runtime-LICENSE.txt), [dotnet-runtime-THIRD-PARTY-NOTICES.txt](licenses/dotnet-runtime-THIRD-PARTY-NOTICES.txt) | `LICENSE.TXT` and `THIRD-PARTY-NOTICES.TXT` in the `Microsoft.NETCore.App.Runtime.win-x64` 10.0.14 package |
+| Inno Setup (the Setup program, and the `unins000.exe` it installs) | 7.1.0 | Inno Setup License | Copyright (C) 1997-2025 Jordan Russell, portions Copyright (C) 2000-2025 Martijn Laan | [InnoSetup-license.txt](licenses/InnoSetup-license.txt) | `tools/license.txt` in the NuGet package Tools.InnoSetup 7.1.0, the one [get-iscc.ps1](tools/release/get-iscc.ps1) pins. The licence asks to keep its notices in the binaries, which the Setup does, and calls a mention appreciated, not required |
 
 ## LAME
 
