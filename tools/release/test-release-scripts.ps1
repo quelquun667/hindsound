@@ -373,6 +373,15 @@ try {
 
     $withCrt = New-PatchedDll 'crt.dll' 'KERNEL32.dll' 'MSVCP140.dll'
     Assert-Refused 'a DLL that needs a redistributable refused' { & $checkDll -DllPath $withCrt } 'MSVCP140.dll'
+
+    # Entry 13 of the data directories, 8 bytes each from offset 112 of the optional header: the delay-loaded imports.
+    $delayBytes = [IO.File]::ReadAllBytes($packageDll)
+    $delayEntry = [BitConverter]::ToInt32($delayBytes, 0x3C) + 24 + 112 + 8 * 13
+    Assert-Equal 'the package DLL has no delay-loaded imports' 0 ([BitConverter]::ToInt32($delayBytes, $delayEntry))
+    [BitConverter]::GetBytes([int]0x1000).CopyTo($delayBytes, $delayEntry)
+    $withDelay = Join-Path $dlls 'delay.dll'
+    [IO.File]::WriteAllBytes($withDelay, $delayBytes)
+    Assert-Refused 'a DLL with delay-loaded imports refused' { & $checkDll -DllPath $withDelay } 'delay-loaded'
     $withoutClose = New-PatchedDll 'noclose.dll' "lame_close`0" "lame_clxse`0"
     Assert-Refused 'a missing export that NAudio.Lame calls refused' { & $checkDll -DllPath $withoutClose } 'lame_close'
     $withoutOther = New-PatchedDll 'noother.dll' "id3tag_set_textinfo_utf16`0" "id3tag_set_textinfo_utfxx`0"

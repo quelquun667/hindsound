@@ -57,6 +57,7 @@ function Read-PeSummary([string]$Path) {
         IsDll   = (($characteristics -band 0x2000) -ne 0)
         Imports = @()
         Exports = @()
+        DelayImports = $false
     }
     # A 32-bit file has its directories elsewhere: stop here, the caller refuses it from these fields.
     if ($magic -ne 0x20B) { return $summary }
@@ -109,6 +110,8 @@ function Read-PeSummary([string]$Path) {
         }
     }
     $summary.Imports = $imports
+    # Entry 13: the imports loaded on first call (/DELAYLOAD). The makefile sets none, and the check of the imports does not read them.
+    $summary.DelayImports = (Get-DirectoryRva 13) -ne 0
     $summary
 }
 
@@ -165,6 +168,9 @@ Write-Output "Imports: $($summary.Imports -join ', ')"
 $badImports = @($summary.Imports | Where-Object { $allowedImports -notcontains $_ })
 if ($badImports.Count -gt 0) {
     throw "$DllPath needs a DLL that a player's PC may lack: $($badImports -join ', '). Allowed: $($allowedImports -join ', ')."
+}
+if ($summary.DelayImports) {
+    throw "$DllPath has delay-loaded imports, which this check does not read: a DLL they need could be missing on a player's PC."
 }
 
 $required = @(Get-Content -LiteralPath (Join-Path $PSScriptRoot 'lame-exports.txt') | Where-Object { $_ -and $_ -notmatch '^\s*#' })

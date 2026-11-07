@@ -163,6 +163,9 @@ $mutations = @(
 
     # The version read as text in the changelog
     @('tools/release/extract-changelog.ps1', '[regex]::Escape($Version)', '$Version')
+
+    # The delay-loaded imports
+    @($dll, 'if ($summary.DelayImports) {', 'if ($false) {')
 )
 
 $repository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).ProviderPath
