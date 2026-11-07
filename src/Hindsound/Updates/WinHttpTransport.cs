@@ -45,6 +45,7 @@ internal sealed partial class WinHttpTransport : IUpdateTransport
         Func<string, Func<Uri, HopOutcome>, Func<bool>, TransportResult> follow)
     {
         var watch = Stopwatch.StartNew();
+        KeepWinHttpSetUp();
         var session = WinHttpOpen(UserAgent, AccessTypeAutomaticProxy, null, null, 0);
         if (session == 0)
         {
@@ -58,6 +59,24 @@ internal sealed partial class WinHttpTransport : IUpdateTransport
         finally
         {
             WinHttpCloseHandle(session);
+        }
+    }
+
+    // Each time a session opens after the last one was closed, WinHTTP sets itself up again and keeps one handle more for good:
+    // 100 GETs, 100 handles more (07/11/2026), and a check a day for weeks would add up. One idle session, opened once and never
+    // closed, keeps it set up. It is never used: each GET still has its own session, its own proxy answer and its own
+    // connections, all closed when it ends. Failing to open it costs nothing but those handles.
+    private static readonly Lock KeepLock = new();
+    private static nint _kept;
+
+    private static void KeepWinHttpSetUp()
+    {
+        lock (KeepLock)
+        {
+            if (_kept == 0)
+            {
+                _kept = WinHttpOpen(UserAgent, AccessTypeAutomaticProxy, null, null, 0);
+            }
         }
     }
 
