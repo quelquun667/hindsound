@@ -90,8 +90,6 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     private readonly SaveThenUpdate _saveThenUpdate = new();
     private bool _firstRunCardFailed;
 
-    // Read by the update pass on its own thread.
-    private volatile bool _sessionEnding;
 
     /// <param name="updaterMayRun">The raw command line was empty, or held only what Setup passes: see <see cref="AppOptions.UpdaterMayRun"/>.</param>
     public HindsoundApp(AppOptions options, Journal journal, bool updaterMayRun = false)
@@ -198,11 +196,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
             OpenFirstRunCard();
         }
 
-        // The first launch promises to tell about the check before it happens: a card that could not open told nothing.
-        if (!_firstRunCardFailed)
-        {
-            _updates?.Start();
-        }
+        UpdateWiring.StartAfterLaunch(_updates, _firstRunCardFailed);
 
         if (_options.SelfTestUpdateCheck && _options.SettingsPath is not null)
         {
@@ -1521,7 +1515,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
             UpdateDecider.IsFullScreen(state, covers),
             UpdateDecider.IsPresentation(state),
             _pipeline is { } pipeline && (pipeline.Busy || Volatile.Read(ref _copying) > 0),
-            _sessionEnding);
+            _sessionEndBlock.Ending);
     }
 
     /// <summary>After each clip: "Save it, then update" goes on once every clip has a result, and only if all were saved.</summary>
@@ -1831,8 +1825,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     // The answer is yes whatever happens: the reason only tells the user what Windows is waiting for.
     private void OnSessionEndAsked()
     {
-        // First, and it cannot throw: no Setup at the end of a session, and a running download stops.
-        _sessionEnding = true;
+        // First, and it cannot throw: from here no Setup at the end of a session, and a running download stops.
         if (_sessionEndBlock.Asked(ClipsInProgress))
         {
             var given = Native.ShutdownBlockReasonCreate(_loop.Hwnd, SessionEndBlock.Reason) != 0;
@@ -1842,7 +1835,6 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
     private void TakeBackSessionEndReason()
     {
-        _sessionEnding = false;
         if (_sessionEndBlock.Over())
         {
             var taken = Native.ShutdownBlockReasonDestroy(_loop.Hwnd) != 0;

@@ -68,6 +68,18 @@ internal static class UpdateWiring
         return version is null ? new UpdateVersion(0, 0, 0) : new UpdateVersion(version.Major, version.Minor, Math.Max(0, version.Build));
     }
 
+    /// <summary>
+    /// Arms the first timer, once the first-launch card is open. The first launch promises to tell about the check before it
+    /// happens: a card that could not open told nothing, so nothing checks on its own in this run. Check now still can.
+    /// </summary>
+    public static void StartAfterLaunch(UpdateFlow? flow, bool firstRunCardFailed)
+    {
+        if (!firstRunCardFailed)
+        {
+            flow?.Start();
+        }
+    }
+
     /// <summary>--selftest-update-check: one real GET, off the loop. The only other place that makes a WinHttpTransport.</summary>
     public static CheckResult SelfTestCheck() => UpdateDownloader.Check(new WinHttpTransport(), () => false);
 

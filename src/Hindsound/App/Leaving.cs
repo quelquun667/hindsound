@@ -94,10 +94,19 @@ internal sealed class SessionEndBlock
     public static readonly TimeSpan ClipsLimit = TimeSpan.FromSeconds(15);
 
     private bool _held;
+    private volatile bool _ending;
+
+    /// <summary>
+    /// From the question of Windows until the session goes on: no Setup at the end of a session, and a running download
+    /// stops. Read on the update thread too.
+    /// </summary>
+    public bool Ending => _ending;
 
     /// <summary>Windows asks if the session may end. True when the reason has to be given now.</summary>
     public bool Asked(bool clipsBusy)
     {
+        // First, whatever the clips: the answer is yes in any case.
+        _ending = true;
         if (!clipsBusy || _held)
         {
             return false;
@@ -110,6 +119,7 @@ internal sealed class SessionEndBlock
     /// <summary>The clips have had their time, or the session goes on after all. True when the reason has to be taken back.</summary>
     public bool Over()
     {
+        _ending = false;
         var held = _held;
         _held = false;
         return held;
