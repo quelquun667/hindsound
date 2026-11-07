@@ -25,12 +25,13 @@ internal static class Mp3Proof
     internal static string RescueFolderFor(string fullFolder) => Path.Combine(fullFolder, "rescued");
 
     /// <param name="openMp3">For the tests of the fallback. Default: LAME, as for a real clip.</param>
+    /// <param name="baseDirectory">For the tests of a relative folder: where it starts. Default: the current directory.</param>
     /// <param name="exportFolder">For the tests of the rescue: the folder that the clip is told to go to, when it is not the folder given.</param>
-    internal static int Write(string folder, Journal journal, Func<string, int, int, IAudioFileWriter>? openMp3, string? exportFolder = null)
+    internal static int Write(string folder, Journal journal, Func<string, int, int, IAudioFileWriter>? openMp3, string? exportFolder = null, string? baseDirectory = null)
     {
         try
         {
-            var fullFolder = Path.GetFullPath(folder);
+            var fullFolder = Path.GetFullPath(folder, baseDirectory ?? Environment.CurrentDirectory);
 
             // The rescue folder inside it: a folder that cannot be written fails here, and nothing reaches %LocalAppData%.
             var saver = new ClipSaver(RescueFolderFor(fullFolder), openMp3: openMp3);

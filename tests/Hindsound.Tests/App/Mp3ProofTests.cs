@@ -29,6 +29,18 @@ public class Mp3ProofTests
     }
 
     [Fact]
+    public void A_relative_folder_starts_at_the_current_directory()
+    {
+        using var temp = new TempFolder();
+
+        var code = Mp3Proof.Write(Path.Combine("rel", "a", "b"), new Journal(temp.Combine("proof.log")), openMp3: null, baseDirectory: temp.Path);
+
+        Assert.Equal(0, code);
+        var clip = Assert.Single(Directory.GetFiles(temp.Path, "*.mp3", SearchOption.AllDirectories));
+        Assert.Equal(temp.Combine("rel", "a", "b"), Path.GetDirectoryName(clip));
+    }
+
+    [Fact]
     public void A_clip_that_falls_back_to_wav_fails_the_proof()
     {
         using var temp = new TempFolder();
