@@ -632,7 +632,12 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
                 if (_clickStands)
                 {
                     _clickStands = false;
-                    ApplyStandingClick();
+
+                    // The pass took the timer away: without a new one, nothing would check again until a restart.
+                    if (!ApplyStandingClick())
+                    {
+                        ArmTimer();
+                    }
                 }
                 else
                 {
@@ -668,13 +673,16 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
         host.Changed();
     }
 
-    // Decided again, not applied as clicked: a game or a clip may have come during the download.
-    private void ApplyStandingClick()
+    // Decided again, not applied as clicked: a game or a clip may have come during the download. True when Setup started.
+    private bool ApplyStandingClick()
     {
-        if (Click().Kind == ClickKind.Applied)
+        if (Click().Kind != ClickKind.Applied)
         {
-            host.LeaveForSetup();
+            return false;
         }
+
+        host.LeaveForSetup();
+        return true;
     }
 
     private void DropClick(UpdateCardNote note)
