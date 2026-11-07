@@ -31,7 +31,8 @@ internal static unsafe partial class Native
     public const uint MF_STRING = 0, MF_GRAYED = 1, MF_SEPARATOR = 0x800, TPM_RETURNCMD = 0x0100, TPM_RIGHTBUTTON = 0x0002,
         TPM_NONOTIFY = 0x0080;
 
-    public const int ANTIALIASED_QUALITY = 4, BK_TRANSPARENT = 1, FIXED_PITCH_MODERN = 0x31;
+    public const int ANTIALIASED_QUALITY = 4, CLEARTYPE_QUALITY = 5, BK_TRANSPARENT = 1, FIXED_PITCH_MODERN = 0x31;
+    public const uint GR_GDIOBJECTS = 0, GR_USEROBJECTS = 1;
 
     public const uint CF_HDROP = 15, GMEM_MOVEABLE = 0x0002;
     public const uint SND_ASYNC = 0x0001, SND_NODEFAULT = 0x0002, SND_MEMORY = 0x0004;
@@ -207,6 +208,7 @@ internal static unsafe partial class Native
     [LibraryImport(U, StringMarshalling = StringMarshalling.Utf16)] public static partial nint FindWindowW(string cls, string? title);
     [LibraryImport(U)] public static partial uint GetWindowThreadProcessId(nint hwnd, uint* processId);
     [LibraryImport(U)] public static partial int AllowSetForegroundWindow(uint processId);
+    [LibraryImport(U)] public static partial uint GetGuiResources(nint process, uint flags);
 
     [LibraryImport("shcore.dll")] public static partial int GetDpiForMonitor(nint monitor, int type, uint* x, uint* y);
 

@@ -9,18 +9,19 @@ internal static class Theme
         Text = AccentColors.LightOnAccent, Muted = 0xAAB1BE, Amber = 0xFFB547, Hot = 0xFF6A5C, Faded = 0x6B7382;
 }
 
+/// <summary>The four fonts of the interface, drawn by DirectWrite (see <see cref="FontFaces"/>), by GDI if it cannot start.</summary>
 internal enum Face
 {
-    /// <summary>Headings: Bahnschrift SemiCondensed, the same as the notification.</summary>
+    /// <summary>Headings: Bahnschrift, weight 600, SemiCondensed, the same as the notification.</summary>
     Title,
 
-    /// <summary>Running text: Segoe UI.</summary>
+    /// <summary>Running text: Segoe UI 400.</summary>
     Body,
 
-    /// <summary>Buttons and the side bar: Segoe UI Semibold.</summary>
+    /// <summary>Buttons and the side bar: Segoe UI 600.</summary>
     Medium,
 
-    /// <summary>Keys, durations and sizes: Cascadia Mono.</summary>
+    /// <summary>Keys, durations and sizes: Cascadia Mono 400, or Consolas where it is not installed.</summary>
     Mono,
 }
 

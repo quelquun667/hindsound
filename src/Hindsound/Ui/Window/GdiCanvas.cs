@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 
 namespace Hindsound.Ui.Window;
 
@@ -15,6 +15,12 @@ internal sealed unsafe class GdiCanvas : ICanvas, IDisposable
     private (uint Accent, bool Mirrored) _notificationKey;
 
     public GdiCanvas(int width, int height, double scale)
+        : this(width, height, scale, TextEngine.Shared)
+    {
+    }
+
+    /// <param name="engine">The text engine; null draws the text with GDI.</param>
+    internal GdiCanvas(int width, int height, double scale, TextEngine? engine)
     {
         Width = width;
         Height = height;
@@ -38,7 +44,8 @@ internal sealed unsafe class GdiCanvas : ICanvas, IDisposable
 
         _oldBitmap = Native.SelectObject(_dc, _dib);
         _pixels = new Pixels((uint*)bits, width, height);
-        _text = new TextPainter(_dc, _pixels);
+        // ClearType: the window is opaque, as the page of the mockup (v1.png) that Chrome draws with ClearType.
+        _text = new TextPainter(_dc, _pixels, engine, clearType: true);
     }
 
     public int Width { get; }
@@ -118,13 +125,10 @@ internal sealed unsafe class GdiCanvas : ICanvas, IDisposable
         NativeMemory.Free(mask);
     }
 
-    private FontSpec Font(Face face, float size) => face switch
-    {
-        Face.Title => new FontSpec("Bahnschrift SemiBold SemiConden", size * _s, false),
-        Face.Medium => new FontSpec("Segoe UI Semibold", size * _s, false),
-        Face.Mono => new FontSpec("Cascadia Mono", size * _s, true),
-        _ => new FontSpec("Segoe UI", size * _s, false),
-    };
+    private FontSpec Font(Face face, float size) => new(face, size * _s);
+
+    /// <summary>True when the text is drawn by DirectWrite, false when GDI took over.</summary>
+    internal bool UsesDirectWrite => _text.UsesDirectWrite;
 
     public void Text(string text, Face face, float size, float x, float top, uint rgb) =>
         _text.Text(Font(face, size), text, x * _s, (top + _originY) * _s, rgb);
