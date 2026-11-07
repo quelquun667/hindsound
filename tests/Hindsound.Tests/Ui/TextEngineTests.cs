@@ -176,6 +176,69 @@ public unsafe class TextEngineTests
         }
     }
 
+    // White on black: an edge pixel whose three channels part by more than 40 is a ClearType fringe; grey moves them together.
+    private static int Fringes(uint* bits, int count)
+    {
+        var fringes = 0;
+        for (var i = 0; i < count; i++)
+        {
+            var p = bits[i];
+            int r = (int)((p >> 16) & 0xFF), g = (int)((p >> 8) & 0xFF), b = (int)(p & 0xFF);
+            fringes += Math.Max(r, Math.Max(g, b)) - Math.Min(r, Math.Min(g, b)) > 40 ? 1 : 0;
+        }
+
+        return fringes;
+    }
+
+    // White text on an opaque black bitmap, through a painter of the shared engine: the number of ClearType fringes.
+    private static int FringesOfPainter(bool clearType)
+    {
+        Native.BITMAPINFOHEADER info = default;
+        info.Size = (uint)sizeof(Native.BITMAPINFOHEADER);
+        info.Width = 240;
+        info.Height = -40;
+        info.Planes = 1;
+        info.BitCount = 32;
+        var dc = Native.CreateCompatibleDC(0);
+        void* bits;
+        var dib = Native.CreateDIBSection(dc, &info, 0, &bits, 0, 0);
+        var old = Native.SelectObject(dc, dib);
+        try
+        {
+            new Span<uint>(bits, 240 * 40).Fill(0xFF000000);
+            using (var painter = new TextPainter(dc, new Pixels((uint*)bits, 240, 40), TextEngine.Shared, clearType, opaque: true))
+            {
+                Assert.True(painter.UsesDirectWrite);
+                painter.Text(new FontSpec(Face.Body, 20), "Clip length 5:00", 6, 6, 0xFFFFFF);
+            }
+
+            return Fringes((uint*)bits, 240 * 40);
+        }
+        finally
+        {
+            Native.SelectObject(dc, old);
+            Native.DeleteObject(dib);
+            Native.DeleteDC(dc);
+        }
+    }
+
+    // The window keeps the ClearType chosen from v1.png: coloured fringes on the edges of its letters. The same opaque bitmap
+    // asked in grey has none, so a wrong index of SetTextAntialiasMode (which leaves Direct2D on its default) is seen too.
+    [Fact]
+    public void The_window_draws_its_letters_in_ClearType_and_grey_when_asked()
+    {
+        var clearType = FringesOfPainter(clearType: true);
+        Assert.True(clearType > 20, $"{clearType} fringes in ClearType");
+        Assert.Equal(0, FringesOfPainter(clearType: false));
+
+        using var canvas = new GdiCanvas(240, 40, 1);
+        Assert.True(canvas.UsesDirectWrite);
+        canvas.FillRect(new Box(0, 0, 240, 40), 0x000000);
+        canvas.Text("Clip length 5:00", Face.Body, 20, 6, 6, 0xFFFFFF);
+        var window = Fringes(canvas.Bits, 240 * 40);
+        Assert.True(window > 20, $"{window} fringes in the window");
+    }
+
     [Fact]
     public void Measures_grow_with_the_text_and_keep_their_fraction()
     {

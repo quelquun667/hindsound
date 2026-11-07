@@ -184,16 +184,18 @@ internal sealed unsafe partial class TextEngine : IDisposable
     }
 
     /// <summary>A Direct2D target for a 32-bit DIB selected in a memory DC, and the brush the text is painted with.</summary>
-    /// <param name="clearType">ClearType for an opaque bitmap (the window); grey with a premultiplied alpha otherwise (the notification).</param>
-    public bool CreateTarget(bool clearType, out nint target, out nint brush)
+    /// <param name="opaque">An opaque bitmap (the window); a premultiplied alpha otherwise (the notification).</param>
+    /// <param name="clearType">ClearType, on an opaque bitmap only: it needs to know what is below each letter. Grey otherwise.</param>
+    public bool CreateTarget(bool opaque, bool clearType, out nint target, out nint brush)
     {
         target = 0;
         brush = 0;
+        clearType &= opaque;
         RenderTargetProperties properties = new()
         {
             Type = TargetSoftware,
             Format = FormatB8G8R8A8,
-            AlphaMode = clearType ? AlphaIgnore : AlphaPremultiplied,
+            AlphaMode = opaque ? AlphaIgnore : AlphaPremultiplied,
             DpiX = 96,
             DpiY = 96,
         };
@@ -592,11 +594,12 @@ internal sealed unsafe class TextPainter : IDisposable
 
     /// <param name="engine">Null draws with GDI.</param>
     /// <param name="clearType">For an opaque bitmap only: ClearType needs to know what is below each letter.</param>
-    public TextPainter(nint dc, Pixels pixels, TextEngine? engine, bool clearType)
+    /// <param name="opaque">Whether the bitmap is opaque; by default, as ClearType is asked or not.</param>
+    public TextPainter(nint dc, Pixels pixels, TextEngine? engine, bool clearType, bool? opaque = null)
     {
         _dc = dc;
         _pixels = pixels;
-        if (engine is not null && engine.CreateTarget(clearType, out _target, out _brush))
+        if (engine is not null && engine.CreateTarget(opaque ?? clearType, clearType, out _target, out _brush))
         {
             _engine = engine;
         }
