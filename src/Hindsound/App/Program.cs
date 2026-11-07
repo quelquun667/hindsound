@@ -30,6 +30,11 @@ internal static class Program
             return NotificationDump.Write(options.DumpNotificationsFolder, journal);
         }
 
+        if (options.ProveMp3Folder is not null)
+        {
+            return Mp3Proof.Write(options.ProveMp3Folder, journal);
+        }
+
         if (options.DumpSettingsFolder is not null)
         {
             try

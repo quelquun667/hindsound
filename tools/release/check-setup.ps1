@@ -1,6 +1,7 @@
 <#
 .SYNOPSIS
-    Installs a Setup in a temporary folder of a GitHub runner, checks what it put there, starts the exe, and uninstalls.
+    Installs a Setup in a temporary folder of a GitHub runner, checks what it put there, has the installed exe draw its
+    notifications and write an MP3, and uninstalls.
 .DESCRIPTION
     A Setup touches the Run key, the Uninstall key and the log of the machine that runs it: this refuses to run anywhere but
     on a GitHub-hosted runner. With -CheckFolder, it only verifies a folder, and installs nothing. That part runs anywhere.
@@ -16,16 +17,19 @@
     The repository, for LICENSE, THIRD-PARTY-NOTICES.md and licenses\*.txt.
 .PARAMETER CheckFolder
     An installed folder to verify. Nothing is installed.
+.PARAMETER CheckMp3Folder
+    A folder written by --prove-mp3 to verify: one MP3 and nothing else. Nothing is installed.
 .EXAMPLE
     ./tools/release/check-setup.ps1 -SetupPath out/Hindsound-0.1.0-Setup.exe -Version 0.1.0 -DllPath lame/libmp3lame.64.dll -WorkDir check
 #>
 param(
-    [Parameter(Mandatory = $true)][string]$Version,
-    [Parameter(Mandatory = $true)][string]$DllPath,
+    [string]$Version,
+    [string]$DllPath,
     [string]$SetupPath,
     [string]$WorkDir,
     [string]$RepoRoot,
-    [string]$CheckFolder
+    [string]$CheckFolder,
+    [string]$CheckMp3Folder
 )
 
 $ErrorActionPreference = 'Stop'
@@ -76,6 +80,28 @@ function Assert-InstalledFolder([string]$Folder) {
         Assert-SameFile (Join-Path $Folder "licenses\$($licence.Name)") $licence.FullName
     }
     Write-Output "Licences: LICENSE, THIRD-PARTY-NOTICES.md and $($expectedLicences.Count) in licenses, as in the repository."
+}
+
+# What --prove-mp3 leaves: a WAV means that the encoder failed and the clip fell back, as every clip of the players would.
+function Assert-Mp3Folder([string]$Folder) {
+    $files = @(Get-ChildItem -LiteralPath $Folder -Recurse -File -ErrorAction SilentlyContinue)
+    $wav = @($files | Where-Object { $_.Extension -eq '.wav' })
+    if ($wav.Count -gt 0) {
+        throw "The installed exe wrote WAV in place of MP3: $(($wav | ForEach-Object Name) -join ', '). NAudio.Lame or LAME did not load."
+    }
+    $mp3 = @($files | Where-Object { $_.Extension -eq '.mp3' -and $_.Length -gt 0 })
+    if ($mp3.Count -ne 1 -or $files.Count -ne 1) {
+        throw "The installed exe wrote $($files.Count) file(s) in $Folder, expected one MP3 that is not empty: $(($files | ForEach-Object Name) -join ', ')."
+    }
+    Write-Output "The installed exe wrote an MP3: $($mp3[0].Name), $($mp3[0].Length) bytes."
+}
+
+if ($CheckMp3Folder) {
+    Assert-Mp3Folder $CheckMp3Folder
+    return
+}
+if (-not $Version -or -not $DllPath) {
+    throw 'Give -Version and -DllPath.'
 }
 
 if ($CheckFolder) {
@@ -153,6 +179,12 @@ try {
     }
     Write-Output "The installed exe drew $($drawn.Count) BMP files."
 
+    # The real path of a clip, with the compiled DLL, in the trimmed exe: there, NAudio.Lame once failed to load, and every clip
+    # came out as WAV without a word (Hindsound.csproj). The exe leaves with a code other than 0 if it fell back.
+    $mp3 = Join-Path $WorkDir 'mp3'
+    Invoke-Program 'The installed exe, MP3' (Join-Path $install 'Hindsound.exe') "--no-mic --no-clipboard --no-hotkeys --offscreen --settings `"$settings`" --prove-mp3 `"$mp3`"" 120
+    Assert-Mp3Folder $mp3
+
     $uninstaller = Join-Path $install 'unins000.exe'
     if (-not (Test-Path -LiteralPath $uninstaller -PathType Leaf)) {
         throw "The installed folder has no $uninstaller."
@@ -168,7 +200,7 @@ try {
     if (Test-Path -LiteralPath $exe) {
         throw "The uninstaller left $exe."
     }
-    Write-Output 'The Setup passed: installed, checked, started and uninstalled.'
+    Write-Output 'The Setup passed: installed, checked, started twice and uninstalled.'
 }
 catch {
     Show-File $setupLog

@@ -45,6 +45,9 @@ internal sealed record AppOptions(
     /// <summary><c>--no-hotkeys</c>: no global shortcut is registered in this run, whatever the settings file says, so a press never reaches it and it holds no combination. The app sees shortcuts that work. The file keeps its own value.</summary>
     public bool NoHotkeys { get; init; }
 
+    /// <summary><c>--prove-mp3 folder</c>: writes one second of a sine into the folder as an MP3, through the path of a real clip, and leaves: 0, or another code if the clip came out as WAV. No capture, no microphone, no clipboard, no sound. See <see cref="Mp3Proof"/>.</summary>
+    public string? ProveMp3Folder { get; init; }
+
     /// <summary>The Windows startup entry, for a run that may touch it. A test run with its own settings file never does, for reading either.</summary>
     public Settings.IRunKey? RunKey() => SettingsPath is null ? new Settings.RegistryRunKey() : null;
 
@@ -143,6 +146,10 @@ internal sealed record AppOptions(
                     break;
                 case "--dump-notifications" when next is not null:
                     options = options with { DumpNotificationsFolder = next };
+                    i++;
+                    break;
+                case "--prove-mp3" when next is not null:
+                    options = options with { ProveMp3Folder = next };
                     i++;
                     break;
             }

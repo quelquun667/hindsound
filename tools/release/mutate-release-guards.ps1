@@ -103,6 +103,13 @@ $mutations = @(
     @($lame, 'contents: read', 'contents: write')
     @($lame, './tools/release/build-lame.ps1', 'Write-Output')
     @($lame, './tools/release/prove-encoding.ps1', 'Write-Output')
+
+    # The MP3 of the installed exe
+    @($setup, 'if ($wav.Count -gt 0) {', 'if ($false) {')
+    @($setup, 'if ($mp3.Count -ne 1 -or $files.Count -ne 1) {', 'if ($false) {')
+    @($setup, '$_.Extension -eq ''.mp3'' -and $_.Length -gt 0', '$_.Extension -eq ''.mp3''')
+    @($setup, '--prove-mp3 `"$mp3`"', '--dump-notifications `"$mp3`"')
+    @($setup, "`n    Assert-Mp3Folder `$mp3", '')
 )
 
 $repository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).ProviderPath

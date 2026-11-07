@@ -51,7 +51,7 @@ Never `git push --all` or `--mirror`: the `worktree-*` branches were not scanned
 | Replace the DLL in the published folder | The compiled DLL takes the place of the package's. |
 | Prove the encoding | `prove-encoding.ps1`: the compiled DLL in the tests' output folder, then 6 test cases with `--no-build` that write a real MP3 through NAudio.Lame and read it back. One decodes the whole file and compares its level with the sine that went in. |
 | Build the Setup | `get-iscc.ps1`, then ISCC on `installer/Hindsound.iss`. |
-| Check the Setup | `check-setup.ps1`: silent installation in a temporary folder of the runner; exe at the file version of the tag, DLL with the hash of the compiled one, `LICENSE`, `THIRD-PARTY-NOTICES.md` and `licenses\*.txt` identical to the repo; the installed exe draws its notifications (`--dump-notifications`), exit code 0 and BMP files; silent uninstallation. |
+| Check the Setup | `check-setup.ps1`: silent installation in a temporary folder of the runner; exe at the file version of the tag, DLL with the hash of the compiled one, `LICENSE`, `THIRD-PARTY-NOTICES.md` and `licenses\*.txt` identical to the repo; the installed exe draws its notifications (`--dump-notifications`), exit code 0 and BMP files; the installed exe writes one second of sine as an MP3 through the path of a clip (`--prove-mp3`), exit code 0, one MP3 and no WAV; silent uninstallation. |
 | Write the update manifest | `write-manifest.ps1`: `hindsound-update-win-x64.json`. |
 | Create the draft release | A draft, with the notes. |
 | Attach the files | The Setup, the manifest, `lame-3.100.tar.gz`. |

@@ -445,6 +445,32 @@ try {
     Assert-FolderRefused 'a licence file missing refused' { Remove-Item -LiteralPath (Join-Path $args[0] 'licenses\b.txt') } 'has no*b.txt'
     Assert-FolderRefused 'another licence file refused' { [IO.File]::WriteAllText((Join-Path $args[0] 'licenses\a.txt'), 'other') } 'differs'
 
+    # What --prove-mp3 of the installed exe leaves, on fake files.
+    $mp3Number = 0
+    function Test-Mp3Folder([string]$Name, [hashtable]$Sizes, [string]$Reason) {
+        $script:mp3Number++
+        $folder = Join-Path $temp "mp3-$($script:mp3Number)"
+        New-Item -ItemType Directory -Path $folder | Out-Null
+        foreach ($file in $Sizes.Keys) {
+            [IO.File]::WriteAllBytes((Join-Path $folder $file), [byte[]](@(1) * $Sizes[$file]))
+        }
+        if ($Reason) {
+            Assert-Refused $Name { & $checkSetup -CheckMp3Folder $folder } $Reason
+        }
+        else {
+            Assert-Accepted $Name { & $checkSetup -CheckMp3Folder $folder }
+        }
+    }
+    Test-Mp3Folder 'one MP3 from the installed exe passes' @{ 'clip.mp3' = 100 } ''
+    Test-Mp3Folder 'a WAV in place of the MP3 refused' @{ 'clip.wav' = 100 } 'WAV in place of MP3'
+    Test-Mp3Folder 'a WAV beside the MP3 refused' @{ 'clip.mp3' = 100; 'clip.wav' = 100 } 'WAV in place of MP3'
+    Test-Mp3Folder 'an empty MP3 refused' @{ 'clip.mp3' = 0 } 'expected one MP3'
+    Test-Mp3Folder 'two MP3 refused' @{ 'a.mp3' = 100; 'b.mp3' = 100 } 'expected one MP3'
+    Test-Mp3Folder 'an empty MP3 folder refused' @{} 'expected one MP3'
+    Assert-Refused 'no MP3 folder refused' { & $checkSetup -CheckMp3Folder (Join-Path $temp 'no-mp3') } 'expected one MP3'
+    $setupText = [IO.File]::ReadAllText($checkSetup)
+    Report 'check-setup has the installed exe write an MP3, then checks it' ($setupText.Contains('--prove-mp3 `"$mp3`"" 120') -and $setupText.Contains("`n    Assert-Mp3Folder `$mp3"))
+
     # A text file: if the guard were gone, Windows could not start it. Never a real Setup here.
     $notSetup = Join-Path $temp 'not-a-setup.exe'
     [IO.File]::WriteAllText($notSetup, 'not a program')
