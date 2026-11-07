@@ -582,6 +582,7 @@ try {
     Test-Mp3Folder 'an empty MP3 refused' @{ 'clip.mp3' = 0 } 'expected one MP3'
     Test-Mp3Folder 'two MP3 refused' @{ 'a.mp3' = 25000; 'b.mp3' = 25000 } 'expected one MP3'
     Test-Mp3Folder 'an MP3 without the start of a frame refused' @{ 'clip.mp3' = 25000 } 'MPEG audio frame' @(0x49, 0x44)
+    Test-Mp3Folder 'an MP3 whose second byte is not a frame sync refused' @{ 'clip.mp3' = 25000 } 'MPEG audio frame' @(0xFF, 0x00)
     Test-Mp3Folder 'a truncated MP3 refused' @{ 'clip.mp3' = 5000 } 'expected 20 000 to 30 000'
     Test-Mp3Folder 'a far too long MP3 refused' @{ 'clip.mp3' = 100000 } 'expected 20 000 to 30 000'
     Test-Mp3Folder 'an MP3 in the rescue folder refused'  @{ 'rescued\clip.mp3' = 25000 } 'rescue folder'
