@@ -44,7 +44,7 @@ git push origin v0.1.0
 Remove-Item $notes
 ```
 
-Never `git push --all` or `--mirror`: the `worktree-*` branches were not scanned for secrets.
+Never `git push --all` or `--mirror`: the other local branches were not scanned for secrets.
 
 ## What happens
 
