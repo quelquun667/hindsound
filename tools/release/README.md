@@ -142,13 +142,13 @@ and its last step refuses to publish it, as `check-remote-tag.ps1` sees the tag 
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\release\test-release-scripts.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\release\mutate-release-guards.ps1 -From 1 -To 15
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\release\mutate-release-guards.ps1
 ```
 
 `test-release-scripts.ps1` compiles nothing, downloads nothing and installs nothing: `build-lame.ps1` gets a fake compiler, and
 `check-setup.ps1` a fake folder. It runs in CI with `pwsh`. It needs the NAudio.Lame package, so run a restore first.
 `mutate-release-guards.ps1` undoes the guards listed in it, one at a time, on a copy, and fails if the tests do not notice.
-It takes about 30 s per entry.
+It takes about 20 to 60 s per entry, depending on the load of the PC; `-From` and `-To` run a part of the list.
 
 Not covered by these tests, because they need a real run on a runner: in `check-setup.ps1`, the exit codes of the Setup, of
 the installed exe and of the uninstaller, the BMP files, and the exe left after the uninstallation; in `prove-encoding.ps1`,

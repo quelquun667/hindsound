@@ -3,13 +3,14 @@
     Undoes the guards of the release scripts and workflows one at a time, on a copy, and fails if a test run does not notice.
 .DESCRIPTION
     Each entry replaces one piece of text, found exactly once, in a new copy of tools/release and .github/workflows, then runs
-    test-release-scripts.ps1 from that copy. Nothing in the repository changes. A full run takes about 30 s per entry.
+    test-release-scripts.ps1 from that copy. Nothing in the repository changes. Each entry takes about 20 to 60 s, depending
+    on the load of the PC.
 .PARAMETER From
     The first entry to run, from 1.
 .PARAMETER To
     The last entry to run. By default, the last one.
 .EXAMPLE
-    powershell -NoProfile -ExecutionPolicy Bypass -File tools\release\mutate-release-guards.ps1 -From 1 -To 15
+    powershell -NoProfile -ExecutionPolicy Bypass -File tools\release\mutate-release-guards.ps1
 #>
 param(
     [int]$From = 1,
