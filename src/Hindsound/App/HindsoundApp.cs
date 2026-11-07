@@ -4,6 +4,7 @@ using Hindsound.Input;
 using Hindsound.Settings;
 using Hindsound.Ui;
 using Hindsound.Ui.Window;
+using Hindsound.Updates;
 
 namespace Hindsound.App;
 
@@ -11,8 +12,10 @@ namespace Hindsound.App;
 /// The wiring: the message loop, the tray icon, the shortcuts, the engine and the clip path. Everything here runs on the
 /// thread of the message loop, unless it says otherwise, and every other thread comes back through <see cref="UiLoop.Post"/>.
 /// </summary>
-internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
+internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost, IUpdatesPanel
 {
+    private const int SelfTestConfirmUpdateMs = 500;
+    private const int SelfTestUpdateCheckMs = 3000;
     private const int SnapshotReleaseDelayMs = 500;
     private const int SelfTestExitDelayMs = 3300;
     private const int SelfTestLeaveCheckMs = 500;
@@ -78,10 +81,24 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     private double _cpuBeforeNotification;
     private int _exitCode;
 
-    public HindsoundApp(AppOptions options, Journal journal)
+    // The updater. Null for a test run, a copy that was not installed, or a launch with any option but --update-failed.
+    private readonly bool _updaterMayRun;
+    private UpdateFlow? _updates;
+    private string _updateWhy = UpdateWiring.TestRun;
+    private bool _quitChosen;
+    private string? _updatedTo;
+    private readonly SaveThenUpdate _saveThenUpdate = new();
+    private bool _firstRunCardFailed;
+
+    // Read by the update pass on its own thread.
+    private volatile bool _sessionEnding;
+
+    /// <param name="updaterMayRun">The raw command line was empty, or held only what Setup passes: see <see cref="AppOptions.UpdaterMayRun"/>.</param>
+    public HindsoundApp(AppOptions options, Journal journal, bool updaterMayRun = false)
     {
         _options = options;
         _journal = journal;
+        _updaterMayRun = updaterMayRun;
         _store = new SettingsStore(options.SettingsPath);
         _pending = new PendingNotices(journal.Write);
         _pretendGameUntilMs = options.SelfTestGameSeconds is { } game ? NowMs + (long)(game * 1000) : 0;
@@ -138,6 +155,12 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             _journal.Write("hotkeys: none registered in this run (--no-hotkeys), whatever the settings say");
         }
 
+        // After the Mutex, before the icon, the hotkeys and the capture: a Setup waiting on disk may install from here.
+        if (StartUpdates())
+        {
+            return;
+        }
+
         _loop = new UiLoop();
         _notification = new Notification { Clicked = OnNotificationClicked, Finished = OnNotificationFinished };
         _pipeline = new ClipPipeline(this, _loop.Post, _loop.After, ex => _journal.Write("clip error: " + ex))
@@ -173,6 +196,17 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         if ((_firstRun || _options.ForceFirstRun) && !_options.SelfTestSave)
         {
             OpenFirstRunCard();
+        }
+
+        // The first launch promises to tell about the check before it happens: a card that could not open told nothing.
+        if (!_firstRunCardFailed)
+        {
+            _updates?.Start();
+        }
+
+        if (_options.SelfTestUpdateCheck && _options.SettingsPath is not null)
+        {
+            _loop.After(SelfTestUpdateCheckMs, RunUpdateCheckSelfTest);
         }
 
         if (_options.SettingsProbe)
@@ -213,6 +247,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         catch (Exception ex)
         {
             _journal.Write("the first-launch card could not open: " + ex);
+            _firstRunCardFailed = true;
             Guard(() => _window?.Dispose(), "first-launch card");
             _window = null;
         }
@@ -369,6 +404,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         _window?.Screen.ReplaceSettings(_settings);
         _window?.Screen.SetHotkeyResults(_hotkeyResults);
         _window?.SetIcon(Accent);
+
+        // The mode may have changed by hand, or the real one replaces the Off of a file that could not be read at first.
+        _updates?.SettingsChanged();
     }
 
     /// <summary>Tells the engine what changed since it was last told, and nothing else.</summary>
@@ -552,7 +590,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         switch (notice)
         {
             case StatusNotice.CaptureOn:
-                ShowStatus(StatusTransitions.CaptureOnNow(_settings, _hotkeyResults), TakePauseScreen());
+                ShowStatus(StatusTransitions.CaptureOnNow(_settings, _hotkeyResults, _updatedTo), TakePauseScreen());
                 break;
             case StatusNotice.Paused:
                 ShowStatus(NotificationStates.Paused(), TakePauseScreen());
@@ -686,6 +724,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
             finally
             {
                 LeaveIfClipsDone();
+                UpdateIfClipsDone(saved: false);
             }
 
             return;
@@ -731,6 +770,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         finally
         {
             LeaveIfClipsDone();
+            UpdateIfClipsDone(saved: true);
         }
     }
 
@@ -817,6 +857,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         }
     }
 
+    // Also read on the update pass's thread: nothing here may send a message to the loop and wait, as reading a window title would.
     private unsafe (UserNotificationState State, bool Covers) Surface()
     {
         if (_options.SelfTestGameSeconds is not null)
@@ -826,7 +867,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
         int raw;
         var state = Native.SHQueryUserNotificationState(&raw) == 0 ? (UserNotificationState)raw : UserNotificationState.Unknown;
-        return (state, ForegroundWindow.Read().CoversMonitor);
+        return (state, ForegroundWindow.ForegroundCovers());
     }
 
     private void Present(NotificationContent content, bool clickThrough, ScreenInfo? screen = null)
@@ -861,7 +902,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
                     _notices.PushedAside(onScreen, _lastStatus);
                 }
 
-                PresentNow(StatusTransitions.Fresh(next, _settings, _hotkeyResults), decision.ClickThrough);
+                PresentNow(StatusTransitions.Fresh(next, _settings, _hotkeyResults, _updatedTo), decision.ClickThrough);
                 return;
             }
 
@@ -917,6 +958,16 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         _notification.Present(content, new NotificationPlacement(area, dpi, clickThrough, leftEdge), Accent);
         _notices.Shown(content);
         _captureOnReminder.Shown(content.Kind);
+
+        // Only on screen does an announcement count as made, and "Updated to" as said.
+        if (content.Kind == NotificationKind.UpdateReady)
+        {
+            _updates?.Shown();
+        }
+        else if (content.Kind == NotificationKind.CaptureOn)
+        {
+            _updatedTo = null;
+        }
     }
 
     private void OnNotificationFinished()
@@ -970,7 +1021,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         var (state, covers) = Surface();
         if (FullscreenPolicy.BackOnDesktop(state, covers) && _pending.TakeNext(NowMs) is { } next)
         {
-            Present(StatusTransitions.Fresh(next, _settings, _hotkeyResults), clickThrough: false);
+            Present(StatusTransitions.Fresh(next, _settings, _hotkeyResults, _updatedTo), clickThrough: false);
             RefreshTray();
         }
     }
@@ -1069,7 +1120,19 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
                 OpenSettings(firstRun: false);
                 break;
             case TrayCommand.Quit:
+                _quitChosen |= UpdateExit.ChoosesQuit(command);
                 AskToLeave(click.Screen);
+                break;
+            case TrayCommand.UpdateNow:
+                OpenSettings(firstRun: false);
+                _window?.Screen.ShowUpdateCard();
+
+                // Nothing can click the card from outside: the test flow confirms it by itself, as the user would.
+                if (_options.Offscreen && _updateWhy == UpdateWiring.TestFolder)
+                {
+                    _loop.After(SelfTestConfirmUpdateMs, () => ((IUpdatesPanel)this).ConfirmUpdate(saveFirst: false));
+                }
+
                 break;
         }
     }
@@ -1085,7 +1148,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         }
 
         var paused = _lastStatus?.Activity == CaptureActivity.Paused;
-        return _tray.ShowMenu((short)(wParam & 0xFFFF), (short)((wParam >> 16) & 0xFFFF), TrayMenu.Items(paused, _lastClip is not null, _leave.Waiting));
+        return _tray.ShowMenu((short)(wParam & 0xFFFF), (short)((wParam >> 16) & 0xFFFF), TrayMenu.Items(paused, _lastClip is not null, _leave.Waiting,
+            _updates?.MenuVersion is { } version ? $"Update to {version}..." : null));
     }
 
     private void OpenClipsFolder()
@@ -1106,7 +1170,13 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
     private void OnNotificationClicked()
     {
-        if (_notification.Showing is { ClickOpensSettings: true })
+        // Before the settings: a failed update is a Problem, which opens the settings too, but at its own section.
+        if (_notification.Showing is { ClickShowsUpdates: true })
+        {
+            OpenSettings(firstRun: false);
+            _window?.Screen.ShowUpdates();
+        }
+        else if (_notification.Showing is { ClickOpensSettings: true })
         {
             OpenSettings(firstRun: false);
         }
@@ -1149,6 +1219,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         var screen = ForegroundWindow.CursorScreen();
         var window = new SettingsWindow(_settings, this, ReadMicPeak, firstRun, _options.Offscreen, screen, OnSettingsClosed);
         _window = window;
+
+        // Always: without an updater, the panel says this copy does not update itself.
+        window.Screen.SetUpdates(this);
         if (_lastStatus is { } status)
         {
             window.Screen.UpdateStatus(status);
@@ -1199,6 +1272,10 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     {
         _window = null;
         _choices.Forget();
+
+        // A restart only ever follows a card the user is looking at.
+        _updates?.CardClosed();
+        _saveThenUpdate.Stop();
         _journal.Write("settings window closed, " + Journal.Memory());
 
         // The window's objects are small and many: a full collection a moment later gives them back.
@@ -1244,6 +1321,11 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         if ((change & (SettingsChange.Buffer | SettingsChange.Devices | SettingsChange.SourceApp)) != 0)
         {
             ApplyEngineOptions();
+        }
+
+        if ((change & SettingsChange.Updates) != 0)
+        {
+            _updates?.SettingsChanged();
         }
     }
 
@@ -1385,6 +1467,229 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         }
     }
 
+    // ---------------------------------------------------------------- updates
+
+    private static string? ExeFolder => Environment.ProcessPath is { } path ? Path.GetDirectoryName(path) : null;
+
+    /// <summary>Says in the log which updater this run has, and runs its launch step. True when Setup started: the app leaves at once.</summary>
+    private bool StartUpdates()
+    {
+        _updateWhy = UpdateWiring.Why(_updaterMayRun, _options, ExeFolder);
+        _updates = UpdateWiring.Create(_updaterMayRun, _options, ExeFolder, this, DateTimeOffset.Now);
+        _journal.Write($"updates: active {_updateWhy == UpdateWiring.Installed} ({_updateWhy})");
+        LaunchReport report;
+        try
+        {
+            if (_updates?.AtLaunch(_options.UpdateFailed, UpdateSurface()) is not { } launched)
+            {
+                return false;
+            }
+
+            report = launched;
+        }
+        catch (Exception ex)
+        {
+            // The capture is what the user started the app for: an updater that breaks goes, the rest starts.
+            _journal.Write("updates: the launch step failed, no updates in this run: " + ex);
+            _updates = null;
+            return false;
+        }
+
+        if (report.SetupStarted)
+        {
+            _journal.Write("the update installs: leaving before the capture starts");
+            return true;
+        }
+
+        if (report.Outcome == LaunchOutcome.Updated && report.UpdatedTo is { } updated)
+        {
+            _updatedTo = updated.ToString();
+        }
+        else if (report.Outcome == LaunchOutcome.Failed)
+        {
+            // Lasting: shown once the icon is there, and "Capture on" right after does not push it away.
+            _notices.Add(NotificationStates.UpdateFailed(UpdateWiring.InstalledVersion().ToString(), report.WillRetry));
+        }
+
+        return false;
+    }
+
+    private UpdateSurface UpdateSurface()
+    {
+        var (state, covers) = Surface();
+        return new UpdateSurface(
+            UpdateDecider.IsFullScreen(state, covers),
+            UpdateDecider.IsPresentation(state),
+            _pipeline is { } pipeline && (pipeline.Busy || Volatile.Read(ref _copying) > 0),
+            _sessionEnding);
+    }
+
+    /// <summary>After each clip: "Save it, then update" goes on once every clip has a result, and only if all were saved.</summary>
+    private void UpdateIfClipsDone(bool saved)
+    {
+        if (_leave.Waiting)
+        {
+            // Leaving decides alone: Quit from the menu installs, and nothing else does.
+            _saveThenUpdate.Stop();
+            return;
+        }
+
+        switch (_saveThenUpdate.ClipEnded(saved, ClipsInProgress))
+        {
+            case SaveThenUpdateStep.Update:
+                _journal.Write("update: the clip is saved, updating");
+                if (_updates is { } updates)
+                {
+                    TakeClick(updates.UpdateClicked());
+                    return;
+                }
+
+                break;
+            case SaveThenUpdateStep.ClipFailed:
+                _journal.Write("update: the clip was not saved, nothing is updated");
+                break;
+        }
+
+        // The card greys its buttons while a clip is being written.
+        _window?.Screen.RefreshUpdates();
+    }
+
+    private void TakeClick(ClickAnswer answer)
+    {
+        _journal.Write(answer.Kind == ClickKind.NotStarted ? $"update clicked: {answer.Kind}, {answer.Status}" : $"update clicked: {answer.Kind}");
+        if (answer.Kind == ClickKind.Applied)
+        {
+            // The decider has already refused while a clip was being written: nothing for the leave flow to wait for.
+            _loop.Quit();
+            return;
+        }
+
+        _window?.Screen.RefreshUpdates();
+    }
+
+    // --selftest-update-check: the only run that reaches GitHub, for one GET of the manifest, with the memory around it.
+    private void RunUpdateCheckSelfTest()
+    {
+        _journal.Write($"update check selftest: before, {Journal.Memory()}, handles {HandleCount()}");
+        _ = UpdatePass.Run(UpdateWiring.SelfTestCheck).ContinueWith(
+            t => _loop.Post(() =>
+            {
+                _journal.Write(t.IsCompletedSuccessfully
+                    ? $"update check: {t.Result.Status} {t.Result.Transport.Status} {t.Result.Transport.Detail}"
+                    : $"update check: failed with {t.Exception?.GetBaseException()}");
+                _journal.Write($"update check selftest: after, {Journal.Memory()}, handles {HandleCount()}");
+                AskToLeave();
+            }),
+            TaskScheduler.Default);
+    }
+
+    private static int HandleCount()
+    {
+        using var self = System.Diagnostics.Process.GetCurrentProcess();
+        return self.HandleCount;
+    }
+
+    UpdateMode IUpdateHost.Mode => SettingsMapping.ToUpdateMode(_settings.General);
+
+    UpdateVersion? IUpdateHost.Skipped => SettingsMapping.ToSkipped(_settings.General);
+
+    void IUpdateHost.SetSkipped(UpdateVersion? version)
+    {
+        _settings.General.Updates.SkippedVersion = version?.ToString();
+        TrySaveSettings();
+    }
+
+    DateTimeOffset IUpdateHost.Now => DateTimeOffset.Now;
+
+    UpdateSurface IUpdateHost.Surface() => UpdateSurface();
+
+    bool IUpdateHost.FirstRunCardOpen => _window?.Screen.Section == Section.FirstRun;
+
+    void IUpdateHost.After(int milliseconds, Action action) => _loop.After(milliseconds, action);
+
+    // The end of a pass always comes back on the loop, also when the work threw: the flow frees itself there.
+    void IUpdateHost.RunPass<T>(Func<T> work, Action<T?, Exception?> done) where T : default =>
+        _ = UpdatePass.Run(work).ContinueWith(
+            t => _loop.Post(() => done(t.IsCompletedSuccessfully ? t.Result : default, t.Exception?.GetBaseException())),
+            TaskScheduler.Default);
+
+    // One path in a game and out of it: the announcement waits for the desktop, as a clip does.
+    void IUpdateHost.Announce(UpdateVersion version, UpdateMode mode)
+    {
+        var content = mode == UpdateMode.Auto
+            ? NotificationStates.UpdateReady(version.ToString(), Accent)
+            : NotificationStates.UpdateAvailable(version.ToString(), Accent);
+        _pending.AddUpdate(content, NowMs);
+        ArmPendingPoll();
+        ShowNextPendingOnDesktop();
+    }
+
+    void IUpdateHost.Withdraw() => _pending.WithdrawUpdate();
+
+    void IUpdateHost.Changed() => _window?.Screen.RefreshUpdates();
+
+    void IUpdateHost.LeaveForSetup() => _loop.Quit();
+
+    void IUpdateHost.Journal(string line) => _journal.Write(line);
+
+    UpdatePanelView IUpdatesPanel.View
+    {
+        get
+        {
+            var view = _updates?.View ?? UpdatePanel.Inactive(UpdateWiring.InstalledVersion());
+            if (_saveThenUpdate.Waiting)
+            {
+                return view with { CardLine = "Saving your clip, then updating...", CardBusy = true };
+            }
+
+            return _saveThenUpdate.ClipFailed ? view with { CardLine = "The clip was not saved. Nothing was updated." } : view;
+        }
+    }
+
+    bool IUpdatesPanel.ClipBusy => ClipsInProgress;
+
+    int IUpdatesPanel.BufferSeconds => _settings.BufferSeconds;
+
+    void IUpdatesPanel.CheckNow() => _updates?.CheckNow();
+
+    void IUpdatesPanel.ConfirmUpdate(bool saveFirst)
+    {
+        if (_updates is not { } updates)
+        {
+            return;
+        }
+
+        if (!saveFirst)
+        {
+            _saveThenUpdate.Stop();
+            TakeClick(updates.UpdateClicked());
+            return;
+        }
+
+        // The whole memory, so what the restart loses is in the clip.
+        _journal.Write("update: saving a clip first");
+        _saveThenUpdate.Start();
+        SaveClip(TimeSpan.FromSeconds(_settings.BufferSeconds));
+        _window?.Screen.RefreshUpdates();
+    }
+
+    void IUpdatesPanel.CancelUpdate()
+    {
+        _updates?.CardClosed();
+        _saveThenUpdate.Stop();
+        _window?.Screen.ShowUpdates();
+    }
+
+    void IUpdatesPanel.WhatsNew()
+    {
+        if (((IUpdatesPanel)this).View.Offered is { } version)
+        {
+            OpenOffLoop(UpdateUrlPolicy.ReleasePage(version));
+        }
+    }
+
+    void IUpdatesPanel.SkipThisVersion() => _updates?.SkipThisVersion();
+
     // ---------------------------------------------------------------- self-test
 
     // The same way in as a key press: from another thread, through the loop's queue.
@@ -1439,7 +1744,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         switch (_leave.Asked(ClipsInProgress))
         {
             case LeaveStep.LeaveNow:
-                _loop.Quit();
+                LeaveForGood();
                 break;
 
             case LeaveStep.WaitForClips:
@@ -1478,7 +1783,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
                     if (_leave.NoticeLimit(_pending))
                     {
                         _journal.Write("the problem has been on screen long enough: leaving");
-                        _loop.Quit();
+                        LeaveForGood();
                     }
                 });
             }
@@ -1487,7 +1792,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         }
 
         _journal.Write("the last clip is done: leaving");
-        _loop.Quit();
+        LeaveForGood();
     }
 
     private void LeaveIfNoticeGone()
@@ -1495,8 +1800,22 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         if (_leave.NoticeGone(_notification.Showing is not null, _pending))
         {
             _journal.Write("the problem has been shown or given up on: leaving");
-            _loop.Quit();
+            LeaveForGood();
         }
+    }
+
+    /// <summary>
+    /// The four ways out once nothing holds the app. The update installs only when the user chose Quit in the menu,
+    /// decided now rather than at the click: a clip written meanwhile has made the moment wrong, and the decider says so.
+    /// </summary>
+    private void LeaveForGood()
+    {
+        if (UpdateExit.InstallOnLeaving(_quitChosen, _updates is { } updates ? updates.ApplyOnQuit : null))
+        {
+            _journal.Write("the update will install now that Hindsound leaves");
+        }
+
+        _loop.Quit();
     }
 
     private void OnLeaveLimit()
@@ -1512,6 +1831,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
     // The answer is yes whatever happens: the reason only tells the user what Windows is waiting for.
     private void OnSessionEndAsked()
     {
+        // First, and it cannot throw: no Setup at the end of a session, and a running download stops.
+        _sessionEnding = true;
         if (_sessionEndBlock.Asked(ClipsInProgress))
         {
             var given = Native.ShutdownBlockReasonCreate(_loop.Hwnd, SessionEndBlock.Reason) != 0;
@@ -1521,6 +1842,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
 
     private void TakeBackSessionEndReason()
     {
+        _sessionEnding = false;
         if (_sessionEndBlock.Over())
         {
             var taken = Native.ShutdownBlockReasonDestroy(_loop.Hwnd) != 0;
@@ -1543,6 +1865,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend
         }
 
         _quitting = true;
+
+        // Never a Setup from here: every way out passes through, the end of a session and an exception included.
+        Guard(() => _updates?.Stop(), "updates");
         Guard(() => _window?.Dispose(), "settings window");
         Guard(() => _tray?.Dispose(), "tray");
         Guard(() => _notification?.Dispose(), "notification");
