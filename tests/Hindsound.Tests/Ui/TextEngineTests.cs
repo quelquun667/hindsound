@@ -110,6 +110,73 @@ public unsafe class TextEngineTests
     }
 
     [Fact]
+    public void The_letters_of_the_notification_are_grey_not_ClearType()
+    {
+        using var bitmap = new NotificationBitmap(Saved(), 1.5, Accent, false);
+        const uint fill = NotificationPalette.Fill, title = NotificationPalette.Title;
+        var edges = 0;
+        for (var y = (int)(8 * 1.5); y < (int)(32 * 1.5); y++)
+        {
+            for (var x = (int)(122 * 1.5); x < (int)(330 * 1.5); x++)
+            {
+                var p = bitmap.PixelAt(x, y) & 0xFFFFFF;
+                if (p == fill || p == title)
+                {
+                    continue;
+                }
+
+                // Grey coverage moves the three channels together from the fill to the title colour; ClearType does not.
+                var cover = new[] { 16, 8, 0 }.Select(shift => (((p >> shift) & 0xFF) - (float)((fill >> shift) & 0xFF)) / (((title >> shift) & 0xFF) - (float)((fill >> shift) & 0xFF))).ToArray();
+                Assert.True(cover.Max() - cover.Min() < 0.12f, $"({x}, {y}) = {p:X6}: {string.Join(", ", cover)}");
+                edges++;
+            }
+        }
+
+        Assert.True(edges > 50, $"{edges} edge pixels");
+    }
+
+    // Over a clear bitmap, the letters bring their own alpha and leave the rest of the bound box clear.
+    [Fact]
+    public void Text_over_clear_pixels_stays_premultiplied_and_leaves_the_rest_clear()
+    {
+        Native.BITMAPINFOHEADER info = default;
+        info.Size = (uint)sizeof(Native.BITMAPINFOHEADER);
+        info.Width = 160;
+        info.Height = -40;
+        info.Planes = 1;
+        info.BitCount = 32;
+        var dc = Native.CreateCompatibleDC(0);
+        void* bits;
+        var dib = Native.CreateDIBSection(dc, &info, 0, &bits, 0, 0);
+        var old = Native.SelectObject(dc, dib);
+        try
+        {
+            var pixels = new Pixels((uint*)bits, 160, 40);
+            using (var painter = new TextPainter(dc, pixels, TextEngine.Shared, clearType: false))
+            {
+                painter.Text(new FontSpec(Face.Title, 20), "Saved", 10, 6, 0xF2F4F7);
+            }
+
+            int clear = 0, partial = 0, solid = 0;
+            for (var i = 0; i < 160 * 40; i++)
+            {
+                var p = ((uint*)bits)[i];
+                var a = p >> 24;
+                Assert.True(((p >> 16) & 0xFF) <= a && ((p >> 8) & 0xFF) <= a && (p & 0xFF) <= a, $"pixel {i} = {p:X8}");
+                _ = a == 0 ? clear++ : a == 255 ? solid++ : partial++;
+            }
+
+            Assert.True(solid > 50 && partial > 50 && clear > 160 * 40 / 2, $"{solid} solid, {partial} partial, {clear} clear");
+        }
+        finally
+        {
+            Native.SelectObject(dc, old);
+            Native.DeleteObject(dib);
+            Native.DeleteDC(dc);
+        }
+    }
+
+    [Fact]
     public void Measures_grow_with_the_text_and_keep_their_fraction()
     {
         using var canvas = new GdiCanvas(10, 10, 1.25);
