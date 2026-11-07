@@ -34,6 +34,11 @@ public class ManifestFromScriptTests
     private static void RunWriteManifest(params string[] arguments)
     {
         var start = new ProcessStartInfo("powershell.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true };
+
+        // Started under PowerShell 7 (the CI steps run in pwsh), the inherited module path leads Windows PowerShell to
+        // PowerShell 7's own Microsoft.PowerShell.Utility, which it cannot load: Get-FileHash then "is not recognized".
+        // Without the variable, Windows PowerShell builds its own default path.
+        start.Environment.Remove("PSModulePath");
         foreach (var argument in new[] { "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", Path.Combine(RepositoryRoot(), "tools", "release", "write-manifest.ps1") }.Concat(arguments))
         {
             start.ArgumentList.Add(argument);
