@@ -11,10 +11,16 @@ internal static class UpdateUrlPolicy
     /// <summary>The only place a Setup may be named at by the manifest.</summary>
     public const string ReleasePrefix = "https://github.com/quelquun667/hindsound/releases/download/";
 
+    /// <summary>The page What's new opens, followed by v{version}.</summary>
+    public const string ReleasePagePrefix = "https://github.com/quelquun667/hindsound/releases/tag/";
+
     private const string SetupExtension = ".exe";
 
     // GitHub answers a release download on github.com, then redirects to one of its asset hosts.
     private static readonly string[] AllowedHosts = ["github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"];
+
+    /// <summary>Built from a parsed version only, so the address cannot carry anything but X.Y.Z.</summary>
+    public static string ReleasePage(UpdateVersion version) => ReleasePagePrefix + "v" + version;
 
     /// <summary>Is this exactly a file of this version's release: the prefix, then v{version}, then one plain file name?</summary>
     public static bool IsReleaseAsset(string? url, UpdateVersion version)

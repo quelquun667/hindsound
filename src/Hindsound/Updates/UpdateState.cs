@@ -57,21 +57,40 @@ internal sealed class UpdateStateStore(string path)
     public static string DefaultFolder { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Hindsound", "updates");
 
-    public UpdateStateData Load()
+    public UpdateStateData Load() => TryLoad(out var state) ? state : new UpdateStateData();
+
+    /// <summary>
+    /// False only when the file is there and cannot be read now, locked or refused: an empty state saved over it would
+    /// give back the counted attempts and the anti-rollback floor. No file, no folder, or a broken file is a known empty state.
+    /// </summary>
+    public bool TryLoad(out UpdateStateData state)
     {
+        state = new UpdateStateData();
         try
         {
-            if (new FileInfo(path).Length > MaxStateBytes)
+            using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            if (file.Length > MaxStateBytes)
             {
-                return new UpdateStateData();
+                return true;
             }
 
-            var state = JsonSerializer.Deserialize(File.ReadAllBytes(path), UpdateStateJson.Default.UpdateStateData);
-            return state is null ? new UpdateStateData() : Sanitized(state);
+            var read = JsonSerializer.Deserialize(file, UpdateStateJson.Default.UpdateStateData);
+            if (read is not null)
+            {
+                state = Sanitized(read);
+            }
+
+            return true;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException or JsonException)
         {
-            return new UpdateStateData();
+            // Both not-found exceptions are IOExceptions too. Taken for a lock, they would stop the updater on every new
+            // install, where the updates folder does not exist yet.
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
         }
     }
 

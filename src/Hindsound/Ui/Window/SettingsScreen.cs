@@ -1,6 +1,7 @@
 using Hindsound.Audio;
 using Hindsound.Input;
 using Hindsound.Settings;
+using Hindsound.Updates;
 
 namespace Hindsound.Ui.Window;
 
@@ -270,6 +271,28 @@ internal sealed partial class SettingsScreen
         _scroll = Math.Clamp(y, 0, MaxScroll);
         SyncEdit();
         _host.Invalidate();
+    }
+
+    // ---------------------------------------------------------------- updates
+
+    /// <summary>The Updates section of General draws from this panel. Null, the default, leaves General as it is.</summary>
+    public void SetUpdates(IUpdatesPanel? panel)
+    {
+    }
+
+    /// <summary>The panel's view changed: draws the section and the card again, keeping the focus.</summary>
+    public void RefreshUpdates()
+    {
+    }
+
+    /// <summary>Shows General, scrolled to the Updates section.</summary>
+    public void ShowUpdates()
+    {
+    }
+
+    /// <summary>Shows the card that confirms an update.</summary>
+    public void ShowUpdateCard()
+    {
     }
 
     private void OnSettingChanged(SettingsChange change)
