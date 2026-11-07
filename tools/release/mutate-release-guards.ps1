@@ -166,6 +166,9 @@ $mutations = @(
 
     # The delay-loaded imports
     @($dll, 'if ($summary.DelayImports) {', 'if ($false) {')
+
+    # The latest release, which the app reads
+    @($release, '--draft=false --latest', '--draft=false')
 )
 
 $repository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).ProviderPath

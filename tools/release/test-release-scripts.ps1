@@ -675,6 +675,7 @@ try {
     Report 'the workflow starts with no permission' ($releaseText -match '(?m)^permissions: \{\}$')
     Report 'the version comes from check-tag' ($releaseText.Contains('"VERSION=$version" >> $env:GITHUB_ENV'))
     Report 'the releases run one at a time, none cancelled' ($releaseText -cmatch '(?m)^concurrency:\n  group: release\n  cancel-in-progress: false$')
+    Report 'the release is published as the latest, which the app reads' ($releaseText.Contains('gh release edit $env:TAG --draft=false --latest'))
     Report 'the release checks the tag on the remote just before publishing' ($releaseText -cmatch '- name: Publish the release\n\s+env:\n[^\n]+\n[^\n]+\n\s+run: \|\n\s+\./tools/release/check-remote-tag\.ps1 -Tag \$env:TAG -Commit \(git rev-parse HEAD\)\n\s+gh release edit \$env:TAG --draft=false')
     Report 'the lame workflow only reads' (($lameText -match '(?m)^permissions:\n  contents: read$') -and -not ($lameText -match 'contents: write|GH_TOKEN|gh release'))
 

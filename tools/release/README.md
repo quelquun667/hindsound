@@ -68,7 +68,7 @@ never published.
 | Write the update manifest | `write-manifest.ps1`: `hindsound-update-win-x64.json`. |
 | Create the draft release | A draft, with the notes. |
 | Attach the files | The Setup, the manifest, `lame-3.100.tar.gz`. Then they are downloaded back, and `check-release-files.ps1` wants exactly these three, a manifest that matches the Setup and its address, and the SHA-256 of the LAME source. |
-| Publish the release | `check-remote-tag.ps1`: the tag on GitHub must still point at the commit built. Then the draft goes public, and the app sees the new version from then on. |
+| Publish the release | `check-remote-tag.ps1`: the tag on GitHub must still point at the commit built. Then the draft goes public, marked as the latest release (`--latest`): the app reads that one, and sees the new version from then on. |
 
 `lame.yml` runs only the compilation, its checks and the proof of the encoding. It publishes nothing, on a manual start or on a
 push to `main` that changes `tools/release/build-lame.ps1`, `check-lame-dll.ps1`, `lame-exports.txt`, `prove-encoding.ps1` or

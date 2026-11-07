@@ -114,10 +114,11 @@ jobs:
           ./tools/release/check-release-files.ps1 -Folder "$env:RUNNER_TEMP/verify" -Version $env:VERSION -Repository $env:GITHUB_REPOSITORY
 
       # A rerun builds the commit of its event, even after the tag moved to a fix: such a Setup must not go out under the tag.
+      # --latest: the app reads releases/latest, so the choice is not left to GitHub.
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           ./tools/release/check-remote-tag.ps1 -Tag $env:TAG -Commit (git rev-parse HEAD)
-          gh release edit $env:TAG --draft=false
+          gh release edit $env:TAG --draft=false --latest
