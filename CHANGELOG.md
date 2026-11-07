@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.0.10] - 2026-11-07
+
+### Changed
+
+- No change in the app: this version is the first update offered to 0.0.9, to check that an installed copy updates itself.
+
 ## [0.0.9] - 2026-11-07
 
 ### Added
