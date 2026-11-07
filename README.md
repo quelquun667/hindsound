@@ -37,7 +37,7 @@ It has been tried on one Windows 11 PC, and some things are [not tried yet](#not
 - **Stays out of your game:** the notification does not take the focus, and over a game, clicks pass through it. In exclusive
   fullscreen, you get a short sound instead.
 - **Your color:** six accent colors, or any bright color you type.
-- **No account, no network:** the app does not use the network.
+- **No account:** the only network use is the daily check for a new version, which you can turn off. See [Updates](#updates).
 
 ## Screenshots
 
@@ -105,8 +105,8 @@ This screen can come back with each new version.
 
 ### Updating
 
-Hindsound does not update itself yet, and has no update setting or menu: automatic updates are on the
-[Roadmap](#roadmap). For now, quit Hindsound, run `git pull`, and run the `dotnet publish` command again.
+An installed Hindsound updates itself, see [Updates](#updates). A build from source never does: quit Hindsound, run
+`git pull`, and run the `dotnet publish` command again.
 
 ### Uninstalling
 
@@ -135,7 +135,7 @@ The first time, with no settings file yet, a card walks you through three steps:
 2. `Check your mic`: speak, and the bar should move. Choose `Off` if you only want the PC sound.
 3. `Try it`: say something, then press your hotkey.
 
-The card also offers `Start with Windows`, which is off by default.
+The card also offers `Start with Windows`, which is off by default, and says that Hindsound checks GitHub for updates once a day.
 
 Everything Hindsound writes:
 
@@ -166,7 +166,8 @@ Good to know:
 - **A click on the notification,** on the desktop, opens the folder of your last clip, or the settings if it reports a problem
   there.
 - **The icon:** a left click opens the settings. A right click opens the menu: `Save last 30s`, `Save last 15s`,
-  `Save last 1 min`, `Save last 5 min`, `Copy last clip`, `Pause capture`, `Open clips folder`, `Settings`, `Quit`.
+  `Save last 1 min`, `Save last 5 min`, `Copy last clip`, `Pause capture`, `Open clips folder`, `Settings`, `Quit`. While a new
+  version is ready (with `Ask me`, also when one is available), the menu adds `Update to X...`.
 - **Starting Hindsound again** while it runs opens the settings of the one already running.
 - **Quitting during a save:** Hindsound finishes the clip first, for 5 minutes at most. A second `Quit` leaves at once.
 
@@ -203,6 +204,7 @@ A left click on the icon opens them. There is no OK button: a change is saved at
 | Export | File name | **`Hindsound_{app}_{date}_{time}`**. These three tags are the only ones. |
 | Export | Copy clip to clipboard | **On** |
 | General | Accent color | **Lime**, Mint, Cyan, Violet, Pink, White, Custom |
+| General | Updates | **Install automatically**, Ask me, Off. See [Updates](#updates). |
 | General | Start with Windows | **Off** |
 | General | Save notifications | **On** |
 | General | Notification position | **Right edge**, Left edge |
@@ -238,6 +240,24 @@ The whole app with 5:00 kept, measured on one PC on 2026-11-06:
 
 Saving takes more while the clip is written, with both sources on. By calculation, not measured: 17 MB for a 30 second
 clip, 173 MB for a 5:00 clip.
+
+## Updates
+
+| Mode | What it does |
+| --- | --- |
+| `Install automatically` (default) | Checks once a day and downloads a new version. It installs when you choose `Quit` in the menu or at the next launch, never while the app runs. |
+| `Ask me` | Checks once a day and tells you. Nothing is downloaded or installed until you click `Update now`. |
+| `Off` | No automatic check. Only `Check now` reaches the network, when you click it. |
+
+Settings > General > Updates shows the running version, when it last checked, and the buttons `Check now`, `Update now`, `What's new` and `Skip this version`. A build from source, or Hindsound started with a command-line option for a test or a check, never updates itself.
+
+**What GitHub sees.** Once a day, Hindsound asks GitHub for one small file that describes the latest version. GitHub sees your IP address and the time. The request carries no identifier and no version number. When a new version is downloaded, GitHub also sees that download. The first launch tells you about this check.
+
+- Hindsound does not check, download or announce during a fullscreen game, a presentation, or while a clip is being written. It tries again 30 minutes later, and an announcement waits until you are back on the desktop.
+- An update restarts Hindsound, and the audio in memory is lost. `Update now` warns you first, and offers `Save it, then update`.
+- If an update fails, Hindsound comes back on the version you had and says so. It tries 3 times at most per version, then only `Update now` tries again.
+- If the settings file is damaged or can't be read, updates turn off, like the microphone. You turn them back on in Settings > General.
+- The size and SHA-256 of each download are checked. That catches a damaged file. It does not prove who published it, since the versions are not signed.
 
 ## Recording other people
 
@@ -288,11 +308,11 @@ Hindsound has only run on one Windows 11 PC so far. These have not been tried fo
 - Windows 10
 - the windows of the Setup and its uninstaller
 - the release workflow in `.github`: no release has been made with it yet
+- updating from GitHub: it waits for the first releases, so only a trial folder in place of GitHub has run
 
 ## Roadmap
 
 - The first release, with the Setup
-- Automatic updates
 - Mac and Linux versions, with no date yet
 
 ## License

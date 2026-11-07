@@ -7,7 +7,7 @@ body:
     id: version
     attributes:
       label: Hindsound version
-      description: Shown in Windows, under Settings > Apps > Installed apps.
+      description: Shown in Hindsound, under Settings > General.
       placeholder: 0.1.0
     validations:
       required: true

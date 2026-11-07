@@ -19,13 +19,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Settings stored in `%AppData%\Hindsound\settings.json`, with a choice of accent color.
 - Repository setup: README, MIT license, changelog.
 - Command-line options to look into a problem without touching what the user relies on: `--no-mic`, `--no-clipboard` and `--no-hotkeys` keep this run away from the microphone, the clipboard and the global shortcuts, whatever the settings say.
-- Updates, for an installed copy: once a day, 2 minutes after launch at the earliest, Hindsound asks GitHub for the latest version. Never during a game in full screen, a presentation or a clip being saved: it tries again 30 minutes later. A copy that was not installed, or started with any command-line option, never updates itself.
+- Updates, for an installed copy: once a day, 2 minutes after launch at the earliest, Hindsound asks GitHub for the latest version. Never during a game in full screen, a presentation or a clip being saved: it tries again 30 minutes later. A copy that was not installed, or started with a command-line option for a test or a check (only the one Setup passes after a failed update is let through), never updates itself.
 - Three update modes in Settings > General: Install automatically (the default), Ask me, and Off. Off asks GitHub nothing unless Check now is pressed. The section shows the version, when it last checked, and the buttons Check now, Update now, What's new and Skip this version.
 - A downloaded update is checked against its size and SHA-256 before Setup starts. In Install automatically, it installs when you choose Quit in the menu, or at the next launch. Closing the window, ending the session or a crash never starts it while Hindsound runs.
 - "Update ready" or "Update available": one notification per version, which waits for the desktop. While a version is ready (in Ask me, also when one is available), the tray menu offers "Update to X...".
 - Update now opens a card first: updating restarts Hindsound and loses the audio in memory, so it offers Save it, then update, as well as Update and Cancel. Nothing is updated if that clip could not be saved.
 - After an update, the "Capture on" notification says "Updated to X" instead. A failed one says "Update failed" and the version still running; Hindsound tries 3 times per version, then only Update now tries again.
 - A damaged or unreadable settings file turns updates Off until you choose again.
+- The first launch card says that Hindsound checks GitHub once a day. In Off, Check now still asks GitHub, on a click. While a version is ready (in Ask me, also when one is available), the tray menu offers "Update to X...".
+- `--update-failed` (passed by Setup to the version it starts again after a failed update), and the test options `--selftest-update <folder>` and `--selftest-update-check`.
 
 ### Changed
 
