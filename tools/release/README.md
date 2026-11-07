@@ -117,7 +117,7 @@ gh run rerun <run id> --failed
 Nothing is left to clean up before this. The tag no longer counts against itself, a draft left by the failed run is reused, and
 its files are replaced. A release already published is refused: an immutable release cannot change, so go to the next version.
 
-A rerun uses the commit of the tag. If the fix is in the code or in a workflow, the tag must move, which is possible only if the
+A rerun builds the commit of the original event, even if the tag has moved since. If the fix is in the code or in a workflow, the tag must move, which is possible only if the
 release was never published:
 
 ```powershell
