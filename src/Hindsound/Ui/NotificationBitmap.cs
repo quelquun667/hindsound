@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Hindsound.Ui.Window;
 
 namespace Hindsound.Ui;
 
@@ -13,6 +14,7 @@ internal sealed unsafe class NotificationBitmap : IDisposable
     private readonly NotificationContent _content;
     private readonly uint _accent;
     private readonly bool _mirrored;
+    private readonly TextEngine? _engine;
     private readonly int _stripLeft, _stripTop, _stripWidth, _stripHeight;
     private float _barsScale = -1;
 
@@ -33,7 +35,14 @@ internal sealed unsafe class NotificationBitmap : IDisposable
     /// <param name="accent">The accent colour, for the glow of the bars.</param>
     /// <param name="mirrored">On the left edge of the screen: the tab is flipped, the text still reads left to right.</param>
     public NotificationBitmap(NotificationContent content, double scale, uint accent, bool mirrored)
+        : this(content, scale, accent, mirrored, TextEngine.Shared)
     {
+    }
+
+    /// <param name="engine">The text engine; null draws the text with GDI.</param>
+    internal NotificationBitmap(NotificationContent content, double scale, uint accent, bool mirrored, TextEngine? engine)
+    {
+        _engine = engine;
         _content = content;
         _accent = accent;
         _mirrored = mirrored;
@@ -100,10 +109,11 @@ internal sealed unsafe class NotificationBitmap : IDisposable
             NotificationIcons.Draw(_pixels, _content.Visual, _content.VisualColor, visualLeft * s, 20 * s, s);
         }
 
-        using var painter = new TextPainter(Dc, _pixels);
-        var titleFont = new FontSpec("Bahnschrift SemiBold SemiConden", 19 * s, false);
-        var bodyFont = new FontSpec("Segoe UI", 13 * s, false);
-        var keyFont = new FontSpec("Cascadia Mono", (_content.SmallKeys ? 10 : 12) * s, true);
+        // Grey, not ClearType: the tab is a layered window, its letters must keep a true alpha over whatever is behind.
+        using var painter = new TextPainter(Dc, _pixels, _engine, clearType: false);
+        var titleFont = new FontSpec(Face.Title, 19 * s);
+        var bodyFont = new FontSpec(Face.Body, 13 * s);
+        var keyFont = new FontSpec(Face.Mono, (_content.SmallKeys ? 10 : 12) * s);
 
         var textLeft = TextLeft(_content, _mirrored) * s;
         var textWidth = TextWidth(_content) * s;
@@ -300,99 +310,6 @@ internal sealed unsafe class NotificationBitmap : IDisposable
         Native.DeleteObject(_dib);
         Native.DeleteDC(Dc);
         NativeMemory.Free(_strip);
-    }
-}
-
-internal readonly record struct FontSpec(string Face, float Size, bool Monospace);
-
-/// <summary>GDI text on the opaque tab. No extra module: gdi32 is already loaded by user32.</summary>
-internal sealed unsafe class TextPainter(nint dc, Pixels pixels) : IDisposable
-{
-    private const int StockSystemFont = 13;
-    private readonly Dictionary<FontSpec, nint> _fonts = [];
-
-    public float Measure(FontSpec font, string text)
-    {
-        Native.SelectObject(dc, Font(font));
-        Native.SIZE size;
-        Native.GetTextExtentPoint32W(dc, text, text.Length, &size);
-        return size.Cx;
-    }
-
-    public float LineHeight(FontSpec font)
-    {
-        Native.SelectObject(dc, Font(font));
-        Native.TEXTMETRICW metrics;
-        Native.GetTextMetricsW(dc, &metrics);
-        return metrics.Height;
-    }
-
-    /// <summary>The text, cut with an ellipsis if it would run under the stripe.</summary>
-    public string Fit(FontSpec font, string text, float width)
-    {
-        if (Measure(font, text) <= width)
-        {
-            return text;
-        }
-
-        for (var length = text.Length - 1; length > 0; length--)
-        {
-            var cut = text[..length].TrimEnd() + "...";
-            if (Measure(font, cut) <= width)
-            {
-                return cut;
-            }
-        }
-
-        return string.Empty;
-    }
-
-    public void Text(FontSpec font, string text, float x, float top, uint rgb)
-    {
-        if (text.Length == 0)
-        {
-            return;
-        }
-
-        Native.SelectObject(dc, Font(font));
-        Native.SetBkMode(dc, Native.BK_TRANSPARENT);
-        Native.SetTextColor(dc, ((rgb & 0xFF) << 16) | (rgb & 0xFF00) | ((rgb >> 16) & 0xFF));
-        Native.SIZE size;
-        Native.GetTextExtentPoint32W(dc, text, text.Length, &size);
-        var left = (int)MathF.Round(x);
-        var y = (int)MathF.Round(top);
-        Native.TextOutW(dc, left, y, text, text.Length);
-
-        // GDI clears the alpha byte of what it touches: the text sits on an opaque fill, so it goes back to opaque.
-        for (var row = Math.Max(0, y - 2); row < Math.Min(pixels.Height, y + size.Cy + 2); row++)
-        {
-            var line = pixels.Row(row);
-            for (var col = Math.Max(0, left - 2); col < Math.Min(pixels.Width, left + size.Cx + 2); col++)
-            {
-                line[col] |= 0xFF000000;
-            }
-        }
-    }
-
-    private nint Font(FontSpec font)
-    {
-        if (!_fonts.TryGetValue(font, out var handle))
-        {
-            handle = Native.CreateFontW(-(int)MathF.Floor(font.Size + 0.5f), 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, Native.ANTIALIASED_QUALITY,
-                font.Monospace ? (uint)Native.FIXED_PITCH_MODERN : 0, font.Face);
-            _fonts[font] = handle;
-        }
-
-        return handle;
-    }
-
-    public void Dispose()
-    {
-        Native.SelectObject(dc, Native.GetStockObject(StockSystemFont));
-        foreach (var handle in _fonts.Values)
-        {
-            Native.DeleteObject(handle);
-        }
     }
 }
 
