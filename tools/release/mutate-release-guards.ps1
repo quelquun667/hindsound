@@ -157,6 +157,9 @@ $mutations = @(
 
     # The package of the Inno Setup compiler
     @($iscc, 'if ($actual -ne $packageSha256) {', 'if ($false) {')
+
+    # The list of exports
+    @($dll, 'if ($required.Count -eq 0) {', 'if ($false) {')
 )
 
 $repository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).ProviderPath

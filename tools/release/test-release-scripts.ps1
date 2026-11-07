@@ -384,6 +384,13 @@ try {
     [IO.File]::WriteAllBytes($notDll, $notDllBytes)
     Assert-Refused 'an x64 program that is no DLL refused' { & $checkDll -DllPath $notDll } 'not a DLL'
 
+    # An empty list of exports would let any DLL through. check-lame-dll reads the list next to itself.
+    $emptyList = Join-Path $temp 'empty-list'
+    New-Item -ItemType Directory -Path $emptyList | Out-Null
+    Copy-Item -LiteralPath $checkDll -Destination $emptyList
+    [IO.File]::WriteAllText((Join-Path $emptyList 'lame-exports.txt'), "# nothing`n")
+    Assert-Refused 'an empty list of exports refused' { & (Join-Path $emptyList 'check-lame-dll.ps1') -DllPath $packageDll } 'lists nothing'
+
     # --- build-lame, with a fake archive and a fake compiler ---
     $buildLame = Join-Path $PSScriptRoot 'build-lame.ps1'
     $systemTar = Join-Path $env:SystemRoot 'System32\tar.exe'
