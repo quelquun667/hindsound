@@ -26,6 +26,7 @@ $setup = 'tools/release/check-setup.ps1'
 $prove = 'tools/release/prove-encoding.ps1'
 $remote = 'tools/release/check-remote-tag.ps1'
 $assets = 'tools/release/check-release-files.ps1'
+$iscc = 'tools/release/get-iscc.ps1'
 $release = '.github/workflows/release.yml'
 $lame = '.github/workflows/lame.yml'
 
@@ -153,6 +154,9 @@ $mutations = @(
     # The same minor, for the next patch
     @($tag, '$sameMinor = $parts[0] -eq $highest[0] -and $parts[1] -eq $highest[1]', '$sameMinor = $parts[1] -eq $highest[1]')
     @($tag, '$sameMinor = $parts[0] -eq $highest[0] -and $parts[1] -eq $highest[1]', '$sameMinor = $parts[0] -eq $highest[0]')
+
+    # The package of the Inno Setup compiler
+    @($iscc, 'if ($actual -ne $packageSha256) {', 'if ($false) {')
 )
 
 $repository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).ProviderPath

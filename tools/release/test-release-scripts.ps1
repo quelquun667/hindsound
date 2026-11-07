@@ -640,6 +640,7 @@ try {
     Report 'the release attaches the Setup, the manifest and the LAME source' ($releaseText -cmatch 'gh release upload [^\n]*Setup\.exe[^\n]*hindsound-update-win-x64\.json[^\n]*lame-3\.100\.tar\.gz')
     Report 'the release downloads its files back and checks them, before publishing' ($releaseText -cmatch '--clobber\n\s+if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}\n\s+gh release download \$env:TAG --dir "\$env:RUNNER_TEMP/verify"\n\s+if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}\n\s+\./tools/release/check-release-files\.ps1 -Folder "\$env:RUNNER_TEMP/verify" -Version \$env:VERSION -Repository \$env:GITHUB_REPOSITORY\n\n\s+# A rerun')
     Report 'the release does not give check-release-files its LAME hash' (-not ($releaseText -match '-LameSha256'))
+    Report 'get-iscc verifies its package before extracting it' ([IO.File]::ReadAllText((Join-Path $PSScriptRoot 'get-iscc.ps1')) -cmatch 'if \(\$actual -ne \$packageSha256\) \{\s+throw [^\n]+\n\}\s+\$content = ')
     Assert-Equal 'the token goes to the three steps of the release' 3 ([regex]::Matches($releaseText, 'GH_TOKEN:')).Count
     $firstToken = @($release | Select-String 'GH_TOKEN:')[0].LineNumber
     $draftStep = @($release | Select-String '- name: Create the draft release')[0].LineNumber
