@@ -177,6 +177,9 @@ $mutations = @(
     # A failure of gh release view that is not "release not found"
     @($release, 'if ($viewExit -ne 0 -and "$view" -notmatch ''release not found'') {', 'if ($false) {')
     @($release, '$viewExit = $LASTEXITCODE', '$viewExit = 0')
+
+    # The clip must be in the folder itself, not in the rescue folder
+    @($setup, 'if ($mp3[0].DirectoryName -ne $root) {', 'if ($false) {')
 )
 
 $repository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).ProviderPath

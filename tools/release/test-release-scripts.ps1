@@ -557,12 +557,17 @@ try {
 
     # What --prove-mp3 of the installed exe leaves, on fake files.
     $mp3Number = 0
-    function Test-Mp3Folder([string]$Name, [hashtable]$Sizes, [string]$Reason) {
+    function Test-Mp3Folder([string]$Name, [hashtable]$Sizes, [string]$Reason, [byte[]]$Header = @(0xFF, 0xFB)) {
         $script:mp3Number++
         $folder = Join-Path $temp "mp3-$($script:mp3Number)"
         New-Item -ItemType Directory -Path $folder | Out-Null
         foreach ($file in $Sizes.Keys) {
-            [IO.File]::WriteAllBytes((Join-Path $folder $file), [byte[]](@(1) * $Sizes[$file]))
+            $path = Join-Path $folder $file
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $path) | Out-Null
+            $bytes = [byte[]](@(1) * $Sizes[$file])
+            # The start of an MPEG audio frame, as the encoder writes it.
+            if ($file.EndsWith('.mp3') -and $bytes.Length -ge 2) { $bytes[0] = $Header[0]; $bytes[1] = $Header[1] }
+            [IO.File]::WriteAllBytes($path, $bytes)
         }
         if ($Reason) {
             Assert-Refused $Name { & $checkSetup -CheckMp3Folder $folder } $Reason
@@ -571,11 +576,12 @@ try {
             Assert-Accepted $Name { & $checkSetup -CheckMp3Folder $folder }
         }
     }
-    Test-Mp3Folder 'one MP3 from the installed exe passes' @{ 'clip.mp3' = 100 } ''
+    Test-Mp3Folder 'one MP3 from the installed exe passes' @{ 'clip.mp3' = 25000 } ''
     Test-Mp3Folder 'a WAV in place of the MP3 refused' @{ 'clip.wav' = 100 } 'WAV in place of MP3'
-    Test-Mp3Folder 'a WAV beside the MP3 refused' @{ 'clip.mp3' = 100; 'clip.wav' = 100 } 'WAV in place of MP3'
+    Test-Mp3Folder 'a WAV beside the MP3 refused' @{ 'clip.mp3' = 25000; 'clip.wav' = 100 } 'WAV in place of MP3'
     Test-Mp3Folder 'an empty MP3 refused' @{ 'clip.mp3' = 0 } 'expected one MP3'
-    Test-Mp3Folder 'two MP3 refused' @{ 'a.mp3' = 100; 'b.mp3' = 100 } 'expected one MP3'
+    Test-Mp3Folder 'two MP3 refused' @{ 'a.mp3' = 25000; 'b.mp3' = 25000 } 'expected one MP3'
+    Test-Mp3Folder 'an MP3 in the rescue folder refused' @{ 'rescued\clip.mp3' = 25000 } 'rescue folder'
     Test-Mp3Folder 'an empty MP3 folder refused' @{} 'expected one MP3'
     Assert-Refused 'no MP3 folder refused' { & $checkSetup -CheckMp3Folder (Join-Path $temp 'no-mp3') } 'expected one MP3'
     $setupText = [IO.File]::ReadAllText($checkSetup)
