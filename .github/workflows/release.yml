@@ -100,12 +100,18 @@ jobs:
           }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      # The LGPL source of LAME goes with every release, as verified by build-lame.ps1.
+      # The LGPL source of LAME goes with every release, as verified by build-lame.ps1. The files are then downloaded back and
+      # checked: once published, an immutable release cannot be corrected.
       - name: Attach the files
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh release upload $env:TAG "$env:RUNNER_TEMP/out/Hindsound-$env:VERSION-Setup.exe" "$env:RUNNER_TEMP/out/hindsound-update-win-x64.json" "$env:RUNNER_TEMP/lame/lame-3.100.tar.gz" --clobber
+        run: |
+          gh release upload $env:TAG "$env:RUNNER_TEMP/out/Hindsound-$env:VERSION-Setup.exe" "$env:RUNNER_TEMP/out/hindsound-update-win-x64.json" "$env:RUNNER_TEMP/lame/lame-3.100.tar.gz" --clobber
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          gh release download $env:TAG --dir "$env:RUNNER_TEMP/verify"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./tools/release/check-release-files.ps1 -Folder "$env:RUNNER_TEMP/verify" -Version $env:VERSION -Repository $env:GITHUB_REPOSITORY
 
       # A rerun builds the commit of its event, even after the tag moved to a fix: such a Setup must not go out under the tag.
       - name: Publish the release

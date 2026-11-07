@@ -233,6 +233,46 @@ try {
     Assert-Refused 'missing Setup refused' { & $writeManifest -Version '1.2.3' -SetupPath (Join-Path $temp 'none.exe') -Repository 'owner/name' -OutFile (Join-Path $temp 'none.json') } 'none.exe'
     Report 'no manifest left after a refusal' (-not (Test-Path -LiteralPath (Join-Path $temp 'none.json')))
 
+    # --- check-release-files: the files of the draft, downloaded back ---
+    $checkFiles = Join-Path $PSScriptRoot 'check-release-files.ps1'
+    $filesNumber = 0
+    function New-ReleaseFiles([string]$ManifestVersion = '1.2.3', [string]$Repository = 'owner/name') {
+        $script:filesNumber++
+        $folder = Join-Path $temp "release-files-$($script:filesNumber)"
+        New-Item -ItemType Directory -Path $folder | Out-Null
+        $file = Join-Path $folder 'Hindsound-1.2.3-Setup.exe'
+        [IO.File]::WriteAllBytes($file, [byte[]](1..200 | ForEach-Object { $_ % 7 }))
+        & $writeManifest -Version $ManifestVersion -SetupPath $file -Repository $Repository -OutFile (Join-Path $folder 'hindsound-update-win-x64.json')
+        [IO.File]::WriteAllText((Join-Path $folder 'lame-3.100.tar.gz'), 'fake source')
+        $folder
+    }
+    $releaseFiles = New-ReleaseFiles
+    $fakeLameSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $releaseFiles 'lame-3.100.tar.gz')).Hash.ToLowerInvariant()
+    function Test-ReleaseFiles([string]$Folder) {
+        & $checkFiles -Folder $Folder -Version '1.2.3' -Repository 'owner/name' -LameSha256 $fakeLameSha256
+    }
+    Assert-Accepted 'the files of the release pass' { Test-ReleaseFiles $releaseFiles }
+    Assert-Refused 'another LAME source refused' { & $checkFiles -Folder $releaseFiles -Version '1.2.3' -Repository 'owner/name' } 'lame-3.100.tar.gz on the release'
+    $releaseFiles = New-ReleaseFiles
+    [IO.File]::WriteAllText((Join-Path $releaseFiles 'Hindsound-1.2.2-Setup.exe'), 'left by an earlier run')
+    Assert-Refused 'a file more on the release refused' { Test-ReleaseFiles $releaseFiles } 'expected'
+    $releaseFiles = New-ReleaseFiles
+    Remove-Item -LiteralPath (Join-Path $releaseFiles 'lame-3.100.tar.gz')
+    Assert-Refused 'a file missing on the release refused' { Test-ReleaseFiles $releaseFiles } 'expected'
+    $releaseFiles = New-ReleaseFiles '1.2.4'
+    Assert-Refused 'a manifest of another version refused' { Test-ReleaseFiles $releaseFiles } 'the version 1.2.4'
+    $releaseFiles = New-ReleaseFiles '1.2.3' 'other/name'
+    Assert-Refused 'a manifest with another address refused' { Test-ReleaseFiles $releaseFiles } 'the address'
+    $releaseFiles = New-ReleaseFiles
+    [IO.File]::AppendAllText((Join-Path $releaseFiles 'Hindsound-1.2.3-Setup.exe'), 'x')
+    Assert-Refused 'a Setup longer than in the manifest refused' { Test-ReleaseFiles $releaseFiles } 'the size'
+    $releaseFiles = New-ReleaseFiles
+    $damaged = Join-Path $releaseFiles 'Hindsound-1.2.3-Setup.exe'
+    $damagedBytes = [IO.File]::ReadAllBytes($damaged)
+    $damagedBytes[0] = $damagedBytes[0] -bxor 0xFF
+    [IO.File]::WriteAllBytes($damaged, $damagedBytes)
+    Assert-Refused 'a Setup of the same size with other bytes refused' { Test-ReleaseFiles $releaseFiles } 'the SHA-256'
+
     # --- check-tag: version jumps ---
     $outside = Join-Path $temp 'not-a-repository'
     New-Item -ItemType Directory -Path $outside | Out-Null
@@ -582,6 +622,8 @@ try {
     Report 'the release checks the version jump, with the confirmation' ($releaseText -cmatch 'check-tag\.ps1 -Tag \$env:TAG -MainRef origin/main -CheckVersionJump -ConfirmVersion \$env:RELEASE_CONFIRM_VERSION')
     Report 'the confirmation comes from a repository variable, through env' ($releaseText -cmatch 'RELEASE_CONFIRM_VERSION: \$\{\{ vars\.RELEASE_CONFIRM_VERSION \}\}')
     Report 'the release attaches the Setup, the manifest and the LAME source' ($releaseText -cmatch 'gh release upload [^\n]*Setup\.exe[^\n]*hindsound-update-win-x64\.json[^\n]*lame-3\.100\.tar\.gz')
+    Report 'the release downloads its files back and checks them, before publishing' ($releaseText -cmatch '--clobber\n\s+if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}\n\s+gh release download \$env:TAG --dir "\$env:RUNNER_TEMP/verify"\n\s+if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}\n\s+\./tools/release/check-release-files\.ps1 -Folder "\$env:RUNNER_TEMP/verify" -Version \$env:VERSION -Repository \$env:GITHUB_REPOSITORY\n\n\s+# A rerun')
+    Report 'the release does not give check-release-files its LAME hash' (-not ($releaseText -match '-LameSha256'))
     Assert-Equal 'the token goes to the three steps of the release' 3 ([regex]::Matches($releaseText, 'GH_TOKEN:')).Count
     $firstToken = @($release | Select-String 'GH_TOKEN:')[0].LineNumber
     $draftStep = @($release | Select-String '- name: Create the draft release')[0].LineNumber

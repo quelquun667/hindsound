@@ -25,6 +25,7 @@ $build = 'tools/release/build-lame.ps1'
 $setup = 'tools/release/check-setup.ps1'
 $prove = 'tools/release/prove-encoding.ps1'
 $remote = 'tools/release/check-remote-tag.ps1'
+$assets = 'tools/release/check-release-files.ps1'
 $release = '.github/workflows/release.yml'
 $lame = '.github/workflows/lame.yml'
 
@@ -122,6 +123,16 @@ $mutations = @(
     @($remote, 'if ($null -eq $remoteCommit) {', 'if ($false) {')
     @($remote, 'if ($remoteCommit -cne $Commit) {', 'if ($false) {')
     @($release, './tools/release/check-remote-tag.ps1 -Tag $env:TAG -Commit (git rev-parse HEAD)', 'Write-Output check')
+
+    # The files of the draft, downloaded back
+    @($assets, 'if (($names -join '', '') -cne ($expected -join '', '')) {', 'if ($false) {')
+    @($assets, 'if ("$($manifest.version)" -cne $Version) {', 'if ($false) {')
+    @($assets, 'if ("$($manifest.url)" -cne $url) {', 'if ($false) {')
+    @($assets, 'if ("$($manifest.size)" -cne "$($setup.Length)") {', 'if ($false) {')
+    @($assets, 'if ("$($manifest.sha256)" -cne $setupSha256) {', 'if ($false) {')
+    @($assets, 'if ($lameActual -cne $LameSha256) {', 'if ($false) {')
+    @($release, 'gh release download $env:TAG --dir', 'Write-Output $env:TAG --dir')
+    @($release, './tools/release/check-release-files.ps1 -Folder', 'Write-Output -Folder')
 )
 
 $repository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).ProviderPath
