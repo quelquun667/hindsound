@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.0.9] - 2026-11-07
+
 ### Added
 
 - Keeps the last minutes of PC audio and microphone in memory, stored as 16-bit samples to stay light.
