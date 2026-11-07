@@ -25,7 +25,7 @@
 .PARAMETER ReferenceDll
     The DLL of the NAudio.Lame package, for check-lame-dll.ps1 to compare the exports with.
 .PARAMETER DownloadOnly
-    Stops once the archive is verified: for a release that ships the DLL of the package and must still attach the source.
+    Stops once the archive is verified. No workflow uses it: every release ships the compiled DLL.
 .PARAMETER ExpectedSha256
     For test-release-scripts.ps1 only, with a fake archive. A workflow never passes it.
 .PARAMETER VsDevCmd
