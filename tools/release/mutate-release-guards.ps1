@@ -170,6 +170,10 @@ $mutations = @(
 
     # The latest release, which the app reads
     @($release, '--draft=false --latest', '--draft=false')
+
+    # A failure of gh release view that is not "release not found"
+    @($release, 'if ($viewExit -ne 0 -and "$view" -notmatch ''release not found'') {', 'if ($false) {')
+    @($release, '$viewExit = $LASTEXITCODE', '$viewExit = 0')
 )
 
 $repository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).ProviderPath

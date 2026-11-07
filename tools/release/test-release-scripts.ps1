@@ -669,6 +669,7 @@ try {
     Report 'the release runs the tests' ($releaseText -cmatch '- name: Test\n\s+run: dotnet test Hindsound\.slnx -c Release --filter "Category!=Device"')
     Report 'the release tests its scripts' ($releaseText -cmatch '- name: Test the release scripts\n\s+run: \./tools/release/test-release-scripts\.ps1')
     Report 'the release starts as a verified draft' ($releaseText.Contains('gh release create $env:TAG --draft --verify-tag '))
+    Report 'a failure of gh release view other than "release not found" stops the step' ($releaseText.Contains('2>&1' + "`n" + '          $viewExit = $LASTEXITCODE') -and $releaseText.Contains('if ($viewExit -ne 0 -and "$view" -notmatch ''release not found'') { throw'))
     Report 'a published release is refused' ($releaseText.Contains('if ($isDraft -eq ''false'') { throw "$env:TAG is already published." }'))
     Report 'a draft is reused' ($releaseText.Contains('if ($isDraft -eq ''true'') {'))
     Report 'the token stays out of git' ($releaseText -match '(?m)^\s+persist-credentials: false$')

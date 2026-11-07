@@ -90,7 +90,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          $isDraft = gh release view $env:TAG --json isDraft --jq .isDraft
+          $ErrorActionPreference = 'Continue'
+          $view = gh release view $env:TAG --json isDraft --jq .isDraft 2>&1
+          $viewExit = $LASTEXITCODE
+          # Only a release that does not exist leaves nothing to reuse: a failure of the network or of the token must not create a second draft.
+          if ($viewExit -ne 0 -and "$view" -notmatch 'release not found') { throw "gh release view failed with exit code ${viewExit}: $view" }
+          $isDraft = if ($viewExit -eq 0) { "$view" } else { '' }
           if ($isDraft -eq 'false') { throw "$env:TAG is already published." }
           if ($isDraft -eq 'true') {
             gh release edit $env:TAG --title "Hindsound $env:VERSION" --notes-file "$env:RUNNER_TEMP/release-notes.md"
