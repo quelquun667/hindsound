@@ -24,6 +24,7 @@ $dll = 'tools/release/check-lame-dll.ps1'
 $build = 'tools/release/build-lame.ps1'
 $setup = 'tools/release/check-setup.ps1'
 $prove = 'tools/release/prove-encoding.ps1'
+$remote = 'tools/release/check-remote-tag.ps1'
 $release = '.github/workflows/release.yml'
 $lame = '.github/workflows/lame.yml'
 
@@ -114,6 +115,13 @@ $mutations = @(
     # One release at a time
     @($release, 'cancel-in-progress: false', 'cancel-in-progress: true')
     @($release, '  group: release', '  group: release-${{ github.ref_name }}')
+
+    # The tag on the remote, just before publishing
+    @($remote, 'if ($LASTEXITCODE -ne 0) {', 'if ($false) {')
+    @($remote, 'if ($found.ContainsKey("refs/tags/$Tag^{}")) {', 'if ($false) {')
+    @($remote, 'if ($null -eq $remoteCommit) {', 'if ($false) {')
+    @($remote, 'if ($remoteCommit -cne $Commit) {', 'if ($false) {')
+    @($release, './tools/release/check-remote-tag.ps1 -Tag $env:TAG -Commit (git rev-parse HEAD)', 'Write-Output check')
 )
 
 $repository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).ProviderPath

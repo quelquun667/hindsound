@@ -102,6 +102,40 @@ try {
         Pop-Location
     }
 
+    # --- check-remote-tag: the tag on the remote must still point at the commit built ---
+    $checkRemote = Join-Path $PSScriptRoot 'check-remote-tag.ps1'
+    $remoteRepo = Join-Path $temp 'remote.git'
+    Invoke-Git init -q --bare $remoteRepo
+    $local = Join-Path $temp 'local'
+    New-Item -ItemType Directory -Path $local | Out-Null
+    Push-Location $local
+    try {
+        Invoke-Git init -q -b main
+        Invoke-Git remote add origin $remoteRepo
+        Invoke-Git commit -q --allow-empty -m built
+        $built = "$(& git rev-parse HEAD)"
+        Invoke-Git commit -q --allow-empty -m fix
+        $fix = "$(& git rev-parse HEAD)"
+        Invoke-Git tag -a v1.0.0 -m annotated $built
+        Invoke-Git tag v1.0.1 $built
+        Invoke-Git push -q origin v1.0.0 v1.0.1
+
+        Assert-Accepted 'an annotated tag still on the commit built passes' { & $checkRemote -Tag 'v1.0.0' -Commit $built }
+        Assert-Accepted 'a light tag still on the commit built passes' { & $checkRemote -Tag 'v1.0.1' -Commit $built }
+        Assert-Refused 'a commit other than the tag refused' { & $checkRemote -Tag 'v1.0.0' -Commit $fix } 'now points at'
+        Invoke-Git tag -f -a v1.0.0 -m moved $fix
+        Invoke-Git tag -f v1.0.1 $fix
+        Invoke-Git push -q -f origin v1.0.0 v1.0.1
+        Assert-Refused 'an annotated tag moved on the remote refused' { & $checkRemote -Tag 'v1.0.0' -Commit $built } 'now points at'
+        Assert-Refused 'a light tag moved on the remote refused' { & $checkRemote -Tag 'v1.0.1' -Commit $built } 'now points at'
+        Invoke-Git push -q origin :refs/tags/v1.0.1
+        Assert-Refused 'a tag deleted on the remote refused' { & $checkRemote -Tag 'v1.0.1' -Commit $fix } 'not on origin'
+        Assert-Refused 'a remote that cannot be read refused' { & $checkRemote -Tag 'v1.0.0' -Commit $fix -Remote (Join-Path $temp 'no-remote') } 'cannot be read'
+    }
+    finally {
+        Pop-Location
+    }
+
     # --- extract-changelog ---
     $changelogLines = @(
         '# Changelog'
@@ -554,6 +588,7 @@ try {
     Report 'no step before the draft gets the token' ($firstToken -gt $draftStep)
     Report 'no step of the release is conditional' (-not ($releaseText -match '(?m)^\s+if:'))
     Report 'the releases run one at a time, none cancelled' ($releaseText -cmatch '(?m)^concurrency:\n  group: release\n  cancel-in-progress: false$')
+    Report 'the release checks the tag on the remote just before publishing' ($releaseText -cmatch '- name: Publish the release\n\s+env:\n[^\n]+\n[^\n]+\n\s+run: \|\n\s+\./tools/release/check-remote-tag\.ps1 -Tag \$env:TAG -Commit \(git rev-parse HEAD\)\n\s+gh release edit \$env:TAG --draft=false')
     Report 'the lame workflow only reads' (($lameText -match '(?m)^permissions:\n  contents: read$') -and -not ($lameText -match 'contents: write|GH_TOKEN|gh release'))
 
     foreach ($workflow in @(@('release.yml', $release), @('lame.yml', $lame))) {
