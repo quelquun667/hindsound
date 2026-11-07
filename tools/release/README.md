@@ -148,7 +148,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\release\mutate-release
 `test-release-scripts.ps1` compiles nothing, downloads nothing and installs nothing: `build-lame.ps1` gets a fake compiler, and
 `check-setup.ps1` a fake folder. It runs in CI with `pwsh`. It needs the NAudio.Lame package, so run a restore first.
 `mutate-release-guards.ps1` undoes the guards listed in it, one at a time, on a copy, and fails if the tests do not notice.
-It takes about 20 to 60 s per entry, depending on the load of the PC; `-From` and `-To` run a part of the list.
+It takes about 25 to 45 s per entry, depending on the load of the PC, so the whole list takes about 45 min: run it in parts of
+14 entries (6 to 12 min each) with `-From` and `-To`.
 
 Not covered by these tests, because they need a real run on a runner: in `check-setup.ps1`, the exit codes of the Setup, of
 the installed exe and of the uninstaller, the BMP files, and the exe left after the uninstallation; in `prove-encoding.ps1`,
