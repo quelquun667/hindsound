@@ -10,7 +10,7 @@ permissions: {}
 jobs:
   release:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     permissions:
       contents: write
     env:
@@ -19,8 +19,8 @@ jobs:
       run:
         shell: pwsh
     steps:
-      # The whole history, to tell whether the tag is on main. The token stays out of git: only the steps
-      # that talk to the release receive it.
+      # The whole history and all the tags, to tell whether the tag is on main and what it follows. The token stays out of
+      # git: only the steps that talk to the release receive it.
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -28,8 +28,10 @@ jobs:
           persist-credentials: false
 
       - name: Check the tag
+        env:
+          RELEASE_CONFIRM_VERSION: ${{ vars.RELEASE_CONFIRM_VERSION }}
         run: |
-          $version = ./tools/release/check-tag.ps1 -Tag $env:TAG -MainRef origin/main
+          $version = ./tools/release/check-tag.ps1 -Tag $env:TAG -MainRef origin/main -CheckVersionJump -ConfirmVersion $env:RELEASE_CONFIRM_VERSION
           "VERSION=$version" >> $env:GITHUB_ENV
 
       # Before the long steps: a tag without notes creates no release.
@@ -44,14 +46,33 @@ jobs:
       - name: Test
         run: dotnet test Hindsound.slnx -c Release --filter "Category!=Device"
 
+      - name: Test the release scripts
+        run: ./tools/release/test-release-scripts.ps1
+
       - name: Publish the app
         run: dotnet publish src/Hindsound/Hindsound.csproj -p:PublishProfile=win-x64 "-p:Version=$env:VERSION" "-p:PublishDir=$env:RUNNER_TEMP/publish/"
+
+      # The published folder still holds the DLL of the NAudio.Lame package here: the exports are compared with it.
+      - name: Build LAME
+        timeout-minutes: 15
+        run: ./tools/release/build-lame.ps1 -WorkDir "$env:RUNNER_TEMP/lame" -OutFile "$env:RUNNER_TEMP/lame/libmp3lame.64.dll" -ReferenceDll "$env:RUNNER_TEMP/publish/libmp3lame.64.dll"
+
+      - name: Replace the DLL in the published folder
+        run: Copy-Item -LiteralPath "$env:RUNNER_TEMP/lame/libmp3lame.64.dll" -Destination "$env:RUNNER_TEMP/publish/libmp3lame.64.dll" -Force
+
+      - name: Prove the encoding with the compiled DLL
+        timeout-minutes: 10
+        run: ./tools/release/prove-encoding.ps1 -DllPath "$env:RUNNER_TEMP/lame/libmp3lame.64.dll" -ResultsDir "$env:RUNNER_TEMP/encoding-results"
 
       - name: Build the Setup
         run: |
           $iscc = ./tools/release/get-iscc.ps1 -Destination "$env:RUNNER_TEMP/inno"
           & $iscc /Q "/DMyAppVersion=$env:VERSION" "/DPublishDir=$env:RUNNER_TEMP/publish" "/O$env:RUNNER_TEMP/out" "/FHindsound-$env:VERSION-Setup" installer/Hindsound.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Check the Setup
+        timeout-minutes: 15
+        run: ./tools/release/check-setup.ps1 -SetupPath "$env:RUNNER_TEMP/out/Hindsound-$env:VERSION-Setup.exe" -Version $env:VERSION -DllPath "$env:RUNNER_TEMP/lame/libmp3lame.64.dll" -WorkDir "$env:RUNNER_TEMP/setup-check"
 
       - name: Write the update manifest
         run: ./tools/release/write-manifest.ps1 -Version $env:VERSION -SetupPath "$env:RUNNER_TEMP/out/Hindsound-$env:VERSION-Setup.exe" -Repository $env:GITHUB_REPOSITORY -OutFile "$env:RUNNER_TEMP/out/hindsound-update-win-x64.json"
@@ -73,11 +94,12 @@ jobs:
           }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      # The LGPL source of LAME goes with every release, as verified by build-lame.ps1.
       - name: Attach the files
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh release upload $env:TAG "$env:RUNNER_TEMP/out/Hindsound-$env:VERSION-Setup.exe" "$env:RUNNER_TEMP/out/hindsound-update-win-x64.json" --clobber
+        run: gh release upload $env:TAG "$env:RUNNER_TEMP/out/Hindsound-$env:VERSION-Setup.exe" "$env:RUNNER_TEMP/out/hindsound-update-win-x64.json" "$env:RUNNER_TEMP/lame/lame-3.100.tar.gz" --clobber
 
       - name: Publish the release
         env:

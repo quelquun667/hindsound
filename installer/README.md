@@ -28,6 +28,9 @@ dotnet publish src/Hindsound/Hindsound.csproj -p:PublishProfile=win-x64 "-p:Publ
 
 Measured: exe 17.66 MB, DLL 1.03 MB, Setup 8.23 MB, 7 s for step 3.
 
+These commands make a Setup with the DLL of the NAudio.Lame package. A release does not: the workflow compiles the DLL from the
+LAME source and puts it in the published folder before step 3. See [tools/release/README.md](../tools/release/README.md).
+
 `LICENSE`, `THIRD-PARTY-NOTICES.md` and `licenses\*.txt` are taken from the root of the repo and installed next to the exe,
 under the same names and with the `licenses` folder, because the notices link to them. If one is missing, ISCC fails.
 

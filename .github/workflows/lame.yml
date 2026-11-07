@@ -1,0 +1,50 @@
+name: LAME
+
+# Builds and checks the DLL without publishing anything: the proof that release.yml's compilation works, without a release.
+# The two scripts that read the result count as part of the build they judge, hence their paths below.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/lame.yml
+      - tools/release/build-lame.ps1
+      - tools/release/check-lame-dll.ps1
+      - tools/release/lame-exports.txt
+      - tools/release/prove-encoding.ps1
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-check:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build the tests
+        run: dotnet build tests/Hindsound.Tests/Hindsound.Tests.csproj -c Release
+
+      # The tests' output folder still holds the DLL of the NAudio.Lame package here: the exports are compared with it.
+      - name: Build and check LAME
+        timeout-minutes: 15
+        run: |
+          $package = @(Get-ChildItem -LiteralPath tests/Hindsound.Tests/bin/Release -Recurse -Filter libmp3lame.64.dll)[0].FullName
+          ./tools/release/build-lame.ps1 -WorkDir "$env:RUNNER_TEMP/lame" -OutFile "$env:RUNNER_TEMP/lame/libmp3lame.64.dll" -ReferenceDll $package
+
+      - name: Prove the encoding with the compiled DLL
+        timeout-minutes: 10
+        run: ./tools/release/prove-encoding.ps1 -DllPath "$env:RUNNER_TEMP/lame/libmp3lame.64.dll" -ResultsDir "$env:RUNNER_TEMP/encoding-results"
