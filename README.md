@@ -23,7 +23,7 @@ paste into a Discord message.
   <img src="assets/screenshots/notification-clip-saved.png" alt="The notification after a save: Clip saved (0:30), Copied. Paste Ctrl V" width="408">
 </p>
 
-**Status:** early development. No version is published yet, but you can [build it from source](#build-from-source) today.
+**Status:** early development. The Setup is on the [Releases page](https://github.com/quelquun667/hindsound/releases), and you can also [build it from source](#build-from-source).
 It has been tried on one Windows 11 PC, and some things are [not tried yet](#not-tried-yet).
 
 ## Features
@@ -61,7 +61,8 @@ It has been tried on one Windows 11 PC, and some things are [not tried yet](#not
 
 ## Installation
 
-There is nothing to download yet: no release has been published. Building from source already works.
+Download the Setup from the [Releases page](https://github.com/quelquun667/hindsound/releases), as explained in
+[The Setup](#the-setup) below, or build Hindsound from source.
 
 ### Build from source
 
@@ -83,7 +84,7 @@ dotnet test Hindsound.slnx --filter "Category!=Device"
 The filter leaves out the tests that need real audio devices. To build the Setup as well, follow
 [installer/README.md](installer/README.md).
 
-### The Setup, once a version is out
+### The Setup
 
 1. Download `Hindsound-X.Y.Z-Setup.exe` from the [Releases page](https://github.com/quelquun667/hindsound/releases).
 2. Run it. You will probably see the screen explained below.
@@ -307,12 +308,10 @@ Hindsound has only run on one Windows 11 PC so far. These have not been tried fo
 - unplugging a headset
 - Windows 10
 - the windows of the Setup and its uninstaller
-- the release workflow in `.github`: no release has been made with it yet
-- updating from GitHub: it waits for the first releases, so only a trial folder in place of GitHub has run
+- updating from GitHub: no installed copy has updated itself from a release yet
 
 ## Roadmap
 
-- The first release, with the Setup
 - Mac and Linux versions, with no date yet
 
 ## License
