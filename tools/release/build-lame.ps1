@@ -30,6 +30,8 @@
     For test-release-scripts.ps1 only, with a fake archive. A workflow never passes it.
 .PARAMETER VsDevCmd
     For test-release-scripts.ps1 only, with a fake compiler. A workflow never passes it.
+.PARAMETER Urls
+    For test-release-scripts.ps1 only, with file addresses. A workflow never passes it.
 .EXAMPLE
     ./tools/release/build-lame.ps1 -WorkDir lame -OutFile lame/libmp3lame.64.dll -ReferenceDll publish/libmp3lame.64.dll
 #>
@@ -40,7 +42,11 @@ param(
     [string]$ReferenceDll,
     [switch]$DownloadOnly,
     [string]$ExpectedSha256 = 'ddfe36cab873794038ae2c1210557ad34857a4b6bdc515785d1da9e175b1da1e',
-    [string]$VsDevCmd
+    [string]$VsDevCmd,
+    [string[]]$Urls = @(
+        'https://sourceforge.net/projects/lame/files/lame/3.100/lame-3.100.tar.gz/download'
+        'https://downloads.sourceforge.net/project/lame/lame/3.100/lame-3.100.tar.gz'
+    )
 )
 
 $ErrorActionPreference = 'Stop'
@@ -69,16 +75,20 @@ if ($ArchivePath) {
 else {
     $archive = Join-Path $WorkDir 'lame-3.100.tar.gz'
     # curl: for a browser-like user agent, as Invoke-WebRequest sends, SourceForge answers with a web page, not the file.
-    # The second address is the same file on the download host. The hash below decides either way.
-    $urls = @(
-        'https://sourceforge.net/projects/lame/files/lame/3.100/lame-3.100.tar.gz/download'
-        'https://downloads.sourceforge.net/project/lame/lame/3.100/lame-3.100.tar.gz'
-    )
-    foreach ($url in $urls) {
+    # The second address is the same file on the download host: it is tried when the first one fails or gives another file.
+    foreach ($url in $Urls) {
         Write-Output "Downloading $url"
         & curl.exe --fail --silent --show-error --location --retry 3 --connect-timeout 30 --max-time 300 --output $archive $url
-        if ($LASTEXITCODE -eq 0) { break }
-        Write-Output "curl failed with exit code $LASTEXITCODE."
+        if ($LASTEXITCODE -ne 0) {
+            Write-Output "curl failed with exit code $LASTEXITCODE."
+        }
+        elseif ((Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant() -ceq $ExpectedSha256) {
+            break
+        }
+        else {
+            Write-Output 'What came is not the archive: its SHA-256 differs.'
+        }
+        if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive }
     }
     if (-not (Test-Path -LiteralPath $archive)) {
         throw 'The LAME archive could not be downloaded from any address.'

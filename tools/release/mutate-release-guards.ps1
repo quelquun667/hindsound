@@ -133,6 +133,11 @@ $mutations = @(
     @($assets, 'if ($lameActual -cne $LameSha256) {', 'if ($false) {')
     @($release, 'gh release download $env:TAG --dir', 'Write-Output $env:TAG --dir')
     @($release, './tools/release/check-release-files.ps1 -Folder', 'Write-Output -Folder')
+
+    # The download of the LAME archive
+    @($build, 'elseif ((Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant() -ceq $ExpectedSha256) {', 'elseif ($true) {')
+    @($build, 'if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive }', '')
+    @($build, 'if (-not (Test-Path -LiteralPath $archive)) {', 'if ($false) {')
 )
 
 $repository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).ProviderPath

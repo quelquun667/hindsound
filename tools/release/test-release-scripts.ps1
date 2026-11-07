@@ -441,6 +441,19 @@ try {
     Assert-Accepted 'the download alone needs no compiler' { & $buildLame -WorkDir $work -OutFile (Join-Path $work 'out.dll') -ArchivePath $fakeArchive -ExpectedSha256 $fakeSha256 -DownloadOnly -VsDevCmd (Join-Path $fake 'none.bat') }
     Report 'the download alone extracts nothing' (-not (Test-Path -LiteralPath (Join-Path $work 'src')))
     Assert-Refused 'the download alone still verifies the hash' { & $buildLame -WorkDir $work -OutFile (Join-Path $work 'out.dll') -ArchivePath $fakeArchive -DownloadOnly } 'SHA-256'
+
+    # The download, from file addresses: curl reads them as it reads https.
+    $notArchive = Join-Path $fake 'page.html'
+    [IO.File]::WriteAllText($notArchive, '<html>a web page</html>')
+    function ConvertTo-FileUrl([string]$Path) { 'file:///' + $Path.Replace('\', '/') }
+    $work = New-BuildFolder
+    $downloadOutput = New-Object Collections.ArrayList
+    Assert-Accepted 'a web page at the first address: the second one gives the archive' { & $buildLame -WorkDir $work -OutFile (Join-Path $work 'out.dll') -Urls (ConvertTo-FileUrl $notArchive), (ConvertTo-FileUrl $fakeArchive) -ExpectedSha256 $fakeSha256 -DownloadOnly | ForEach-Object { [void]$downloadOutput.Add("$_") } }
+    Report 'the web page is named in the run log' (@($downloadOutput | Where-Object { $_ -like '*not the archive*' }).Count -eq 1)
+    $work = New-BuildFolder
+    Assert-Refused 'no address gives the archive refused' { & $buildLame -WorkDir $work -OutFile (Join-Path $work 'out.dll') -Urls (ConvertTo-FileUrl $notArchive), (ConvertTo-FileUrl $notArchive) -ExpectedSha256 $fakeSha256 -DownloadOnly } 'from any address'
+    $work = New-BuildFolder
+    Assert-Refused 'no address answers refused' { & $buildLame -WorkDir $work -OutFile (Join-Path $work 'out.dll') -Urls (ConvertTo-FileUrl (Join-Path $fake 'none.tar.gz')) -ExpectedSha256 $fakeSha256 -DownloadOnly } 'from any address'
     $work = New-BuildFolder
     Assert-Refused 'an archive that is not the expected tree refused' { & $buildLame -WorkDir $work -OutFile (Join-Path $work 'out.dll') -ArchivePath $emptyArchive -ExpectedSha256 $emptySha256 -VsDevCmd $fakeVs } 'has no lame-3.100'
     $work = New-BuildFolder
@@ -640,6 +653,7 @@ try {
         Report "$($workflow[0]) puts no expression in a run block" (-not $runText.Contains('${{'))
         Report "$($workflow[0]) lets no step fail silently" (-not ($text -match 'continue-on-error'))
         Report "$($workflow[0]) does not use the test parameters of build-lame" (-not ($text -match '-ExpectedSha256|-VsDevCmd'))
+        Report "$($workflow[0]) does not give build-lame its addresses" (-not ($text -match '-Urls'))
         foreach ($uses in @($workflow[1] | Where-Object { $_ -match '^\s*(- )?uses:' })) {
             Report "$($workflow[0]) pins $($uses.Trim())" ($uses -cmatch '@[0-9a-f]{40} # v[0-9]')
         }
