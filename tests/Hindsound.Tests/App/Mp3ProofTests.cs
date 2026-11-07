@@ -54,6 +54,22 @@ public class Mp3ProofTests
     }
 
     [Fact]
+    public void A_clip_saved_in_the_rescue_folder_fails_the_proof()
+    {
+        using var temp = new TempFolder();
+        var folder = temp.Combine("proof");
+        var file = temp.Combine("a-file");
+        File.WriteAllText(file, "not a folder");
+
+        // The clip is told to go to a file: it cannot, and goes to the rescue folder of the proof, never to the real one.
+        var code = Mp3Proof.Write(folder, new Journal(temp.Combine("proof.log")), openMp3: null, exportFolder: file);
+
+        Assert.Equal(Mp3Proof.ExitFailed, code);
+        var clip = Assert.Single(Directory.GetFiles(temp.Path, "*.mp3", SearchOption.AllDirectories));
+        Assert.Equal(Mp3Proof.RescueFolderFor(Path.GetFullPath(folder)), Path.GetDirectoryName(clip));
+    }
+
+    [Fact]
     public void A_folder_that_cannot_be_written_fails_the_proof()
     {
         using var temp = new TempFolder();

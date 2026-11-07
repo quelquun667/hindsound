@@ -13,7 +13,8 @@ internal static class Mp3Proof
     /// <summary>The MP3 encoder failed, and the clip came out as WAV.</summary>
     public const int ExitFellBackToWav = 4;
 
-    private const int ExitFailed = 3;
+    /// <summary>The clip did not reach the folder given, or the proof broke.</summary>
+    internal const int ExitFailed = 3;
 
     public static int Write(string folder, Journal journal) => Write(folder, journal, openMp3: null);
 
@@ -24,7 +25,8 @@ internal static class Mp3Proof
     internal static string RescueFolderFor(string fullFolder) => Path.Combine(fullFolder, "rescued");
 
     /// <param name="openMp3">For the tests of the fallback. Default: LAME, as for a real clip.</param>
-    internal static int Write(string folder, Journal journal, Func<string, int, int, IAudioFileWriter>? openMp3)
+    /// <param name="exportFolder">For the tests of the rescue: the folder that the clip is told to go to, when it is not the folder given.</param>
+    internal static int Write(string folder, Journal journal, Func<string, int, int, IAudioFileWriter>? openMp3, string? exportFolder = null)
     {
         try
         {
@@ -32,7 +34,7 @@ internal static class Mp3Proof
 
             // The rescue folder inside it: a folder that cannot be written fails here, and nothing reaches %LocalAppData%.
             var saver = new ClipSaver(RescueFolderFor(fullFolder), openMp3: openMp3);
-            var options = new ExportOptions { Format = ExportFormat.Mp3, TrackMode = TrackMode.Mix, OutputFolder = fullFolder };
+            var options = new ExportOptions { Format = ExportFormat.Mp3, TrackMode = TrackMode.Mix, OutputFolder = exportFolder ?? fullFolder };
             var result = saver.Save(new AudioSnapshot(Sine(), []), options);
 
             journal.Write($"prove-mp3: {string.Join(", ", result.Paths)}, {result.SizeBytes} bytes, rescued {result.Rescued}, fell back to WAV {result.FellBackToWav}");
