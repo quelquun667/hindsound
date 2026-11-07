@@ -616,7 +616,16 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
         {
             var before = _state;
             _state = _state with { Pending = new PendingSetup(manifest.Version.ToString(), manifest.Sha256, manifest.Size) };
-            if (Save("download"))
+
+            // An antivirus may take an unsigned Setup away as soon as it is written. Gone already, the step after would
+            // download it again at once, with no timer, and again: the network in a loop.
+            var setupKept = UpdateFiles.DownloadedVersion(_state, folder) == manifest.Version;
+            if (!setupKept)
+            {
+                host.Journal("update download: the Setup is gone");
+            }
+
+            if (setupKept && Save("download"))
             {
                 host.Journal($"update download: Ready {manifest.Version}");
                 host.Changed();
@@ -633,7 +642,8 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
                 return;
             }
 
-            // Without Pending on disk, Run would find nothing: a failure like any other.
+            // Without Pending on disk, Run would find nothing; without the Setup, nothing waits to install: a failure like
+            // any other, and the next try waits for the next check.
             _state = before;
             result = result with { Status = DownloadStatus.DiskFailed };
         }

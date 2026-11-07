@@ -59,9 +59,14 @@ internal sealed class FakeUpdateHost : IUpdateHost
                 return;
             }
 
-            done(work(), null);
+            var result = work();
+            BetweenWorkAndDone?.Invoke();
+            done(result, null);
         });
     }
+
+    /// <summary>Runs after a pass's work, before the flow hears of it: an antivirus that takes the Setup away.</summary>
+    public Action? BetweenWorkAndDone { get; set; }
 
     public void Announce(UpdateVersion version, UpdateMode mode) => Announced.Add((version, mode));
 
