@@ -41,6 +41,10 @@ Never `git push --all` or `--mirror`: the `worktree-*` branches were not scanned
 
 `release.yml` runs these steps in order. A failure stops everything after it, and no Release comes out.
 
+One release runs at a time: a tag pushed during a run waits for it, and no run is cancelled to make room. GitHub keeps one
+waiting run only: a third tag pushed meanwhile cancels the waiting one, whose version then stays below the highest tag and is
+never published.
+
 | Step | What it does |
 | --- | --- |
 | Check the tag | `check-tag.ps1`: the form `vX.Y.Z`, the commit on `origin/main`, the version jump below. |

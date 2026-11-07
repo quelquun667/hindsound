@@ -7,6 +7,12 @@ on:
 
 permissions: {}
 
+# One release at a time, and none cancelled: two runs at once could publish in the wrong order, and the lower version
+# would become the latest release. GitHub keeps one waiting run only: a third tag cancels the one that waits.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: windows-latest

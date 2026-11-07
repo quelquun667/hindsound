@@ -553,6 +553,7 @@ try {
     $draftStep = @($release | Select-String '- name: Create the draft release')[0].LineNumber
     Report 'no step before the draft gets the token' ($firstToken -gt $draftStep)
     Report 'no step of the release is conditional' (-not ($releaseText -match '(?m)^\s+if:'))
+    Report 'the releases run one at a time, none cancelled' ($releaseText -cmatch '(?m)^concurrency:\n  group: release\n  cancel-in-progress: false$')
     Report 'the lame workflow only reads' (($lameText -match '(?m)^permissions:\n  contents: read$') -and -not ($lameText -match 'contents: write|GH_TOKEN|gh release'))
 
     foreach ($workflow in @(@('release.yml', $release), @('lame.yml', $lame))) {

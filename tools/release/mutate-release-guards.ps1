@@ -110,6 +110,10 @@ $mutations = @(
     @($setup, '$_.Extension -eq ''.mp3'' -and $_.Length -gt 0', '$_.Extension -eq ''.mp3''')
     @($setup, '--prove-mp3 `"$mp3`"', '--dump-notifications `"$mp3`"')
     @($setup, "`n    Assert-Mp3Folder `$mp3", '')
+
+    # One release at a time
+    @($release, 'cancel-in-progress: false', 'cancel-in-progress: true')
+    @($release, '  group: release', '  group: release-${{ github.ref_name }}')
 )
 
 $repository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).ProviderPath
