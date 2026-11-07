@@ -312,6 +312,8 @@ try {
         Assert-Refused 'a skipped minor refused' { & $jump 'v0.2.0' } 'is a jump'
         Assert-Refused 'a new major refused' { & $jump 'v1.0.0' } 'is a jump'
         Assert-Refused 'a new major with the next minor refused' { & $jump 'v1.1.0' } 'is a jump'
+        Assert-Refused 'a new major with the next patch refused' { & $jump 'v1.0.10' } 'is a jump'
+        Assert-Refused 'the next minor with the next patch refused' { & $jump 'v0.1.10' } 'is a jump'
         Assert-Refused 'the 9.0.0 of the mistake refused' { & $jump 'v9.0.0' } 'is a jump'
         Assert-Returns 'a new major confirmed' '1.0.0' { & $jump 'v1.0.0' '1.0.0' }
         Assert-Returns 'a skipped minor confirmed' '0.2.0' { & $jump 'v0.2.0' '0.2.0' }

@@ -149,6 +149,10 @@ $mutations = @(
     @($release, 'run: dotnet test Hindsound.slnx', 'run: Write-Output Hindsound.slnx')
     @($release, 'run: ./tools/release/test-release-scripts.ps1', 'run: Write-Output')
     @($release, '"VERSION=$version" >> $env:GITHUB_ENV', '"VERSION=0.1.0" >> $env:GITHUB_ENV')
+
+    # The same minor, for the next patch
+    @($tag, '$sameMinor = $parts[0] -eq $highest[0] -and $parts[1] -eq $highest[1]', '$sameMinor = $parts[1] -eq $highest[1]')
+    @($tag, '$sameMinor = $parts[0] -eq $highest[0] -and $parts[1] -eq $highest[1]', '$sameMinor = $parts[0] -eq $highest[0]')
 )
 
 $repository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).ProviderPath
