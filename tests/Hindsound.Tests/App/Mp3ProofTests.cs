@@ -16,6 +16,17 @@ public class Mp3ProofTests
     }
 
     [Fact]
+    public void An_option_after_a_folder_option_is_not_taken_for_its_folder()
+    {
+        var options = AppOptions.Parse(["--prove-mp3", "--no-mic"]);
+        Assert.Null(options.ProveMp3Folder);
+        Assert.True(options.NoMic);
+
+        Assert.Null(AppOptions.Parse(["--dump-notifications", "--no-mic"]).DumpNotificationsFolder);
+        Assert.Null(AppOptions.Parse(["--dump-settings", "--no-mic"]).DumpSettingsFolder);
+    }
+
+    [Fact]
     public void One_second_of_sine_comes_out_as_one_mp3()
     {
         using var temp = new TempFolder();

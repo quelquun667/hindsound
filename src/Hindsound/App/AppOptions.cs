@@ -59,6 +59,9 @@ internal sealed record AppOptions(
 
     public const string FailCard = "card", FailReload = "reload", FailRun = "run";
 
+    /// <summary>A folder after an option: a value that starts with "--" is the next option, the folder was forgotten.</summary>
+    private static bool IsFolder(string? value) => value is not null && !value.StartsWith("--", StringComparison.Ordinal);
+
     /// <summary>Unknown or incomplete options are ignored: the app is started by Windows, nobody could read an error.</summary>
     public static AppOptions Parse(IReadOnlyList<string> args)
     {
@@ -126,7 +129,7 @@ internal sealed record AppOptions(
                 case "--offscreen":
                     options = options with { Offscreen = true };
                     break;
-                case "--dump-settings" when next is not null:
+                case "--dump-settings" when IsFolder(next):
                     options = options with { DumpSettingsFolder = next };
                     i++;
                     break;
@@ -144,11 +147,11 @@ internal sealed record AppOptions(
                 case "--settings-probe":
                     options = options with { SettingsProbe = true };
                     break;
-                case "--dump-notifications" when next is not null:
+                case "--dump-notifications" when IsFolder(next):
                     options = options with { DumpNotificationsFolder = next };
                     i++;
                     break;
-                case "--prove-mp3" when next is not null:
+                case "--prove-mp3" when IsFolder(next):
                     options = options with { ProveMp3Folder = next };
                     i++;
                     break;
