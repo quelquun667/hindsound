@@ -304,8 +304,11 @@ internal sealed unsafe partial class TextEngine : IDisposable
         return true;
     }
 
-    /// <summary>Draws one line with its top at (x, top), in pixels of the bitmap. Only the box around the text is bound.</summary>
-    public void Draw(nint target, nint brush, nint dc, int width, int height, FontSpec font, string text, float x, float top, uint rgb)
+    /// <summary>
+    /// Draws one line with its top at (x, top), in pixels of the bitmap. Only the box around the text is bound. Gives the HRESULT
+    /// of BindDC or EndDraw: on a failure, nothing was drawn and the painter decides what follows.
+    /// </summary>
+    public int Draw(nint target, nint brush, nint dc, int width, int height, FontSpec font, string text, float x, float top, uint rgb)
     {
         var layout = CreateLayout(font, text);
         try
@@ -321,7 +324,7 @@ internal sealed unsafe partial class TextEngine : IDisposable
             };
             if (box.Right <= box.Left || box.Bottom <= box.Top)
             {
-                return;
+                return 0;
             }
 
             var vtbl = Vtbl(target);
@@ -330,7 +333,7 @@ internal sealed unsafe partial class TextEngine : IDisposable
             if (hr < 0)
             {
                 TellOnce("bind", $"text: BindDC failed (0x{hr:X8})");
-                return;
+                return hr;
             }
 
             ColorF color = new() { R = ((rgb >> 16) & 0xFF) / 255f, G = ((rgb >> 8) & 0xFF) / 255f, B = (rgb & 0xFF) / 255f, A = 1 };
@@ -346,6 +349,8 @@ internal sealed unsafe partial class TextEngine : IDisposable
             {
                 TellOnce("draw", $"text: EndDraw failed (0x{hr:X8})");
             }
+
+            return hr;
         }
         finally
         {
@@ -419,7 +424,8 @@ internal sealed unsafe partial class TextEngine : IDisposable
         }
     }
 
-    private void TellOnce(string key, string line)
+    /// <summary>Writes a line to the journal the first time its key comes.</summary>
+    internal void TellOnce(string key, string line)
     {
         lock (_told)
         {
@@ -694,11 +700,17 @@ internal sealed unsafe partial class TextEngine : IDisposable
 internal sealed unsafe class TextPainter : IDisposable
 {
     private const int StockSystemFont = 13;
+    // D2DERR_RECREATE_TARGET: the target was lost and must be made again.
+    private const int RecreateTarget = unchecked((int)0x8899000C);
+    // Failures of a draw in a row before this painter leaves Direct2D for GDI.
+    private const int FailuresBeforeGdi = 3;
     private readonly nint _dc;
     private readonly Pixels _pixels;
-    private readonly TextEngine? _engine;
-    private readonly nint _target, _brush;
+    private readonly bool _opaque, _clearType;
     private readonly Dictionary<FontSpec, nint> _gdiFonts = [];
+    private TextEngine? _engine;
+    private nint _target, _brush;
+    private int _failures;
 
     /// <param name="engine">Null draws with GDI.</param>
     /// <param name="clearType">For an opaque bitmap only: ClearType needs to know what is below each letter.</param>
@@ -707,7 +719,9 @@ internal sealed unsafe class TextPainter : IDisposable
     {
         _dc = dc;
         _pixels = pixels;
-        if (engine is not null && engine.CreateTarget(opaque ?? clearType, clearType, out _target, out _brush))
+        _opaque = opaque ?? clearType;
+        _clearType = clearType;
+        if (engine is not null && engine.CreateTarget(_opaque, _clearType, out _target, out _brush))
         {
             _engine = engine;
         }
@@ -715,11 +729,25 @@ internal sealed unsafe class TextPainter : IDisposable
 
     public bool UsesDirectWrite => _engine is not null;
 
+    /// <summary>An HRESULT the next draw acts as if EndDraw had given: how the tests reach a lost target.</summary>
+    internal int EndDrawResultForTests { get; set; }
+
+    /// <summary>An HRESULT the next call to the engine throws, as a failed CreateTextLayout would.</summary>
+    internal int ThrowForTests { get; set; }
+
     public float Measure(FontSpec font, string text)
     {
         if (_engine is not null)
         {
-            return _engine.Measure(font, text);
+            try
+            {
+                ThrowIfAsked();
+                return _engine.Measure(font, text);
+            }
+            catch (COMException ex)
+            {
+                LeaveDirectWrite("measure", ex.HResult);
+            }
         }
 
         Native.SelectObject(_dc, GdiFont(font));
@@ -732,7 +760,15 @@ internal sealed unsafe class TextPainter : IDisposable
     {
         if (_engine is not null)
         {
-            return _engine.LineHeight(font);
+            try
+            {
+                ThrowIfAsked();
+                return _engine.LineHeight(font);
+            }
+            catch (COMException ex)
+            {
+                LeaveDirectWrite("measure a line", ex.HResult);
+            }
         }
 
         Native.SelectObject(_dc, GdiFont(font));
@@ -761,6 +797,10 @@ internal sealed unsafe class TextPainter : IDisposable
         return string.Empty;
     }
 
+    /// <summary>
+    /// Draws the text. When Direct2D fails, the text is drawn by GDI this time, so none goes missing; a lost target is made again,
+    /// and after a few failures in a row, or an exception, this painter stays on GDI.
+    /// </summary>
     public void Text(FontSpec font, string text, float x, float top, uint rgb)
     {
         if (text.Length == 0)
@@ -768,9 +808,8 @@ internal sealed unsafe class TextPainter : IDisposable
             return;
         }
 
-        if (_engine is not null)
+        if (_engine is not null && DrawWithEngine(font, text, x, top, rgb))
         {
-            _engine.Draw(_target, _brush, _dc, _pixels.Width, _pixels.Height, font, text, x, top, rgb);
             return;
         }
 
@@ -794,6 +833,73 @@ internal sealed unsafe class TextPainter : IDisposable
         }
     }
 
+    // True when Direct2D drew the text; false when GDI has to.
+    private bool DrawWithEngine(FontSpec font, string text, float x, float top, uint rgb)
+    {
+        var engine = _engine!;
+        try
+        {
+            ThrowIfAsked();
+            var hr = engine.Draw(_target, _brush, _dc, _pixels.Width, _pixels.Height, font, text, x, top, rgb);
+            if (EndDrawResultForTests != 0)
+            {
+                (hr, EndDrawResultForTests) = (EndDrawResultForTests, 0);
+            }
+
+            if (hr == RecreateTarget)
+            {
+                engine.ReleaseTarget(_target, _brush);
+                _target = _brush = 0;
+                if (!engine.CreateTarget(_opaque, _clearType, out _target, out _brush))
+                {
+                    LeaveDirectWrite("make a target", hr);
+                    return false;
+                }
+
+                engine.TellOnce("recreated", $"text: Direct2D target lost (0x{hr:X8}), made again");
+                hr = engine.Draw(_target, _brush, _dc, _pixels.Width, _pixels.Height, font, text, x, top, rgb);
+            }
+
+            if (hr >= 0)
+            {
+                _failures = 0;
+                return true;
+            }
+
+            if (++_failures >= FailuresBeforeGdi)
+            {
+                LeaveDirectWrite("draw", hr);
+            }
+
+            return false;
+        }
+        catch (COMException ex)
+        {
+            LeaveDirectWrite("draw", ex.HResult);
+            return false;
+        }
+    }
+
+    private void ThrowIfAsked()
+    {
+        if (ThrowForTests != 0)
+        {
+            var hr = ThrowForTests;
+            ThrowForTests = 0;
+            throw new COMException("asked by a test", hr);
+        }
+    }
+
+    // This painter draws and measures with GDI from now on; the next canvas tries Direct2D again.
+    private void LeaveDirectWrite(string what, int hr)
+    {
+        var engine = _engine!;
+        engine.TellOnce("left " + what, $"text: DirectWrite failed to {what} (0x{hr:X8}), this bitmap goes on with GDI");
+        engine.ReleaseTarget(_target, _brush);
+        _target = _brush = 0;
+        _engine = null;
+    }
+
     private nint GdiFont(FontSpec font)
     {
         if (!_gdiFonts.TryGetValue(font, out var handle))
@@ -808,6 +914,7 @@ internal sealed unsafe class TextPainter : IDisposable
     public void Dispose()
     {
         _engine?.ReleaseTarget(_target, _brush);
+        _target = _brush = 0;
         if (_gdiFonts.Count > 0)
         {
             Native.SelectObject(_dc, Native.GetStockObject(StockSystemFont));

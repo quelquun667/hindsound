@@ -239,6 +239,137 @@ public unsafe class TextEngineTests
         Assert.True(window > 20, $"{window} fringes in the window");
     }
 
+    // An opaque black bitmap selected in a memory DC, for a painter of its own.
+    private sealed class BlackBitmap : IDisposable
+    {
+        private readonly nint _dib, _old;
+
+        public BlackBitmap(int width, int height)
+        {
+            Native.BITMAPINFOHEADER info = default;
+            info.Size = (uint)sizeof(Native.BITMAPINFOHEADER);
+            info.Width = width;
+            info.Height = -height;
+            info.Planes = 1;
+            info.BitCount = 32;
+            Dc = Native.CreateCompatibleDC(0);
+            void* bits;
+            _dib = Native.CreateDIBSection(Dc, &info, 0, &bits, 0, 0);
+            _old = Native.SelectObject(Dc, _dib);
+            Pixels = new Pixels((uint*)bits, width, height);
+            new Span<uint>(bits, width * height).Fill(0xFF000000);
+        }
+
+        public nint Dc { get; }
+
+        public Pixels Pixels { get; }
+
+        // Pixels of white ink between two rows.
+        public int Ink(int fromRow, int toRow)
+        {
+            var ink = 0;
+            for (var y = fromRow; y < toRow; y++)
+            {
+                var row = Pixels.Row(y);
+                for (var x = 0; x < Pixels.Width; x++)
+                {
+                    ink += ((row[x] >> 8) & 0xFF) > 100 ? 1 : 0;
+                }
+            }
+
+            return ink;
+        }
+
+        public void Dispose()
+        {
+            Native.SelectObject(Dc, _old);
+            Native.DeleteObject(_dib);
+            Native.DeleteDC(Dc);
+        }
+    }
+
+    [Fact]
+    public void A_lost_Direct2D_target_is_made_again_and_the_text_still_drawn()
+    {
+        var lines = new List<string>();
+        using var engine = TextEngine.TryCreate(lines.Add, missingForTests: [])!;
+        using (var bitmap = new BlackBitmap(240, 40))
+        using (var painter = new TextPainter(bitmap.Dc, bitmap.Pixels, engine, clearType: true))
+        {
+            painter.EndDrawResultForTests = unchecked((int)0x8899000C);
+            painter.Text(new FontSpec(Face.Body, 20), "Clip length", 6, 6, 0xFFFFFF);
+            Assert.True(painter.UsesDirectWrite);
+            Assert.True(bitmap.Ink(0, 40) > 50);
+            painter.Text(new FontSpec(Face.Body, 20), "Clip length", 120, 6, 0xFFFFFF);
+            Assert.True(painter.UsesDirectWrite);
+        }
+
+        Assert.Contains(lines, line => line.Contains("Direct2D target lost (0x8899000C), made again"));
+        Assert.Equal(0, engine.HeldForTests);
+    }
+
+    // A failed draw is drawn by GDI, so no text goes missing; three in a row and the painter stays on GDI.
+    [Fact]
+    public void A_failed_draw_is_drawn_by_GDI_and_three_in_a_row_leave_Direct2D()
+    {
+        var lines = new List<string>();
+        using var engine = TextEngine.TryCreate(lines.Add, missingForTests: [])!;
+        using (var bitmap = new BlackBitmap(240, 120))
+        using (var painter = new TextPainter(bitmap.Dc, bitmap.Pixels, engine, clearType: true))
+        {
+            for (var i = 0; i < 3; i++)
+            {
+                Assert.True(painter.UsesDirectWrite);
+                painter.EndDrawResultForTests = unchecked((int)0x80004005);
+                painter.Text(new FontSpec(Face.Body, 20), "Clip length", 6, 6 + i * 36, 0xFFFFFF);
+                Assert.True(bitmap.Ink(i * 36, i * 36 + 36) > 50, $"draw {i}: no ink");
+            }
+
+            Assert.False(painter.UsesDirectWrite);
+            Assert.True(painter.Measure(new FontSpec(Face.Body, 20), "Clip length") > 40);
+        }
+
+        Assert.Contains(lines, line => line.Contains("DirectWrite failed to draw (0x80004005), this bitmap goes on with GDI"));
+        Assert.Equal(0, engine.HeldForTests);
+    }
+
+    // A COMException of DirectWrite (a layout or a format it could not make) never leaves the painter, which goes on with GDI.
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void An_exception_of_DirectWrite_stays_in_the_painter_which_goes_on_with_GDI(int call)
+    {
+        var lines = new List<string>();
+        using var engine = TextEngine.TryCreate(lines.Add, missingForTests: [])!;
+        var font = new FontSpec(Face.Body, 20);
+        using (var bitmap = new BlackBitmap(240, 40))
+        using (var painter = new TextPainter(bitmap.Dc, bitmap.Pixels, engine, clearType: true))
+        {
+            painter.ThrowForTests = unchecked((int)0x8007000E);
+            var result = call switch
+            {
+                0 => painter.Measure(font, "Clip length"),
+                1 => painter.LineHeight(font),
+                _ => Draw(painter, font),
+            };
+
+            Assert.True(result > 0);
+            Assert.False(painter.UsesDirectWrite);
+            painter.Text(font, "Clip length", 6, 6, 0xFFFFFF);
+            Assert.True(bitmap.Ink(0, 40) > 50);
+        }
+
+        Assert.Contains(lines, line => line.Contains("(0x8007000E), this bitmap goes on with GDI"));
+        Assert.Equal(0, engine.HeldForTests);
+
+        static float Draw(TextPainter painter, FontSpec font)
+        {
+            painter.Text(font, "Clip", 120, 6, 0xFFFFFF);
+            return 1;
+        }
+    }
+
     [Fact]
     public void Measures_grow_with_the_text_and_keep_their_fraction()
     {
