@@ -2,20 +2,18 @@
 
 A tag `vX.Y.Z` on `main` is all it takes: GitHub Actions builds the Setup and the manifest, and publishes the Release.
 
-Last checked: 2026-11-07, on Windows 11 for the scripts, by reading and with stand-ins, and on GitHub for `lame.yml`.
+Last checked: 2026-11-08, with the releases of 0.0.9 and 0.0.10 on GitHub.
 
-**What has run on GitHub, as of 2026-11-07: `lame.yml`, once, on the push of `c6fb54d` to `main` (run 42318035034, green):
-the download of the LAME archive and its SHA-256, the compilation, the checks of the DLL and the 6 encoding tests. What has
-never run: `release.yml`. No release has been made, and the installation test of `check-setup.ps1`, the MP3 of the installed
-exe, the upload, the download back and the publication have never run.**
+**What has run on GitHub: `release.yml`, for 0.0.9 (run 42417937500) and 0.0.10 (run 42418331539), on 2026-11-07, both green
+from the tag to the publication. An installed 0.0.9 then updated itself to 0.0.10 from the Release, on 2026-11-08.**
+
+A tag waits until the last run of `lame.yml` is green:
 
 ```powershell
 gh run list --workflow lame.yml --limit 1
 # If no run started, or to run it again on main:
 gh workflow run lame.yml --ref main
 ```
-
-The first tag waits until the last run of `lame.yml` is green.
 
 ## Before the first release
 
@@ -153,7 +151,8 @@ It takes about 25 to 45 s per entry, depending on the load of the PC, so the who
 
 Not covered by these tests, because they need a real run on a runner: in `check-setup.ps1`, the exit codes of the Setup, of
 the installed exe and of the uninstaller, the BMP files, and the exe left after the uninstallation; in `prove-encoding.ps1`,
-the exit code of `dotnet test` and the DLL replaced during the proof. Read them in the log of the first release.
+the exit code of `dotnet test` and the DLL replaced during the proof. After a change to one of these scripts, read them in the
+log of the next release.
 
 **Never start `check-setup.ps1` without `-CheckFolder` on a PC in use, or a release Setup at all.** The script refuses anywhere but
 a GitHub-hosted runner, because the uninstaller of a release build deletes the real log and the real Run value.
