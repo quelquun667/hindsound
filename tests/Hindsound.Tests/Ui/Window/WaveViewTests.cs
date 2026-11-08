@@ -227,7 +227,7 @@ public class WaveViewEngineTests
     {
         using var rig = new AudioTestRig(bufferSeconds: 60, micEnabled: false);
         await rig.Engine.StartAsync();
-        rig.Run(4);
+        rig.Run(4, mic: false);
         rig.Clock.Advance(5);
         var lane = new WaveLane();
         var mic = new WaveLane();
