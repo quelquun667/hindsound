@@ -500,10 +500,25 @@ public class WaveViewZoneTests
     [Theory]
     [InlineData(960)]
     [InlineData(970)]
-    [InlineData(1000)]
     public void A_change_outside_the_saved_part_is_not_mentioned(int frameSeconds)
     {
         Assert.Equal("Save: last 0:30", WaveView.SaveLine(30, Facts(300, 300, 1000, new SourceChange(frameSeconds * Rate, "Discord.exe"))));
+    }
+
+    [Fact]
+    public void A_change_after_the_end_of_the_window_is_not_mentioned()
+    {
+        Assert.Equal("Save: last 0:30", WaveView.SaveLine(30, Facts(300, 300, 1000, new SourceChange(1001 * Rate, "Discord.exe"))));
+    }
+
+    [Fact]
+    public void Paused_after_choosing_an_app_all_that_is_held_is_from_before_it()
+    {
+        // The change sits exactly on the end: nothing was captured from the new source yet.
+        Assert.Equal(
+            "Save: last 0:02 of 0:30 (0:02 from before Discord)",
+            WaveView.SaveLine(30, Facts(300, 2, 1000, new SourceChange(1000 * Rate, "Discord.exe"))));
+        Assert.Equal((2, 2), WaveView.SaveSeconds(30, Facts(300, 2, 1000, new SourceChange(1000 * Rate, "Discord.exe"))));
     }
 
     [Fact]

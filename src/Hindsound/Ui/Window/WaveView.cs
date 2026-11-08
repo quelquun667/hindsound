@@ -209,7 +209,8 @@ internal static class WaveView
     public static (int Kept, int Before) SaveSeconds(int clipSeconds, in WaveFacts facts)
     {
         var start = ZoneStart(clipSeconds, facts);
-        var before = LastChange(facts) is { } change && change.Frame > start && change.Frame < facts.End
+        // A change right at the end counts: paused after choosing an app, everything held is from before it.
+        var before = LastChange(facts) is { } change && change.Frame > start && change.Frame <= facts.End
             ? SecondsOf(change.Frame - start)
             : 0;
         return (SecondsOf(facts.End - start), before);
