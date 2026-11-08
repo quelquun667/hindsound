@@ -356,34 +356,42 @@ public sealed class LibraryStoreTests : IDisposable
     }
 
     [Fact]
-    public void TheFirstWrite_OverAFile_KeepsACopyOfIt_Once()
+    public void WritesOverASoundFile_LeaveNoCopyOfIt()
     {
         var store = Store();
         Create(store, "pets");
-        Assert.False(File.Exists(LibraryPath + ".bak"));
-        var first = File.ReadAllText(LibraryPath);
-
         Create(store, "dogs");
-        Assert.Equal(first, File.ReadAllText(LibraryPath + ".bak"));
-
         Create(store, "cats");
-        Assert.Equal(first, File.ReadAllText(LibraryPath + ".bak"));
-        Assert.Equal(["library.json", "library.json.bak"], Files());
+
+        Assert.Equal(["library.json"], Files());
     }
 
     [Fact]
-    public void TheFirstCopyFails_NothingIsWritten()
+    public void ASoundFile_NeedsNoRoomForACopy()
     {
         var store = Store();
         Create(store, "pets");
-        var before = File.ReadAllBytes(LibraryPath);
 
-        // A folder in its place: not an existing file, and nothing can be copied there.
+        // A folder where a copy would go: with no copy to make, it is no obstacle.
         Directory.CreateDirectory(LibraryPath + ".bak");
         var change = store.CreateCollection("dogs", ClipScan.Nothing, Now);
 
-        Assert.Equal(LibraryOutcome.NotWritten, change.Outcome);
-        Assert.Equal(before, File.ReadAllBytes(LibraryPath));
+        Assert.Equal(LibraryOutcome.Done, change.Outcome);
+        Assert.Equal(["pets", "dogs"], store.Read().Data.Collections.Select(c => c.Name));
+    }
+
+    [Fact]
+    public void ADeletedCollection_LeavesItsNameInNoFileOfTheFolder()
+    {
+        var store = Store();
+        var id = Create(store, "Collection-Canary-7F3");
+        Create(store, "dogs");
+
+        Assert.Equal(LibraryOutcome.Done, store.DeleteCollection(id, ClipScan.Nothing, Now).Outcome);
+
+        var files = Directory.GetFiles(_folder, "*", SearchOption.AllDirectories);
+        Assert.NotEmpty(files);
+        Assert.All(files, file => Assert.DoesNotContain("Collection-Canary-7F3", File.ReadAllText(file)));
     }
 
     [Fact]

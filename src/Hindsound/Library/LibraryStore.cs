@@ -459,7 +459,8 @@ public sealed class LibraryStore
 
             try
             {
-                KeepFirstCopy();
+                // No copy of a sound file: it would keep for good the name of a collection the user deleted. Only a broken
+                // file is copied, in StartOver, where the user asked to leave it behind.
                 AtomicFile.Write(Path, JsonSerializer.Serialize(data, TypeInfo));
                 return new LibraryChange(LibraryOutcome.Done, new LibraryRead(LibraryStatus.Loaded, data));
             }
@@ -470,17 +471,6 @@ public sealed class LibraryStore
                 // What the disk holds, so a screen drawn from it shows no star and no collection that was not saved.
                 return new LibraryChange(LibraryOutcome.NotWritten, ReadFile());
             }
-        }
-    }
-
-    // The file as it was before this store first wrote over it: the user may have edited it, and a write keeps only what it
-    // knows. Once, so the folder doesn't fill up. A failure stops the write that comes after it.
-    private void KeepFirstCopy()
-    {
-        var copy = Path + ".bak";
-        if (File.Exists(Path) && !File.Exists(copy))
-        {
-            File.Copy(Path, copy, overwrite: false);
         }
     }
 }
