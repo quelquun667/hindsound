@@ -95,8 +95,10 @@ the next Windows session, through the Run value if the user has it.
 To check that a release has none of it, save the preprocessed script: add `#expr SaveToFile("<file>")` at the end of a copy
 of `Hindsound.iss` in this folder, and compile it with `ISCC /O-`. `--settings` must not appear in it.
 
-The app of a trial comes from a scratch copy of `src/Hindsound/` where `App/Program.cs` differs in two lines: the same mutex
-name, and `options = options.SettingsPath is null ? options with { SettingsPath = @"<TrialRoot>\settings.json" } : options;`
+The app of a trial comes from a scratch copy of `src/Hindsound/` where `App/Program.cs` differs in two places. First,
+`MutexNameFor` is made to return `@"Local\HindsoundTrial.SingleInstance"` whatever the options say: since 08/11/2026 any
+run with `--settings`, which every start of a trial has, gets a hashed name of its own and never looks at `MutexName`, so
+changing that constant has no effect. Second, `options = options.SettingsPath is null ? options with { SettingsPath = @"<TrialRoot>\settings.json" } : options;`
 after `AppOptions.Parse`. So it can never start on the real settings, and no other Hindsound on the PC can disturb it.
 Publish it twice, with `-p:Version=1.0.0` and `-p:Version=1.0.1`, and compile each with:
 
@@ -114,9 +116,14 @@ Two seconds after each start, `<TrialRoot>\settings.log` must say `mic enabled F
 `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=<TrialRoot>\install /LOG=<file>`. To lock a file, another process keeps it
 open: `[IO.File]::Open($path, 'Open', 'Read', 'Read')`. The running app leaves by itself: `--exit-after 8`.
 
-The real mutex name needs one more trial: exes from unmodified code, and a copy of `Hindsound.iss` in this folder with
-`Local\HindsoundTrial.SingleInstance` replaced by `Local\Hindsound.SingleInstance`, still with `/DTrialRoot`. Wait until no
-other Hindsound holds the mutex: `[Threading.Mutex]::OpenExisting('Local\Hindsound.SingleInstance')` must throw.
+The real mutex name needs one more trial: exes from a scratch copy where `MutexNameFor` returns `MutexName`, the real
+name, whatever the options say (the code as it is cannot hold that name under `--settings`, which `/DTrialRoot` always
+passes), and a copy of `Hindsound.iss` in this folder with `Local\HindsoundTrial.SingleInstance` replaced by
+`Local\Hindsound.SingleInstance`, still with `/DTrialRoot`. Wait until no other Hindsound holds the mutex:
+`[Threading.Mutex]::OpenExisting('Local\Hindsound.SingleInstance')` must throw.
+
+The two trials above were rewritten on 08/11/2026 to match the mutex code of that day and have not been run since. The
+results below date from 06/11/2026, before `MutexNameFor` existed, when the trial copy only had to change the constant.
 
 Results of 06/11/2026:
 
@@ -133,7 +140,7 @@ Results of 06/11/2026:
 | App outlives the wait | `1.0.1 Setup /WAITEXIT=3 /RESTARTAPP` | Exit 1 in 3.8 s. Same process alive, no second one. |
 | App leaves after the wait | `1.0.1 Setup /WAITEXIT=60 /RESTARTAPP`, app leaves after 70 s | Exit 1 in 62 s. The app leaves at 69 s. 15 s later no process runs, and 1.0.0 is still on disk. This is why N is 330. |
 | Slowest exit | `1.0.1 Setup /WAITEXIT=330 /RESTARTAPP`, app leaves after 300 s | Exit 0 in 299 s. Waited 286 s. 1.0.1 runs, mic off. |
-| Real mutex name | `1.0.1 Setup /WAITEXIT=330 /RESTARTAPP`, unmodified exes | The running exe holds the mutex. Uninstall refused, exit 1. `/WAITEXIT=2`: exit 1, app alive. Then exit 0 in 9.4 s, waited 7.6 s, 1.0.1 runs, mic off. |
+| Real mutex name | `1.0.1 Setup /WAITEXIT=330 /RESTARTAPP`, exes holding the real name | The running exe holds the mutex. Uninstall refused, exit 1. `/WAITEXIT=2`: exit 1, app alive. Then exit 0 in 9.4 s, waited 7.6 s, 1.0.1 runs, mic off. |
 | No wait | `1.0.1 Setup` | Exit 1 in 0.6 s. App untouched. |
 | First installation fails | `1.0.1 Setup /RESTARTAPP`, a locked `Hindsound.exe` in the folder | Exit 5. No Uninstall key, no shortcut, DLL and licence removed. Nothing started. |
 | Uninstall, app running | `unins000.exe` | Exit 1. Nothing changed. |
