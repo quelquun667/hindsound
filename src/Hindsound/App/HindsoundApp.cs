@@ -1,4 +1,4 @@
-using Hindsound.Audio;
+﻿using Hindsound.Audio;
 using Hindsound.Export;
 using Hindsound.Input;
 using Hindsound.Settings;
@@ -582,7 +582,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         var withdrawn = _pending.WithdrawCeased(status);
         _notices.WithdrawCeased(status);
         _window?.Screen.UpdateStatus(status);
-        if (StatusTransitions.NoticeContent(notice, status, _settings, _hotkeyResults, _updatedTo) is { } content)
+        if (NoticeContentFor(notice, status) is { } content)
         {
             ShowStatus(content, notice is StatusNotice.CaptureOn or StatusNotice.Paused ? TakePauseScreen() : null);
         }
@@ -896,7 +896,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
                     _notices.PushedAside(onScreen, _lastStatus);
                 }
 
-                PresentNow(StatusTransitions.FreshFrom(next, _settings, _hotkeyResults, _updatedTo, _lastStatus), decision.ClickThrough);
+                PresentNow(FreshNow(next), decision.ClickThrough);
                 return;
             }
 
@@ -1015,7 +1015,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         var (state, covers) = Surface();
         if (FullscreenPolicy.BackOnDesktop(state, covers) && _pending.TakeNext(NowMs) is { } next)
         {
-            Present(StatusTransitions.FreshFrom(next, _settings, _hotkeyResults, _updatedTo, _lastStatus), clickThrough: false);
+            Present(FreshNow(next), clickThrough: false);
             RefreshTray();
         }
     }
@@ -1131,6 +1131,17 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         }
     }
 
+    // What the menu, the waiting notices and the status notices say about the memory is read here, from the last status, at the
+    // moment they are made: kept apart from the windows so a test can look at the wiring itself.
+    internal IReadOnlyList<TrayMenuItem> MenuItemsNow() =>
+        TrayMenu.ItemsFor(_lastStatus, _lastClip is not null, _leave.Waiting, _updates?.MenuVersion is { } version ? $"Update to {version}..." : null);
+
+    internal NotificationContent FreshNow(NotificationContent waited) =>
+        StatusTransitions.FreshFrom(waited, _settings, _hotkeyResults, _updatedTo, _lastStatus);
+
+    internal NotificationContent? NoticeContentFor(StatusNotice notice, AudioEngineStatus status) =>
+        StatusTransitions.NoticeContent(notice, status, _settings, _hotkeyResults, _updatedTo);
+
     private TrayCommand AskTrayMenu(nuint wParam)
     {
         ReloadSettingsIfChanged();
@@ -1141,8 +1152,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
             return (TrayCommand)(wParam & 0xFFFF);
         }
 
-        return _tray.ShowMenu((short)(wParam & 0xFFFF), (short)((wParam >> 16) & 0xFFFF), TrayMenu.ItemsFor(_lastStatus, _lastClip is not null, _leave.Waiting,
-            _updates?.MenuVersion is { } version ? $"Update to {version}..." : null));
+        return _tray.ShowMenu((short)(wParam & 0xFFFF), (short)((wParam >> 16) & 0xFFFF), MenuItemsNow());
     }
 
     private void OpenClipsFolder()
