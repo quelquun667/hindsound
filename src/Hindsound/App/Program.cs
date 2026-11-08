@@ -1,9 +1,13 @@
+using System.Security.Cryptography;
+using System.Text;
+
 namespace Hindsound.App;
 
 /// <summary>The entry point: no interface framework, one instance at a time.</summary>
 internal static class Program
 {
     private const string MutexName = @"Local\Hindsound.SingleInstance";
+    private const string TestMutexPrefix = @"Local\Hindsound.SingleInstance.Test.";
     private const int ExitAnotherInstance = 2;
     private const int ExitFailed = 3;
 
@@ -12,6 +16,22 @@ internal static class Program
     /// again after a failed update: waking the running one would open its settings in front of whatever the user is doing.
     /// </summary>
     internal static bool WakesTheFirstInstance(AppOptions options) => options.SettingsPath is null && !options.UpdateFailed;
+
+    /// <summary>
+    /// Setup waits on the plain name, so a real launch keeps it. A run with its own settings file gets a name of its own, so
+    /// it can run beside the user's copy, and two runs on one file still refuse each other. The name has to be the same from
+    /// one process to the next, which rules out <see cref="string.GetHashCode()"/>; Windows paths ignore case, so must the name.
+    /// </summary>
+    internal static string MutexNameFor(AppOptions options)
+    {
+        if (options.SettingsPath is not { } path)
+        {
+            return MutexName;
+        }
+
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(path).ToUpperInvariant()));
+        return TestMutexPrefix + Convert.ToHexString(hash);
+    }
 
     [STAThread]
     private static int Main(string[] args)
@@ -52,7 +72,7 @@ internal static class Program
             }
         }
 
-        using var instance = new Mutex(true, MutexName, out var first);
+        using var instance = new Mutex(true, MutexNameFor(options), out var first);
         if (!first)
         {
             journal.Write("another instance is running: leaving");
