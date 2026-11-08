@@ -2,7 +2,7 @@ using Hindsound.Audio;
 
 namespace Hindsound.Ui.Window;
 
-/// <summary>What the two labels and the middle mark of the wave's axis say.</summary>
+/// <summary>What the three labels of the wave's axis say.</summary>
 internal readonly record struct WaveAxis(string Left, string Middle, string Right);
 
 /// <summary>A change of source that shows in the window, and the column its line goes on.</summary>

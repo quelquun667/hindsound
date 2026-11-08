@@ -22,7 +22,7 @@ public sealed class WaveLane
     /// <summary>Nothing to show here: not held, not read yet, or touched by the writer. Not the same as silence.</summary>
     public const byte Empty = 255;
 
-    /// <summary>Samples one pass may read over both lanes: about 8 ms. 5:00 with the microphone takes 2 passes, 30:00 takes 9.</summary>
+    /// <summary>Samples one pass may read over both lanes, 8 to 20 ms as measured. 5:00 with the microphone takes 2 passes, 30:00 takes 9.</summary>
     public const long PassSamples = 32_000_000;
 
     private SourceTrack? _track;
