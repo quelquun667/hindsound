@@ -117,6 +117,10 @@ internal static class TrayMenu
     }
 
     // The menu is read in one look, just before the clip: an entry says when it would come out shorter than its words.
+    /// <summary><see cref="Items"/> from the last status of the engine: whether it is paused and what the memory holds are read from it, every time the menu opens.</summary>
+    public static IReadOnlyList<TrayMenuItem> ItemsFor(Audio.AudioEngineStatus? status, bool hasLastClip, bool closingAfterClip, string? updateText) =>
+        Items(status?.Activity == Audio.CaptureActivity.Paused, hasLastClip, closingAfterClip, updateText, status?.Buffered);
+
     private static TrayMenuItem SaveItem(TrayCommand command, string text, int seconds, TimeSpan? buffered)
     {
         if (buffered is not { } held)

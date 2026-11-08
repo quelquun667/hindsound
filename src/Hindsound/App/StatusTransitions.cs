@@ -196,6 +196,26 @@ internal static class StatusTransitions
         waited.Kind == NotificationKind.CaptureOn ? CaptureOnNow(settings, hotkeys, updatedTo, keptSeconds) : waited;
 
     /// <summary>
+    /// What the memory holds in whole seconds, read from the last status at the moment a text is made; null before the
+    /// first status. Every argument is required: a caller that forgets one does not compile instead of saying a stale number.
+    /// </summary>
+    public static int? KeptSecondsOf(AudioEngineStatus? status) => status is null ? null : KeptDuration.SecondsOf(status.Buffered);
+
+    /// <summary><see cref="Fresh"/> with the memory read from the last status.</summary>
+    public static NotificationContent FreshFrom(NotificationContent waited, AppSettings settings, IReadOnlyList<HotkeyResult> hotkeys, string? updatedTo, AudioEngineStatus? status) =>
+        Fresh(waited, settings, hotkeys, updatedTo, KeptSecondsOf(status));
+
+    /// <summary>What a notice from the engine says, made from the status that raised it; null for a notice with no text of its own here.</summary>
+    public static NotificationContent? NoticeContent(StatusNotice notice, AudioEngineStatus status, AppSettings settings, IReadOnlyList<HotkeyResult> hotkeys, string? updatedTo) => notice switch
+    {
+        StatusNotice.CaptureOn => CaptureOnNow(settings, hotkeys, updatedTo, KeptSecondsOf(status)),
+        StatusNotice.Paused => NotificationStates.Paused(KeptSecondsOf(status) ?? 0),
+        StatusNotice.NoDevice => NotificationStates.NoDevice(),
+        StatusNotice.DeviceChanged => NotificationStates.DeviceChanged(status.SystemDeviceName ?? "the default output"),
+        _ => null,
+    };
+
+    /// <summary>
     /// The icon and its tip, from everything that is true now, so that nothing stays out of date. The tip names the first
     /// problem. A microphone not captured, or another shortcut refused, only goes in the tip: clips still get saved.
     /// </summary>

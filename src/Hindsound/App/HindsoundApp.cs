@@ -582,20 +582,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         var withdrawn = _pending.WithdrawCeased(status);
         _notices.WithdrawCeased(status);
         _window?.Screen.UpdateStatus(status);
-        switch (notice)
+        if (StatusTransitions.NoticeContent(notice, status, _settings, _hotkeyResults, _updatedTo) is { } content)
         {
-            case StatusNotice.CaptureOn:
-                ShowStatus(StatusTransitions.CaptureOnNow(_settings, _hotkeyResults, _updatedTo, KeptSecondsNow), TakePauseScreen());
-                break;
-            case StatusNotice.Paused:
-                ShowStatus(NotificationStates.Paused(KeptSecondsNow ?? 0), TakePauseScreen());
-                break;
-            case StatusNotice.NoDevice:
-                ShowStatus(NotificationStates.NoDevice());
-                break;
-            case StatusNotice.DeviceChanged:
-                ShowStatus(NotificationStates.DeviceChanged(status.SystemDeviceName ?? "the default output"));
-                break;
+            ShowStatus(content, notice is StatusNotice.CaptureOn or StatusNotice.Paused ? TakePauseScreen() : null);
         }
 
         if (MicLossWatch.WorthTelling(micNotice, notice, lossNeverShown: withdrawn?.Kind == NotificationKind.MicLost))
@@ -844,9 +833,6 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         }
     }
 
-    // Read when a notification is made, which can be long after the status that asked for it: at a launch, that one says 0.
-    private int? KeptSecondsNow => _lastStatus is { } status ? KeptDuration.SecondsOf(status.Buffered) : null;
-
     private void ShowStatus(NotificationContent content, ScreenInfo? screen = null)
     {
         var (state, covers) = Surface();
@@ -910,7 +896,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
                     _notices.PushedAside(onScreen, _lastStatus);
                 }
 
-                PresentNow(StatusTransitions.Fresh(next, _settings, _hotkeyResults, _updatedTo, KeptSecondsNow), decision.ClickThrough);
+                PresentNow(StatusTransitions.FreshFrom(next, _settings, _hotkeyResults, _updatedTo, _lastStatus), decision.ClickThrough);
                 return;
             }
 
@@ -1029,7 +1015,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         var (state, covers) = Surface();
         if (FullscreenPolicy.BackOnDesktop(state, covers) && _pending.TakeNext(NowMs) is { } next)
         {
-            Present(StatusTransitions.Fresh(next, _settings, _hotkeyResults, _updatedTo, KeptSecondsNow), clickThrough: false);
+            Present(StatusTransitions.FreshFrom(next, _settings, _hotkeyResults, _updatedTo, _lastStatus), clickThrough: false);
             RefreshTray();
         }
     }
@@ -1155,9 +1141,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
             return (TrayCommand)(wParam & 0xFFFF);
         }
 
-        var paused = _lastStatus?.Activity == CaptureActivity.Paused;
-        return _tray.ShowMenu((short)(wParam & 0xFFFF), (short)((wParam >> 16) & 0xFFFF), TrayMenu.Items(paused, _lastClip is not null, _leave.Waiting,
-            _updates?.MenuVersion is { } version ? $"Update to {version}..." : null, _lastStatus?.Buffered));
+        return _tray.ShowMenu((short)(wParam & 0xFFFF), (short)((wParam >> 16) & 0xFFFF), TrayMenu.ItemsFor(_lastStatus, _lastClip is not null, _leave.Waiting,
+            _updates?.MenuVersion is { } version ? $"Update to {version}..." : null));
     }
 
     private void OpenClipsFolder()

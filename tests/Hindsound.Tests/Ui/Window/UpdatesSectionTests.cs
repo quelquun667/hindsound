@@ -290,6 +290,19 @@ public sealed class UpdatesSectionTests : IDisposable
         Assert.Equal(["card.save", "card.update", "card.cancel"], Screen.StopIds().Where(id => id.StartsWith("card.", StringComparison.Ordinal)));
     }
 
+    [Fact]
+    public void Card_says_what_the_memory_holds_when_the_status_says_less_than_the_setting()
+    {
+        var panel = WithPanel();
+        panel.Buffer = 300;
+        Screen.UpdateStatus(ScreenRig.Capturing() with { Buffered = TimeSpan.FromSeconds(12) });
+        Screen.ShowUpdateCard();
+        var painted = Painted(Paint());
+
+        Assert.Contains("The last 0:12 in memory will be lost.", painted);
+        Assert.DoesNotContain("The last 5:00", painted);
+    }
+
     [Theory]
     [InlineData(90, "1:30")]
     [InlineData(600, "10:00")]
