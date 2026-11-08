@@ -173,6 +173,9 @@ public sealed class AudioEngine : IDisposable
     private int _disposed;
     private AudioEngineStatus? _lastPublished;
     private string? _notedApp;
+
+    // The choice in force before the last note, to tell a choice taken back from a new one. Only read with a last note.
+    private string? _appBeforeNote;
     private SourceChange[] _sourceChanges = [];
 
     /// <param name="options">The starting settings.</param>
@@ -358,6 +361,7 @@ public sealed class AudioEngine : IDisposable
             return;
         }
 
+        var before = _notedApp;
         _notedApp = wanted;
 
         // Without a track there is no past to tell apart.
@@ -366,11 +370,26 @@ public sealed class AudioEngine : IDisposable
             return;
         }
 
+        // Time stands still while paused: a second choice lands on the frame of the first, with no audio between them.
+        // The first line then stands where nothing was heard and means nothing, and a choice taken back changed nothing.
+        var frame = Math.Max(_timeline.NowFrames, track.EndFrame);
         var changes = _sourceChanges;
-        var kept = changes.AsSpan(Math.Max(0, changes.Length - (SourceChangesKept - 1)));
-        var next = new SourceChange[kept.Length + 1];
+        var replaces = changes.Length > 0 && changes[^1].Frame == frame;
+        if (!replaces)
+        {
+            _appBeforeNote = before;
+        }
+
+        var cancels = replaces && string.Equals(wanted, _appBeforeNote, StringComparison.OrdinalIgnoreCase);
+        var old = replaces ? changes.AsSpan(0, changes.Length - 1) : changes.AsSpan();
+        var kept = old[Math.Max(0, old.Length - (cancels ? SourceChangesKept : SourceChangesKept - 1))..];
+        var next = new SourceChange[kept.Length + (cancels ? 0 : 1)];
         kept.CopyTo(next);
-        next[^1] = new SourceChange(Math.Max(_timeline.NowFrames, track.EndFrame), wanted);
+        if (!cancels)
+        {
+            next[^1] = new SourceChange(frame, wanted);
+        }
+
         Volatile.Write(ref _sourceChanges, next);
     }
 
