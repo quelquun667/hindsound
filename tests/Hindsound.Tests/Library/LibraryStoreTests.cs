@@ -498,6 +498,23 @@ public sealed class LibraryStoreTests : IDisposable
     }
 
     [Fact]
+    public void Delete_LeavesTheIdNowhere_NeitherInTheFileNorInWhatItReturns()
+    {
+        var store = Store();
+        var kept = Create(store, "pets");
+        const string gone = "c2";
+        Assert.Equal(gone, Create(store, "dogs"));
+        var clip = Clip("a.mp3");
+        store.SetInCollection(clip, kept, true, ClipScan.Nothing, Now);
+        store.SetInCollection(clip, gone, true, ClipScan.Nothing, Now);
+
+        var change = store.DeleteCollection(gone, ClipScan.Nothing, Now);
+
+        Assert.Equal([kept], Assert.Single(change.Library.Data.Clips).Collections);
+        Assert.DoesNotContain($"\"{gone}\"", File.ReadAllText(LibraryPath));
+    }
+
+    [Fact]
     public void Delete_TheLastLabelOfAClip_LeavesNoEntry_ButAStarredOneStays()
     {
         var store = Store();
