@@ -134,7 +134,7 @@ The first time, with no settings file yet, a card walks you through three steps:
 
 1. `Pick your hotkey`: keep `Ctrl+Shift+F10` or press another one.
 2. `Check your mic`: speak, and the bar should move. Choose `Off` if you only want the PC sound.
-3. `Try it`: say something, then press your hotkey.
+3. `Try it`: wait a few seconds, say something, then press your hotkey.
 
 The card also offers `Start with Windows`, which is off by default, and says that Hindsound checks GitHub for updates once a day.
 

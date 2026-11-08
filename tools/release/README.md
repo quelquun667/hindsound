@@ -15,9 +15,9 @@ gh run list --workflow lame.yml --limit 1
 gh workflow run lame.yml --ref main
 ```
 
-## Before the first release
+## Settings of the repository
 
-These are settings of the repository, once: secret scanning, push protection and immutable releases. The rest needs nothing.
+Once: secret scanning, push protection and immutable releases. The rest needs nothing.
 
 ## Release a version
 

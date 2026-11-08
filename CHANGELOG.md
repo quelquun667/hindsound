@@ -8,9 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- The notification at the start says what is really kept: `Filling, up to 5:00`, then `2:10 of 5:00 kept`, and `Keeping the last 5:00` only once it is true. A pause says what can still be saved.
+- The notification says what is really kept when it shows: `Filling, up to 5:00` at the start, `2:10 of 5:00 kept` when capture resumes, and `Keeping the last 5:00` only once it is true. A pause says what can still be saved.
 - The band of the window shows `0:12 / 5:00` while the memory fills.
-- `Save last 30s` is now `Save up to 30s`, on the button, in the tray menu and on the Hotkeys page. An entry of the menu longer than what is kept says so: `Save up to 5 min (only 0:12)`.
+- `Save last ...` is now `Save up to ...`, on the button, in the tray menu and on the Hotkeys page. An entry of the menu longer than what is kept says so: `Save up to 5 min (only 0:12)`.
 - The button and the save entries of the menu are grey with less than a second kept.
 - A clip that takes a while to write says the length it really has: `Saving clip (0:12)`, not the length asked for.
 - The first-launch card and the update card follow what is kept and the length of a clip.
