@@ -33,6 +33,9 @@ internal static class Program
         return TestMutexPrefix + Convert.ToHexString(hash);
     }
 
+    /// <summary>Holds the name for as long as the mutex lives. <paramref name="first"/> says whether nobody held it before.</summary>
+    internal static Mutex TakeInstance(AppOptions options, out bool first) => new(true, MutexNameFor(options), out first);
+
     [STAThread]
     private static int Main(string[] args)
     {
@@ -72,7 +75,7 @@ internal static class Program
             }
         }
 
-        using var instance = new Mutex(true, MutexNameFor(options), out var first);
+        using var instance = TakeInstance(options, out var first);
         if (!first)
         {
             journal.Write("another instance is running: leaving");

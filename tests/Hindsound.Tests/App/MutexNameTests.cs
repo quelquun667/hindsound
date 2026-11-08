@@ -58,6 +58,23 @@ public class MutexNameTests
         Assert.Equal(NameFor("--settings", full), NameFor("--settings", full.ToUpperInvariant()));
     }
 
+    // Only with --settings: a test must never hold the real name, which Setup and a real launch wait on.
+    [Fact]
+    public void The_mutex_taken_is_the_one_of_the_settings_file()
+    {
+        var file = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json");
+        var options = AppOptions.Parse(["--settings", file]);
+
+        using var held = Program.TakeInstance(options, out var first);
+        Assert.True(first);
+
+        using var again = Program.TakeInstance(options, out var second);
+        Assert.False(second);
+
+        using var other = Program.TakeInstance(AppOptions.Parse(["--settings", file + ".other"]), out var third);
+        Assert.True(third);
+    }
+
     [Fact]
     public void Two_files_never_share_a_name()
     {
