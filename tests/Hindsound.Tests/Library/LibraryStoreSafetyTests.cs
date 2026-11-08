@@ -157,5 +157,22 @@ public sealed class LibraryStoreSafetyTests : IDisposable
         Assert.Equal(3, paths.Distinct(StringComparer.OrdinalIgnoreCase).Count());
     }
 
+    [Fact]
+    public void ALineWithNoFile_IsRefused_AndNothingIsWritten()
+    {
+        var store = Store();
+        var id = store.CreateCollection("pets", ClipScan.Nothing, Now).CollectionId!;
+        var before = File.ReadAllBytes(LibraryPath);
+        var empty = new ClipGroup([]);
+
+        var starred = store.SetFavorite(empty, true, ClipScan.Nothing, Now);
+        var ticked = store.SetInCollection(empty, id, true, ClipScan.Nothing, Now);
+
+        Assert.Equal(LibraryOutcome.NoFile, starred.Outcome);
+        Assert.Equal(LibraryOutcome.NoFile, ticked.Outcome);
+        Assert.Equal(before, File.ReadAllBytes(LibraryPath));
+        Assert.Equal(LibraryStatus.Loaded, Store().Read().Status);
+    }
+
     // END
 }

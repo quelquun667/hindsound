@@ -96,6 +96,9 @@ public enum LibraryOutcome
 
     /// <summary>No collection has this id: the file changed since it was read.</summary>
     UnknownCollection,
+
+    /// <summary>The line has no file to know it by, so there is nothing to label. Nothing changed.</summary>
+    NoFile,
 }
 
 /// <summary>What an action did, and the library it leaves.</summary>
@@ -244,6 +247,11 @@ public sealed class LibraryStore
     public LibraryChange SetInCollection(ClipGroup clip, string id, bool inCollection, ClipScan scan, DateTime nowUtc) =>
         Change(scan, nowUtc, data =>
         {
+            if (HasNoFile(clip))
+            {
+                return LibraryOutcome.NoFile;
+            }
+
             if (!data.Collections.Exists(c => c.Id == id))
             {
                 return LibraryOutcome.UnknownCollection;
@@ -263,6 +271,11 @@ public sealed class LibraryStore
     public LibraryChange SetFavorite(ClipGroup clip, bool favorite, ClipScan scan, DateTime nowUtc) =>
         Change(scan, nowUtc, data =>
         {
+            if (HasNoFile(clip))
+            {
+                return LibraryOutcome.NoFile;
+            }
+
             Label(data, clip, entry => entry.Favorite = favorite);
             return LibraryOutcome.Done;
         });
@@ -364,6 +377,9 @@ public sealed class LibraryStore
         data.Clips.RemoveAll(clip => clip.IsBare);
         return data;
     }
+
+    // An entry with no file would be written, then judged damaged at the next read, and the whole library with it.
+    private static bool HasNoFile(ClipGroup clip) => clip.Files.Count == 0;
 
     private static LibraryOutcome? Refusal(LibraryData data, string name, LibraryCollection? except)
     {
