@@ -116,8 +116,8 @@ public sealed class LibraryStoreSafetyTests : IDisposable
         Assert.Single(Store().Read().Data.Clips);
     }
 
-    private static ClipFile Track(string name) =>
-        new(Path.Combine(@"D:\Clips", name), 1000, new DateTime(2026, 11, 8, 12, 0, 0, DateTimeKind.Utc));
+    private static ClipFile Track(string name, long size = 1000) =>
+        new(Path.Combine(@"D:\Clips", name), size, new DateTime(2026, 11, 8, 12, 0, 0, DateTimeKind.Utc));
 
     [Fact]
     public void ATrackThatCameBackAfterTheLabeling_IsAddedToTheEntry_SoItKeepsTheLabelsAlone()
@@ -125,7 +125,9 @@ public sealed class LibraryStoreSafetyTests : IDisposable
         var store = Store();
         var id = store.CreateCollection("pets", ClipScan.Nothing, Now).CollectionId!;
         ClipFile system = Track("a_system.mp3");
-        ClipFile mic = Track("a_mic.mp3");
+
+        // Not the size of the lost track, or a look at the folder would take it for that track renamed.
+        ClipFile mic = Track("a_mic.mp3", size: 2000);
         store.SetFavorite(new ClipGroup([system]), true, ClipScan.Nothing, Now);
         store.SetInCollection(new ClipGroup([system, mic]), id, true, ClipScan.Nothing, Now);
 
