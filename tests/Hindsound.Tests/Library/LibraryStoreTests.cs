@@ -682,9 +682,8 @@ public sealed class LibraryStoreTests : IDisposable
         store.CreateCollection(canary + "-6", scan, Now);
 
         // A broken file whose copy cannot be made.
-        var free = Path.Combine(folder, "library.json.bak");
-        Assert.True(File.Exists(free));
-        Directory.CreateDirectory(Path.Combine(folder, "library.json.1.bak"));
+        // A folder where the copy would go: a sound file leaves no copy, so nothing else stands in the way.
+        Directory.CreateDirectory(Path.Combine(folder, "library.json.bak"));
         Assert.Equal(LibraryOutcome.NotWritten, store.StartOver().Outcome);
 
         var log = File.ReadAllText(logPath);
