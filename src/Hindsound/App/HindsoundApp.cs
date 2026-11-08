@@ -1,4 +1,4 @@
-﻿using Hindsound.Audio;
+using Hindsound.Audio;
 using Hindsound.Export;
 using Hindsound.Input;
 using Hindsound.Settings;
