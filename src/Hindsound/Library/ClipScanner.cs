@@ -144,16 +144,30 @@ public static class ClipScanner
     {
         try
         {
+            // A file left out for a save in progress is a file the folder holds: the folder is then not read to its end, or the
+            // index would take that clip for gone, and count the days of a clip that is there.
+            var heldBack = false;
             var listing = new FileSystemEnumerable<ClipFile>(
                 folder,
                 static (ref FileSystemEntry entry) => new ClipFile(entry.ToFullPath(), entry.Length, entry.LastWriteTimeUtc.UtcDateTime),
                 FirstLevel)
             {
                 ShouldIncludePredicate = (ref FileSystemEntry entry) =>
-                    !entry.IsDirectory
-                    && entry.Length > 0
-                    && IsAudioName(entry.FileName)
-                    && !(hideFrom is { } limit && entry.LastWriteTimeUtc.UtcDateTime >= limit),
+                {
+                    if (entry.IsDirectory || !IsAudioName(entry.FileName))
+                    {
+                        return false;
+                    }
+
+                    // The date before the size: a clip just reserved is empty, and is held back all the same.
+                    if (hideFrom is { } limit && entry.LastWriteTimeUtc.UtcDateTime >= limit)
+                    {
+                        heldBack = true;
+                        return false;
+                    }
+
+                    return entry.Length > 0;
+                },
             };
 
             foreach (var file in listing)
@@ -161,7 +175,7 @@ public static class ClipScanner
                 files.Add(file);
             }
 
-            return true;
+            return !heldBack;
         }
         catch (Exception ex) when (ex is DirectoryNotFoundException or DriveNotFoundException)
         {
