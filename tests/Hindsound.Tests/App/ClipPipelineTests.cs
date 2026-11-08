@@ -241,6 +241,28 @@ public class ClipPipelineTests
         Assert.Single(rig.SlowNotices);
     }
 
+    [Theory]
+    [InlineData(12, 30, 12)]
+    [InlineData(30, 30, 30)]
+    [InlineData(40, 30, 30)]
+    public void The_saving_notice_names_what_is_kept_not_what_was_asked(int keptSeconds, int askedSeconds, int announcedSeconds)
+    {
+        var rig = new Rig();
+        using var hold = new ManualResetEventSlim(false);
+        rig.Backend.HoldSave = hold;
+        rig.Backend.NextSnapshot = () => new AudioSnapshot(new float[keptSeconds * InternalFormat.SampleRate * InternalFormat.SystemChannels], []);
+        rig.Pipeline.Press(Request(askedSeconds));
+        Assert.True(SpinWait.SpinUntil(() => !rig.Timers.IsEmpty, Wait));
+
+        Assert.True(rig.Timers.TryDequeue(out var whileWriting));
+        whileWriting();
+        hold.Set();
+        rig.NextOutcome();
+
+        var notice = Assert.Single(rig.SlowNotices);
+        Assert.Equal(TimeSpan.FromSeconds(announcedSeconds), notice.Requested);
+    }
+
     [Fact]
     public void Leaving_waits_for_the_clips_still_queued()
     {

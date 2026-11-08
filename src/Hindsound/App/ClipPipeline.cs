@@ -279,7 +279,9 @@ internal sealed class ClipPipeline
             {
                 if (!done.Value)
                 {
-                    SavingSlowly?.Invoke(request);
+                    // What is being written, not what was asked for: the memory may hold less than the request.
+                    var kept = snapshot.Duration;
+                    SavingSlowly?.Invoke(kept < request.Requested ? request with { Requested = kept } : request);
                 }
             }));
 
