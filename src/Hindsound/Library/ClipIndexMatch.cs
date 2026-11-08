@@ -190,21 +190,86 @@ public static class ClipIndexMatch
 
         var links = new Dictionary<LibraryFile, ClipFile>();
         var lost = new List<LibraryFile>();
+        var changed = new List<(LibraryFile File, ClipFile OnDisk)>();
         var named = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var claimed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var clip in clips)
         {
             foreach (var file in clip.Files)
             {
-                if (onDisk.TryGetValue(file.Path, out var same))
+                if (!onDisk.TryGetValue(file.Path, out var same))
+                {
+                    lost.Add(file);
+                    continue;
+                }
+
+                named.Add(file.Path);
+                if (KeyOf(same) == KeyOf(file))
                 {
                     links[file] = same;
-                    named.Add(file.Path);
+                    claimed.Add(same.Path);
                 }
                 else
                 {
-                    lost.Add(file);
+                    changed.Add((file, same));
                 }
             }
+        }
+
+        if (changed.Count > 0)
+        {
+            // The name of an entry, with another size or date, is that entry edited. Unless one lost entry, and only one, has
+            // exactly this size and date, and no other file does: then the name was taken over by a renamed file, and the
+            // dead clip does not hand its labels on.
+            var lostByKey = new Dictionary<(long Size, long Written), List<LibraryFile>>();
+            foreach (var file in lost)
+            {
+                if (!lostByKey.TryGetValue(KeyOf(file), out var owners))
+                {
+                    owners = [];
+                    lostByKey[KeyOf(file)] = owners;
+                }
+
+                owners.Add(file);
+            }
+
+            var diskByKey = new Dictionary<(long Size, long Written), int>();
+            foreach (var file in onDisk.Values)
+            {
+                diskByKey[KeyOf(file)] = diskByKey.GetValueOrDefault(KeyOf(file)) + 1;
+            }
+
+            var displaced = new List<LibraryFile>();
+            foreach (var (file, same) in changed)
+            {
+                if (lostByKey.TryGetValue(KeyOf(same), out var owners) && owners.Count == 1 && diskByKey[KeyOf(same)] == 1)
+                {
+                    links[owners[0]] = same;
+                    claimed.Add(same.Path);
+                    displaced.Add(file);
+                }
+            }
+
+            foreach (var (file, same) in changed)
+            {
+                if (displaced.Contains(file))
+                {
+                    continue;
+                }
+
+                // Another file already holds this name by its size and date: the entry here is a stale record of it.
+                if (claimed.Contains(same.Path))
+                {
+                    displaced.Add(file);
+                }
+                else
+                {
+                    links[file] = same;
+                }
+            }
+
+            lost.RemoveAll(links.ContainsKey);
+            lost.AddRange(displaced);
         }
 
         if (lost.Count == 0)
@@ -212,16 +277,18 @@ public static class ClipIndexMatch
             return links;
         }
 
-        // A file another entry names is that entry's. Moving a whole folder also comes here, its old place being absent.
+        // A file another entry names is that entry's: it is no link for a lost one. It still counts as a candidate, though,
+        // because a clip labeled among identical copies is no reason to pick one of them for the dead one.
+        // Moving a whole folder also comes here, its old place being absent.
         var free = new Dictionary<(long Size, long Written), List<ClipFile>>();
         foreach (var file in onDisk.Values)
         {
-            if (named.Contains(file.Path) || !scan.WasRead(Path.GetDirectoryName(file.Path)))
+            if (!scan.WasRead(Path.GetDirectoryName(file.Path)))
             {
                 continue;
             }
 
-            var key = (file.Size, file.WrittenUtc.Ticks);
+            var key = KeyOf(file);
             if (!free.TryGetValue(key, out var candidates))
             {
                 candidates = [];
@@ -234,15 +301,15 @@ public static class ClipIndexMatch
         var wanted = new Dictionary<(long Size, long Written), int>();
         foreach (var file in lost)
         {
-            var key = (file.Size, file.Written.Ticks);
+            var key = KeyOf(file);
             wanted[key] = wanted.GetValueOrDefault(key) + 1;
         }
 
         // A doubt on either side is no link: labels on the wrong clip are worse than labels that wait.
         foreach (var file in lost)
         {
-            var key = (file.Size, file.Written.Ticks);
-            if (wanted[key] == 1 && free.TryGetValue(key, out var candidates) && candidates.Count == 1)
+            var key = KeyOf(file);
+            if (wanted[key] == 1 && free.TryGetValue(key, out var candidates) && candidates.Count == 1 && !named.Contains(candidates[0].Path))
             {
                 links[file] = candidates[0];
             }
@@ -250,4 +317,8 @@ public static class ClipIndexMatch
 
         return links;
     }
+
+    private static (long Size, long Written) KeyOf(ClipFile file) => (file.Size, file.WrittenUtc.Ticks);
+
+    private static (long Size, long Written) KeyOf(LibraryFile file) => (file.Size, file.Written.Ticks);
 }
