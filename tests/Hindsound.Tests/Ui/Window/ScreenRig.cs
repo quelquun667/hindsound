@@ -1,4 +1,4 @@
-using Hindsound.Audio;
+﻿using Hindsound.Audio;
 using Hindsound.Input;
 using Hindsound.Settings;
 using Hindsound.Ui;
@@ -17,10 +17,12 @@ internal sealed class ScreenRig : IDisposable
         Backend = new FakeBackend(this);
         Host = new FakeHost();
         Manager.Apply(Settings.Hotkeys);
-        Screen = new SettingsScreen(Settings, Backend, Host, new FakeCanvas(), firstRun);
+        Screen = new SettingsScreen(Settings, Backend, Host, Canvas, firstRun);
     }
 
     public AppSettings Settings { get; }
+
+    public FakeCanvas Canvas { get; } = new();
 
     public FakeHotkeys Native { get; }
 
@@ -71,6 +73,7 @@ internal sealed class FakeCanvas : ICanvas
     public void Text(string text, Face face, float size, float x, float top, uint rgb)
     {
         Drawn.Add(text);
+        DrawnAt.Add((text, x));
         TextColors[text] = rgb;
     }
 
@@ -80,6 +83,9 @@ internal sealed class FakeCanvas : ICanvas
     public void Notification(NotificationContent content, float x, float y, uint accent, bool mirrored) => NotificationAccent = accent;
 
     public List<string> Drawn { get; } = [];
+
+    /// <summary>Each text with the left edge it was drawn at.</summary>
+    public List<(string Text, float X)> DrawnAt { get; } = [];
 
     /// <summary>The colour each text was last drawn in.</summary>
     public Dictionary<string, uint> TextColors { get; } = [];
