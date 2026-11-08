@@ -54,6 +54,11 @@ internal static class WaveView
     /// Fills one bar per column, the newest on the right: <see cref="Height"/>, or <see cref="WaveLane.Empty"/> where
     /// the lane has nothing to show. A lane with no track keeps its place on the screen as a flat line, all 0.
     /// Allocates nothing.
+    /// <para>
+    /// Equal bars do not mean an equal picture: the line of a change and the start of the saved part slide with time
+    /// while a long silence leaves every bar at 0. To know whether to repaint, compare the bars, and also
+    /// <see cref="ZoneOf"/> and the column of <see cref="MarkerOf"/>: integers, so no allocation.
+    /// </para>
     /// </summary>
     public static void Compose(WaveLane lane, in WaveFacts facts, Span<byte> bars)
     {
@@ -174,27 +179,40 @@ internal static class WaveView
     /// <summary>
     /// The line under the wave. The time counted from before a change of source is said out loud: the clip holds it,
     /// and it is the sound of whatever was chosen back then.
+    /// <para>
+    /// It depends on the end of the window, so on time alone: with the memory full the status never changes, yet the
+    /// seconds from before a change shrink until it falls out of the clip. Whoever draws it compares
+    /// <see cref="SaveSeconds"/> at each tick, two integers and no allocation, and builds the text only when they differ.
+    /// </para>
     /// </summary>
     public static string SaveLine(int clipSeconds, in WaveFacts facts)
     {
-        var start = ZoneStart(clipSeconds, facts);
-        var kept = SecondsOf(facts.End - start);
+        var (kept, before) = SaveSeconds(clipSeconds, facts);
         var line = "Save: last " + NotificationStates.FormatDuration(kept);
         if (kept < clipSeconds)
         {
             line += " of " + NotificationStates.FormatDuration(clipSeconds);
         }
 
-        if (LastChange(facts) is { } change && change.Frame > start && change.Frame < facts.End)
+        if (before > 0)
         {
-            var before = SecondsOf(change.Frame - start);
-            if (before > 0)
-            {
-                line += $" ({NotificationStates.FormatDuration(before)} from before {SourceName(change.App)})";
-            }
+            line += $" ({NotificationStates.FormatDuration(before)} from before {SourceName(LastChange(facts)!.Value.App)})";
         }
 
         return line;
+    }
+
+    /// <summary>
+    /// The seconds the save line is made of: the part a clip would keep, and how much of it comes from before the last
+    /// change of source (0 when none does). Allocates nothing.
+    /// </summary>
+    public static (int Kept, int Before) SaveSeconds(int clipSeconds, in WaveFacts facts)
+    {
+        var start = ZoneStart(clipSeconds, facts);
+        var before = LastChange(facts) is { } change && change.Frame > start && change.Frame < facts.End
+            ? SecondsOf(change.Frame - start)
+            : 0;
+        return (SecondsOf(facts.End - start), before);
     }
 
     /// <summary>The words on the line of a change of source.</summary>
