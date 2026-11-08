@@ -95,5 +95,19 @@ public sealed class ClipIndexMatchRulesTests
         Assert.Equal(["c2"], labels.CollectionIds);
     }
 
+    [Fact]
+    public void ATakenOverName_IsNotGivenAway_WhenAnotherFileHasTheSameSizeAndDate()
+    {
+        var edited = Entry(File("b.mp3", size: 2000), "c2");
+        var lost = Entry(File("a.mp3", size: 1000), "c1");
+        var taken = Group(File("b.mp3", size: 1000));
+        var other = Group(File("c.mp3", size: 1000));
+
+        var match = ClipIndexMatch.Match([edited, lost], Scan(taken, other));
+
+        Assert.Equal(["c2"], match.LabelsOf(taken).CollectionIds);
+        Assert.False(match.LabelsOf(other).Any);
+    }
+
     // END
 }
