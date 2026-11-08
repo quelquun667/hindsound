@@ -62,19 +62,35 @@ public static class ClipFolders
     }
 
     /// <summary>
-    /// What two spellings of a folder share, compared without regard to case: without the separator at the end, nor the
-    /// <c>\\?\</c> prefix of the long form of a path. A junction is another matter: finding where it leads would cost one
-    /// opening of the folder at every look, so a folder reached by a junction and by its target is read twice.
+    /// What two spellings of a folder, or of a file in it, share, compared without regard to case: with the same separators,
+    /// without the one at the end, nor the <c>\\?\</c> or <c>\\.\</c> prefix of the long form of a path. The one comparison
+    /// for the scan and for the index, or each would call a path by another name. A junction is another matter: finding
+    /// where it leads would cost one opening of the folder at every look, so a folder reached by a junction and by its
+    /// target is read twice.
     /// </summary>
     internal static string Key(string fullPath)
     {
-        const string LongUnc = @"\\?\UNC\";
-        const string Long = @"\\?\";
-        var path = fullPath.StartsWith(LongUnc, StringComparison.OrdinalIgnoreCase) ? @"\\" + fullPath[LongUnc.Length..]
-            : fullPath.StartsWith(Long, StringComparison.Ordinal) ? fullPath[Long.Length..]
-            : fullPath;
+        var path = fullPath.Replace('/', '\\');
+        foreach (var prefix in LongPrefixes)
+        {
+            if (path.StartsWith(prefix + @"UNC\", StringComparison.OrdinalIgnoreCase))
+            {
+                return Path.TrimEndingDirectorySeparator(@"\\" + path[(prefix.Length + 4)..]);
+            }
+        }
+
+        foreach (var prefix in LongPrefixes)
+        {
+            if (path.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                return Path.TrimEndingDirectorySeparator(path[prefix.Length..]);
+            }
+        }
+
         return Path.TrimEndingDirectorySeparator(path);
     }
+
+    private static readonly string[] LongPrefixes = [@"\\?\", @"\\.\"];
 
     /// <summary>All that a failure may tell: the message of a file error holds the full path.</summary>
     internal static string Describe(Exception ex) =>

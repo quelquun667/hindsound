@@ -22,7 +22,7 @@ public sealed class ClipScan
 
     public bool WasRead(string? folder) => !string.IsNullOrEmpty(folder) && _foldersRead.Contains(FolderKey(folder));
 
-    private static string FolderKey(string folder) => Path.TrimEndingDirectorySeparator(folder.Replace('/', '\\'));
+    private static string FolderKey(string folder) => ClipFolders.Key(folder);
 }
 
 /// <summary>The labels a line of the library shows.</summary>
@@ -189,7 +189,7 @@ public static class ClipIndexMatch
         {
             foreach (var file in group.Files)
             {
-                onDisk[file.Path] = file;
+                onDisk[ClipFolders.Key(file.Path)] = file;
             }
         }
 
@@ -202,17 +202,17 @@ public static class ClipIndexMatch
         {
             foreach (var file in clip.Files)
             {
-                if (!onDisk.TryGetValue(file.Path, out var same))
+                if (!onDisk.TryGetValue(ClipFolders.Key(file.Path), out var same))
                 {
                     lost.Add(file);
                     continue;
                 }
 
-                named.Add(file.Path);
+                named.Add(ClipFolders.Key(file.Path));
                 if (KeyOf(same) == KeyOf(file))
                 {
                     links[file] = same;
-                    claimed.Add(same.Path);
+                    claimed.Add(ClipFolders.Key(same.Path));
                 }
                 else
                 {
@@ -250,7 +250,7 @@ public static class ClipIndexMatch
                 if (lostByKey.TryGetValue(KeyOf(same), out var owners) && owners.Count == 1 && diskByKey[KeyOf(same)] == 1)
                 {
                     links[owners[0]] = same;
-                    claimed.Add(same.Path);
+                    claimed.Add(ClipFolders.Key(same.Path));
                     displaced.Add(file);
                 }
             }
@@ -263,7 +263,7 @@ public static class ClipIndexMatch
                 }
 
                 // Another file already holds this name by its size and date: the entry here is a stale record of it.
-                if (claimed.Contains(same.Path))
+                if (claimed.Contains(ClipFolders.Key(same.Path)))
                 {
                     displaced.Add(file);
                 }
@@ -336,11 +336,11 @@ public static class ClipIndexMatch
             {
                 if (links.TryGetValue(file, out var linked))
                 {
-                    taken.Add(linked.Path);
+                    taken.Add(ClipFolders.Key(linked.Path));
                 }
             }
 
-            var spare = free.Values.SelectMany(static list => list).Where(file => !taken.Contains(file.Path)).ToList();
+            var spare = free.Values.SelectMany(static list => list).Where(file => !taken.Contains(ClipFolders.Key(file.Path))).ToList();
             foreach (var file in left)
             {
                 var near = spare.FindAll(candidate => IsNear(file, candidate));
@@ -361,7 +361,7 @@ public static class ClipIndexMatch
     /// </summary>
     private static void LinkUnlessDoubtful(List<LibraryFile> askers, List<ClipFile> candidates, HashSet<string> named, Dictionary<LibraryFile, ClipFile> links)
     {
-        if (askers.Count != candidates.Count || candidates.Exists(candidate => named.Contains(candidate.Path)))
+        if (askers.Count != candidates.Count || candidates.Exists(candidate => named.Contains(ClipFolders.Key(candidate.Path))))
         {
             return;
         }
