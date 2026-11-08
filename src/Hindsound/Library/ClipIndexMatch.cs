@@ -82,6 +82,11 @@ public static class ClipIndexMatch
     /// <summary>How long an entry outlives its files. Long enough for a clip to come back from the Recycle Bin.</summary>
     public static readonly TimeSpan KeptMissing = TimeSpan.FromDays(30);
 
+    // How far a date may have moved when a clip is copied to a FAT (2 s) or exFAT (10 ms) drive, as the scanner allows for.
+    private static readonly TimeSpan CoarseClock = TimeSpan.FromSeconds(2);
+
+    private const long CoarseGrid = 10 * TimeSpan.TicksPerMillisecond;
+
     /// <summary>The labels of what a scan found, for display. Changes nothing, not even in the entries.</summary>
     public static IndexMatch Match(IReadOnlyList<LibraryClip> clips, ClipScan scan)
     {
@@ -298,25 +303,110 @@ public static class ClipIndexMatch
             candidates.Add(file);
         }
 
-        var wanted = new Dictionary<(long Size, long Written), int>();
+        var wanted = new Dictionary<(long Size, long Written), List<LibraryFile>>();
         foreach (var file in lost)
         {
             var key = KeyOf(file);
-            wanted[key] = wanted.GetValueOrDefault(key) + 1;
+            if (!wanted.TryGetValue(key, out var askers))
+            {
+                askers = [];
+                wanted[key] = askers;
+            }
+
+            askers.Add(file);
         }
 
         // A doubt on either side is no link: labels on the wrong clip are worse than labels that wait.
-        foreach (var file in lost)
+        foreach (var (key, askers) in wanted)
         {
-            var key = KeyOf(file);
-            if (wanted[key] == 1 && free.TryGetValue(key, out var candidates) && candidates.Count == 1 && !named.Contains(candidates[0].Path))
+            if (free.TryGetValue(key, out var candidates))
             {
-                links[file] = candidates[0];
+                LinkUnlessDoubtful(askers, candidates, named, links);
+            }
+        }
+
+        // The exact date comes first: on a disk that keeps it to the tick, two tracks of one size written a second apart would
+        // be a doubt here. A copy onto a FAT or exFAT drive moves every date a little, and the scanner knows those drives.
+        var left = lost.FindAll(file => !links.ContainsKey(file));
+        if (left.Count > 0)
+        {
+            // A file just linked by its exact date is that lost file's. One named by an entry stays a candidate, for the doubt.
+            var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var file in lost)
+            {
+                if (links.TryGetValue(file, out var linked))
+                {
+                    taken.Add(linked.Path);
+                }
+            }
+
+            var spare = free.Values.SelectMany(static list => list).Where(file => !taken.Contains(file.Path)).ToList();
+            foreach (var file in left)
+            {
+                var near = spare.FindAll(candidate => IsNear(file, candidate));
+                if (near.Count > 0)
+                {
+                    var askers = left.FindAll(other => near.Exists(candidate => IsNear(other, candidate)));
+                    LinkUnlessDoubtful(askers, near, named, links);
+                }
             }
         }
 
         return links;
     }
+
+    /// <summary>
+    /// The lost files that asked for a place, and the files on disk that could be it. One and one is a link. The two tracks of
+    /// a clip may share a size and a date, so with two and two the suffixes _system and _mic tell which is which.
+    /// </summary>
+    private static void LinkUnlessDoubtful(List<LibraryFile> askers, List<ClipFile> candidates, HashSet<string> named, Dictionary<LibraryFile, ClipFile> links)
+    {
+        if (askers.Count != candidates.Count || candidates.Exists(candidate => named.Contains(candidate.Path)))
+        {
+            return;
+        }
+
+        if (askers.Count == 1)
+        {
+            links[askers[0]] = candidates[0];
+            return;
+        }
+
+        if (askers.Count != 2)
+        {
+            return;
+        }
+
+        var (first, second) = (askers[0], askers[1]);
+        if (Track(candidates[0].Path) + Track(candidates[1].Path) != SystemTrack + MicTrack || Track(first.Path) + Track(second.Path) != SystemTrack + MicTrack)
+        {
+            return;
+        }
+
+        var (ofFirst, ofSecond) = Track(first.Path) == Track(candidates[0].Path) ? (candidates[0], candidates[1]) : (candidates[1], candidates[0]);
+        links[first] = ofFirst;
+        links[second] = ofSecond;
+    }
+
+    private const int SystemTrack = 1, MicTrack = 2;
+
+    /// <summary><see cref="SystemTrack"/> for a name ending in the suffix of a system track, <see cref="MicTrack"/> for a mic track, 0 for any other.</summary>
+    private static int Track(string path)
+    {
+        var stem = Path.GetFileNameWithoutExtension(path.AsSpan());
+        return stem.EndsWith("_system", StringComparison.OrdinalIgnoreCase) ? SystemTrack
+            : stem.EndsWith("_mic", StringComparison.OrdinalIgnoreCase) ? MicTrack
+            : 0;
+    }
+
+    // Only a date that sits on the grid of such a drive is a date such a drive could have given: a file that differs by a few
+    // ticks on a disk that keeps them is another file.
+    // The other track of the same clip is written a second apart and may be as large: a system track is never a mic track.
+    private static bool IsNear(LibraryFile file, ClipFile candidate) =>
+        file.Size == candidate.Size
+        && candidate.WrittenUtc.Ticks % CoarseGrid == 0
+        && (file.Written - candidate.WrittenUtc).Duration() <= CoarseClock
+        && (Track(file.Path) == 0 || Track(candidate.Path) == 0 || Track(file.Path) == Track(candidate.Path));
 
     private static (long Size, long Written) KeyOf(ClipFile file) => (file.Size, file.WrittenUtc.Ticks);
 
