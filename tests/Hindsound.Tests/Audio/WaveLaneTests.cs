@@ -622,9 +622,18 @@ public class WaveLaneBesideTheWriterTests
         var systemLane = new WaveLane();
         var micLane = new WaveLane();
         WaveLane.CatchUp(WaveRig.FactsOf(system, 2 * Rate, mic), systemLane, micLane);
+        Tick(0);
 
         var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var i = 0; i < 500; i++)
+        for (var i = 1; i <= 500; i++)
+        {
+            Tick(i);
+        }
+
+        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+
+        // Once before measuring: the shared empty list is made the first time anything asks for it.
+        void Tick(int i)
         {
             system.AppendContinuation(packetSystem);
             mic.AppendContinuation(packetMic);
@@ -632,8 +641,6 @@ public class WaveLaneBesideTheWriterTests
             WaveLane.CatchUp(facts, systemLane, micLane);
             _ = systemLane.LevelOf(i);
         }
-
-        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
     }
 
     [Fact]
