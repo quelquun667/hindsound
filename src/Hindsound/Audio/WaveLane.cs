@@ -46,7 +46,11 @@ public sealed class WaveLane
     /// <summary>A track is being followed.</summary>
     public bool HasTrack => _track is not null;
 
-    /// <summary>Nothing is left to read for now. Another pass would change nothing until new audio comes.</summary>
+    /// <summary>
+    /// Nothing is left to read for now. This says nothing about the picture: time goes on without audio (a mute PC, an
+    /// application that closed), and the window slides, so the bars, the line and the saved part still move. Whoever
+    /// follows the lane may stop only when time itself is frozen (paused, stopped, no device) and this is true.
+    /// </summary>
     public bool IsCaughtUp => _track is null || (_nextFrame >= _readUpTo && _lowSlice <= PastStopSlice);
 
     private long HighSlice => (_nextFrame + FramesPerSlice - 1) / FramesPerSlice;
