@@ -132,7 +132,7 @@ public static class AudioFileLength
                 continue;
             }
 
-            return Mp3Duration(head[i..], frame, audioEnd - (audioStart + i), length);
+            return Mp3Duration(head[i..], frame, audioEnd - (audioStart + i));
         }
 
         return null;
@@ -144,7 +144,7 @@ public static class AudioFileLength
         && second.Mpeg1 == frame.Mpeg1
         && second.SampleRate == frame.SampleRate;
 
-    private static TimeSpan? Mp3Duration(ReadOnlySpan<byte> first, in Mp3Frame frame, long audioBytes, long fileBytes)
+    private static TimeSpan? Mp3Duration(ReadOnlySpan<byte> first, in Mp3Frame frame, long audioBytes)
     {
         // The Info frame (Xing for a variable bitrate) sits where the side information of a frame would be.
         var tag = 4 + (frame.HasCrc ? 2 : 0) + (frame.Mpeg1 ? (frame.Mono ? 17 : 32) : (frame.Mono ? 9 : 17));
@@ -164,8 +164,9 @@ public static class AudioFileLength
                 bytes = BinaryPrimitives.ReadUInt32BigEndian(first[at..]);
             }
 
-            // The tag was written at the end of the encoding, so it knows the whole size: less than that on disk is a cut file.
-            if (bytes > fileBytes)
+            // The tag was written at the end of the encoding, so it knows the whole size of the sound: less than that on disk is
+            // a cut file. LAME counts the sound alone, not the ID3 tags around it (a picture of 300 KB would hide a cut of 200 KB).
+            if (bytes > audioBytes)
             {
                 return null;
             }
