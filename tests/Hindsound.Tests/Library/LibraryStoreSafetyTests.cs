@@ -174,5 +174,43 @@ public sealed class LibraryStoreSafetyTests : IDisposable
         Assert.Equal(LibraryStatus.Loaded, Store().Read().Status);
     }
 
-    // END
+    [Fact]
+    public void ALineWhosePathDiffersInCase_IsTheSameEntry()
+    {
+        var store = Store();
+        var id = store.CreateCollection("pets", ClipScan.Nothing, Now).CollectionId!;
+        store.SetFavorite(Clip("a.mp3"), true, ClipScan.Nothing, Now);
+
+        store.SetInCollection(new ClipGroup([new ClipFile(@"d:\clips\A.MP3", 1000, Now)]), id, true, ClipScan.Nothing, Now);
+
+        var entry = Assert.Single(Store().Read().Data.Clips);
+        Assert.Single(entry.Files);
+        Assert.True(entry.Favorite);
+        Assert.Equal([id], entry.Collections);
+    }
+
+    [Fact]
+    public void ANullFileInAnEntry_IsDamage_NotATrouble()
+    {
+        File.WriteAllText(LibraryPath, """{ "version": 1, "clips": [{ "favorite": true, "files": [null] }] }""");
+
+        var read = Store().Read();
+
+        Assert.Equal(LibraryStatus.Corrupt, read.Status);
+        Assert.False(read.CanWrite);
+    }
+
+    [Theory]
+    [InlineData("""{ "version": 1, "collections": null }""")]
+    [InlineData("""{ "version": 1, "clips": null }""")]
+    public void ANullList_IsAnEmptyOne_NotDamage(string content)
+    {
+        File.WriteAllText(LibraryPath, content);
+
+        var read = Store().Read();
+
+        Assert.Equal(LibraryStatus.Loaded, read.Status);
+        Assert.Empty(read.Data.Collections);
+        Assert.Empty(read.Data.Clips);
+    }
 }
