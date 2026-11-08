@@ -140,6 +140,21 @@ public sealed class ClipIndexMatchCoarseDatesTests
     }
 
     [Fact]
+    public void AFileLinkedByItsExactDate_IsNoRivalForTheCoarseOnes()
+    {
+        var exact = Group(File(Drive, "x.mp3", T));
+        var coarse = Group(File(Drive, "y.mp3", T.AddSeconds(1)));
+
+        // The first entry has its file; the second, two seconds later than the first, is within the margin of both files.
+        var match = ClipIndexMatch.Match(
+            [Entry("c1", File(Clips, "a.mp3", T)), Entry("c2", File(Clips, "b.mp3", T.AddSeconds(2)))],
+            Scan(exact, coarse));
+
+        Assert.Equal(["c1"], Labels(match, exact));
+        Assert.Equal(["c2"], Labels(match, coarse));
+    }
+
+    [Fact]
     public void ARenamedPairOfTracksOfOneSizeAndDate_IsToldApartBySuffix()
     {
         var system = File(Drive, "y_system.mp3", T);
