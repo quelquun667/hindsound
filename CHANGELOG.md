@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- The notification at the start says what is really kept: `Filling, up to 5:00`, then `2:10 of 5:00 kept`, and `Keeping the last 5:00` only once it is true. A pause says what can still be saved.
+- The band of the window shows `0:12 / 5:00` while the memory fills.
+- `Save last 30s` is now `Save up to 30s`, on the button, in the tray menu and on the Hotkeys page. An entry of the menu longer than what is kept says so: `Save up to 5 min (only 0:12)`.
+- The button and the save entries of the menu are grey with less than a second kept.
+- The first-launch card and the update card follow what is kept and the length of a clip.
+- The `Updates` row of General is now `When a version is out`, as the section already has that title.
+- A run with its own settings file (`--settings`) no longer gets in the way of the copy in use: only two runs on the same file refuse each other.
+
 ## [0.0.10] - 2026-11-07
 
 ### Changed

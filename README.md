@@ -28,8 +28,8 @@ It has been tried on one Windows 11 PC, and some things are [not tried yet](#not
 
 ## Features
 
-- **Keeps the past:** the last 5:00 by default, in RAM. No audio goes to disk until you save.
-- **One hotkey:** `Ctrl+Shift+F10` saves the last 30 seconds. The length and the hotkey are yours to change.
+- **Keeps the past:** up to 5:00 by default, in RAM, filling from the moment it starts. No audio goes to disk until you save.
+- **One hotkey:** `Ctrl+Shift+F10` saves up to the last 30 seconds. The length and the hotkey are yours to change.
 - **Ready to paste:** the file goes to the clipboard, so `Ctrl+V` puts it in a message.
 - **PC sound and microphone:** mixed in one file, or as two separate files.
 - **One application only:** record just Discord or just your game, or the whole PC (the default).
@@ -166,9 +166,10 @@ Good to know:
   `In fullscreen games` to `Sound only`.
 - **A click on the notification,** on the desktop, opens the folder of your last clip, or the settings if it reports a problem
   there.
-- **The icon:** a left click opens the settings. A right click opens the menu: `Save last 30s`, `Save last 15s`,
-  `Save last 1 min`, `Save last 5 min`, `Copy last clip`, `Pause capture`, `Open clips folder`, `Settings`, `Quit`. While a new
-  version is ready (with `Ask me`, also when one is available), the menu adds `Update to X...`.
+- **The icon:** a left click opens the settings. A right click opens the menu: `Save up to 30s`, `Save up to 15s`,
+  `Save up to 1 min`, `Save up to 5 min`, `Copy last clip`, `Pause capture`, `Open clips folder`, `Settings`, `Quit`. An entry
+  longer than what is kept says so, such as `Save up to 5 min (only 0:12)`, and they are all grey with less than a second kept.
+  While a new version is ready (with `Ask me`, also when one is available), the menu adds `Update to X...`.
 - **Starting Hindsound again** while it runs opens the settings of the one already running.
 - **Quitting during a save:** Hindsound finishes the clip first, for 5 minutes at most. A second `Quit` leaves at once.
 
@@ -177,9 +178,9 @@ Good to know:
 | Action | Default |
 | --- | --- |
 | `Save clip` (the length set in Durations) | `Ctrl+Shift+F10` |
-| `Save last 15s` | Not set |
-| `Save last 1 min` | Not set |
-| `Save last 5 min` | Not set |
+| `Save up to 15s` | Not set |
+| `Save up to 1 min` | Not set |
+| `Save up to 5 min` | Not set |
 | `Pause or resume` | Not set |
 | `Copy last clip` | Not set |
 
@@ -205,7 +206,7 @@ A left click on the icon opens them. There is no OK button: a change is saved at
 | Export | File name | **`Hindsound_{app}_{date}_{time}`**. These three tags are the only ones. |
 | Export | Copy clip to clipboard | **On** |
 | General | Accent color | **Lime**, Mint, Cyan, Violet, Pink, White, Custom |
-| General | Updates | **Install automatically**, Ask me, Off. See [Updates](#updates). |
+| General | When a version is out | **Install automatically**, Ask me, Off. See [Updates](#updates). |
 | General | Start with Windows | **Off** |
 | General | Save notifications | **On** |
 | General | Notification position | **Right edge**, Left edge |
@@ -308,7 +309,6 @@ Hindsound has only run on one Windows 11 PC so far. These have not been tried fo
 - unplugging a headset
 - Windows 10
 - the windows of the Setup and its uninstaller
-- updating from GitHub: no installed copy has updated itself from a release yet
 
 ## Roadmap
 
