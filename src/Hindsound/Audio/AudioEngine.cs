@@ -43,6 +43,20 @@ public sealed record AudioEngineStatus(
     string? SourceApp = null,
     bool SourceAppMissing = false);
 
+/// <summary>A change of what the PC side captures, kept for the live wave.</summary>
+/// <param name="Frame">Timeline frame from which on the new source alone is in the buffer.</param>
+/// <param name="App">The application now captured, by exe name. Null is the whole PC.</param>
+public readonly record struct SourceChange(long Frame, string? App);
+
+/// <summary>What the live wave needs from the engine, read many times a second. Reading it allocates nothing.</summary>
+/// <param name="System">The track of the PC sound, if any.</param>
+/// <param name="Mic">The track of the microphone, if any.</param>
+/// <param name="Start">Timeline frame where the audio that could be saved right now starts.</param>
+/// <param name="End">Timeline frame just after it. Goes on while a silent source delivers nothing.</param>
+/// <param name="BufferFrames">How many frames the memory is set to keep, full or not.</param>
+/// <param name="Changes">The last changes of source since the start, the most recent last. Never changes once read.</param>
+public readonly record struct WaveFacts(SourceTrack? System, SourceTrack? Mic, long Start, long End, int BufferFrames, IReadOnlyList<SourceChange> Changes);
+
 /// <param name="BufferDuration">How much past audio to keep.</param>
 /// <param name="MicEnabled">Capture the microphone.</param>
 /// <param name="SystemDeviceId">An output to capture, or null for the system default (which keeps this app's sounds out).</param>
@@ -73,6 +87,9 @@ public sealed class AudioEngine : IDisposable
 
     // The longest wait before looking again for a device, in ticks. A source that keeps dying waits 1, 2, then this.
     private const int MaxTicksBetweenRetries = 3;
+
+    // Far more than one window can show, and small enough to stay out of the way when nobody ever opens it.
+    private const int SourceChangesKept = 8;
 
     // A source that ran this long was working: its death is an event, not a device refusing to capture.
     private static readonly long StableAfterTicks = TimeSpan.FromSeconds(5).Ticks;
@@ -155,6 +172,11 @@ public sealed class AudioEngine : IDisposable
     private int _ticksSinceAppCheck;
     private int _disposed;
     private AudioEngineStatus? _lastPublished;
+    private string? _notedApp;
+
+    // The choice in force before the last note, to tell a choice taken back from a new one. Only read with a last note.
+    private string? _appBeforeNote;
+    private SourceChange[] _sourceChanges = [];
 
     /// <param name="options">The starting settings.</param>
     /// <param name="factory">Opens the captures. By default, the real ones.</param>
@@ -195,6 +217,18 @@ public sealed class AudioEngine : IDisposable
     /// <summary>The current status.</summary>
     public AudioEngineStatus Status => BuildStatus();
 
+    /// <summary>What the live wave draws from. Takes no lock, allocates nothing, and never waits for a command.</summary>
+    public WaveFacts WaveFacts
+    {
+        get
+        {
+            var system = Volatile.Read(ref _systemTrack);
+            var mic = Volatile.Read(ref _micTrack);
+            var (start, frames) = WindowOf(system, mic, int.MaxValue);
+            return new WaveFacts(system, mic, start, start + frames, FramesOf(_options.BufferDuration), Volatile.Read(ref _sourceChanges));
+        }
+    }
+
     /// <summary>Starts capturing, with an empty buffer. Without a device, it ends in <see cref="CaptureActivity.NoDevice"/>.</summary>
     public Task StartAsync() => RunCommandAsync(async () =>
     {
@@ -211,6 +245,8 @@ public sealed class AudioEngine : IDisposable
         _exclusionDiedEarly = false;
         _quickDeaths = 0;
         _appMissing = false;
+        _notedApp = WantedApp;
+        Volatile.Write(ref _sourceChanges, []);
         StartWatching();
         _tick.Change(_tickInterval, _tickInterval);
         await RefreshSourcesAsync().ConfigureAwait(false);
@@ -310,7 +346,68 @@ public sealed class AudioEngine : IDisposable
     {
         _options = _options with { SourceApp = exeName };
         await RefreshSourcesAsync().ConfigureAwait(false);
+
+        // Paused or stopped, the refresh did nothing: nothing is coming in, so this is still where the new source starts.
+        NoteSourceChange();
     });
+
+    // Here and not when the change is asked for: the command waits its turn, and until the old capture is closed its
+    // packets keep coming. A note placed earlier would call them the new source. Never on the audio threads.
+    private void NoteSourceChange()
+    {
+        var wanted = WantedApp;
+        if (!_started || string.Equals(wanted, _notedApp, StringComparison.OrdinalIgnoreCase) || !OldSourceIsGone(wanted))
+        {
+            return;
+        }
+
+        var before = _notedApp;
+        _notedApp = wanted;
+
+        // Without a track there is no past to tell apart.
+        if (Volatile.Read(ref _systemTrack) is not { } track)
+        {
+            return;
+        }
+
+        // Time stands still while paused: a second choice lands on the frame of the first, with no audio between them.
+        // The first line then stands where nothing was heard and means nothing, and a choice taken back changed nothing.
+        var frame = Math.Max(_timeline.NowFrames, track.EndFrame);
+        var changes = _sourceChanges;
+        var replaces = changes.Length > 0 && changes[^1].Frame == frame;
+        if (!replaces)
+        {
+            _appBeforeNote = before;
+        }
+
+        var cancels = replaces && string.Equals(wanted, _appBeforeNote, StringComparison.OrdinalIgnoreCase);
+        var old = replaces ? changes.AsSpan(0, changes.Length - 1) : changes.AsSpan();
+        var kept = old[Math.Max(0, old.Length - (cancels ? SourceChangesKept : SourceChangesKept - 1))..];
+        var next = new SourceChange[kept.Length + (cancels ? 0 : 1)];
+        kept.CopyTo(next);
+        if (!cancels)
+        {
+            next[^1] = new SourceChange(frame, wanted);
+        }
+
+        Volatile.Write(ref _sourceChanges, next);
+    }
+
+    // A failed look-up leaves the old capture running. Then the change has not happened yet, and a later refresh notes it.
+    private bool OldSourceIsGone(string? wanted)
+    {
+        var open = _system;
+        if (!IsLive(open))
+        {
+            return true;
+        }
+
+        return wanted is null
+            ? open!.TargetProcessId is null
+            : string.Equals(open!.DeviceId, AppDeviceId(wanted), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string AppDeviceId(string app) => "app:" + app;
 
     /// <summary>Checks the devices now, as a device change would.</summary>
     public Task RefreshDevicesAsync() => RunCommandAsync(RefreshSourcesAsync);
@@ -557,6 +654,7 @@ public sealed class AudioEngine : IDisposable
 
     private void SettleAfterRefresh()
     {
+        NoteSourceChange();
         if (!IsLive(_system) || (_options.MicEnabled && !IsLive(_mic)))
         {
             ArmRetry(MaxTicksBetweenRetries);
@@ -607,7 +705,7 @@ public sealed class AudioEngine : IDisposable
         }
 
         // Same process, same capture: another instance starting later does not pull it away.
-        var id = "app:" + app;
+        var id = AppDeviceId(app);
         if (target is not null && IsLive(open) && open!.TargetProcessId == target && string.Equals(open.DeviceId, id, StringComparison.OrdinalIgnoreCase))
         {
             return;

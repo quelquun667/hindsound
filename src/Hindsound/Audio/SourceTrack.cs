@@ -17,6 +17,9 @@ public sealed class SourceTrack
     /// </summary>
     public const int SlackFrames = InternalFormat.SampleRate;
 
+    /// <summary>From <see cref="PeakOfFrames"/>: part of the range was audio once and is gone, so no peak can be told.</summary>
+    public const int PeakGone = -1;
+
     // A clock correction is spread over this many frames, 10 ms. Done in one frame, on a 1 kHz tone at -6 dBFS, it is a
     // click at -33.2 dBFS above 8 kHz, 1.4 times a second at 30 ppm. Spread out, it measures -84.9 dBFS.
     private const int FadeFrames = 480;
@@ -155,6 +158,18 @@ public sealed class SourceTrack
         var position = (startFrame - _originFrame) * Channels;
         Volatile.Read(ref _ring).CopyTo(position, destination, out var firstHeld);
         return (int)(Math.Max(0, firstHeld - Math.Max(0, position)) / Channels);
+    }
+
+    /// <summary>
+    /// The peak of a range of frames, every channel together, without taking any lock. Allocates nothing.
+    /// Frames from before this track began or not written yet count for nothing.
+    /// </summary>
+    /// <returns>The peak in stored units, 0 to 32768, or <see cref="PeakGone"/>.</returns>
+    public int PeakOfFrames(long startFrame, int frames)
+    {
+        var position = (startFrame - _originFrame) * Channels;
+        var peak = Volatile.Read(ref _ring).PeakOf(position, frames * Channels, out var firstHeld);
+        return firstHeld > Math.Max(0, position) ? PeakGone : peak;
     }
 
     /// <summary>
