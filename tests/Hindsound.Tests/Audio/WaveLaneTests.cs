@@ -354,6 +354,41 @@ public class WaveLaneTests
     }
 
     [Fact]
+    public void Another_track_over_the_same_frames_is_read_again()
+    {
+        // The mic turned off and on again between two passes: the frames overlap, and the audio is another.
+        var first = new SourceTrack(1, 10 * Rate, 0);
+        WaveRig.Write(first, 5 * Rate, 1);
+        var lane = new WaveLane();
+        WaveRig.ReadAll(lane, WaveRig.FactsOf(first, 10 * Rate));
+
+        var second = new SourceTrack(1, 10 * Rate, 3 * Rate);
+        WaveRig.Write(second, 2 * Rate, 2);
+        var facts = WaveRig.FactsOf(second, 10 * Rate);
+        WaveRig.ReadAll(lane, facts);
+
+        WaveRig.AssertLikeRaw(lane, second, facts);
+        Assert.Equal(WaveLane.Empty, lane.LevelOf(29));
+    }
+
+    [Fact]
+    public void A_new_start_with_frames_counted_from_zero_again_is_read_again()
+    {
+        var first = new SourceTrack(1, 10 * Rate, 0);
+        WaveRig.Write(first, 8 * Rate, 1);
+        var lane = new WaveLane();
+        WaveRig.ReadAll(lane, WaveRig.FactsOf(first, 10 * Rate));
+
+        var second = new SourceTrack(1, 10 * Rate, 0);
+        WaveRig.Write(second, Rate, 2);
+        var facts = WaveRig.FactsOf(second, 10 * Rate);
+        WaveRig.ReadAll(lane, facts);
+
+        WaveRig.AssertLikeRaw(lane, second, facts);
+        Assert.Equal(WaveLane.Empty, lane.LevelOf(30));
+    }
+
+    [Fact]
     public void No_track_forgets_everything()
     {
         var track = new SourceTrack(1, 10 * Rate, 0);
