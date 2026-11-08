@@ -34,7 +34,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Update now opens a card first: updating restarts Hindsound and loses the audio in memory, so it offers Save it, then update, as well as Update and Cancel. Nothing is updated if that clip could not be saved.
 - After an update, the "Capture on" notification says "Updated to X" instead. A failed one says "Update failed" and the version still running; Hindsound tries 3 times per version, then only Update now tries again.
 - A damaged or unreadable settings file turns updates Off until you choose again.
-- The first launch card says that Hindsound checks GitHub once a day. In Off, Check now still asks GitHub, on a click. While a version is ready (in Ask me, also when one is available), the tray menu offers "Update to X...".
+- The first launch card says that Hindsound checks GitHub once a day.
 - `--update-failed` (passed by Setup to the version it starts again after a failed update), and the test options `--selftest-update <folder>` and `--selftest-update-check`.
 
 ### Changed
