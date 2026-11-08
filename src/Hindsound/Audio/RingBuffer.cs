@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Hindsound.Audio;
@@ -199,6 +200,9 @@ public sealed class RingBuffer
     }
 
     // The two extremes and not the absolute values: the absolute value of -32768 does not fit in 16 bits.
+    // Optimized from the first call: code on Vector<T> is left out of a ReadyToRun build, and starting at the JIT's first
+    // tier made the opening pass 6 times slower (61 ms against 8), and that is the pass the wave is waited for.
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static int PeakOfStored(ReadOnlySpan<short> samples)
     {
         var vectors = MemoryMarshal.Cast<short, Vector<short>>(samples);
