@@ -61,8 +61,20 @@ public static class ClipFolders
         }
     }
 
-    /// <summary>What two spellings of a folder share, compared without regard to case.</summary>
-    internal static string Key(string fullPath) => Path.TrimEndingDirectorySeparator(fullPath);
+    /// <summary>
+    /// What two spellings of a folder share, compared without regard to case: without the separator at the end, nor the
+    /// <c>\\?\</c> prefix of the long form of a path. A junction is another matter: finding where it leads would cost one
+    /// opening of the folder at every look, so a folder reached by a junction and by its target is read twice.
+    /// </summary>
+    internal static string Key(string fullPath)
+    {
+        const string LongUnc = @"\\?\UNC\";
+        const string Long = @"\\?\";
+        var path = fullPath.StartsWith(LongUnc, StringComparison.OrdinalIgnoreCase) ? @"\\" + fullPath[LongUnc.Length..]
+            : fullPath.StartsWith(Long, StringComparison.Ordinal) ? fullPath[Long.Length..]
+            : fullPath;
+        return Path.TrimEndingDirectorySeparator(path);
+    }
 
     /// <summary>All that a failure may tell: the message of a file error holds the full path.</summary>
     internal static string Describe(Exception ex) =>
