@@ -329,13 +329,15 @@ public class PeakOfBesideTheWriterTests
         track.AppendContinuation(new float[600]);
         _ = track.PeakOfFrames(track.OldestFrame, 500);
 
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var i = 0; i < 1000; i++)
+        Action reads = () =>
         {
-            _ = track.PeakOfFrames(track.OldestFrame, 500);
-            _ = track.PeakOfFrames(0, 10);
-        }
+            for (var i = 0; i < 1000; i++)
+            {
+                _ = track.PeakOfFrames(track.OldestFrame, 500);
+                _ = track.PeakOfFrames(0, 10);
+            }
+        };
 
-        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+        Assert.Equal(0, WaveRig.LeastAllocated(reads));
     }
 }

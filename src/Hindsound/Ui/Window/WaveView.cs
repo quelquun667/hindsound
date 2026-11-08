@@ -220,12 +220,8 @@ internal static class WaveView
 
     private static int SecondsOf(long frames) => NotificationStates.WholeSeconds(TimeSpan.FromSeconds((double)frames / Rate));
 
-    // The same frame the engine would start a clip of this length at: a clip never goes past what the memory holds.
-    private static long ZoneStart(int clipSeconds, in WaveFacts facts)
-    {
-        var length = Math.Min((long)clipSeconds * Rate, facts.BufferFrames);
-        return Math.Max(facts.End - length, facts.Start);
-    }
+    // The same frame the engine would start a clip of this length at: the window already stops at the memory set.
+    private static long ZoneStart(int clipSeconds, in WaveFacts facts) => Math.Max(facts.End - (long)clipSeconds * Rate, facts.Start);
 
     private static SourceChange? LastChange(in WaveFacts facts) => facts.Changes is { Count: > 0 } changes ? changes[changes.Count - 1] : null;
 

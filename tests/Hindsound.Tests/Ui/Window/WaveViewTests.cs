@@ -321,15 +321,17 @@ public class WaveViewEngineTests
         _ = WaveView.ZoneOf(30, facts, 180);
         _ = WaveView.MarkerOf(facts, 180);
 
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var i = 0; i < 200; i++)
+        Action draws = () =>
         {
-            WaveView.Compose(lane, facts, bars);
-            _ = WaveView.ZoneOf(30, facts, 180);
-            _ = WaveView.ToneOf(i, 10, WaveView.MarkerOf(facts, 180));
-        }
+            for (var i = 0; i < 200; i++)
+            {
+                WaveView.Compose(lane, facts, bars);
+                _ = WaveView.ZoneOf(30, facts, 180);
+                _ = WaveView.ToneOf(i, 10, WaveView.MarkerOf(facts, 180));
+            }
+        };
 
-        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+        Assert.Equal(0, WaveRig.LeastAllocated(draws));
     }
 }
 

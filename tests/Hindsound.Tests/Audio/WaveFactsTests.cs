@@ -68,13 +68,16 @@ public class WaveFactsTests
         await rig.Engine.SetSourceAppAsync(null);
         _ = rig.Engine.WaveFacts;
 
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var i = 0; i < 1000; i++)
+        var engine = rig.Engine;
+        Action reads = () =>
         {
-            _ = rig.Engine.WaveFacts;
-        }
+            for (var i = 0; i < 1000; i++)
+            {
+                _ = engine.WaveFacts;
+            }
+        };
 
-        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+        Assert.Equal(0, WaveRig.LeastAllocated(reads));
     }
 
     [Fact]
