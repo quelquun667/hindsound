@@ -145,19 +145,23 @@ internal static class NotificationStates
     public static NotificationContent NoDevice() =>
         Icon(NotificationKind.NoDevice, "No audio device", "Nothing is being captured", NotificationPalette.Hot, NotificationVisual.Triangle, NotificationPalette.Hot);
 
-    public static NotificationContent Paused() =>
-        Icon(NotificationKind.Paused, "Capture paused", "Nothing new is being recorded", NotificationPalette.Muted, NotificationVisual.Pause, NotificationPalette.Muted);
+    /// <param name="keptSeconds">What the memory holds: it stays there during the pause, and can still be saved.</param>
+    public static NotificationContent Paused(int keptSeconds = 0) =>
+        Icon(NotificationKind.Paused, "Capture paused", keptSeconds >= 1 ? $"{FormatDuration(keptSeconds)} kept. Nothing new is recorded" : "Nothing new is being recorded",
+            NotificationPalette.Muted, NotificationVisual.Pause, NotificationPalette.Muted);
 
-    /// <param name="bufferSeconds">How much is kept.</param>
+    /// <param name="bufferSeconds">How much can be kept.</param>
     /// <param name="saveGesture">The save shortcut, such as <c>Ctrl+Shift+F10</c>.</param>
     /// <param name="saveHotkeyProblem">Said instead of the keys when pressing them would do nothing: the user finds out now, not when the moment is gone.</param>
     /// <param name="updatedTo">The version an update just installed: said in the title, the rest is the usual line.</param>
-    public static NotificationContent CaptureOn(int bufferSeconds, string? saveGesture, string? saveHotkeyProblem = null, string? updatedTo = null)
+    /// <param name="keptSeconds">What the memory holds now; null when nothing has said yet.</param>
+    public static NotificationContent CaptureOn(int bufferSeconds, string? saveGesture, string? saveHotkeyProblem = null, string? updatedTo = null, int? keptSeconds = null)
     {
         var title = updatedTo is null ? "Capture on" : $"Updated to {updatedTo}";
+        var kept = KeptLine(bufferSeconds, keptSeconds);
         if (saveHotkeyProblem is not null)
         {
-            return new NotificationContent(NotificationKind.CaptureOn, title, $"Keeping the last {FormatDuration(bufferSeconds)}. {saveHotkeyProblem}", [], NotificationPalette.Amber,
+            return new NotificationContent(NotificationKind.CaptureOn, title, $"{kept}. {saveHotkeyProblem}", [], NotificationPalette.Amber,
                 NotificationVisual.Dot, NotificationPalette.Hot, NoBars)
             {
                 ClickOpensSettings = true,
@@ -165,8 +169,24 @@ internal static class NotificationStates
         }
 
         var keys = string.IsNullOrWhiteSpace(saveGesture) ? [] : saveGesture.Split('+');
-        var body = keys.Length == 0 ? $"Keeping the last {FormatDuration(bufferSeconds)}" : $"Keeping the last {FormatDuration(bufferSeconds)}. Save:";
+        var body = keys.Length == 0 ? kept : $"{kept}. Save:";
         return new NotificationContent(NotificationKind.CaptureOn, title, body, keys, NotificationPalette.Hot, NotificationVisual.Dot, NotificationPalette.Hot, NoBars);
+    }
+
+    private static string KeptLine(int cap, int? kept)
+    {
+        var length = FormatDuration(cap);
+        if (kept is not { } seconds)
+        {
+            return $"Keeping up to {length}";
+        }
+
+        return KeptDuration.StateOf(seconds, cap) switch
+        {
+            KeptState.Full => $"Keeping the last {length}",
+            KeptState.Starting => $"Filling, up to {length}",
+            _ => $"{FormatDuration(seconds)} of {length} kept",
+        };
     }
 
     public static NotificationContent DeviceChanged(string deviceName) =>

@@ -135,12 +135,12 @@ public class NotificationStatesTests
 
     [Fact]
     public void Capture_on() =>
-        AssertState(NotificationStates.CaptureOn(300, "Ctrl+Shift+F10"), K.CaptureOn, "Capture on", "Keeping the last 5:00. Save:", P.Hot, NotificationVisual.Dot, "Ctrl", "Shift", "F10");
+        AssertState(NotificationStates.CaptureOn(300, "Ctrl+Shift+F10", keptSeconds: 300), K.CaptureOn, "Capture on", "Keeping the last 5:00. Save:", P.Hot, NotificationVisual.Dot, "Ctrl", "Shift", "F10");
 
     [Fact]
     public void Capture_on_follows_the_settings()
     {
-        var content = NotificationStates.CaptureOn(90, "Alt+F9");
+        var content = NotificationStates.CaptureOn(90, "Alt+F9", keptSeconds: 90);
         Assert.Equal("Keeping the last 1:30. Save:", content.Body);
         Assert.Equal(new[] { "Alt", "F9" }, content.Keys);
     }
@@ -148,7 +148,7 @@ public class NotificationStatesTests
     [Fact]
     public void Capture_on_with_the_save_hotkey_taken_shows_no_key_and_says_so()
     {
-        var content = NotificationStates.CaptureOn(300, "Ctrl+Shift+F10", "Save hotkey is taken");
+        var content = NotificationStates.CaptureOn(300, "Ctrl+Shift+F10", "Save hotkey is taken", keptSeconds: 300);
 
         AssertState(content, K.CaptureOn, "Capture on", "Keeping the last 5:00. Save hotkey is taken", P.Amber, NotificationVisual.Dot);
         Assert.True(content.ClickOpensSettings);

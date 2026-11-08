@@ -21,7 +21,7 @@ public class UpdatedCaptureOnTests
     [Fact]
     public void Updated_says_the_version_and_the_usual_line()
     {
-        var updated = NotificationStates.CaptureOn(300, "Ctrl+Shift+F10", updatedTo: "0.2.0");
+        var updated = NotificationStates.CaptureOn(300, "Ctrl+Shift+F10", updatedTo: "0.2.0", keptSeconds: 300);
         var usual = NotificationStates.CaptureOn(300, "Ctrl+Shift+F10");
 
         Assert.Equal("Updated to 0.2.0", updated.Title);
@@ -62,7 +62,7 @@ public class UpdatedCaptureOnTests
     [Fact]
     public void Save_hotkey_is_taken_keeps_the_version_in_the_title()
     {
-        var fresh = StatusTransitions.Fresh(NotificationStates.CaptureOn(60, "F24"), Read(), Taken, "0.2.0");
+        var fresh = StatusTransitions.Fresh(NotificationStates.CaptureOn(60, "F24"), Read(), Taken, "0.2.0", keptSeconds: 60);
 
         Assert.Equal("Updated to 0.2.0", fresh.Title);
         Assert.Equal("Keeping the last 1:00. Save hotkey is taken", fresh.Body);

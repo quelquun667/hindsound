@@ -121,10 +121,7 @@ internal sealed unsafe class NotificationBitmap : IDisposable
 
         var rowTop = MathF.Round(34 * s);
         var rowHeight = MathF.Round(20 * s);
-        var keysWidth = KeysWidth(painter, keyFont, s);
-        var body = _content.Keys.Count > 0
-            ? BodyBeforeKeys(painter, bodyFont, textWidth - keysWidth)
-            : painter.Fit(bodyFont, _content.Body, textWidth);
+        var body = BodyShown(_content, painter, bodyFont, keyFont, textWidth, s);
         painter.Text(bodyFont, body, textLeft, rowTop + (rowHeight - painter.LineHeight(bodyFont)) / 2, NotificationPalette.Muted);
 
         var x = MathF.Round(textLeft + painter.Measure(bodyFont, body) + 6 * s);
@@ -134,37 +131,43 @@ internal sealed unsafe class NotificationBitmap : IDisposable
         }
     }
 
+    /// <summary>What the second row really says, once the keys have taken their room: the tests measure this very path.</summary>
+    internal static string BodyShown(NotificationContent content, TextPainter painter, FontSpec bodyFont, FontSpec keyFont, float textWidth, float s) =>
+        content.Keys.Count > 0
+            ? BodyBeforeKeys(content, painter, bodyFont, textWidth - KeysWidth(content, painter, keyFont, s))
+            : painter.Fit(bodyFont, content.Body, textWidth);
+
     // A long shortcut wins over the sentence: the keys are the useful part of the row.
-    private string BodyBeforeKeys(TextPainter painter, FontSpec font, float width)
+    private static string BodyBeforeKeys(NotificationContent content, TextPainter painter, FontSpec font, float width)
     {
-        if (painter.Measure(font, _content.Body) <= width)
+        if (painter.Measure(font, content.Body) <= width)
         {
-            return _content.Body;
+            return content.Body;
         }
 
-        var lastSentence = _content.Body[(_content.Body.LastIndexOf(' ') + 1)..];
+        var lastSentence = content.Body[(content.Body.LastIndexOf(' ') + 1)..];
         return painter.Measure(font, lastSentence) <= width ? lastSentence : string.Empty;
     }
 
-    private float KeysWidth(TextPainter painter, FontSpec font, float s)
+    private static float KeysWidth(NotificationContent content, TextPainter painter, FontSpec font, float s)
     {
         var width = 6 * s;
-        foreach (var key in _content.Keys)
+        foreach (var key in content.Keys)
         {
-            width += MathF.Round(painter.Measure(font, key) + 2 * (KeyPadding * s + s)) + MathF.Round(4 * s);
+            width += MathF.Round(painter.Measure(font, key) + 2 * (KeyPaddingOf(content) * s + s)) + MathF.Round(4 * s);
         }
 
         return width;
     }
 
-    private float KeyPadding => _content.SmallKeys ? 4 : 6;
+    private static float KeyPaddingOf(NotificationContent content) => content.SmallKeys ? 4 : 6;
 
     private float DrawKey(TextPainter painter, FontSpec font, string text, float left, float rowTop, float rowHeight, float s)
     {
         var height = _content.SmallKeys ? MathF.Round(16 * s) : rowHeight;
         var top = rowTop + MathF.Floor((rowHeight - height) / 2);
         var textWidth = painter.Measure(font, text);
-        var right = left + MathF.Round(textWidth + 2 * (KeyPadding * s + s));
+        var right = left + MathF.Round(textWidth + 2 * (KeyPaddingOf(_content) * s + s));
         var radius = 3 * s;
         _pixels.FillRoundRect(left, top, right, top + height, radius, NotificationPalette.CapBorder);
         _pixels.FillRoundRect(left + s, top + s, right - s, top + height - s, MathF.Max(0, radius - s), NotificationPalette.CapFill);

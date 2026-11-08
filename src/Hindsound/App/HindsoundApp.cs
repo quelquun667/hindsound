@@ -585,10 +585,10 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         switch (notice)
         {
             case StatusNotice.CaptureOn:
-                ShowStatus(StatusTransitions.CaptureOnNow(_settings, _hotkeyResults, _updatedTo), TakePauseScreen());
+                ShowStatus(StatusTransitions.CaptureOnNow(_settings, _hotkeyResults, _updatedTo, KeptSecondsNow), TakePauseScreen());
                 break;
             case StatusNotice.Paused:
-                ShowStatus(NotificationStates.Paused(), TakePauseScreen());
+                ShowStatus(NotificationStates.Paused(KeptSecondsNow ?? 0), TakePauseScreen());
                 break;
             case StatusNotice.NoDevice:
                 ShowStatus(NotificationStates.NoDevice());
@@ -844,6 +844,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         }
     }
 
+    // Read when a notification is made, which can be long after the status that asked for it: at a launch, that one says 0.
+    private int? KeptSecondsNow => _lastStatus is { } status ? KeptDuration.SecondsOf(status.Buffered) : null;
+
     private void ShowStatus(NotificationContent content, ScreenInfo? screen = null)
     {
         var (state, covers) = Surface();
@@ -907,7 +910,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
                     _notices.PushedAside(onScreen, _lastStatus);
                 }
 
-                PresentNow(StatusTransitions.Fresh(next, _settings, _hotkeyResults, _updatedTo), decision.ClickThrough);
+                PresentNow(StatusTransitions.Fresh(next, _settings, _hotkeyResults, _updatedTo, KeptSecondsNow), decision.ClickThrough);
                 return;
             }
 
@@ -1026,7 +1029,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         var (state, covers) = Surface();
         if (FullscreenPolicy.BackOnDesktop(state, covers) && _pending.TakeNext(NowMs) is { } next)
         {
-            Present(StatusTransitions.Fresh(next, _settings, _hotkeyResults, _updatedTo), clickThrough: false);
+            Present(StatusTransitions.Fresh(next, _settings, _hotkeyResults, _updatedTo, KeptSecondsNow), clickThrough: false);
             RefreshTray();
         }
     }
