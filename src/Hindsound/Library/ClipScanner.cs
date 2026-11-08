@@ -45,7 +45,13 @@ public static class ClipScanner
     private static readonly TimeSpan WriteClockMargin = TimeSpan.FromSeconds(2);
 
     // The listing of the folder itself must fail when refused: read as empty, every clip in it would count as gone.
-    private static readonly EnumerationOptions FirstLevel = new() { RecurseSubdirectories = false, IgnoreInaccessible = false };
+    // A hidden or system file is no clip of ours, and is said so here rather than left to the default of the options.
+    private static readonly EnumerationOptions FirstLevel = new()
+    {
+        RecurseSubdirectories = false,
+        IgnoreInaccessible = false,
+        AttributesToSkip = FileAttributes.Hidden | FileAttributes.System,
+    };
 
     /// <summary>
     /// Never throws for a folder or a file. Slow disks make it slow: not for the thread of the window. The result holds every
