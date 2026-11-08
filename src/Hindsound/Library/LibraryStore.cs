@@ -131,6 +131,11 @@ public sealed class LibraryStore
         AllowTrailingCommas = true,
     };
 
+    // One gate for every store, not one per instance: the app may make a store for each call, and a read on one thread must
+    // not look at the file while an action on another replaces it (it would find it missing, or refuse to open it, and a
+    // write that meets a reader fails). Reentrant, so an action can read under it. Held for file work only, never for long.
+    private static readonly object Gate = new();
+
     private readonly Action<string> _journal;
 
     /// <param name="settingsPath">The settings file. The library goes in the same folder.</param>
@@ -145,6 +150,14 @@ public sealed class LibraryStore
 
     /// <summary>Looks at the file and changes nothing on disk, not even the date a clip went missing.</summary>
     public LibraryRead Read()
+    {
+        lock (Gate)
+        {
+            return ReadFile();
+        }
+    }
+
+    private LibraryRead ReadFile()
     {
         try
         {
@@ -260,23 +273,26 @@ public sealed class LibraryStore
     /// </summary>
     public LibraryChange StartOver()
     {
-        var read = Read();
-        if (read.Status != LibraryStatus.Corrupt)
+        lock (Gate)
         {
-            return new LibraryChange(LibraryOutcome.ReadOnly, read);
-        }
+            var read = ReadFile();
+            if (read.Status != LibraryStatus.Corrupt)
+            {
+                return new LibraryChange(LibraryOutcome.ReadOnly, read);
+            }
 
-        try
-        {
-            File.Copy(Path, AtomicFile.FreeBackupPath(Path), overwrite: false);
-            var data = new LibraryData();
-            AtomicFile.Write(Path, JsonSerializer.Serialize(data, TypeInfo));
-            return new LibraryChange(LibraryOutcome.Done, new LibraryRead(LibraryStatus.Loaded, data));
-        }
-        catch (Exception ex)
-        {
-            _journal($"library: not written ({Describe(ex)})");
-            return new LibraryChange(LibraryOutcome.NotWritten, read);
+            try
+            {
+                File.Copy(Path, AtomicFile.FreeBackupPath(Path), overwrite: false);
+                var data = new LibraryData();
+                AtomicFile.Write(Path, JsonSerializer.Serialize(data, TypeInfo));
+                return new LibraryChange(LibraryOutcome.Done, new LibraryRead(LibraryStatus.Loaded, data));
+            }
+            catch (Exception ex)
+            {
+                _journal($"library: not written ({Describe(ex)})");
+                return new LibraryChange(LibraryOutcome.NotWritten, read);
+            }
         }
     }
 
@@ -399,31 +415,34 @@ public sealed class LibraryStore
 
     private LibraryChange Change(ClipScan scan, DateTime nowUtc, Func<LibraryData, LibraryOutcome> apply)
     {
-        var read = Read();
-        if (!read.CanWrite)
+        lock (Gate)
         {
-            _journal($"library: not written, the file is {read.Status}");
-            return new LibraryChange(LibraryOutcome.ReadOnly, read);
-        }
+            var read = ReadFile();
+            if (!read.CanWrite)
+            {
+                _journal($"library: not written, the file is {read.Status}");
+                return new LibraryChange(LibraryOutcome.ReadOnly, read);
+            }
 
-        var data = read.Data;
-        data.Clips = ClipIndexMatch.Settled(data.Clips, scan, nowUtc);
-        var outcome = apply(data);
-        if (outcome != LibraryOutcome.Done)
-        {
-            return new LibraryChange(outcome, read);
-        }
+            var data = read.Data;
+            data.Clips = ClipIndexMatch.Settled(data.Clips, scan, nowUtc);
+            var outcome = apply(data);
+            if (outcome != LibraryOutcome.Done)
+            {
+                return new LibraryChange(outcome, read);
+            }
 
-        try
-        {
-            KeepFirstCopy();
-            AtomicFile.Write(Path, JsonSerializer.Serialize(data, TypeInfo));
-            return new LibraryChange(LibraryOutcome.Done, new LibraryRead(LibraryStatus.Loaded, data));
-        }
-        catch (Exception ex)
-        {
-            _journal($"library: not written ({Describe(ex)})");
-            return new LibraryChange(LibraryOutcome.NotWritten, read);
+            try
+            {
+                KeepFirstCopy();
+                AtomicFile.Write(Path, JsonSerializer.Serialize(data, TypeInfo));
+                return new LibraryChange(LibraryOutcome.Done, new LibraryRead(LibraryStatus.Loaded, data));
+            }
+            catch (Exception ex)
+            {
+                _journal($"library: not written ({Describe(ex)})");
+                return new LibraryChange(LibraryOutcome.NotWritten, read);
+            }
         }
     }
 
