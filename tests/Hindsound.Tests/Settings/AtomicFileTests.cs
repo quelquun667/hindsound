@@ -1,3 +1,5 @@
+using System.Security.AccessControl;
+using System.Security.Principal;
 using Hindsound.Settings;
 
 namespace Hindsound.Tests.Settings;
@@ -45,6 +47,45 @@ public sealed class AtomicFileTests : IDisposable
 
         Assert.Equal("one", File.ReadAllText(Target));
         Assert.Equal([Target], Directory.GetFiles(_folder));
+    }
+
+    [Fact]
+    public void Write_ReplacesTheFile_InsteadOfWritingInPlace()
+    {
+        AtomicFile.Write(Target, "one");
+
+        // A reader that lets the file be replaced holds the old file: a replacement leaves it with the old text, while a
+        // write in place would show it the new text (and a cut during that write would leave half a file).
+        using var reader = new FileStream(Target, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        AtomicFile.Write(Target, "two");
+
+        Assert.Equal("two", File.ReadAllText(Target));
+        Assert.Equal("one", new StreamReader(reader).ReadToEnd());
+    }
+
+    [Fact]
+    public void Write_BuildsTheTemporaryFileInTheFolderOfTheTarget()
+    {
+        AtomicFile.Write(Target, "one");
+
+        // The folder refuses new files: the write must fail at the temporary file, so it is made in that folder (a
+        // temporary file elsewhere could sit on another volume, where the replacement is not atomic).
+        var user = WindowsIdentity.GetCurrent().User!;
+        var rule = new FileSystemAccessRule(user, FileSystemRights.CreateFiles, AccessControlType.Deny);
+        var info = new DirectoryInfo(_folder);
+        var acl = info.GetAccessControl();
+        acl.AddAccessRule(rule);
+        info.SetAccessControl(acl);
+        try
+        {
+            Assert.Throws<UnauthorizedAccessException>(() => AtomicFile.Write(Target, "two"));
+            Assert.Equal("one", File.ReadAllText(Target));
+        }
+        finally
+        {
+            acl.RemoveAccessRule(rule);
+            info.SetAccessControl(acl);
+        }
     }
 
     [Fact]
