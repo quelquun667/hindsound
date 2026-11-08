@@ -61,9 +61,7 @@ public static class ClipFolders
         }
     }
 
-    /// <summary>Whether two full paths name the same folder.</summary>
-    public static bool Same(string a, string b) => string.Equals(Key(a), Key(b), StringComparison.OrdinalIgnoreCase);
-
+    /// <summary>What two spellings of a folder share, compared without regard to case.</summary>
     internal static string Key(string fullPath) => Path.TrimEndingDirectorySeparator(fullPath);
 
     /// <summary>All that a failure may tell: the message of a file error holds the full path.</summary>
