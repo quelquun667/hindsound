@@ -27,7 +27,10 @@ public class MutexNameTests
         }
 
         Assert.NotNull(folder);
-        Assert.Contains(RealName, File.ReadAllText(Path.Combine(folder.FullName, "installer", "Hindsound.iss")), StringComparison.Ordinal);
+        // Whole lines, not a piece of text: a longer name, or a line that no longer feeds AppMutex, must not pass.
+        var lines = File.ReadAllLines(Path.Combine(folder.FullName, "installer", "Hindsound.iss")).Select(line => line.Trim()).ToList();
+        Assert.Contains("#define AppMutexName \"" + RealName + "\"", lines);
+        Assert.Contains("AppMutex={#AppMutexName}", lines);
     }
 
     [Fact]
