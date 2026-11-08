@@ -7,6 +7,8 @@
     <IsPackable>false</IsPackable>
     <!-- The sheet of the tray icon writes through the canvas's pointer, as the app does. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- The capture tests count the bytes a callback allocates. With tiered compilation the runtime allocates once when it swaps a hot method, inside that count. -->
+    <TieredCompilation>false</TieredCompilation>
   </PropertyGroup>
 
   <ItemGroup>
