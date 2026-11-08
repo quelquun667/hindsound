@@ -303,7 +303,7 @@ public sealed class ClipSaver
     /// <c>%VARIABLE%</c> is left as typed, "clips" or "C:clips" depend on the current directory) is invalid: the
     /// clip would land where nobody looks. The ArgumentException sends the clip to the rescue folder.
     /// </summary>
-    private static string ExpandFolder(string folder)
+    internal static string ExpandFolder(string folder)
     {
         if (string.IsNullOrWhiteSpace(folder)) return Path.GetFullPath(ExportOptions.DefaultOutputFolder());
 

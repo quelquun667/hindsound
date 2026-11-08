@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Hindsound.Input;
 
 namespace Hindsound.Settings;
@@ -140,6 +141,7 @@ public sealed class ExportSettings
 {
     public const string DefaultFolder = "%USERPROFILE%\\Music\\Hindsound";
     public const string DefaultTemplate = "Hindsound_{app}_{date}_{time}";
+    public const int MaxKnownClipFolders = 8;
 
     /// <summary>"mp3" or "wav".</summary>
     public string Format { get; set; } = "mp3";
@@ -156,6 +158,13 @@ public sealed class ExportSettings
 
     public string OutputFolder { get; set; } = DefaultFolder;
 
+    /// <summary>
+    /// The earlier output folders, as they were stored, most recent first: their clips stay in the library. Null when
+    /// there is none, so that the key only enters the file once a folder has really been left.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? KnownClipFolders { get; set; }
+
     public string FileNameTemplate { get; set; } = DefaultTemplate;
 
     public bool CopyToClipboard { get; set; } = true;
@@ -168,7 +177,21 @@ public sealed class ExportSettings
         TargetLufs = double.IsFinite(TargetLufs) ? Math.Clamp(TargetLufs, -30, -5) : -16;
         PeakCeilingDb = double.IsFinite(PeakCeilingDb) ? Math.Clamp(PeakCeilingDb, -20, 0) : -1;
         OutputFolder = string.IsNullOrWhiteSpace(OutputFolder) ? DefaultFolder : OutputFolder;
+        KnownClipFolders = CleanKnownFolders(KnownClipFolders);
         FileNameTemplate = string.IsNullOrWhiteSpace(FileNameTemplate) ? DefaultTemplate : FileNameTemplate;
+    }
+
+    private static List<string>? CleanKnownFolders(List<string>? folders)
+    {
+        if (folders is null) return null;
+
+        var clean = folders
+            .Where(folder => !string.IsNullOrWhiteSpace(folder))
+            .Select(folder => folder.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(MaxKnownClipFolders)
+            .ToList();
+        return clean.Count == 0 ? null : clean;
     }
 }
 
