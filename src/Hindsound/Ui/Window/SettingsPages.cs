@@ -605,7 +605,7 @@ internal sealed partial class SettingsScreen
         // A copy that does not update itself only says so: no list, no buttons, no word about GitHub.
         if (view.Active)
         {
-            Row("Updates", "general.updates", y, () => UpdateChoices, () => Editor.Settings.General.Updates.Mode, Editor.SetUpdateMode);
+            Row("When a version is out", "general.updates", y, () => UpdateChoices, () => Editor.Settings.General.Updates.Mode, Editor.SetUpdateMode);
             y += RowHeight + 12;
         }
 
