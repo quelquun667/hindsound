@@ -80,5 +80,41 @@ public sealed class LibraryStoreSafetyTests : IDisposable
         Assert.Equal(200, read.Data.Clips.Count);
     }
 
+    [Fact]
+    public void NotWritten_ShowsTheFileAsItIs_NotTheChangeThatFailed()
+    {
+        var store = Store();
+        store.CreateCollection("pets", ClipScan.Nothing, Now);
+
+        LibraryChange created;
+        LibraryChange starred;
+        using (new FileStream(LibraryPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            created = store.CreateCollection("dogs", ClipScan.Nothing, Now);
+            starred = store.SetFavorite(Clip("a.mp3"), true, ClipScan.Nothing, Now);
+        }
+
+        Assert.Equal(LibraryOutcome.NotWritten, created.Outcome);
+        Assert.Equal("pets", Assert.Single(created.Library.Data.Collections).Name);
+        Assert.Equal(LibraryOutcome.NotWritten, starred.Outcome);
+        Assert.Empty(starred.Library.Data.Clips);
+    }
+
+    [Fact]
+    public void ARefusal_ShowsTheFileAsItIs_NotTheEntriesTheActionSettled()
+    {
+        var store = Store();
+        var scan = new ClipScan([], [@"D:\Clips"]);
+        store.SetFavorite(Clip("a.mp3"), true, ClipScan.Nothing, Now);
+        store.CreateCollection("pets", scan, Now);
+
+        // Past the wait, the action drops the entry in memory before it finds the name taken.
+        var change = store.CreateCollection("PETS", scan, Now.AddDays(31));
+
+        Assert.Equal(LibraryOutcome.NameTaken, change.Outcome);
+        Assert.Single(change.Library.Data.Clips);
+        Assert.Single(Store().Read().Data.Clips);
+    }
+
     // END
 }

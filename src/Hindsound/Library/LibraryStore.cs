@@ -100,7 +100,7 @@ public enum LibraryOutcome
 
 /// <summary>What an action did, and the library it leaves.</summary>
 /// <param name="Outcome">What happened.</param>
-/// <param name="Library">The library as of now. In memory only, if the outcome is not <see cref="LibraryOutcome.Done"/>.</param>
+/// <param name="Library">The library as of now. If the outcome is not <see cref="LibraryOutcome.Done"/>, the file as it is, without the change that was asked for.</param>
 /// <param name="CollectionId">The collection just created.</param>
 public readonly record struct LibraryChange(LibraryOutcome Outcome, LibraryRead Library, string? CollectionId = null);
 
@@ -429,7 +429,8 @@ public sealed class LibraryStore
             var outcome = apply(data);
             if (outcome != LibraryOutcome.Done)
             {
-                return new LibraryChange(outcome, read);
+                // The file, not the entries this action settled or changed in memory: nothing of it was kept.
+                return new LibraryChange(outcome, ReadFile());
             }
 
             try
@@ -441,7 +442,9 @@ public sealed class LibraryStore
             catch (Exception ex)
             {
                 _journal($"library: not written ({Describe(ex)})");
-                return new LibraryChange(LibraryOutcome.NotWritten, read);
+
+                // What the disk holds, so a screen drawn from it shows no star and no collection that was not saved.
+                return new LibraryChange(LibraryOutcome.NotWritten, ReadFile());
             }
         }
     }
