@@ -75,6 +75,45 @@ public sealed class ClipPathSpellingTests
         Assert.Equal(Now, Assert.Single(kept).MissingSince);
     }
 
+    [Theory]
+    [InlineData(@"\\?\D:\Clips\kept.mp3", @"D:\Clips\kept.mp3")]
+    [InlineData(@"D:\Clips\kept.mp3", @"\\?\D:\Clips\kept.mp3")]
+    public void AFileNamedByAnEntry_IsNoCandidateForALostOne_WhicheverWayItIsSpelled(string entryPath, string onDisk)
+    {
+        var kept = new ClipGroup([File(onDisk)]);
+        var lost = Entry(@"D:\Clips\gone.mp3", "c2");
+
+        var match = ClipIndexMatch.Match([Entry(entryPath), lost], new ClipScan([kept], [Clips]));
+
+        Assert.Equal(["c1"], match.LabelsOf(kept).CollectionIds);
+    }
+
+    [Theory]
+    [InlineData(@"\\?\D:\Clips\a.mp3")]
+    [InlineData(@"D:/Clips/a.mp3")]
+    public void AStaleRecordOfAName_IsNotGivenTheFile_WhicheverWayTheFileIsSpelled(string onDisk)
+    {
+        var file = new ClipGroup([File(onDisk)]);
+        var stale = new LibraryClip { Files = [new LibraryFile { Path = @"D:\Clips\a.mp3", Size = 2000, Written = T }], Collections = ["c2"] };
+
+        var match = ClipIndexMatch.Match([Entry(@"D:\Clips\a.mp3"), stale], new ClipScan([file], [Clips]));
+
+        Assert.Equal(["c1"], match.LabelsOf(file).CollectionIds);
+    }
+
+    [Theory]
+    [InlineData(@"\\?\D:\Clips\x.mp3")]
+    [InlineData(@"D:/Clips/x.mp3")]
+    public void AFileLinkedByItsExactDate_IsNotTakenByACoarseOne_WhicheverWayItIsSpelled(string onDisk)
+    {
+        var file = new ClipGroup([File(onDisk)]);
+        var coarse = new LibraryClip { Files = [new LibraryFile { Path = @"D:\Clips\y.mp3", Size = 1000, Written = T.AddSeconds(1) }], Collections = ["c2"] };
+
+        var match = ClipIndexMatch.Match([Entry(@"D:\Clips\w.mp3"), coarse], new ClipScan([file], [Clips]));
+
+        Assert.Equal(["c1"], match.LabelsOf(file).CollectionIds);
+    }
+
     [Fact]
     public void AnEditedFileOfAnEntryWithOtherSeparators_StaysItsEntrys()
     {
