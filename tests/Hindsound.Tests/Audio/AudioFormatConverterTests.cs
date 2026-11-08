@@ -4,6 +4,7 @@ using NAudio.Wave;
 
 namespace Hindsound.Tests.Audio;
 
+[Collection(nameof(TimingSensitive))]
 public class AudioFormatConverterTests
 {
     private const float Tolerance = 1e-5f;

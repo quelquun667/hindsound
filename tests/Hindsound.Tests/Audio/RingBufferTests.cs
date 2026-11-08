@@ -60,6 +60,7 @@ public class SampleCodecTests
     }
 }
 
+[Collection(nameof(TimingSensitive))]
 public class RingBufferTests
 {
     private static float[] Samples(params int[] stored) => stored.Select(value => value / 32767f).ToArray();

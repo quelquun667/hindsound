@@ -93,6 +93,7 @@ public class CaptureTimelineTests
     }
 }
 
+[Collection(nameof(TimingSensitive))]
 public class CapturePipelineTests
 {
     private readonly FakeClock _clock = new();
