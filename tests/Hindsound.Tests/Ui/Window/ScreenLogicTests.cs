@@ -165,11 +165,11 @@ public class StatusTextTests
     }
 
     [Theory]
-    [InlineData(15, "Save last 15s")]
-    [InlineData(30, "Save last 30s")]
-    [InlineData(60, "Save last 1 min")]
-    [InlineData(300, "Save last 5 min")]
-    [InlineData(90, "Save last 1:30")]
+    [InlineData(15, "Save up to 15s")]
+    [InlineData(30, "Save up to 30s")]
+    [InlineData(60, "Save up to 1 min")]
+    [InlineData(300, "Save up to 5 min")]
+    [InlineData(90, "Save up to 1:30")]
     public void The_big_button_says_how_long(int seconds, string label)
     {
         Assert.Equal(label, StatusText.SaveLabel(seconds));

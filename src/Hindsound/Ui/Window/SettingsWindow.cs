@@ -1047,6 +1047,13 @@ internal static unsafe class SettingsDump
         }
 
         Shot("hotkeys");
+        Shot("band-filling", (s, _) => s.UpdateStatus(sampleStatus with { Buffered = TimeSpan.FromSeconds(12) }));
+        Shot("band-empty", (s, _) => s.UpdateStatus(sampleStatus with { Buffered = TimeSpan.Zero }));
+        Shot("band-longest", (s, _) =>
+        {
+            s.Editor.SetBufferSeconds(AppSettings.MaxBufferSeconds);
+            s.UpdateStatus(sampleStatus with { Buffered = TimeSpan.FromSeconds(1790), MicCapturing = false, MemoryBytes = 522_000_000 });
+        });
         Shot("hotkeys-listening", (s, _) =>
         {
             s.Key(Vk.Tab, 0);

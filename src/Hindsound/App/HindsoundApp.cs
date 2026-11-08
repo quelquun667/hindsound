@@ -1157,7 +1157,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
         var paused = _lastStatus?.Activity == CaptureActivity.Paused;
         return _tray.ShowMenu((short)(wParam & 0xFFFF), (short)((wParam >> 16) & 0xFFFF), TrayMenu.Items(paused, _lastClip is not null, _leave.Waiting,
-            _updates?.MenuVersion is { } version ? $"Update to {version}..." : null));
+            _updates?.MenuVersion is { } version ? $"Update to {version}..." : null, _lastStatus?.Buffered));
     }
 
     private void OpenClipsFolder()

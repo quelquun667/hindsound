@@ -110,22 +110,11 @@ internal class Button(string label, Action click) : Widget
     public override void Paint(ICanvas c, UiState ui)
     {
         var box = Bounds;
-        if (Accented)
+        if (Accented && Enabled)
         {
             c.Glow(box, 4, 0.35f, ui.Accent);
             c.FillRound(box, 4, ui.Accent);
-            if (SubLabel is null)
-            {
-                c.TextCentered(label, Face.Medium, FontSize, box, ui.OnAccent);
-            }
-            else
-            {
-                var labelWidth = c.Measure(label, Face.Medium, FontSize);
-                var subWidth = c.Measure(SubLabel, Face.Mono, 11);
-                var x = box.MidX - Math.Max(labelWidth, subWidth) / 2;
-                c.TextMid(label, Face.Medium, FontSize, x, box.MidY - 9, ui.OnAccent);
-                c.TextMid(SubLabel, Face.Mono, 11, x, box.MidY + 10, ui.OnAccent);
-            }
+            PaintLabels(c, box, ui.OnAccent);
         }
         else
         {
@@ -134,7 +123,7 @@ internal class Button(string label, Action click) : Widget
             var color = Enabled ? Theme.Text : Theme.Faded;
             if (Icon == ButtonIcon.None)
             {
-                c.TextCentered(label, Face.Medium, FontSize, box, color);
+                PaintLabels(c, box, color);
             }
             else
             {
@@ -149,6 +138,21 @@ internal class Button(string label, Action click) : Widget
         {
             ui.FocusOutline(c, box, 4);
         }
+    }
+
+    private void PaintLabels(ICanvas c, Box box, uint color)
+    {
+        if (SubLabel is null)
+        {
+            c.TextCentered(label, Face.Medium, FontSize, box, color);
+            return;
+        }
+
+        var labelWidth = c.Measure(label, Face.Medium, FontSize);
+        var subWidth = c.Measure(SubLabel, Face.Mono, 11);
+        var x = box.MidX - Math.Max(labelWidth, subWidth) / 2;
+        c.TextMid(label, Face.Medium, FontSize, x, box.MidY - 9, color);
+        c.TextMid(SubLabel, Face.Mono, 11, x, box.MidY + 10, color);
     }
 
     private void PaintIcon(ICanvas c, float x, float midY, uint color)

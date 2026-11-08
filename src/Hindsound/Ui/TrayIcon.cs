@@ -85,7 +85,8 @@ internal static class TrayMenu
     /// <param name="hasLastClip">There is a clip to copy.</param>
     /// <param name="closingAfterClip">Quit was asked for and a clip is still being written: a second Quit is all that is left to do.</param>
     /// <param name="updateText">The line that offers a new version, such as "Update to 0.2.0..."; null when there is none to offer.</param>
-    public static IReadOnlyList<TrayMenuItem> Items(bool paused, bool hasLastClip, bool closingAfterClip, string? updateText = null)
+    /// <param name="buffered">What the memory holds; null when nothing has said yet.</param>
+    public static IReadOnlyList<TrayMenuItem> Items(bool paused, bool hasLastClip, bool closingAfterClip, string? updateText = null, TimeSpan? buffered = null)
     {
         if (closingAfterClip)
         {
@@ -94,10 +95,10 @@ internal static class TrayMenu
 
         List<TrayMenuItem> items =
         [
-            new(TrayCommand.Save30s, "Save last 30s"),
-            new(TrayCommand.Save15s, "Save last 15s"),
-            new(TrayCommand.Save1m, "Save last 1 min"),
-            new(TrayCommand.Save5m, "Save last 5 min"),
+            SaveItem(TrayCommand.Save30s, "Save up to 30s", 30, buffered),
+            SaveItem(TrayCommand.Save15s, "Save up to 15s", 15, buffered),
+            SaveItem(TrayCommand.Save1m, "Save up to 1 min", 60, buffered),
+            SaveItem(TrayCommand.Save5m, "Save up to 5 min", 300, buffered),
             new(TrayCommand.None),
             new(TrayCommand.CopyLast, "Copy last clip", hasLastClip),
             new(TrayCommand.TogglePause, paused ? "Resume capture" : "Pause capture"),
@@ -113,6 +114,21 @@ internal static class TrayMenu
 
         items.Add(new(TrayCommand.Quit, "Quit"));
         return items;
+    }
+
+    // The menu is read in one look, just before the clip: an entry says when it would come out shorter than its words.
+    private static TrayMenuItem SaveItem(TrayCommand command, string text, int seconds, TimeSpan? buffered)
+    {
+        if (buffered is not { } held)
+        {
+            return new(command, text);
+        }
+
+        var kept = KeptDuration.SecondsOf(held);
+        return new(
+            command,
+            seconds > kept && KeptDuration.CanSave(held) ? $"{text} (only {NotificationStates.FormatDuration(kept)})" : text,
+            KeptDuration.CanSave(held));
     }
 }
 

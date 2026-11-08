@@ -65,13 +65,12 @@ internal sealed partial class SettingsScreen
 
     private void BuildBand()
     {
-        var band = StatusText.From(_status);
+        var band = StatusText.From(_status, Editor.Settings.BufferSeconds);
         var saveLabel = StatusText.SaveLabel(Editor.Settings.ClipSeconds);
         var saveGesture = Editor.Settings.Hotkeys.SaveDefault ?? string.Empty;
-        var saveWidth = Math.Max(_canvas.Measure(saveLabel, Face.Medium, 16), _canvas.Measure(saveGesture, Face.Mono, 11)) + 36;
-        var saveBox = new Box(WindowWidth - 24 - MathF.Ceiling(saveWidth), 10, MathF.Ceiling(saveWidth), 52);
+        var saveBox = SaveBox(_canvas, saveLabel, saveGesture);
         var pauseWidth = Button.WidthFor(_canvas, "Resume", icon: true);
-        var pauseLeft = saveBox.X - 20 - pauseWidth;
+        var pauseLeft = BandPauseLeft(_canvas, saveLabel, saveGesture);
         Chrome(new Painted((c, ui) => PaintBand(c, ui, band, pauseLeft)) { Bounds = new Box(0, 0, WindowWidth, BandHeight) });
         Chrome(new Button(band.PauseLabel, _backend.TogglePause)
         {
@@ -86,6 +85,7 @@ internal sealed partial class SettingsScreen
             Accented = true,
             SubLabel = saveGesture,
             FontSize = 16,
+            Enabled = band.SaveEnabled,
             Bounds = saveBox,
         });
     }
@@ -121,21 +121,46 @@ internal sealed partial class SettingsScreen
                 break;
         }
 
-        // An exe name can be of any length, and the figures and the buttons come after it.
-        const float gap = 20;
-        var figures = band.Mic.Length == 0 ? 0
-            : c.Measure(band.Mic, Face.Body, 14) + gap + c.Measure(band.Duration, Face.Mono, 13) + gap + c.Measure(band.Ram, Face.Mono, 13) + gap;
-        var title = c.Fit(band.Title, Face.Title, 22, pauseLeft - gap - figures - x);
+        var (title, gap) = BandTitle(c, band, pauseLeft, x);
         c.TextMid(title, Face.Title, 22, x, mid, Theme.Text);
-        x += c.Measure(title, Face.Title, 22) + 20;
+        x += c.Measure(title, Face.Title, 22) + gap;
         if (band.Mic.Length > 0)
         {
             c.TextMid(band.Mic, Face.Body, 14, x, mid, Theme.Muted);
-            x += c.Measure(band.Mic, Face.Body, 14) + 20;
+            x += c.Measure(band.Mic, Face.Body, 14) + gap;
             c.TextMid(band.Duration, Face.Mono, 13, x, mid, Theme.Text);
-            x += c.Measure(band.Duration, Face.Mono, 13) + 20;
+            x += c.Measure(band.Duration, Face.Mono, 13) + gap;
             c.TextMid(band.Ram, Face.Mono, 13, x, mid, Theme.Muted);
         }
+    }
+
+    /// <summary>Where the Pause button starts: the width of the save button decides it.</summary>
+    internal static float BandPauseLeft(ICanvas c, string saveLabel, string saveGesture) =>
+        SaveBox(c, saveLabel, saveGesture).X - 20 - Button.WidthFor(c, "Resume", icon: true);
+
+    private static Box SaveBox(ICanvas c, string saveLabel, string saveGesture)
+    {
+        var width = MathF.Ceiling(Math.Max(c.Measure(saveLabel, Face.Medium, 16), c.Measure(saveGesture, Face.Mono, 11)) + 36);
+        return new Box(WindowWidth - 24 - width, 10, width, 52);
+    }
+
+    /// <summary>
+    /// The title as it fits, and the space between the figures. An exe name can be of any length, and the figures and the
+    /// buttons come after it. They close up before the title gets cut: a long memory and the longest word for the microphone
+    /// would otherwise cut even "Capturing".
+    /// </summary>
+    /// <param name="c">What measures.</param>
+    /// <param name="band">The words of the band.</param>
+    /// <param name="pauseLeft">Where the Pause button starts.</param>
+    /// <param name="x">Where the title starts.</param>
+    internal static (string Title, float Gap) BandTitle(ICanvas c, StatusBand band, float pauseLeft, float x)
+    {
+        const float wide = 20, tight = 12;
+        float Room(float gap) => pauseLeft - gap - x - (band.Mic.Length == 0 ? 0
+            : c.Measure(band.Mic, Face.Body, 14) + gap + c.Measure(band.Duration, Face.Mono, 13) + gap + c.Measure(band.Ram, Face.Mono, 13) + gap);
+
+        var chosen = c.Measure(band.Title, Face.Title, 22) <= Room(wide) ? wide : tight;
+        return (c.Fit(band.Title, Face.Title, 22, Room(chosen)), chosen);
     }
 
     private void BuildNav()
@@ -676,7 +701,7 @@ internal sealed partial class SettingsScreen
         var busy = view?.CardBusy == true;
         var clipBusy = panel?.ClipBusy == true;
         var title = view?.Offered is { } offered ? $"Update to {offered}" : "Update";
-        var body = $"Updating restarts Hindsound. The last {NotificationStates.FormatDuration(panel?.BufferSeconds ?? 0)} in memory will be lost.";
+        var body = StatusText.UpdateCardBody(_status, panel?.BufferSeconds ?? 0);
 
         // A download under way speaks first; then a clip still being written, which greys the two buttons.
         var line = busy ? view!.CardLine : clipBusy ? ClipBusyNote : view?.CardLine;
@@ -757,13 +782,21 @@ internal sealed partial class SettingsScreen
 
     private static readonly string[] FirstRunSteps = ["Pick your hotkey", "Check your mic", "Try it"];
 
+    // The app has only just started: a clip made at once would hold next to nothing.
+    internal const string FirstRunWait = "Wait a few seconds.";
+    internal const string FirstRunSay = "Say something, then press your hotkey.";
+    internal const float FirstRunNoteGap = 4;
+
+    /// <summary>The room of a line in the panel of the card: nothing cuts a note that goes past it.</summary>
+    internal const float FirstRunTextWidth = 420;
+
     public int FirstRunStep => _firstRunStep;
 
     public bool FirstRunClipDone => _firstRunClipDone;
 
     private void BuildFirstRun()
     {
-        const float x = 40, panelLeft = 260, panelRight = 720;
+        const float x = 40, panelLeft = 260, panelRight = panelLeft + FirstRunTextWidth + 40;
         var step = _firstRunStep;
         var done = _firstRunClipDone;
         Add(new Painted((c, ui) =>
@@ -806,7 +839,7 @@ internal sealed partial class SettingsScreen
         switch (step)
         {
             case 0:
-                FirstRunNote("This saves the last 30 seconds from anywhere, even in a game.", inner, top);
+                FirstRunNote(StatusText.FirstRunHotkeyNote(Editor.Settings.ClipSeconds), inner, top);
                 Add(
                     new HotkeyField(HotkeyAction.SaveDefault, () => ViewOf(HotkeyAction.SaveDefault), BeginCapture)
                     {
@@ -828,7 +861,8 @@ internal sealed partial class SettingsScreen
                 break;
             default:
                 var gesture = Editor.Settings.Hotkeys.SaveDefault ?? string.Empty;
-                FirstRunNote("Say something, then press your hotkey.", inner, top);
+                FirstRunNote(FirstRunWait, inner, top);
+                Add(new Painted((c, _) => c.TextMid(FirstRunSay, Face.Body, 14, inner + c.Measure(FirstRunWait, Face.Body, 14) + FirstRunNoteGap, top + 8, Theme.Muted)), scrolls: false);
                 Add(new Painted((c, _) => c.Keycaps(gesture, inner, top + 42)), scrolls: false);
                 if (done && _lastClip is { } clip)
                 {

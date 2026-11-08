@@ -187,9 +187,9 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
     public static readonly (HotkeyAction Action, string Label)[] HotkeyRows =
     [
         (HotkeyAction.SaveDefault, "Save clip"),
-        (HotkeyAction.Save15s, "Save last 15s"),
-        (HotkeyAction.Save1m, "Save last 1 min"),
-        (HotkeyAction.Save5m, "Save last 5 min"),
+        (HotkeyAction.Save15s, "Save up to 15s"),
+        (HotkeyAction.Save1m, "Save up to 1 min"),
+        (HotkeyAction.Save5m, "Save up to 5 min"),
         (HotkeyAction.TogglePause, "Pause or resume"),
         (HotkeyAction.CopyLast, "Copy last clip"),
     ];

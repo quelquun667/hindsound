@@ -132,15 +132,18 @@ internal enum StatusMark
 }
 
 /// <summary>What the band at the top says, from the engine's status alone.</summary>
-internal readonly record struct StatusBand(StatusMark Mark, string Title, string Mic, string Duration, string Ram, string PauseLabel, bool PauseEnabled);
+internal readonly record struct StatusBand(StatusMark Mark, string Title, string Mic, string Duration, string Ram, string PauseLabel, bool PauseEnabled, bool SaveEnabled);
 
 internal static class StatusText
 {
-    public static StatusBand From(AudioEngineStatus? status)
+    /// <param name="status">The last status of the engine, if any.</param>
+    /// <param name="capSeconds">What the setting lets the memory hold; null to show only what it holds.</param>
+    public static StatusBand From(AudioEngineStatus? status, int? capSeconds = null)
     {
         if (status is null)
         {
-            return new StatusBand(StatusMark.None, "Starting", string.Empty, string.Empty, string.Empty, "Pause", false);
+            // Nothing says the memory is empty yet, and pressing save at this moment gets its own answer: "Nothing to save yet".
+            return new StatusBand(StatusMark.None, "Starting", string.Empty, string.Empty, string.Empty, "Pause", false, true);
         }
 
         var (mark, title) = Headline(status);
@@ -150,10 +153,24 @@ internal static class StatusText
             mark,
             title,
             mic,
-            NotificationStates.FormatDuration(NotificationStates.WholeSeconds(status.Buffered)),
+            DurationCell(KeptDuration.SecondsOf(status.Buffered), capSeconds),
             Megabytes(status.MemoryBytes),
             paused ? "Resume" : "Pause",
-            status.Activity != CaptureActivity.Stopped);
+            status.Activity != CaptureActivity.Stopped,
+            KeptDuration.CanSave(status.Buffered));
+    }
+
+    // Filling, the cell says both figures: the setting alone would read as what the memory already holds.
+    private static string DurationCell(int kept, int? cap)
+    {
+        if (cap is not { } setting)
+        {
+            return NotificationStates.FormatDuration(kept);
+        }
+
+        return KeptDuration.StateOf(kept, setting) == KeptState.Full
+            ? NotificationStates.FormatDuration(setting)
+            : $"{NotificationStates.FormatDuration(kept)} / {NotificationStates.FormatDuration(setting)}";
     }
 
     private static (StatusMark Mark, string Title) Headline(AudioEngineStatus status)
@@ -175,11 +192,39 @@ internal static class StatusText
     public static string Megabytes(long bytes) =>
         string.Create(CultureInfo.InvariantCulture, $"~{Math.Round(bytes / 1_000_000.0, MidpointRounding.AwayFromZero):0} MB");
 
-    /// <summary>The words of the big button: "30s", "1 min", "1:30".</summary>
+    /// <summary>The words of the big button: "30s", "1 min", "1:30". The same at any moment: its width places the Pause button, and "up to" stays true with 0:12 in memory.</summary>
     public static string SaveLabel(int clipSeconds) =>
-        "Save last " + (clipSeconds < 60 ? clipSeconds + "s"
+        "Save up to " + (clipSeconds < 60 ? clipSeconds + "s"
             : clipSeconds % 60 == 0 ? clipSeconds / 60 + " min"
             : NotificationStates.FormatDuration(clipSeconds));
+
+    /// <summary>The same length in a sentence: "30 seconds", "1 minute", "1:30".</summary>
+    public static string ClipWords(int clipSeconds) =>
+        clipSeconds < 60 ? clipSeconds + (clipSeconds == 1 ? " second" : " seconds")
+        : clipSeconds == 60 ? "1 minute"
+        : clipSeconds % 60 == 0 ? clipSeconds / 60 + " minutes"
+        : NotificationStates.FormatDuration(clipSeconds);
+
+    /// <summary>The first step of the first-launch card.</summary>
+    public static string FirstRunHotkeyNote(int clipSeconds) =>
+        $"Saves up to the last {ClipWords(clipSeconds)}, from anywhere, even in a game.";
+
+    /// <summary>What the update card says is lost. No figure under a few seconds: there is nothing to warn about.</summary>
+    /// <param name="status">The last status of the engine; before any, only the setting can be named.</param>
+    /// <param name="capSeconds">What the setting lets the memory hold.</param>
+    public static string UpdateCardBody(AudioEngineStatus? status, int capSeconds)
+    {
+        const string restart = "Updating restarts Hindsound.";
+        if (status is null)
+        {
+            return $"{restart} The last {NotificationStates.FormatDuration(capSeconds)} in memory will be lost.";
+        }
+
+        var kept = KeptDuration.SecondsOf(status.Buffered);
+        return kept < KeptDuration.StartingBelowSeconds
+            ? restart
+            : $"{restart} The last {NotificationStates.FormatDuration(KeptDuration.Shown(kept, capSeconds))} in memory will be lost.";
+    }
 
     /// <summary>"720 KB", "1.4 MB".</summary>
     public static string FileSize(long bytes)
