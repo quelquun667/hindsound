@@ -15,6 +15,8 @@ public class MutexNameTests
     {
         Assert.Equal(RealName, NameFor());
         Assert.Equal(RealName, NameFor("--offscreen", "--no-mic"));
+        // The one argument of the launch Setup starts again after a failed update: the old copy still running holds this name.
+        Assert.Equal(RealName, NameFor("--update-failed"));
     }
 
     [Fact]
