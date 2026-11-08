@@ -116,5 +116,44 @@ public sealed class LibraryStoreSafetyTests : IDisposable
         Assert.Single(Store().Read().Data.Clips);
     }
 
+    private static ClipFile Track(string name) =>
+        new(Path.Combine(@"D:\Clips", name), 1000, new DateTime(2026, 11, 8, 12, 0, 0, DateTimeKind.Utc));
+
+    [Fact]
+    public void ATrackThatCameBackAfterTheLabeling_IsAddedToTheEntry_SoItKeepsTheLabelsAlone()
+    {
+        var store = Store();
+        var id = store.CreateCollection("pets", ClipScan.Nothing, Now).CollectionId!;
+        ClipFile system = Track("a_system.mp3");
+        ClipFile mic = Track("a_mic.mp3");
+        store.SetFavorite(new ClipGroup([system]), true, ClipScan.Nothing, Now);
+        store.SetInCollection(new ClipGroup([system, mic]), id, true, ClipScan.Nothing, Now);
+
+        // The system track is gone: the mic track is the only one a look at the folder finds.
+        var micLine = new ClipGroup([mic]);
+        var labels = ClipIndexMatch.Match(Store().Read().Data.Clips, new ClipScan([micLine], [@"D:\Clips"])).LabelsOf(micLine);
+
+        Assert.True(labels.Favorite);
+        Assert.Equal([id], labels.CollectionIds);
+    }
+
+    [Fact]
+    public void ATrackIsAddedOnce_WhenTwoEntriesCoverTheSameLine()
+    {
+        var store = Store();
+        var id = store.CreateCollection("pets", ClipScan.Nothing, Now).CollectionId!;
+        ClipFile system = Track("a_system.mp3");
+        ClipFile mic = Track("a_mic.mp3");
+        ClipFile extra = Track("a_extra.mp3");
+        store.SetFavorite(new ClipGroup([system]), true, ClipScan.Nothing, Now);
+        store.SetFavorite(new ClipGroup([mic]), true, ClipScan.Nothing, Now);
+
+        store.SetInCollection(new ClipGroup([system, mic, extra]), id, true, ClipScan.Nothing, Now);
+
+        var paths = Store().Read().Data.Clips.SelectMany(entry => entry.Files).Select(file => file.Path).ToArray();
+        Assert.Equal(3, paths.Length);
+        Assert.Equal(3, paths.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+    }
+
     // END
 }

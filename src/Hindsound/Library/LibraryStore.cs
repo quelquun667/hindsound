@@ -395,12 +395,20 @@ public sealed class LibraryStore
         var entries = data.Clips.FindAll(entry => entry.Files.Exists(file => clip.Files.Any(f => string.Equals(f.Path, file.Path, StringComparison.OrdinalIgnoreCase))));
         if (entries.Count == 0)
         {
-            var entry = new LibraryClip
-            {
-                Files = [.. clip.Files.Select(f => new LibraryFile { Path = f.Path, Size = f.Size, Written = f.WrittenUtc })],
-            };
+            var entry = new LibraryClip();
             data.Clips.Add(entry);
             entries.Add(entry);
+        }
+
+        // A track that came back after the labeling joins the entry, once however many entries cover the line: one survivor
+        // must be enough to keep the labels, and a track the entry never cited could not be that survivor.
+        var cited = new HashSet<string>(entries.SelectMany(entry => entry.Files.Select(file => file.Path)), StringComparer.OrdinalIgnoreCase);
+        foreach (var f in clip.Files)
+        {
+            if (cited.Add(f.Path))
+            {
+                entries[0].Files.Add(new LibraryFile { Path = f.Path, Size = f.Size, Written = f.WrittenUtc });
+            }
         }
 
         foreach (var entry in entries)
