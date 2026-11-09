@@ -53,7 +53,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     private bool _startTouchesRunKey;
     private AudioEngineOptions? _engineOptions;
     private SettingsWindow? _window;
-    private Section _lastSettingsPage = Section.Hotkeys;
+    private readonly WindowGoing _going;
     private bool _firstRun;
     private IReadOnlyList<HotkeyResult> _hotkeyResults = [];
     private AudioEngineStatus? _lastStatus;
@@ -98,6 +98,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         _options = options;
         _journal = journal;
         _updaterMayRun = updaterMayRun;
+        _going = new WindowGoing(() => _leave.MayOpenSettings, () => _window?.Screen, () => _window?.BringBack(), CreateWindow, OpenLastClipFolder, _journal.Write);
         _store = new SettingsStore(options.SettingsPath);
         _pending = new PendingNotices(journal.Write);
         _pretendGameUntilMs = options.SelfTestGameSeconds is { } game ? NowMs + (long)(game * 1000) : 0;
@@ -1174,7 +1175,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         });
     }
 
-    private void OnNotificationClicked() => Go(WindowRoutes.ClickOn(_notification.Showing));
+    private void OnNotificationClicked() => _going.Click(_notification.Showing);
 
     private void OpenLastClipFolder()
     {
@@ -1191,43 +1192,14 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
     // ---------------------------------------------------------------- the window
 
-    private void Go(WindowGesture gesture)
-    {
-        var route = WindowRoutes.Of(gesture, _window?.Screen.Section, _lastSettingsPage);
-        _journal.Write($"window gesture {gesture}: {route.Action} {route.Section}, the window was on {_window?.Screen.Section.ToString() ?? "nothing"}");
-        if (route.Action == WindowAction.OpenClipFolder)
-        {
-            OpenLastClipFolder();
-            return;
-        }
+    private void Go(WindowGesture gesture) => _going.Go(gesture);
 
-        OpenWindow(route.Section ?? Section.Now);
-        if (route.Action == WindowAction.ShowUpdates)
-        {
-            _window?.Screen.ShowUpdates();
-        }
-        else if (route.Action == WindowAction.ShowUpdateCard)
-        {
-            _window?.Screen.ShowUpdateCard();
-        }
-    }
+    private void OpenWindow(Section target) => _going.Open(target);
 
     /// <summary>Only one at a time, and only while it is open: closing destroys it, and the memory goes back.</summary>
     /// <param name="target">The view to land on. <see cref="Section.FirstRun"/> opens the first-launch card.</param>
-    private void OpenWindow(Section target)
+    private void CreateWindow(Section target)
     {
-        if (!_leave.MayOpenSettings)
-        {
-            return;
-        }
-
-        if (_window is { } open)
-        {
-            open.BringBack();
-            open.Screen.ShowSection(target);
-            return;
-        }
-
         var firstRun = target == Section.FirstRun;
 
         // The screen the user is looking at, whatever the active window is: a game on the first one, a click on the second.
@@ -1235,7 +1207,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         var window = new SettingsWindow(_settings, this, ReadMicPeak, firstRun, _options.Offscreen, screen, OnSettingsClosed);
         _window = window;
 
-        window.Screen.SettingsPageSeen = page => _lastSettingsPage = page;
+        window.Screen.SettingsPageSeen = _going.SettingsPageSeen;
 
         // Always: without an updater, the panel says this copy does not update itself.
         window.Screen.SetUpdates(this);
