@@ -144,6 +144,10 @@ internal static unsafe class SettingsDump
         public Audio.WaveFacts WaveFacts => facts;
     }
 
+    /// <summary>What the engine reports after a pause: it closes both captures, so the band says the microphone is not captured.</summary>
+    internal static Audio.AudioEngineStatus PausedStatus(Audio.AudioEngineStatus open) =>
+        open with { Activity = Audio.CaptureActivity.Paused, SystemCapturing = false, MicCapturing = false };
+
     public static int Write(string folder, double scale)
     {
         Directory.CreateDirectory(folder);
@@ -387,7 +391,7 @@ internal static unsafe class SettingsDump
         });
         Shot("now-pause", (s, _) =>
         {
-            s.UpdateStatus(sampleStatus with { Activity = Audio.CaptureActivity.Paused });
+            s.UpdateStatus(PausedStatus(sampleStatus));
             Wave(s, Memory(voiceTrack, micTrack));
         });
         Shot("now-app-absente", (s, _) =>
