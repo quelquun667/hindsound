@@ -175,7 +175,14 @@ internal static unsafe class SettingsDump
             PngFile.Write(Path.Combine(folder, name + suffix + ".png"), canvas.Bits, canvas.Width, canvas.Height);
         }
 
-        Shot("hotkeys");
+        // The four pictures of the README: the side bar they show is the one of the window, with the Now page above the settings.
+        static void WithNow(SettingsScreen s, Section page)
+        {
+            s.SetNow(new SampleNow(default));
+            s.ShowSection(page);
+        }
+
+        Shot("hotkeys", (s, _) => WithNow(s, Section.Hotkeys));
         Shot("band-filling", (s, _) => s.UpdateStatus(sampleStatus with { Buffered = TimeSpan.FromSeconds(12) }));
         Shot("band-empty", (s, _) => s.UpdateStatus(sampleStatus with { Buffered = TimeSpan.Zero }));
         Shot("band-longest", (s, _) =>
@@ -210,7 +217,7 @@ internal static unsafe class SettingsDump
             s.Key(Vk.Enter, 0);
             s.Key(0x79, HotkeyGesture.ModControl | HotkeyGesture.ModShift);
         }, focus: true);
-        Shot("durations", (s, _) => s.ShowSection(Section.Durations));
+        Shot("durations", (s, _) => WithNow(s, Section.Durations));
         Shot("durations-custom", (s, _) =>
         {
             s.ShowSection(Section.Durations);
@@ -224,7 +231,7 @@ internal static unsafe class SettingsDump
         {
             s.Editor.SetSourceApp("Discord.exe");
             s.UpdateStatus(sampleStatus with { SystemDeviceName = "Discord.exe", OwnSoundsExcluded = false, SourceApp = "Discord.exe" });
-            s.ShowSection(Section.Audio);
+            WithNow(s, Section.Audio);
         });
         Shot("audio-app-missing", (s, _) =>
         {
@@ -240,7 +247,7 @@ internal static unsafe class SettingsDump
             s.Key(Vk.Space, 0);
         }, focus: true);
         Shot("export", (s, _) => s.ShowSection(Section.Export));
-        Shot("general", (s, _) => s.ShowSection(Section.General));
+        Shot("general", (s, _) => WithNow(s, Section.General));
         Shot("general-bottom", (s, _) =>
         {
             s.ShowSection(Section.General);
