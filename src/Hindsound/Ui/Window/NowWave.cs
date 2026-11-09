@@ -221,7 +221,7 @@ internal sealed class NowWave
         if (titles)
         {
             c.TextMid(_systemTitle, Face.Medium, 13, SettingsScreen.Left, SystemTitleY, Theme.Muted);
-            var micTitle = WaveView.MicLaneTitle(status);
+            var micTitle = WaveView.MicLaneTitle(status, _micLane.HasTrack);
             c.TextMid(micTitle, Face.Medium, 13, SettingsScreen.Left, MicTitleY, micTitle == WaveView.MicLost ? Theme.Amber : Theme.Muted);
         }
 
@@ -229,7 +229,7 @@ internal sealed class NowWave
         PaintLane(c, SystemLane, _systemGrid, _systemBars, _systemLane.HasTrack, _marker, look, systemWords, fills: true);
         PaintMarker(c, titles);
 
-        PaintLane(c, MicLane, _micGrid, _micBars, _micLane.HasTrack, WaveMarker.None, look, WaveView.MicLaneText(status), fills: false);
+        PaintLane(c, MicLane, _micGrid, _micBars, _micLane.HasTrack, WaveMarker.None, look, WaveView.MicLaneText(status, _micLane.HasTrack), fills: false);
         PaintZoneLine(c, accent, frozen);
     }
 

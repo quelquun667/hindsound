@@ -209,11 +209,12 @@ internal static class WaveView
     /// <summary>
     /// The name of the microphone's lane: a lost one is said here, in amber, with its past still under it. Turned off is said in the lane
     /// itself (<see cref="MicLaneText"/>). Paused, stopped or with no device at all, no capture is open and that is not a lost microphone:
-    /// the band already says why.
+    /// the band already says why. A microphone that never gave a track was not on and then lost: it was never captured, and the lane
+    /// says so in its middle (<see cref="MicLaneText"/>) instead of this title.
     /// </summary>
-    public static string MicLaneTitle(AudioEngineStatus? status)
+    public static string MicLaneTitle(AudioEngineStatus? status, bool hasTrack = true)
     {
-        if (status is null || !status.MicEnabled)
+        if (status is null || !status.MicEnabled || !hasTrack)
         {
             return "Mic";
         }
@@ -222,7 +223,20 @@ internal static class WaveView
     }
 
     /// <summary>What the lane of the microphone says in its middle, with no base line, or null when it shows its bars.</summary>
-    public static string? MicLaneText(AudioEngineStatus? status) => status is { MicEnabled: false } ? "Mic off" : null;
+    public static string? MicLaneText(AudioEngineStatus? status, bool hasTrack = true)
+    {
+        if (status is null)
+        {
+            return null;
+        }
+
+        if (!status.MicEnabled)
+        {
+            return "Mic off";
+        }
+
+        return !hasTrack && !status.MicCapturing && status.Activity == CaptureActivity.Capturing ? "Mic not captured" : null;
+    }
 
     /// <summary>
     /// The line under the wave. The time counted from before a change of source is said out loud: the clip holds it,
@@ -261,7 +275,18 @@ internal static class WaveView
         var before = LastChange(facts) is { } change && change.Frame > start && change.Frame <= facts.End
             ? SecondsOf(change.Frame - start)
             : 0;
-        return (SecondsOf(facts.End - start), before);
+        var kept = SecondsOf(facts.End - start);
+
+        // A clip that reaches the whole memory holds what the band calls full, with the same second of margin: the measure can stay a
+        // hair under the setting for good, and the line would then say "4:59 of 5:00" under a band that says 5:00. A shorter clip is
+        // not rounded up: 0:29 of 0:30 while the memory fills is true.
+        var cap = (int)Math.Min(facts.BufferFrames / Rate, int.MaxValue);
+        if (cap > 0 && clipSeconds >= cap)
+        {
+            kept = KeptDuration.Shown(kept, cap);
+        }
+
+        return (kept, before);
     }
 
     /// <summary>The words on the line of a change of source.</summary>
