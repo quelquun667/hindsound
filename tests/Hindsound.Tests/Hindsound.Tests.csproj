@@ -7,7 +7,7 @@
     <IsPackable>false</IsPackable>
     <!-- The sheet of the tray icon writes through the canvas's pointer, as the app does. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <!-- The capture tests count the bytes a callback allocates. A background GC empties the allocation block of every thread, and that count takes what was left in it for an allocation. The published app runs without background GC too. -->
+    <!-- The capture tests count the bytes a callback allocates. With background GC, that count jumped in 5 full runs out of 31, for threads that allocated nothing; without it, in none of 30. The published app runs without it too. -->
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
   </PropertyGroup>
 

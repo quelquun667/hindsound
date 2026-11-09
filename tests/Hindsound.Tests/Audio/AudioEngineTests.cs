@@ -671,6 +671,7 @@ public class AudioEngineTests
     }
 }
 
+// Apart from the parallel tests: what these measure, time or bytes allocated, should not depend on what else runs.
 [CollectionDefinition(nameof(TimingSensitive), DisableParallelization = true)]
 public class TimingSensitive;
 

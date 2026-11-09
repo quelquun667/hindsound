@@ -197,11 +197,11 @@ internal static class StatusTransitions
 
     /// <summary>
     /// What the memory holds in whole seconds, read from the last status at the moment a text is made; null before the
-    /// first status. Every argument is required: a caller that forgets one does not compile instead of saying a stale number.
+    /// first status.
     /// </summary>
     public static int? KeptSecondsOf(AudioEngineStatus? status) => status is null ? null : KeptDuration.SecondsOf(status.Buffered);
 
-    /// <summary><see cref="Fresh"/> with the memory read from the last status.</summary>
+    /// <summary><see cref="Fresh"/> with the memory read from the last status. Every argument is required: a caller that forgets one does not compile instead of saying a stale number.</summary>
     public static NotificationContent FreshFrom(NotificationContent waited, AppSettings settings, IReadOnlyList<HotkeyResult> hotkeys, string? updatedTo, AudioEngineStatus? status) =>
         Fresh(waited, settings, hotkeys, updatedTo, KeptSecondsOf(status));
 

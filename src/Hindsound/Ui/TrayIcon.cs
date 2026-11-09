@@ -136,10 +136,11 @@ internal static class TrayMenu
             return new(command, text);
         }
 
+        // A second short is not worth saying: the band calls that memory full, and the two must agree.
         var kept = KeptDuration.SecondsOf(held);
         return new(
             command,
-            seconds > kept && KeptDuration.CanSave(held) ? $"{text} (only {NotificationStates.FormatDuration(kept)})" : text,
+            seconds - kept > 1 && KeptDuration.CanSave(held) ? $"{text} (only {NotificationStates.FormatDuration(kept)})" : text,
             KeptDuration.CanSave(held));
     }
 }
