@@ -52,13 +52,15 @@ public sealed class ClipIndexMatchCoarseDatesTests
     }
 
     [Theory]
-    [InlineData(20_100_000L)] // a hundredth of a second past the margin
-    [InlineData(-20_100_000L)]
-    public void ADateTooFarAway_IsNoCandidate(long onTheDrive)
+    [InlineData(0L, 20_100_000L)] // a hundredth of a second past the margin
+    [InlineData(0L, -20_100_000L)]
+    [InlineData(-1L, 20_000_000L)] // a tick past the margin, on the grid
+    [InlineData(1L, -20_000_000L)]
+    public void ADateTooFarAway_IsNoCandidate(long before, long onTheDrive)
     {
         var far = Group(File(Drive, "a.mp3", T.AddTicks(onTheDrive)));
 
-        Assert.Empty(Labels(ClipIndexMatch.Match([Entry("c1", File(Clips, "a.mp3", T))], Scan(far)), far));
+        Assert.Empty(Labels(ClipIndexMatch.Match([Entry("c1", File(Clips, "a.mp3", T.AddTicks(before)))], Scan(far)), far));
     }
 
     [Fact]
