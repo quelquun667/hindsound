@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-09
+
 ### Added
 
 - The window opens on a new `Now` page: a live wave of what the memory holds, one lane for the PC sound and one for the microphone. It fills from the right, and the part not held yet shows `Filling...` and dots.

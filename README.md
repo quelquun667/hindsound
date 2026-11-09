@@ -309,8 +309,7 @@ Hindsound has only run on one Windows 11 PC so far. These have not been tried fo
 - recording only a real game or Discord
 - the notification in real games in exclusive fullscreen
 - the settings window with a real mouse and on a second screen
-- the `Now` page on a real window, with real music playing
-- the bold `Open Hindsound` line in the menu of the icon
+- the `Now` page with real music playing
 - typing a hotkey, and the Browse button
 - changing the audio output
 - a damaged settings file with Start with Windows on
