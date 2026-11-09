@@ -23,6 +23,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     private const int ProbeStepMs = 300;
     private const string ProbeTextField = "export.template";
     private const int ProbeAfterCloseMs = 10_000;
+    private const int ProbeNowMs = 2_400;
+    private const int ProbeNowOpenings = 3;
     private const int StartupReadTries = 3;
     private const int StartupReadGapMs = 200;
     private const int SelfTestFailDelayMs = 1500;
@@ -1407,6 +1409,15 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
             _journal.Write($"probe: reached {string.Join(" -> ", seen)}");
             _journal.Write($"probe: open, {Journal.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, {Journal.CpuMilliseconds():F0} ms of CPU so far");
 
+            // The wave of the Now page is made only once the page runs: the measure after closing has to follow a window that had one.
+            window.Screen.ShowSection(Section.Now);
+            _loop.After(ProbeNowMs, CloseOnNow);
+        }
+
+        void CloseOnNow()
+        {
+            _journal.Write($"probe: {ProbeNowMs} ms on Now, {Journal.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
+
             // The page the first opening below must come back to, with this window gone.
             window.Screen.ShowSection(Section.Export);
             window.Close();
@@ -1438,14 +1449,15 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
                     _loop.After(ProbeStepMs, Cycle);
                 }
-                else if (cycles++ < 3)
+                else if (cycles++ <= ProbeNowOpenings)
                 {
+                    // Long enough for the page to make its wave and read the memory, as a person looking at it would.
                     OpenWindow(Section.Now);
-                    _loop.After(ProbeStepMs, Cycle);
+                    _loop.After(ProbeNowMs, Cycle);
                 }
                 else
                 {
-                    _journal.Write($"probe: after 3 more openings, {Journal.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
+                    _journal.Write($"probe: after the menu and {ProbeNowOpenings} openings on Now of {ProbeNowMs} ms each, {Journal.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
                     _journal.Write($"probe: folder dialog usable {FolderPicker.SelfCheck()}");
                     _loop.Quit();
                 }
