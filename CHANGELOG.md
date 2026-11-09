@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-09
+
+The first announced version. What the app does is in the README, and the full list is under 0.0.9.
+
 ### Changed
 
 - The notification says what is really kept when it shows: `Filling, up to 5:00` at the start, `2:10 of 5:00 kept` when capture resumes, and `Keeping the last 5:00` only once it is true. A pause says what can still be saved.
