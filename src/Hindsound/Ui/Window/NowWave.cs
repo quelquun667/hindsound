@@ -95,6 +95,9 @@ internal sealed class NowWave
         _followed = true;
     }
 
+    /// <summary>The page is coming back after an absence, during which nothing was read: its next full paint reads first.</summary>
+    public void ReadAgain() => _followed = false;
+
     /// <summary>Works out the picture and says what changed. Draws nothing, and allocates nothing unless the words change.</summary>
     public WaveChange Look(double scale, in WaveFacts facts, int clipSeconds, AudioEngineStatus? status)
     {
