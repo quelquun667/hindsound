@@ -189,8 +189,8 @@ that applies. Clips saved before this version are there too. It shows every `.mp
 output folder, of up to 8 output folders you used before (counted from this version on, so a folder you left earlier is not
 listed), and of the rescue folder. A folder you filled with music shows that music as well.
 
-- **When it looks:** when you open the page, and when the window comes back to the front while the page is on
-  screen. A clip still being saved shows up at the next look, once it is finished. With the window closed, Hindsound looks at no folder.
+- **When it looks:** when you open the page, when a clip is saved while the page is on screen, and when the window comes back to
+  the front. A clip still being saved never shows half written. With the window closed, Hindsound looks at no folder.
 - **The chosen clip:** choose a line to see its length, size and name at the bottom, then `Copy` it or `Show in folder`. A clip
   saved as two files is one line, and both buttons act on both files. If the file is gone, it says `This clip was moved or deleted`,
   and the line goes at the next look. If the button could not do its job, it says `That didn't work. Your clip is untouched.`
@@ -329,7 +329,6 @@ Hindsound has only run on one Windows 11 PC so far. These have not been tried fo
 - a memory of 30:00 really filled, and the wave of the `Now` page over it
 - the `Library` page with a real mouse
 - `Show in folder` in the real Explorer, `Copy` from `Library` then a paste, and the `Library` line in the menu of the icon
-- a click on a real `Clip saved` notification that opens `Library`
 - typing a hotkey, and the Browse button
 - changing the audio output
 - a damaged settings file with Start with Windows on
