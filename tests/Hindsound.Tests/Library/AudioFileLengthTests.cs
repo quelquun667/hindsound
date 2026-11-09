@@ -213,7 +213,7 @@ public sealed class AudioFileLengthTests : IDisposable
     public void The_Info_frame_sits_behind_the_side_information(byte[] header, int tagAt, uint frames, double seconds)
     {
         var frameBytes = header[1] == 0xE3 ? 384 : header[1] == 0xF3 ? 192 : Stereo128FrameBytes;
-        var mp3 = Frames(header, frameBytes, 4);
+        var mp3 = Frames(header, frameBytes, (int)frames);
         Tag(mp3, tagAt, "Info", frames);
 
         Assert.Equal(seconds, AudioFileLength.Read(WriteBytes("a.mp3", mp3))!.Value.TotalSeconds, 3);
@@ -222,7 +222,7 @@ public sealed class AudioFileLengthTests : IDisposable
     [Fact]
     public void A_Xing_tag_counts_as_an_Info_tag()
     {
-        var mp3 = Frames(Stereo128, Stereo128FrameBytes, 4);
+        var mp3 = Frames(Stereo128, Stereo128FrameBytes, 100);
         Tag(mp3, 36, "Xing", 100);
 
         Assert.Equal(2.4, AudioFileLength.Read(WriteBytes("a.mp3", mp3))!.Value.TotalSeconds, 3);
@@ -240,7 +240,7 @@ public sealed class AudioFileLengthTests : IDisposable
     [Fact]
     public void A_tag_claiming_more_bytes_than_the_file_holds_means_a_cut_file()
     {
-        var mp3 = Frames(Stereo128, Stereo128FrameBytes, 4);
+        var mp3 = Frames(Stereo128, Stereo128FrameBytes, 100);
         Tag(mp3, 36, "Info", 100, bytes: (uint)mp3.Length + 1);
         Assert.Null(AudioFileLength.Read(WriteBytes("a.mp3", mp3)));
 
@@ -435,7 +435,7 @@ public sealed class AudioFileLengthTests : IDisposable
         var body = new byte[16];
         BinaryPrimitives.WriteUInt16LittleEndian(body, 1);
         BinaryPrimitives.WriteUInt16LittleEndian(body.AsSpan(2), 1);
-        BinaryPrimitives.WriteUInt32LittleEndian(body.AsSpan(4), 8000);
+        BinaryPrimitives.WriteUInt32LittleEndian(body.AsSpan(4), bytesPerSecond);
         BinaryPrimitives.WriteUInt32LittleEndian(body.AsSpan(8), bytesPerSecond);
         BinaryPrimitives.WriteUInt16LittleEndian(body.AsSpan(12), 1);
         BinaryPrimitives.WriteUInt16LittleEndian(body.AsSpan(14), 8);

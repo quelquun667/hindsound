@@ -180,6 +180,12 @@ internal sealed partial class SettingsScreen
 
     private void BuildFoot()
     {
+        if (Section == Section.Library)
+        {
+            BuildLibraryFoot();
+            return;
+        }
+
         var top = WindowHeight - FootHeight;
         var clip = _lastClip;
         Chrome(new Painted((c, _) =>
@@ -242,6 +248,9 @@ internal sealed partial class SettingsScreen
                 break;
             case Section.Now:
                 BuildNow();
+                break;
+            case Section.Library:
+                BuildLibrary();
                 break;
             default:
                 BuildFirstRun();

@@ -48,13 +48,13 @@ public class WindowRoutesTests
     }
 
     [Fact]
-    public void Until_library_exists_a_click_on_a_clip_opens_its_folder_and_leaves_the_window_alone()
+    public void A_click_on_a_clip_lands_on_library()
     {
         Section?[] all = [null, Section.Now, Section.General];
         foreach (var view in all)
         {
-            Assert.Equal(new WindowRoute(WindowAction.OpenClipFolder), WindowRoutes.Of(WindowGesture.ClipSavedClick, view, LastPage));
-            Assert.Equal(new WindowRoute(WindowAction.OpenClipFolder), WindowRoutes.Of(WindowGesture.OtherClipClick, view, LastPage));
+            Assert.Equal(new WindowRoute(WindowAction.Show, Section.Library), WindowRoutes.Of(WindowGesture.ClipSavedClick, view, LastPage));
+            Assert.Equal(new WindowRoute(WindowAction.Show, Section.Library), WindowRoutes.Of(WindowGesture.OtherClipClick, view, LastPage));
         }
     }
 
@@ -122,19 +122,11 @@ public class WindowRoutesTests
     }
 
     [Fact]
-    public void Every_gesture_has_its_line_and_only_the_clips_leave_the_window_alone()
+    public void Every_gesture_has_its_line_and_none_leaves_the_window_alone()
     {
         foreach (var gesture in Enum.GetValues<WindowGesture>())
         {
-            var route = Closed(gesture);
-            if (gesture is WindowGesture.ClipSavedClick or WindowGesture.OtherClipClick)
-            {
-                Assert.Null(route.Section);
-            }
-            else
-            {
-                Assert.NotNull(route.Section);
-            }
+            Assert.NotNull(Closed(gesture).Section);
         }
     }
 

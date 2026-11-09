@@ -19,6 +19,9 @@ internal enum Section
 
     /// <summary>What the memory holds, as it comes in. First in the side bar: the order of the lines is in <see cref="NavRows"/>, not here.</summary>
     Now,
+
+    /// <summary>The clips on disk, newest first. Under Now in the side bar.</summary>
+    Library,
 }
 
 /// <summary>What the screen asks of the app. The real one is <see cref="App.HindsoundApp"/>.</summary>
@@ -312,6 +315,12 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
         }
 
         Refresh();
+
+        // Nothing watches the folders: what the list shows was true when it last looked.
+        if (section == Section.Library)
+        {
+            _library?.ReadAgain();
+        }
     }
 
     public void ScrollTo(float y)
@@ -428,7 +437,9 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
         Rebuild();
         if (_focusId is not null && Find(_focusId) is not { CanFocus: true })
         {
-            _focusId = IsCard ? CardStops().FirstOrDefault() : NavId;
+            // A foot button of the Library that goes dim hands the focus back to its list: from the side bar, the next arrow would leave the page.
+            var backToList = _focusId is ClipCopyId or ClipShowId && Section == Section.Library && Find(ClipListId) is { CanFocus: true };
+            _focusId = IsCard ? CardStops().FirstOrDefault() : backToList ? ClipListId : NavId;
         }
 
         SyncEdit();
@@ -637,6 +648,12 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
 
         if (vk is Vk.PageUp or Vk.PageDown)
         {
+            if (ClipList is { } list)
+            {
+                list.OnPage(vk == Vk.PageDown);
+                return true;
+            }
+
             ScrollTo(_scroll + (vk == Vk.PageDown ? 1 : -1) * (ViewBottom - BandHeight - ScrollStep));
             return true;
         }
@@ -892,7 +909,7 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
         }
 
         var hover = HitTest(x, y)?.Id;
-        if (hover != _hoverId || hover == NavId)
+        if (hover != _hoverId || hover == NavId || (Find(hover) is RowList list && list.HoverMoved(x, y)))
         {
             _hoverId = hover;
             _host.Invalidate();
@@ -994,6 +1011,12 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
         {
             popup.Wheel(notches);
             _host.Invalidate();
+            return;
+        }
+
+        if (ClipList is { } list)
+        {
+            list.OnWheel(notches);
             return;
         }
 

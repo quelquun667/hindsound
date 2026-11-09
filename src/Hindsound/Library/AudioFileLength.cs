@@ -24,6 +24,15 @@ public static class AudioFileLength
     // downloads it, which a look at a list must not do. The two recall flags have no name in FileAttributes.
     private const FileAttributes OnlineOnly = FileAttributes.Offline | (FileAttributes)0x40000 | (FileAttributes)0x400000;
 
+    // The bitrate an Info frame may imply, from the lowest of MPEG 2 to the highest of MPEG 1, a little wider on each side:
+    // frame sizes are rounded down, then a padding byte may follow, so a short real file can land just past either end.
+    private const double MinInfoKbps = 7.5, MaxInfoKbps = 320.5;
+
+    private const ushort WavPcm = 1, WavFloat = 3, WavExtensible = 0xFFFE;
+
+    // Where the format code of an extensible WAV sits in its format chunk: the first bytes of its sub-format, and all that is read of it.
+    private const int WavSubFormatAt = 24;
+
     private static readonly int[] Mpeg1Kbps = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320];
     private static readonly int[] Mpeg2Kbps = [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160];
     private static readonly int[] Mpeg1Rates = [44100, 48000, 32000];
@@ -70,7 +79,7 @@ public static class AudioFileLength
         }
 
         // A chunk header and the start of the format chunk that may follow it.
-        Span<byte> chunk = stackalloc byte[8 + 16];
+        Span<byte> chunk = stackalloc byte[8 + WavSubFormatAt + 2];
         uint bytesPerSecond = 0;
         long dataBytes = 0;
         var offset = (long)riff.Length;
@@ -82,7 +91,7 @@ public static class AudioFileLength
             long size = BinaryPrimitives.ReadUInt32LittleEndian(chunk[4..]);
             if (chunk[..4].SequenceEqual("fmt "u8))
             {
-                if (size < 16 || got < chunk.Length) return null;
+                if (size < 16 || got < 8 + 16 || !RateIsTrue(chunk[8..got], size)) return null;
                 bytesPerSecond = BinaryPrimitives.ReadUInt32LittleEndian(chunk[16..]);
             }
             else if (chunk[..4].SequenceEqual("data"u8))
@@ -101,6 +110,28 @@ public static class AudioFileLength
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// In PCM or float every second is sampleRate x blockAlign bytes, so a byte rate that says otherwise is a false header. A
+    /// compressed format has a byte rate of its own, and only that to go by.
+    /// </summary>
+    private static bool RateIsTrue(ReadOnlySpan<byte> format, long size)
+    {
+        var code = BinaryPrimitives.ReadUInt16LittleEndian(format);
+        if (code == WavExtensible)
+        {
+            // The format is in the sub-format, and a chunk without one says nothing it can be read by.
+            if (size < WavSubFormatAt + 2 || format.Length < WavSubFormatAt + 2) return false;
+            code = BinaryPrimitives.ReadUInt16LittleEndian(format[WavSubFormatAt..]);
+        }
+
+        if (code is not (WavPcm or WavFloat)) return true;
+
+        var sampleRate = BinaryPrimitives.ReadUInt32LittleEndian(format[4..]);
+        var byteRate = BinaryPrimitives.ReadUInt32LittleEndian(format[8..]);
+        var blockAlign = BinaryPrimitives.ReadUInt16LittleEndian(format[12..]);
+        return byteRate == (ulong)sampleRate * blockAlign;
     }
 
     // ---------------------------------------------------------------- MP3
@@ -173,7 +204,12 @@ public static class AudioFileLength
 
             if (frames > 0)
             {
-                return TimeSpan.FromSeconds((double)frames * frame.SamplesPerFrame / frame.SampleRate);
+                var seconds = (double)frames * frame.SamplesPerFrame / frame.SampleRate;
+
+                // The size counts the frame of the tag itself, and the number of frames does not: at 320 kbps a very short clip
+                // would seem above the limit. A false number of frames gives a bitrate no encoder makes: no duration at all.
+                var kbps = ((bytes > 0 ? bytes : audioBytes) - frame.Length) * 8 / seconds / 1000;
+                return kbps is >= MinInfoKbps and <= MaxInfoKbps ? TimeSpan.FromSeconds(seconds) : null;
             }
         }
 

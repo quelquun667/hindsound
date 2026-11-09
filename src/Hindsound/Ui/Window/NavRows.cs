@@ -28,8 +28,14 @@ internal sealed class NavRows
     /// <summary>The window before it has a Now page.</summary>
     public static readonly NavRows SettingsOnly = new([]);
 
-    /// <summary>The window of the app. The line of Library goes after Now, once the page exists.</summary>
+    /// <summary>The window with Now and without Library.</summary>
     public static readonly NavRows WithViews = new([new(Section.Now, "Now")]);
+
+    /// <summary>The window of the app.</summary>
+    public static readonly NavRows WithLibrary = new([new(Section.Now, "Now"), new(Section.Library, "Library")]);
+
+    /// <summary>The window with Library and without Now.</summary>
+    public static readonly NavRows LibraryOnly = new([new(Section.Library, "Library")]);
 
     private readonly int _views;
 

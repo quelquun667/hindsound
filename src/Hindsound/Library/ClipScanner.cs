@@ -38,7 +38,8 @@ public static class ClipScanner
 {
     public const int MaxLines = 2000;
 
-    private const string SystemSuffix = "_system", MicSuffix = "_mic";
+    internal const string SystemSuffix = "_system";
+    private const string MicSuffix = "_mic";
 
     // A FAT or exFAT drive keeps write times to 2 s, and the system clock file times come from is coarser than UtcNow. A
     // file hidden too early only comes back at the next scan; a half-written one shown is a clip that seems broken.
@@ -58,7 +59,8 @@ public static class ClipScanner
     /// clip found, since the index needs them all to recognize a moved clip; <see cref="Cap"/> then gives the lines.
     /// </summary>
     /// <param name="journal">Told of a failure: only the type of the exception and its code, never a path or a message.</param>
-    public static ClipListing Scan(ClipScanRequest request, Action<string>? journal = null)
+    /// <param name="cancel">Looked at between two folders, since an unplugged network share can take long to refuse. A scan cut short lists only what it read.</param>
+    public static ClipListing Scan(ClipScanRequest request, Action<string>? journal = null, CancellationToken cancel = default)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -67,6 +69,11 @@ public static class ClipScanner
         var read = new List<string>();
         foreach (var folder in FoldersToRead(request, journal))
         {
+            if (cancel.IsCancellationRequested)
+            {
+                break;
+            }
+
             if (ReadFolder(folder, hideFrom, files, journal))
             {
                 read.Add(folder);
@@ -249,7 +256,7 @@ public static class ClipScanner
     private static DateTime Later(DateTime a, DateTime b) => a > b ? a : b;
 
     /// <summary>The path without its suffix if its name ends with it (extension kept, to pair only files of one format), or null.</summary>
-    private static string? WithoutSuffix(string path, string suffix)
+    internal static string? WithoutSuffix(string path, string suffix)
     {
         var extension = Path.GetExtension(path.AsSpan());
         var stem = path.AsSpan(0, path.Length - extension.Length);

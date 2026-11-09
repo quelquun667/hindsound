@@ -20,6 +20,8 @@ public class WindowGoingTests
         public void ShowUpdates() => calls.Add("updates");
 
         public void ShowUpdateCard() => calls.Add("card");
+
+        public void SelectClip(string path) => calls.Add("clip " + path);
     }
 
     private sealed class Harness
@@ -42,7 +44,6 @@ public class WindowGoingTests
                     Calls.Add("create " + target);
                     Open = new FakeScreen(target, Calls);
                 },
-                () => Calls.Add("clip folder"),
                 Journal.Add);
         }
     }
@@ -75,12 +76,6 @@ public class WindowGoingTests
 
         Assert.Single(h.Journal);
         Assert.StartsWith($"window gesture {gesture}: {route.Action}", h.Journal[0], StringComparison.Ordinal);
-        if (route.Action == WindowAction.OpenClipFolder)
-        {
-            Assert.Equal(["clip folder"], h.Calls);
-            return;
-        }
-
         var target = route.Section ?? Section.Now;
         Assert.Equal(target, h.Open!.Section);
         Assert.Equal(openOn is null ? $"create {target}" : "bring back", h.Calls[0]);

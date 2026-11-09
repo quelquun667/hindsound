@@ -217,7 +217,7 @@ public sealed class AudioFileLengthGuardsTests : IDisposable
         var body = new byte[16];
         BinaryPrimitives.WriteUInt16LittleEndian(body, 1);
         BinaryPrimitives.WriteUInt16LittleEndian(body.AsSpan(2), 1);
-        BinaryPrimitives.WriteUInt32LittleEndian(body.AsSpan(4), 8000);
+        BinaryPrimitives.WriteUInt32LittleEndian(body.AsSpan(4), bytesPerSecond);
         BinaryPrimitives.WriteUInt32LittleEndian(body.AsSpan(8), bytesPerSecond);
         BinaryPrimitives.WriteUInt16LittleEndian(body.AsSpan(12), 1);
         BinaryPrimitives.WriteUInt16LittleEndian(body.AsSpan(14), 8);

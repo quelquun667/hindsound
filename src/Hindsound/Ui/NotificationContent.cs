@@ -58,7 +58,10 @@ internal sealed record NotificationContent(
     uint VisualColor,
     IReadOnlyList<BarColumn> Bars)
 {
-    /// <summary>A click opens the settings, where the problem gets solved, instead of the folder of the clips.</summary>
+    /// <summary>The clip this is about, by the path of its first file: a click chooses it in the Library page.</summary>
+    public string? ClipPath { get; init; }
+
+    /// <summary>A click opens the settings, where the problem gets solved, instead of the Library page.</summary>
     public bool ClickOpensSettings { get; init; }
 
     /// <summary>A click opens the Updates section of the settings.</summary>
@@ -94,7 +97,10 @@ internal static class NotificationStates
     /// <param name="copyWanted">The settings ask for a copy to the clipboard.</param>
     /// <param name="copied">The copy succeeded.</param>
     /// <param name="accent">The accent colour.</param>
-    public static NotificationContent ForClip(ClipResult result, TimeSpan requested, bool copyWanted, bool copied, uint accent)
+    public static NotificationContent ForClip(ClipResult result, TimeSpan requested, bool copyWanted, bool copied, uint accent) =>
+        WordsForClip(result, requested, copyWanted, copied, accent) with { ClipPath = result.Paths.Count > 0 ? result.PrimaryPath : null };
+
+    private static NotificationContent WordsForClip(ClipResult result, TimeSpan requested, bool copyWanted, bool copied, uint accent)
     {
         var copyFailed = copyWanted && !copied;
         if (result.Rescued)

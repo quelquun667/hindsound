@@ -36,14 +36,16 @@ It has been tried on one Windows 11 PC, and some things are [not tried yet](#not
 - **MP3 or WAV:** MP3 at 192 kbps by default, with the volume evened out to -16 LUFS.
 - **Stays out of your game:** the notification does not take the focus, and over a game, clicks pass through it. In exclusive
   fullscreen, you get a short sound instead.
+- **Your clips in one list:** the `Library` page shows them newest first, with their length, and copies one or shows it in its
+  folder. Your files never move.
 - **Your color:** six accent colors, or any bright color you type.
 - **No account:** the only network use is the daily check for a new version, which you can turn off. See [Updates](#updates).
 
 ## Screenshots
 
-| Now: what the memory holds |
-| --- |
-| <img src="assets/screenshots/now.png" alt="Now page: a wave for the PC sound and one for the microphone, the last 0:30 bright, and Save: last 0:30 under the wave" width="400"> |
+| Now: what the memory holds | Library: your clips |
+| --- | --- |
+| <img src="assets/screenshots/now.png" alt="Now page: a wave for the PC sound and one for the microphone, the last 0:30 bright, and Save: last 0:30 under the wave" width="400"> | <img src="assets/screenshots/library.png" alt="Library page: the clips newest first, each with its length, one of them chosen, and Copy and Show in folder at the bottom" width="400"> |
 
 | Hotkeys | Durations and memory |
 | --- | --- |
@@ -168,11 +170,11 @@ Good to know:
   could throw it out of fullscreen. The notification shows when you are back on the desktop, within 30 seconds for a normal
   clip, and at any time for a clip that had a problem. A borderless game gets the notification right away, unless you set
   `In fullscreen games` to `Sound only`.
-- **A click on the notification,** on the desktop, depends on what it says. About a clip: the folder of your last clip. About
+- **A click on the notification,** on the desktop, depends on what it says. About a clip: the `Library` page, with that clip chosen. About
   the capture, such as `Capture on` or `Microphone lost`: the `Now` page. `Capture on` with `Save hotkey is taken`: Settings >
   Hotkeys. A problem with the settings file: the settings. A new version: Settings > General > Updates.
 - **The icon:** a left click opens the window on the `Now` page, or brings it up as it is if it is already open. A right click
-  opens the menu: `Open Hindsound`, `Save up to 30s`, `Save up to 15s`, `Save up to 1 min`, `Save up to 5 min`, `Copy last clip`,
+  opens the menu: `Open Hindsound`, `Library`, `Save up to 30s`, `Save up to 15s`, `Save up to 1 min`, `Save up to 5 min`, `Copy last clip`,
   `Pause capture`, `Open clips folder`, `Settings`, `Quit`. `Settings` goes to the last page of the settings you looked at,
   `Hotkeys` at first. A save entry longer than what is kept says so, such as `Save up to 5 min (only 0:12)`, and they are all grey
   with less than a second kept. While a new version is ready (with `Ask me`, also when one is available), the menu adds
@@ -180,8 +182,22 @@ Good to know:
 - **Starting Hindsound again** while it runs does the same as a left click on the icon.
 - **Quitting during a save:** Hindsound finishes the clip first, for 5 minutes at most. A second `Quit` leaves at once.
 
-### Hotkeys
+### Library
 
+`Library`, under `Now` in the left column, lists your clips, newest first: the name, the length, and `Rescued` or `2 files` when
+that applies. Clips saved before this version are there too. It shows every `.mp3` and `.wav` file at the first level of your
+output folder, of up to 8 output folders you used before (counted from this version on, so a folder you left earlier is not
+listed), and of the rescue folder. A folder you filled with music shows that music as well.
+
+- **When it looks:** when you open the page, and when the window comes back to the front while the page is on
+  screen. A clip still being saved shows up at the next look, once it is finished. With the window closed, Hindsound looks at no folder.
+- **The chosen clip:** choose a line to see its length, size and name at the bottom, then `Copy` it or `Show in folder`. A clip
+  saved as two files is one line, and both buttons act on both files. If the file is gone, it says `This clip was moved or deleted`,
+  and the line goes at the next look. If the button could not do its job, it says `That didn't work. Your clip is untouched.`
+- **Your files:** `Library` never moves, renames or deletes a file. To do that, use the Explorer: the list follows.
+- **Long lists:** it shows the 2,000 most recent clips, and says so at the end of the list.
+
+### Hotkeys
 | Action | Default |
 | --- | --- |
 | `Save clip` (the length set in Durations) | `Ctrl+Shift+F10` |
@@ -309,7 +325,11 @@ Hindsound has only run on one Windows 11 PC so far. These have not been tried fo
 - recording only a real game or Discord
 - the notification in real games in exclusive fullscreen
 - the settings window with a real mouse and on a second screen
-- the `Now` page with real music playing
+- the `Now` page with real music playing, and with a real microphone
+- a memory of 30:00 really filled, and the wave of the `Now` page over it
+- the `Library` page with a real mouse
+- `Show in folder` in the real Explorer, `Copy` from `Library` then a paste, and the `Library` line in the menu of the icon
+- a click on a real `Clip saved` notification that opens `Library`
 - typing a hotkey, and the Browse button
 - changing the audio output
 - a damaged settings file with Start with Windows on

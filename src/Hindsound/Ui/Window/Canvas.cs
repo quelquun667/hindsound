@@ -116,7 +116,7 @@ internal static class CanvasText
     public static void TextRight(this ICanvas c, string text, Face face, float size, float right, float midY, uint rgb) =>
         c.TextMid(text, face, size, right - c.Measure(text, face, size), midY, rgb);
 
-    /// <summary>The text, cut with an ellipsis if it does not fit.</summary>
+    /// <summary>The text, cut with an ellipsis if it does not fit. Halves the lengths it tries: a file name can be 255 characters, and a list draws several per paint.</summary>
     public static string Fit(this ICanvas c, string text, Face face, float size, float width)
     {
         if (c.Measure(text, face, size) <= width)
@@ -124,17 +124,26 @@ internal static class CanvasText
             return text;
         }
 
-        for (var length = text.Length - 1; length > 0; length--)
+        // The longest cut that fits lies in (fits, tooLong). 0 stands for none at all.
+        var fits = 0;
+        var tooLong = text.Length;
+        while (tooLong - fits > 1)
         {
-            var cut = text[..length].TrimEnd() + "...";
-            if (c.Measure(cut, face, size) <= width)
+            var length = fits + (tooLong - fits) / 2;
+            if (c.Measure(Cut(text, length), face, size) <= width)
             {
-                return cut;
+                fits = length;
+            }
+            else
+            {
+                tooLong = length;
             }
         }
 
-        return string.Empty;
+        return fits == 0 ? string.Empty : Cut(text, fits);
     }
+
+    private static string Cut(string text, int length) => text[..length].TrimEnd() + "...";
 
     /// <summary>Words wrapped to a width. Returns the height used, in design pixels.</summary>
     public static float Wrapped(this ICanvas c, string text, Face face, float size, float x, float top, float width, uint rgb)

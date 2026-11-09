@@ -38,6 +38,9 @@ internal enum WindowGesture
 
     /// <summary>"Update to X..." in the menu of the icon.</summary>
     UpdateMenu,
+
+    /// <summary>Library in the menu of the icon.</summary>
+    LibraryMenu,
 }
 
 /// <summary>What a gesture ends up doing, on top of bringing the window up at <see cref="WindowRoute.Section"/>.</summary>
@@ -51,18 +54,14 @@ internal enum WindowAction
 
     /// <summary>Shows the card that confirms an update.</summary>
     ShowUpdateCard,
-
-    /// <summary>No window at all: the folder of the last clip.</summary>
-    OpenClipFolder,
 }
 
 /// <param name="Action">What to do.</param>
-/// <param name="Section">Where the window lands; null when the gesture leaves the window alone.</param>
+/// <param name="Section">Where the window lands.</param>
 internal readonly record struct WindowRoute(WindowAction Action, Section? Section = null);
 
 /// <summary>
-/// Where each gesture leads, with the window closed and with the window open. Pure: tested without any window. The Library
-/// view adds its section here, on the two clip lines, and nothing else moves.
+/// Where each gesture leads, with the window closed and with the window open. Pure: tested without any window.
 /// </summary>
 internal static class WindowRoutes
 {
@@ -83,11 +82,14 @@ internal static class WindowRoutes
         WindowGesture.UpdateClick => new(WindowAction.ShowUpdates, openOn ?? Section.Now),
         WindowGesture.UpdateMenu => new(WindowAction.ShowUpdateCard, openOn ?? Section.Now),
 
-        // The clip lines. They lead to Library once it exists.
-        _ => new(WindowAction.OpenClipFolder),
+        // The clip lines, and the line of the menu.
+        _ => LandOn(Section.Library, openOn),
     };
 
-    /// <summary>What the click on a notification is. Nothing showing is the last clip, as it always was.</summary>
+    /// <summary>
+    /// What the click on a notification is. With nothing showing, which a click on a window that is shown should not meet, it
+    /// is a clip line: the Library opens with no clip chosen.
+    /// </summary>
     public static WindowGesture ClickOn(NotificationContent? content)
     {
         if (content is null)

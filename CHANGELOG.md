@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- A new `Library` page lists your clips, newest first, with their length. It shows the clips saved before this version too.
+- Choose a clip to see its length, size and name at the bottom, then `Copy` it or `Show in folder`. If the file is gone, it says so: `This clip was moved or deleted`.
+- It shows the 2,000 most recent clips, and says so at the end of the list.
+- A clip saved while the page is open shows up by itself, and a file renamed in the Explorer shows up under its new name when the window comes back to the front.
+- `Library` in the menu of the icon, under `Open Hindsound`.
+
+### Changed
+
+- A click on a `Clip saved` notification opens `Library` on that clip, instead of the folder. The other notifications about a clip open `Library` too.
+- Changing the output folder no longer hides your older clips: `Library` keeps listing up to 8 earlier folders, counted from this version on.
+- Closing the window gives back the memory of the page as soon as it closes.
+
 ## [0.2.0] - 2026-11-09
 
 ### Added

@@ -157,6 +157,7 @@ internal sealed class ClipPipeline
     private long _waitingBytes;
     private int _waitingPieces;
     private int _inFlight;
+    private readonly List<(ClipRequest Request, DateTime Utc)> _pressed = [];
 
     private readonly IClipBackend _backend;
     private readonly Action<Action> _post;
@@ -194,9 +195,29 @@ internal sealed class ClipPipeline
     /// </summary>
     public bool Busy => Volatile.Read(ref _inFlight) > 0;
 
+    /// <summary>
+    /// When the oldest press yet to end was made, or null if none is. A file written since then may be a clip half written, and
+    /// a copy to the clipboard that goes on after <see cref="Finished"/> writes no file, so it does not count.
+    /// </summary>
+    public DateTime? OldestPressUtc
+    {
+        get
+        {
+            lock (_pressed)
+            {
+                return _pressed.Count == 0 ? null : _pressed.Min(press => press.Utc);
+            }
+        }
+    }
+
     /// <summary>Takes the press. Returns at once.</summary>
     public void Press(ClipRequest request)
     {
+        lock (_pressed)
+        {
+            _pressed.Add((request, DateTime.UtcNow));
+        }
+
         Interlocked.Increment(ref _inFlight);
         _snapshots.Enqueue(() => TakeSnapshot(request));
         Started?.Invoke();
@@ -303,6 +324,11 @@ internal sealed class ClipPipeline
 
     private void Finish(ClipOutcome outcome) => _post(() =>
     {
+        lock (_pressed)
+        {
+            _pressed.RemoveAll(press => ReferenceEquals(press.Request, outcome.Request));
+        }
+
         Interlocked.Decrement(ref _inFlight);
         Finished?.Invoke(outcome);
     });

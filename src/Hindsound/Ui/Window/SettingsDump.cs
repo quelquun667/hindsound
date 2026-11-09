@@ -144,6 +144,53 @@ internal static unsafe class SettingsDump
         public Audio.WaveFacts WaveFacts => facts;
     }
 
+    /// <summary>A list of made-up clips with no folder behind it: nothing here reads the disk, and no real name reaches a picture.</summary>
+    private sealed class SampleLibrary(Library.ClipLines? lines, IReadOnlyDictionary<string, int> seconds) : ILibraryPanel
+    {
+        private const string Folder = @"C:\Clips\", RescueFolder = @"C:\Clips\Rescued\";
+        private const long BytesPerSecond = 24_000;
+
+        public static readonly SampleLibrary NotRead = new(null, new Dictionary<string, int>());
+
+        public Library.ClipLines? Lines => lines;
+
+        /// <param name="leftOut">How many clips the cap left out of the list.</param>
+        /// <param name="clips">A name without its extension, its seconds, and its two kinds of line.</param>
+        public static SampleLibrary Of(int leftOut, params (string Name, int Seconds, bool TwoFiles, bool Rescued)[] clips)
+        {
+            var known = new Dictionary<string, int>();
+            var rows = new List<Library.ClipGroup>(clips.Length);
+            foreach (var (name, length, twoFiles, rescued) in clips)
+            {
+                var folder = rescued ? RescueFolder : Folder;
+                var size = length * BytesPerSecond;
+                var files = twoFiles
+                    ? new[] { new Library.ClipFile($"{folder}{name}_system.mp3", size / 2, default), new Library.ClipFile($"{folder}{name}_mic.mp3", size / 2, default) }
+                    : [new Library.ClipFile($"{folder}{name}.mp3", size, default)];
+                known[files[0].Path] = length;
+                rows.Add(new Library.ClipGroup(files));
+            }
+
+            return new SampleLibrary(new Library.ClipLines(rows, leftOut), known);
+        }
+
+        public TimeSpan? LengthOf(Library.ClipGroup line) => seconds.TryGetValue(line.Main.Path, out var length) ? TimeSpan.FromSeconds(length) : null;
+
+        public bool IsRescued(Library.ClipGroup line) => line.Main.Path.StartsWith(RescueFolder, StringComparison.Ordinal);
+
+        public void Copy(Library.ClipGroup line)
+        {
+        }
+
+        public void ShowInFolder(Library.ClipGroup line)
+        {
+        }
+
+        public void ReadAgain()
+        {
+        }
+    }
+
     /// <summary>What the engine reports after a pause: it closes both captures, so the band says the microphone is not captured.</summary>
     internal static Audio.AudioEngineStatus PausedStatus(Audio.AudioEngineStatus open) =>
         open with { Activity = Audio.CaptureActivity.Paused, SystemCapturing = false, MicCapturing = false };
@@ -179,10 +226,11 @@ internal static unsafe class SettingsDump
             PngFile.Write(Path.Combine(folder, name + suffix + ".png"), canvas.Bits, canvas.Width, canvas.Height);
         }
 
-        // The four pictures of the README: the side bar they show is the one of the window, with the Now page above the settings.
+        // The four pictures of the README: the side bar they show is the one of the window, with Now and Library above the settings.
         static void WithNow(SettingsScreen s, Section page)
         {
             s.SetNow(new SampleNow(default));
+            s.SetLibrary(SampleLibrary.NotRead);
             s.ShowSection(page);
         }
 
@@ -357,6 +405,7 @@ internal static unsafe class SettingsDump
         static void Wave(SettingsScreen s, Audio.WaveFacts facts)
         {
             s.SetNow(new SampleNow(facts));
+            s.SetLibrary(SampleLibrary.NotRead);
             for (var i = 0; i < 12; i++)
             {
                 s.WaveTick();
@@ -421,6 +470,57 @@ internal static unsafe class SettingsDump
             s.Key(Vk.Space, 0);
             s.WaveTick();
         }, focus: true);
+
+        // The Library page. The same names as its mock-ups, made-up clips, and no star, filter or collections yet.
+        (string, int, bool, bool)[] clips =
+        [
+            ("Hindsound_Discord_2026-11-08_21-14-03", 30, false, false),
+            ("Hindsound_Discord_2026-11-08_20-47-51", 30, false, false),
+            ("Hindsound_2026-11-08_19-02-16", 60, false, false),
+            ("Hindsound_Discord_2026-11-07_23-31-40", 15, false, false),
+            ("Hindsound_2026-11-07_22-10-08", 300, true, false),
+            ("Hindsound_Discord_2026-11-06_18-55-27", 30, false, false),
+            ("Hindsound_2026-11-05_21-40-12", 30, false, false),
+        ];
+        const string chosenClip = @"C:\Clips\Hindsound_Discord_2026-11-08_20-47-51.mp3";
+
+        static void ShowClips(SettingsScreen s, SampleLibrary library)
+        {
+            s.SetNow(new SampleNow(default));
+            s.SetLibrary(library);
+            s.ShowSection(Section.Library);
+        }
+
+        Shot("library-liste", (s, _) =>
+        {
+            ShowClips(s, SampleLibrary.Of(0, clips));
+            s.SelectClip(chosenClip);
+        });
+        Shot("library-clip-absent", (s, _) =>
+        {
+            ShowClips(s, SampleLibrary.Of(0, clips));
+            s.SelectClip(chosenClip);
+            s.ClipGestureEnded(chosenClip, ShellOutcome.Gone);
+        });
+        Shot("library-vide", (s, _) => ShowClips(s, SampleLibrary.Of(0)));
+
+        // The end of 2,000 lines, reached the way the user reaches it: the last row, then up to the one the picture shows chosen.
+        Shot("library-plafond", (s, _) =>
+        {
+            var older = Enumerable.Range(0, Library.ClipScanner.MaxLines - 6).Select(i => ($"Hindsound_{i:0000}", 30, false, false));
+            var last = clips.Take(6).Select((clip, i) => i == 3 ? clip with { Item4 = true } : clip);
+            ShowClips(s, SampleLibrary.Of(500, [.. older, .. last]));
+            s.TabTo(SettingsScreen.ClipListId);
+            s.Key(Vk.End, 0);
+            s.Key(Vk.Up, 0);
+            s.Key(Vk.Up, 0);
+        });
+        Shot("library-nom-long", (s, _) =>
+        {
+            var name = "Hindsound_" + new string('W', 120);
+            ShowClips(s, SampleLibrary.Of(0, [(name, 30, false, false), .. clips.Skip(1)]));
+            s.SelectClip($@"C:\Clips\{name}.mp3");
+        });
 
         return FolderPicker.SelfCheck() ? 0 : 3;    }
 }

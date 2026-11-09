@@ -10,7 +10,7 @@ public class UpdateMenuTests
     {
         var items = TrayMenu.Items(paused: false, hasLastClip: true, closingAfterClip: false);
 
-        Assert.Equal(12, items.Count);
+        Assert.Equal(13, items.Count);
         Assert.DoesNotContain(items, item => item.Command == TrayCommand.UpdateNow);
         Assert.Equal(new TrayMenuItem(TrayCommand.None), items[^2]);
         Assert.Equal(new TrayMenuItem(TrayCommand.Quit, "Quit"), items[^1]);
@@ -22,7 +22,7 @@ public class UpdateMenuTests
     {
         var items = TrayMenu.Items(paused: false, hasLastClip: true, closingAfterClip: false, updateText: "Update to 0.2.0...");
 
-        Assert.Equal(13, items.Count);
+        Assert.Equal(14, items.Count);
         Assert.Equal(new TrayMenuItem(TrayCommand.Quit, "Quit"), items[^1]);
         Assert.Equal(new TrayMenuItem(TrayCommand.UpdateNow, "Update to 0.2.0..."), items[^2]);
         Assert.True(items[^2].Enabled);

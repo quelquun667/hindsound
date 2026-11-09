@@ -44,4 +44,12 @@ public sealed record HotkeyResult(HotkeyAction Action, string? Gesture, HotkeySt
     public const string UnavailableMessage = "Hotkeys did not respond in time; try again";
 
     public bool Ok => Status is HotkeyStatus.Registered or HotkeyStatus.NotSet or HotkeyStatus.Suspended;
+
+    /// <summary>
+    /// The journal line. In a <c>--no-hotkeys</c> run the layer says yes without registering anything, so a bare
+    /// "Registered" would read as a shortcut Windows really holds.
+    /// </summary>
+    public string JournalLine(bool nothingRegistered) =>
+        $"hotkey {Action} {Gesture}: {Status}"
+        + (nothingRegistered && Status == HotkeyStatus.Registered ? " (accepted, nothing registered with Windows in this run)" : "");
 }

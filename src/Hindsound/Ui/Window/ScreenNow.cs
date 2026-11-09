@@ -50,7 +50,13 @@ internal sealed partial class SettingsScreen
     /// <summary>The picture of the wave, for what wants to look at it. Null until the page has been shown.</summary>
     internal NowWave? Wave => _wave;
 
-    private NavRows Rows => _now is null ? NavRows.SettingsOnly : NavRows.WithViews;
+    private NavRows Rows => (_now, _library) switch
+    {
+        (null, null) => NavRows.SettingsOnly,
+        (_, null) => NavRows.WithViews,
+        (null, _) => NavRows.LibraryOnly,
+        _ => NavRows.WithLibrary,
+    };
 
     /// <summary>Where the end of the first-launch card leaves the user.</summary>
     private Section FirstSection => _now is null ? Section.Hotkeys : Section.Now;

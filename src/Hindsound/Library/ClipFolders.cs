@@ -62,6 +62,27 @@ public static class ClipFolders
     }
 
     /// <summary>
+    /// Whether a line of the library is a clip that could not go to the output folder, for its badge. No clip is rescued when
+    /// the output folder is the rescue folder itself: the user chose it, and the badge would sit on every line. Touches no
+    /// disk, but resolves both folders at each call: once for each line drawn, not for each line of the list.
+    /// </summary>
+    public static bool IsRescued(ClipGroup line, ClipScanRequest folders)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        ArgumentNullException.ThrowIfNull(folders);
+
+        if (line.Files.Count == 0 || Resolve(folders.RescueFolder) is not { } rescue)
+        {
+            return false;
+        }
+
+        var key = Key(rescue);
+        return !string.Equals(Resolve(folders.OutputFolder) is { } output ? Key(output) : null, key, StringComparison.OrdinalIgnoreCase)
+            && Path.GetDirectoryName(line.Main.Path) is { } folder
+            && string.Equals(Key(folder), key, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// What two spellings of a folder, or of a file in it, share, compared without regard to case: with the same separators,
     /// without the one at the end, nor the <c>\\?\</c> or <c>\\.\</c> prefix of the long form of a path. The one comparison
     /// for the scan and for the index, or each would call a path by another name. A junction is another matter: finding

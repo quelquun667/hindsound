@@ -30,6 +30,7 @@ internal enum TrayCommand : uint
     // Last, so the numbers above never move: the --offscreen tests post them.
     UpdateNow,
     OpenHindsound,
+    Library,
 }
 
 /// <summary>One line of the tray menu. <see cref="TrayCommand.None"/> is a separator.</summary>
@@ -99,6 +100,7 @@ internal static class TrayMenu
         List<TrayMenuItem> items =
         [
             new(TrayCommand.OpenHindsound, "Open Hindsound"),
+            new(TrayCommand.Library, "Library"),
             SaveItem(TrayCommand.Save30s, "Save up to 30s", 30, buffered),
             SaveItem(TrayCommand.Save15s, "Save up to 15s", 15, buffered),
             SaveItem(TrayCommand.Save1m, "Save up to 1 min", 60, buffered),

@@ -99,6 +99,15 @@ public enum LibraryOutcome
 
     /// <summary>The line has no file to know it by, so there is nothing to label. Nothing changed.</summary>
     NoFile,
+
+    /// <summary>A fresh look at the folders no longer finds the clip of the line. Nothing was written. Told by <see cref="LibraryReads"/>, not by the store.</summary>
+    ClipGone,
+
+    /// <summary>
+    /// The fresh look did not read the folder of the clip (held back for a save in progress, refused, absent), so the clip may well be
+    /// there and is not called gone. Nothing was written. Told by <see cref="LibraryReads"/>, not by the store.
+    /// </summary>
+    FolderNotRead,
 }
 
 /// <summary>What an action did, and the library it leaves.</summary>

@@ -13,6 +13,8 @@ internal interface IWindowScreen
     void ShowUpdates();
 
     void ShowUpdateCard();
+
+    void SelectClip(string path);
 }
 
 /// <summary>
@@ -25,16 +27,14 @@ internal sealed class WindowGoing
     private readonly Func<IWindowScreen?> _current;
     private readonly Action _bringBack;
     private readonly Action<Section> _create;
-    private readonly Action _openLastClipFolder;
     private readonly Action<string> _journal;
 
-    public WindowGoing(Func<bool> mayOpen, Func<IWindowScreen?> current, Action bringBack, Action<Section> create, Action openLastClipFolder, Action<string> journal)
+    public WindowGoing(Func<bool> mayOpen, Func<IWindowScreen?> current, Action bringBack, Action<Section> create, Action<string> journal)
     {
         _mayOpen = mayOpen;
         _current = current;
         _bringBack = bringBack;
         _create = create;
-        _openLastClipFolder = openLastClipFolder;
         _journal = journal;
     }
 
@@ -44,19 +44,15 @@ internal sealed class WindowGoing
     public void SettingsPageSeen(Section page) => LastSettingsPage = page;
 
     /// <summary>A click on the notification on screen.</summary>
-    public void Click(Hindsound.Ui.NotificationContent? showing) => Go(WindowRoutes.ClickOn(showing));
+    public void Click(Hindsound.Ui.NotificationContent? showing) => Go(WindowRoutes.ClickOn(showing), showing?.ClipPath);
 
-    public void Go(WindowGesture gesture)
+    /// <param name="gesture">What the user did.</param>
+    /// <param name="clip">The clip the gesture is about, chosen if the window ends up on the Library page: a card is not left for it.</param>
+    public void Go(WindowGesture gesture, string? clip = null)
     {
         var screen = _current();
         var route = WindowRoutes.Of(gesture, screen?.Section, LastSettingsPage);
         _journal($"window gesture {gesture}: {route.Action} {route.Section}, the window was on {screen?.Section.ToString() ?? "nothing"}");
-        if (route.Action == WindowAction.OpenClipFolder)
-        {
-            _openLastClipFolder();
-            return;
-        }
-
         Open(route.Section ?? Section.Now);
         if (route.Action == WindowAction.ShowUpdates)
         {
@@ -65,6 +61,11 @@ internal sealed class WindowGoing
         else if (route.Action == WindowAction.ShowUpdateCard)
         {
             _current()?.ShowUpdateCard();
+        }
+
+        if (clip is not null && _current() is { Section: Section.Library } shown)
+        {
+            shown.SelectClip(clip);
         }
     }
 

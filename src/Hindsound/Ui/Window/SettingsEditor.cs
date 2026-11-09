@@ -2,6 +2,7 @@ using System.Globalization;
 using Hindsound.App;
 using Hindsound.Export;
 using Hindsound.Input;
+using Hindsound.Library;
 using Hindsound.Settings;
 
 namespace Hindsound.Ui.Window;
@@ -375,7 +376,12 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
             return FieldCheck.Bad(FolderError);
         }
 
-        SetExport(Settings.Export.OutputFolder != folder, () => Settings.Export.OutputFolder = folder);
+        SetExport(Settings.Export.OutputFolder != folder, () =>
+        {
+            // Before the new one is written: without this, the clips left behind would vanish from the Library page.
+            Settings.Export.KnownClipFolders = ClipFolders.AfterOutputChange(Settings.Export.KnownClipFolders, Settings.Export.OutputFolder, folder);
+            Settings.Export.OutputFolder = folder;
+        });
         return FieldCheck.Fine;
     }
 

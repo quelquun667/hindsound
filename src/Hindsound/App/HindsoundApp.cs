@@ -1,6 +1,7 @@
 using Hindsound.Audio;
 using Hindsound.Export;
 using Hindsound.Input;
+using Hindsound.Library;
 using Hindsound.Settings;
 using Hindsound.Ui;
 using Hindsound.Ui.Window;
@@ -25,6 +26,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     private const int ProbeAfterCloseMs = 10_000;
     private const int ProbeNowMs = 2_400;
     private const int ProbeNowOpenings = 3;
+    private const int ProbeLibraryLimitMs = 120_000;
     private const int StartupReadTries = 3;
     private const int StartupReadGapMs = 200;
     private const int SelfTestFailDelayMs = 1500;
@@ -55,6 +57,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     private bool _startTouchesRunKey;
     private AudioEngineOptions? _engineOptions;
     private SettingsWindow? _window;
+    private WindowLibrary? _library;
+    private string? _probeLibraryFolder;
     private readonly WindowGoing _going;
     private bool _firstRun;
     private IReadOnlyList<HotkeyResult> _hotkeyResults = [];
@@ -100,7 +104,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         _options = options;
         _journal = journal;
         _updaterMayRun = updaterMayRun;
-        _going = new WindowGoing(() => _leave.MayOpenSettings, () => _window?.Screen, () => _window?.BringBack(), target => (OpenInstead ?? CreateWindow)(target), OpenLastClipFolder, _journal.Write);
+        _going = new WindowGoing(() => _leave.MayOpenSettings, () => _window?.Screen, () => _window?.BringBack(), target => (OpenInstead ?? CreateWindow)(target), _journal.Write);
         _store = new SettingsStore(options.SettingsPath);
         _pending = new PendingNotices(journal.Write);
         _pretendGameUntilMs = options.SelfTestGameSeconds is { } game ? NowMs + (long)(game * 1000) : 0;
@@ -165,12 +169,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
         _loop = new UiLoop();
         _notification = new Notification { Clicked = () => NotificationClicked(_notification.Showing), Finished = OnNotificationFinished };
-        _pipeline = new ClipPipeline(this, _loop.Post, _loop.After, ex => _journal.Write("clip error: " + ex))
-        {
-            SavingSlowly = OnSavingSlowly,
-            Finished = OnClipFinished,
-            Started = OnClipStarted,
-        };
+        _pipeline = NewPipeline(_loop.Post, _loop.After);
 
         _tray = new TrayIcon(_loop.Hwnd, UiLoop.TrayCallbackMessage);
         _loop.TrayMessage = OnTrayMessage;
@@ -395,6 +394,13 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
             return;
         }
 
+        // Changed by hand: the settings page does this when the folder is chosen there, and without it the clips left in the
+        // old folder would vanish from the Library page. Kept in memory; the next save of the settings writes it.
+        if (settings.Export.OutputFolder != _settings.Export.OutputFolder)
+        {
+            settings.Export.KnownClipFolders = ClipFolders.AfterOutputChange(settings.Export.KnownClipFolders, _settings.Export.OutputFolder, settings.Export.OutputFolder);
+        }
+
         _settings = settings;
         ApplyStartupRegistration();
         ApplyHotkeys();
@@ -486,14 +492,15 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         NoteHotkeys(_hotkeys?.Apply(_settings.Hotkeys) ?? HotkeyManager.WithoutManager(_settings.Hotkeys));
     }
 
-    private void NoteHotkeys(IReadOnlyList<HotkeyResult> results)
+    /// <summary>Journals what each shortcut came to. Internal for a test that builds the app and never runs it.</summary>
+    internal void NoteHotkeys(IReadOnlyList<HotkeyResult> results)
     {
         _hotkeyResults = results;
         foreach (var result in results)
         {
             if (result.Status != HotkeyStatus.NotSet)
             {
-                _journal.Write($"hotkey {result.Action} {result.Gesture}: {result.Status}");
+                _journal.Write(result.JournalLine(_options.NoHotkeys));
             }
         }
 
@@ -702,9 +709,26 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         }
     });
 
+    /// <summary>The pipeline of the clips, with what the app does at each of its steps. The loop's functions are given, so that a test needs no loop.</summary>
+    internal ClipPipeline NewPipeline(Action<Action> post, Action<int, Action> after) =>
+        new(this, post, after, ex => _journal.Write("clip error: " + ex))
+        {
+            SavingSlowly = OnSavingSlowly,
+            Finished = OnClipFinished,
+            Started = OnClipStarted,
+        };
+
     private void OnClipFinished(ClipOutcome outcome)
     {
-        _loop.After(SnapshotReleaseDelayMs, ReleaseSnapshotMemory);
+        OnClipEnded();
+        (ShowOutcomeInstead ?? ShowOutcome)(outcome);
+    }
+
+    /// <summary>What a clip that ended says to the user, so that a test sees the Library page look again without the notification.</summary>
+    internal Action<ClipOutcome>? ShowOutcomeInstead { get; set; }
+
+    private void ShowOutcome(ClipOutcome outcome)
+    {
         if (outcome.Result is not { } result)
         {
             try
@@ -1117,6 +1141,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
             case TrayCommand.OpenHindsound:
                 Go(WindowGesture.OpenApp);
                 break;
+            case TrayCommand.Library:
+                Go(WindowGesture.LibraryMenu);
+                break;
             case TrayCommand.Settings:
                 Go(WindowGesture.SettingsMenu);
                 break;
@@ -1201,10 +1228,22 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     /// <summary>What a test puts in place of making a real window: it is told the page the gesture asked for.</summary>
     internal Action<Section>? OpenInstead { get; set; }
 
+    /// <summary>What a test or the probe puts in place of the folders of the settings, so that no real folder of clips is read.</summary>
+    internal Func<ClipScanRequest>? LibraryFoldersInstead { get; set; }
+
+    /// <summary>What a test puts in place of the message loop of a run that never started.</summary>
+    internal Action<Action>? PostInstead { get; set; }
+
+    /// <summary>For a test: the settings of a run that never loaded them.</summary>
+    internal AppSettings SettingsNow => _settings;
+
+    /// <summary>For a test: the clip path of a run that never made one.</summary>
+    internal void UsePipeline(ClipPipeline pipeline) => _pipeline = pipeline;
+
     /// <summary>The settings page the menu entry goes back to.</summary>
     internal Section LastSettingsPage => _going.LastSettingsPage;
 
-    /// <summary>What the screen of a new window is given: the page it remembers, the updater, and the Now page with its wave.</summary>
+    /// <summary>What the screen of a new window is given: the page it remembers, the updater, the Now page with its wave, and the Library page.</summary>
     internal void WireScreen(SettingsScreen screen)
     {
         screen.SettingsPageSeen = _going.SettingsPageSeen;
@@ -1212,11 +1251,70 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         // Always: without an updater, the panel says this copy does not update itself.
         screen.SetUpdates(this);
         screen.SetNow(this);
+
+        // Reads nothing yet: the screen asks when the page is shown.
+        _library?.Close();
+        _library = new WindowLibrary(
+            screen,
+            new LibraryStore(_store.Path, _journal.Write),
+            LibraryFolders,
+            work => (PostInstead ?? _loop.Post)(work),
+            _options.Offscreen ? new OffscreenFolderShell(_journal.Write) : new ExplorerFolderShell(),
+            File.Exists,
+            paths => ClipboardFiles.TrySet(_loop.Hwnd, paths),
+            (attempt, done) => SettingsMapping.CopyToClipboard(_options, attempt, (ms, then) => _loop.After(ms, then), done),
+            _journal.Write,
+            Directory.Exists,
+            () => _pipeline?.OldestPressUtc);
+        screen.SetLibrary(_library);
+    }
+
+    /// <summary>Where the Library page looks right now. Only the settings and the clip path are read, no disk.</summary>
+    internal ClipScanRequest LibraryFolders() => LibraryFoldersInstead?.Invoke() ?? new ClipScanRequest
+    {
+        OutputFolder = _settings.Export.OutputFolder,
+        KnownFolders = _settings.Export.KnownClipFolders ?? [],
+        ClipStartedUtc = _pipeline?.OldestPressUtc,
+    };
+
+    /// <summary>A clip has ended, or the window came back to the front.</summary>
+    internal void LookAtTheClipsIfShown() => _library?.LookIfShown();
+
+    /// <summary>The window came to the front: a settings file edited by hand, the audio choices, and the clips are all read again.</summary>
+    internal void OnWindowActivated()
+    {
+        ReloadSettingsIfChanged();
+        (LoadChoicesInstead ?? LoadChoices)();
+        LookAtTheClipsIfShown();
+    }
+
+    /// <summary>Lists the devices, so that a test comes back to the front without touching the audio objects.</summary>
+    internal Action? LoadChoicesInstead { get; set; }
+
+    /// <summary>A clip has ended, saved or not: its memory goes back a moment later, and the Library page shows it.</summary>
+    internal void OnClipEnded()
+    {
+        (AfterInstead ?? _loop.After)(SnapshotReleaseDelayMs, ReleaseSnapshotMemory);
+        LookAtTheClipsIfShown();
+    }
+
+    /// <summary>The window that is open, if any.</summary>
+    internal SettingsWindow? WindowNow => _window;
+
+    /// <summary>Whether a window holds a Library page right now.</summary>
+    internal bool HasLibrary => _library is not null;
+
+    /// <summary>The window has gone, and its library with it.</summary>
+    internal void LibraryWindowClosed()
+    {
+        // A look still running holds a list: the memory only goes back once it has ended.
+        _library?.Close(ReleaseWindowMemory);
+        _library = null;
     }
 
     /// <summary>Only one at a time, and only while it is open: closing destroys it, and the memory goes back.</summary>
     /// <param name="target">The view to land on. <see cref="Section.FirstRun"/> opens the first-launch card.</param>
-    private void CreateWindow(Section target)
+    internal void CreateWindow(Section target)
     {
         var firstRun = target == Section.FirstRun;
 
@@ -1236,15 +1334,11 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         window.Screen.SetHotkeyResults(_hotkeyResults);
         window.SetIcon(Accent);
         window.Show();
-        LoadChoices();
+        (LoadChoicesInstead ?? LoadChoices)();
 
         // On the way back: a click activates the window first, so a file edited by hand meanwhile is read before that
         // click changes anything; and an app started while the window was in the background gets offered.
-        window.Activated = () =>
-        {
-            ReloadSettingsIfChanged();
-            LoadChoices();
-        };
+        window.Activated = OnWindowActivated;
         _journal.Write($"settings window opened on {target}, first launch {firstRun}, on the screen of the cursor {screen.Monitor.Left},{screen.Monitor.Top},{screen.Monitor.Right},{screen.Monitor.Bottom}{(_options.Offscreen ? " (drawn off screen instead)" : string.Empty)}, {Journal.Memory()}");
         if (_options.Offscreen && firstRun)
         {
@@ -1273,10 +1367,11 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     private LastClipInfo? LastClipShown() =>
         _lastClip is { } clip ? new LastClipInfo(clip.Duration, _lastClipTime, clip.SizeBytes) { Notice = _lastClipNotice } : null;
 
-    private void OnSettingsClosed()
+    internal void OnSettingsClosed()
     {
         _window = null;
         _choices.Forget();
+        LibraryWindowClosed();
 
         // A restart only ever follows a card the user is looking at.
         _updates?.CardClosed();
@@ -1284,14 +1379,23 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         _journal.Write("settings window closed, " + Journal.Memory());
 
         // The window's objects are small and many: a full collection a moment later gives them back.
-        _loop.After(SnapshotReleaseDelayMs, ReleaseWindowMemory);
+        (AfterInstead ?? _loop.After)(SnapshotReleaseDelayMs, ReleaseWindowMemory);
     }
 
-    private static void ReleaseWindowMemory() => _ = Task.Run(() =>
+    /// <summary>How a collection is made, so that a test sees what was asked without collecting.</summary>
+    internal Action<GCCollectionMode>? CollectInstead { get; set; }
+
+    /// <summary>The loop's timer, so that a test runs what was left for later.</summary>
+    internal Action<int, Action>? AfterInstead { get; set; }
+
+    // The second collection is aggressive: a plain one leaves the freed pages of the window and of the Library list
+    // committed, and the process keeps them (seen once, on the published exe after Library had been open on 2,000 clips).
+    private void ReleaseWindowMemory() => _ = Task.Run(() =>
     {
-        GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+        var collect = CollectInstead ?? (mode => GC.Collect(2, mode, blocking: true, compacting: true));
+        collect(GCCollectionMode.Forced);
         GC.WaitForPendingFinalizers();
-        GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+        collect(GCCollectionMode.Aggressive);
     });
 
     // Only ever looks at what the engine already holds: opening the window opens no audio.
@@ -1406,6 +1510,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         steps.Add(() => window.Screen.ShowSection(Section.Hotkeys));
         steps.Add(() => window.ProbePicture(Path.ChangeExtension(_journal.Path, ".hotkeys.png")));
         var at = 0;
+        WeakReference<SettingsWindow>? windowRef = null;
         _loop.After(ProbeStepMs, Next);
 
         void Next()
@@ -1430,15 +1535,35 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         {
             _journal.Write($"probe: {ProbeNowMs} ms on Now, {Journal.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
 
-            // The page the first opening below must come back to, with this window gone.
-            window.Screen.ShowSection(Section.Export);
-            window.Close();
-            _loop.After(ProbeAfterCloseMs, AfterClosing);
+            ProbeLibrary(window, () =>
+            {
+                // The page the first opening below must come back to, with this window gone.
+                window.Screen.ShowSection(Section.Export);
+                window.Close();
+
+                // These steps wait on the timers from here on: holding the window would keep it in the measures after closing.
+                windowRef = new WeakReference<SettingsWindow>(window);
+                window = null!;
+                _loop.After(ProbeAfterCloseMs, AfterClosing);
+            });
         }
 
         void AfterClosing()
         {
-            _journal.Write($"probe: 10 s after closing, {Journal.Memory()}, window gone {_window is null}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
+            _journal.Write($"probe: 10 s after closing, {Journal.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
+
+            // After the measures, which are of the app as it is: nothing is collected before them.
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+            var alive = windowRef is { } reference && reference.TryGetTarget(out _);
+            _journal.Write($"probe: window gone {!alive}, library gone {!HasLibrary}");
+            if (alive || HasLibrary)
+            {
+                _exitCode = 1;
+                _journal.Write("probe: FAILED, the window or its library is still held after closing");
+            }
+
             var cycles = 0;
             Cycle();
 
@@ -1471,8 +1596,136 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
                 {
                     _journal.Write($"probe: after the menu and {ProbeNowOpenings} openings on Now of {ProbeNowMs} ms each, {Journal.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
                     _journal.Write($"probe: folder dialog usable {FolderPicker.SelfCheck()}");
+                    RemoveProbeClips();
                     _loop.Quit();
                 }
+            }
+        }
+    }
+
+    // The Library page, on clips the probe makes for itself in a folder of its own: a run never reads or adds to a real one.
+    private void ProbeLibrary(SettingsWindow window, Action done)
+    {
+        var folder = LibraryProbeFiles.FolderFor(_options.SettingsPath);
+        if (folder is null)
+        {
+            _journal.Write("probe: Library not looked at, it takes a --settings file in a folder of its own");
+            done();
+            return;
+        }
+
+        _probeLibraryFolder = folder;
+        LibraryFoldersInstead = OnlyFolder(folder);
+        var hwnd = window.Hwnd;
+        var renamed = Path.Combine(folder, "probe-renamed.wav");
+        var openedMs = 0L;
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                LibraryProbeFiles.Create(folder);
+                _loop.Post(Open);
+            }
+            catch (Exception ex)
+            {
+                _loop.Post(() => Fail($"its clips could not be made ({ClipFolders.Describe(ex)})"));
+            }
+        });
+
+        void Key(uint vk) => Native.PostMessageW(hwnd, WindowNative.WM_KEYDOWN, vk, 0);
+
+        void Fail(string why)
+        {
+            _exitCode = 1;
+            _journal.Write($"probe: FAILED, Library: {why}");
+            done();
+        }
+
+        void Wait(Func<bool> ready, Action then, string what)
+        {
+            var from = NowMs;
+            Look();
+
+            void Look()
+            {
+                if (ready())
+                {
+                    then();
+                }
+                else if (NowMs - from > ProbeLibraryLimitMs)
+                {
+                    Fail(what);
+                }
+                else
+                {
+                    _loop.After(ProbeStepMs, Look);
+                }
+            }
+        }
+
+        void Open()
+        {
+            openedMs = NowMs;
+            window.Screen.ShowSection(Section.Library);
+            Wait(() => _library is { Lines: not null, IsWorking: false }, Measure, "no reading came back");
+        }
+
+        void Measure()
+        {
+            _journal.Write($"probe: Library, {_library?.Lines?.Lines.Count} lines, {_library?.Lines?.LeftOut} left out, names and lengths read in {NowMs - openedMs} ms (of files this probe wrote a moment before: not the time of a folder that was already there), {Journal.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
+            if (!window.Screen.TabTo(SettingsScreen.ClipListId))
+            {
+                Fail("the focus never reached the list");
+                return;
+            }
+
+            Key(Vk.Down);
+            Key(Vk.Down);
+            Key(Vk.PageDown);
+            _loop.After(ProbeStepMs, Rename);
+        }
+
+        void Rename()
+        {
+            window.ProbePicture(Path.ChangeExtension(_journal.Path, ".library.png"));
+
+            // What the Explorer does while the window is in the background, then the window coming back to the front.
+            File.Move(LibraryProbeFiles.PathOf(folder, 0), renamed);
+            Native.PostMessageW(hwnd, WindowNative.WM_ACTIVATE, 1, 0);
+            Wait(
+                () => _library is { IsWorking: false, Lines: { } lines } && lines.Lines.Any(line => line.Main.Path == renamed),
+                Show,
+                "a file renamed never showed up under its new name");
+        }
+
+        void Show()
+        {
+            _journal.Write($"probe: Library, a file renamed showed up when the window came back, focus on {window.Screen.FocusId}");
+
+            // A real window of the Explorer is never opened by a probe: only the off-screen shell says what it would do.
+            if (_options.Offscreen && window.Screen.TabTo(SettingsScreen.ClipShowId))
+            {
+                Key(Vk.Enter);
+            }
+
+            _loop.After(ProbeStepMs, done);
+        }
+    }
+
+    // Apart: a lambda written inside the probe would keep its window alive for as long as this is set, and spoil the measures after closing.
+    private static Func<ClipScanRequest> OnlyFolder(string folder) => () => new ClipScanRequest { OutputFolder = folder, RescueFolder = folder };
+
+    private void RemoveProbeClips()
+    {
+        if (_probeLibraryFolder is { } folder)
+        {
+            try
+            {
+                LibraryProbeFiles.Remove(folder);
+            }
+            catch (Exception ex)
+            {
+                _journal.Write($"probe: its clips stay behind ({ClipFolders.Describe(ex)})");
             }
         }
     }
