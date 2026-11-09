@@ -219,10 +219,18 @@ public class WindowRoutesTests
             NotificationStates.SettingsUnreadable(),
             NotificationStates.SettingsHasError(),
             NotificationStates.SettingsNotSaved(),
-            NotificationStates.StartupNotChanged(),
         ];
 
         Assert.All(all, content => Assert.Equal(WindowGesture.SettingsProblemClick, WindowRoutes.ClickOn(content)));
+    }
+
+    [Fact]
+    public void Start_with_windows_that_could_not_change_lands_on_the_page_that_has_it()
+    {
+        Assert.Equal(WindowGesture.StartupProblemClick, WindowRoutes.ClickOn(NotificationStates.StartupNotChanged()));
+        Assert.Equal(new WindowRoute(WindowAction.Show, Section.General), Closed(WindowGesture.StartupProblemClick));
+        Assert.Equal(new WindowRoute(WindowAction.Show, Section.General), OpenOn(WindowGesture.StartupProblemClick, Section.Now));
+        Assert.Equal(new WindowRoute(WindowAction.Show, Section.FirstRun), OpenOn(WindowGesture.StartupProblemClick, Section.FirstRun));
     }
 
     [Fact]

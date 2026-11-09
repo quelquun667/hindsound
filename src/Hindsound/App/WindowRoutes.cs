@@ -27,8 +27,11 @@ internal enum WindowGesture
     /// <summary>A click on Capture on when it says the save hotkey does not work.</summary>
     HotkeyRefusedClick,
 
-    /// <summary>A click on a notification about the settings file or Start with Windows.</summary>
+    /// <summary>A click on a notification about the settings file.</summary>
     SettingsProblemClick,
+
+    /// <summary>A click on the notification that says Start with Windows could not change: that row is on General.</summary>
+    StartupProblemClick,
 
     /// <summary>A click on a notification about a new version.</summary>
     UpdateClick,
@@ -74,6 +77,7 @@ internal static class WindowRoutes
         WindowGesture.SettingsMenu or WindowGesture.SettingsProblemClick => LandOn(lastSettingsPage, openOn),
         WindowGesture.StatusClick => LandOn(Section.Now, openOn),
         WindowGesture.HotkeyRefusedClick => LandOn(Section.Hotkeys, openOn),
+        WindowGesture.StartupProblemClick => LandOn(Section.General, openOn),
 
         // Not LandOn: the two of them have their own rules, on the screen, about the cards.
         WindowGesture.UpdateClick => new(WindowAction.ShowUpdates, openOn ?? Section.Now),
@@ -99,7 +103,12 @@ internal static class WindowRoutes
 
         if (content.ClickOpensSettings)
         {
-            return content.Kind == NotificationKind.CaptureOn ? WindowGesture.HotkeyRefusedClick : WindowGesture.SettingsProblemClick;
+            return content.Kind switch
+            {
+                NotificationKind.CaptureOn => WindowGesture.HotkeyRefusedClick,
+                NotificationKind.StartupNotChanged => WindowGesture.StartupProblemClick,
+                _ => WindowGesture.SettingsProblemClick,
+            };
         }
 
         return content.Kind switch

@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- The window opens on a new `Now` page: a live wave of what the memory holds, one lane for the PC sound and one for the microphone. It fills from the right, and the part not held yet shows `Filling...` and dots.
+- The part the save button would take is bright, with `Save: last 0:30` under the wave, or `Save: last 0:12 of 0:30` while the memory is short.
+- `Record` on `Now` is the same setting as on the `Audio` page. Choosing an app greys the past, which is still the sound of the whole PC, draws a `Discord only from here` line, and says `Save: last 0:30 (0:25 from before Discord)`.
+- `Open Hindsound` in the menu of the icon, in bold.
+
+### Changed
+
+- A left click on the icon and a second launch open the window on `Now`, or bring it up as it is if it is already open.
+- `Settings` in the menu goes to the last page of the settings you looked at, `Hotkeys` at first.
+- A click on a notification about the capture (`Capture on`, `Microphone lost` and the like) opens `Now`, `Save hotkey is taken` opens `Hotkeys`, and `Couldn't change Start with Windows` opens `General`.
+- The first-launch card ends on `Now`.
+- With no audio device, the band shows `No audio device` without its figures, so the words are never cut.
+- An entry of the menu says `(only ...)` only when it is more than a second short, as the band does.
+- The wave stops with the capture when paused, and its timer stops on other pages and while the window is minimized. Closed, the window costs nothing, as before.
+
 ## [0.1.0] - 2026-11-09
 
 The first announced version. What the app does is in the README, and the full list is under 0.0.9.
