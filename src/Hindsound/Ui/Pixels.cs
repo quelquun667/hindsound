@@ -7,7 +7,12 @@ internal readonly unsafe struct Pixels(uint* origin, int width, int height)
     public int Width { get; } = width;
     public int Height { get; } = height;
 
-    public uint* Row(int y) => Origin + y * Width;
+    /// <summary>The first pixel of a row. A row off the bitmap is a write before or after it that no pixel test can see, so a debug build stops there.</summary>
+    public uint* Row(int y)
+    {
+        System.Diagnostics.Debug.Assert(y >= 0 && y < Height, "A row off the bitmap.");
+        return Origin + y * Width;
+    }
 
     /// <summary>Lays one opaque colour over the pixel with the given coverage, keeping the buffer premultiplied.</summary>
     public static void Blend(uint* pixel, uint rgb, float coverage)

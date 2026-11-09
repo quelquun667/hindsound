@@ -44,6 +44,9 @@ public sealed class ScreenLibraryKeepsRowsTests : IDisposable
     {
         Scrolled();
         var before = Painted();
+
+        // The chosen clip is named at the bottom. With nothing chosen the first arrow picks the first row, so ten of them pick clip0009.
+        Assert.True(before.Contains("clip0009.mp3"), $"focus {Screen.FocusId}, drawn: {string.Join(" | ", before)}");
         Assert.DoesNotContain("clip0000", before);
 
         Screen.ShowSection(Section.Now);

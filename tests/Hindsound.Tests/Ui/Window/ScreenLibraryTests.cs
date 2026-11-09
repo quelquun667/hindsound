@@ -63,7 +63,7 @@ public sealed class ScreenLibraryTests : IDisposable
         public Hindsound.Audio.WaveFacts WaveFacts => default;
     }
 
-    private const float ListTop = 86, RowX = 300, ThumbX = 750;
+    private const float ListTop = 118, RowX = 300, ThumbX = 750;
 
     private readonly ScreenRig _rig = new();
 
@@ -284,16 +284,16 @@ public sealed class ScreenLibraryTests : IDisposable
     // ---------------------------------------------------------------- the list
 
     [Fact]
-    public void Of_2000_rows_a_paint_asks_about_the_seven_on_screen()
+    public void Of_2000_rows_a_paint_asks_about_the_six_on_screen()
     {
         var library = OpenWith(2000);
 
         var drawn = Painted();
 
-        Assert.Equal(7, library.LengthsAsked);
+        Assert.Equal(6, library.LengthsAsked);
         Assert.Contains("clip0000", drawn);
-        Assert.Contains("clip0006", drawn);
-        Assert.DoesNotContain("clip0007", drawn);
+        Assert.Contains("clip0005", drawn);
+        Assert.DoesNotContain("clip0006", drawn);
     }
 
     [Fact]
@@ -303,7 +303,7 @@ public sealed class ScreenLibraryTests : IDisposable
 
         Assert.Equal(0, Screen.MaxScroll);
         Assert.False(List.Scrolls);
-        Assert.Equal(new Box(SettingsScreen.Left, ListTop, 560, 280), List.Bounds);
+        Assert.Equal(new Box(SettingsScreen.Left, ListTop, 560, 240), List.Bounds);
     }
 
     [Fact]
@@ -330,7 +330,7 @@ public sealed class ScreenLibraryTests : IDisposable
         Assert.Contains("clip0002.mp3", Painted());
 
         _rig.Press(Vk.PageDown);
-        Assert.Contains("clip0008.mp3", Painted());
+        Assert.Contains("clip0007.mp3", Painted());
 
         _rig.Press(Vk.End);
         var drawn = Painted();
@@ -389,7 +389,7 @@ public sealed class ScreenLibraryTests : IDisposable
         var drawn = Painted();
         Assert.DoesNotContain("clip0001", drawn);
         Assert.Contains("clip0002", drawn);
-        Assert.Contains("clip0008", drawn);
+        Assert.Contains("clip0007", drawn);
 
         // The chosen row has scrolled away: the foot still names it.
         Assert.Contains("clip0000.mp3", drawn);
@@ -419,8 +419,8 @@ public sealed class ScreenLibraryTests : IDisposable
 
         var drawn = Painted();
         Assert.Equal("nav", Screen.FocusId);
-        Assert.DoesNotContain("clip0005", drawn);
-        Assert.Contains("clip0006", drawn);
+        Assert.DoesNotContain("clip0004", drawn);
+        Assert.Contains("clip0005", drawn);
         Assert.Contains("clip0001.mp3", drawn);
 
         Assert.True(Screen.Key(Vk.PageUp, 0));
@@ -443,9 +443,9 @@ public sealed class ScreenLibraryTests : IDisposable
     {
         OpenWith(2000);
 
-        Screen.MouseDown(ThumbX, ListTop + 278);
-        Screen.MouseMove(ThumbX, ListTop + 279);
-        Screen.MouseUp(ThumbX, ListTop + 279);
+        Screen.MouseDown(ThumbX, ListTop + 238);
+        Screen.MouseMove(ThumbX, ListTop + 239);
+        Screen.MouseUp(ThumbX, ListTop + 239);
 
         var drawn = Painted();
         Assert.DoesNotContain("clip0000", drawn);
@@ -611,7 +611,7 @@ public sealed class ScreenLibraryTests : IDisposable
         OpenWith(5);
         Screen.SelectClip(FakeLibrary.PathOf(1));
 
-        Assert.Equal(["band.pause", "band.save", "nav", SettingsScreen.ClipListId, SettingsScreen.ClipCopyId, SettingsScreen.ClipShowId], Screen.StopIds());
+        Assert.Equal(["band.pause", "band.save", "nav", SettingsScreen.ClipFilterId, SettingsScreen.ClipListId, SettingsScreen.ClipCopyId, SettingsScreen.ClipShowId], Screen.StopIds());
     }
 
     [Fact]
@@ -619,7 +619,7 @@ public sealed class ScreenLibraryTests : IDisposable
     {
         OpenWith(5);
 
-        Assert.Equal(["band.pause", "band.save", "nav", SettingsScreen.ClipListId], Screen.StopIds());
+        Assert.Equal(["band.pause", "band.save", "nav", SettingsScreen.ClipFilterId, SettingsScreen.ClipListId], Screen.StopIds());
     }
 
     [Fact]
@@ -627,7 +627,7 @@ public sealed class ScreenLibraryTests : IDisposable
     {
         OpenWith(0);
 
-        Assert.Equal(["band.pause", "band.save", "nav"], Screen.StopIds());
+        Assert.Equal(["band.pause", "band.save", "nav", SettingsScreen.ClipFilterId], Screen.StopIds());
     }
 
     [Fact]

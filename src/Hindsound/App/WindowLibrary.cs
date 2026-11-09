@@ -22,10 +22,15 @@ internal sealed class WindowLibrary : ILibraryPanel
     private readonly Action<string> _journal;
     private readonly Func<string, bool>? _folderExists;
     private readonly LibraryReads _reads;
+
+    // What each action asked for is waiting to be told, by the action itself: two of the same kind can be on their way.
+    private readonly Dictionary<LibraryAction, Action<LibraryOutcome>?> _waiting = new(ReferenceEqualityComparer.Instance);
+    private LibraryRead? _index;
+    private IndexMatch? _labels;
     private bool _closed;
 
     /// <param name="screen">The screen of the window, the only one this ever answers to.</param>
-    /// <param name="store">The index beside the settings. Read here, never written: no action on it exists yet.</param>
+    /// <param name="store">The index beside the settings. Written only by an action the screen asks for, after a fresh look.</param>
     /// <param name="folders">Where to look, asked at each look: the settings can change, and so can the clips being saved.</param>
     /// <param name="post">Runs an action on the thread of the loop.</param>
     /// <param name="shell">Shows a file in the Explorer.</param>
@@ -57,13 +62,38 @@ internal sealed class WindowLibrary : ILibraryPanel
         _trySet = trySet;
         _clipboard = clipboard;
         _journal = journal;
-        _reads = new LibraryReads(store, post, OnReading, screen.LibraryLengthsKnown, journal) { ClipStarted = clipStarted };
+        _reads = new LibraryReads(store, post, OnReading, screen.LibraryLengthsKnown, journal) { ClipStarted = clipStarted, ActionFailed = OnActionFailed, ActionOutcomeKnown = OnActionKnown };
     }
+
+    /// <summary>The index as the latest look found it. Null until a look has come back, a damaged file included: its sentence needs it.</summary>
+    public LibraryData? Index => _index?.Data;
+
+    public LibraryStatus IndexStatus => _index?.Status ?? LibraryStatus.Missing;
+
+    public ClipLabels LabelsOf(ClipGroup line) => _labels?.LabelsOf(line) ?? new ClipLabels(false, []);
+
+    // Each action looks first, off the loop, and takes its clip from that look by its path: the line on screen may be older.
+    public void SetFavorite(ClipGroup line, bool favorite) => Act(() => LibraryAction.SetFavorite(line, favorite), null);
+
+    public void SetIn(ClipGroup line, string collectionId, bool inCollection) =>
+        Act(() => LibraryAction.SetInCollection(line, collectionId, inCollection), outcome => _screen.CollectionTickAnswered(collectionId, outcome));
+
+    public void CreateCollection(string name) => Act(() => LibraryAction.CreateCollection(name), _screen.CollectionBoxAnswered);
+
+    public void RenameCollection(string collectionId, string name) =>
+        Act(() => LibraryAction.RenameCollection(collectionId, name), _screen.CollectionBoxAnswered);
+
+    public void DeleteCollection(string collectionId) => Act(() => LibraryAction.DeleteCollection(collectionId), _screen.CollectionBoxAnswered);
+
+    public void StartOver() => Act(LibraryAction.StartOver, _screen.CollectionBoxAnswered);
 
     public ClipLines? Lines { get; private set; }
 
     /// <summary>A look is under way, or the durations of the last one are still being read.</summary>
     internal bool IsWorking => _reads.IsWorking;
+
+    /// <summary>The actions asked for whose answer has not come yet. For a test that each way out of an action takes it off.</summary>
+    internal int ActionsWaiting => _waiting.Count;
 
     public TimeSpan? LengthOf(ClipGroup line) => _reads.LengthOf(line);
 
@@ -96,14 +126,97 @@ internal sealed class WindowLibrary : ILibraryPanel
     public void Close(Action? workEnded = null)
     {
         _closed = true;
+        _waiting.Clear();
         _reads.Close(workEnded);
+    }
+
+    private void Act(Func<LibraryAction> make, Action<LibraryOutcome>? answer)
+    {
+        if (_closed)
+        {
+            return;
+        }
+
+        LibraryAction? action = null;
+        try
+        {
+            action = make();
+            _waiting[action] = answer;
+            _reads.Act(action, _folders());
+        }
+        catch (Exception ex)
+        {
+            // An action left waiting would keep every star asked for lit until the window closes.
+            if (action is not null)
+            {
+                _waiting.Remove(action, out _);
+            }
+
+            // Nothing was written. The screen still gets its answer, on the loop as always, or a box would wait for ever.
+            _journal($"library action: not asked ({ClipFolders.Describe(ex)})");
+            _post(() => Tell(answer, LibraryOutcome.NotWritten));
+        }
     }
 
     private void OnReading(LibrarySnapshot snapshot)
     {
-        // Only the lines: the labels and the rest of the look have nothing to show yet, and would stay in memory until the next one.
+        if (_closed)
+        {
+            return;
+        }
+
+        // The lines, the index and its labels: what the screen draws until the next look. The folders and every clip found stay out.
         Lines = snapshot.Lines;
-        _screen.LibraryReadingArrived();
+        _index = snapshot.Library;
+        _labels = snapshot.Labels;
+        if (snapshot.Acted is not { } acted)
+        {
+            // A look made while an action is on its way was made before it was written.
+            _screen.LibraryReadingArrived(_waiting.Count > 0);
+            return;
+        }
+
+        _waiting.Remove(acted.Action, out var answer);
+        Tell(answer, acted.Outcome);
+    }
+
+    private void OnActionFailed(LibraryAction action)
+    {
+        if (!_closed)
+        {
+            _waiting.Remove(action, out var answer);
+            Tell(answer, LibraryOutcome.NotWritten);
+        }
+    }
+
+    // The action was applied and what came after it failed: its outcome is the file's, so it is said as it is.
+    private void OnActionKnown(LibraryAction action, LibraryOutcome outcome)
+    {
+        if (_closed)
+        {
+            return;
+        }
+
+        _waiting.Remove(action, out var answer);
+        Tell(answer, outcome);
+
+        // The reading that went with it never came: look again, so that the screen shows what the file holds. That look would put
+        // out the sentence of the answer, which the user has not had time to read.
+        _screen.KeepSentenceThroughNextReading();
+        ReadAgain();
+    }
+
+    /// <summary>The reading first, then the answer: in the other order, the reading would wipe the sentence of the answer.</summary>
+    private void Tell(Action<LibraryOutcome>? answer, LibraryOutcome outcome)
+    {
+        if (_closed)
+        {
+            return;
+        }
+
+        // The actions still waiting come after this one: the stars they ask for are not in this reading.
+        _screen.LibraryReadingArrived(_waiting.Count > 0);
+        answer?.Invoke(outcome);
     }
 
     // The shell can answer long after the window that asked has gone. This panel is that window's, so its close is the check.

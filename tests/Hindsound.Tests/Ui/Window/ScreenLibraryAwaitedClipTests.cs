@@ -11,7 +11,7 @@ public sealed class ScreenLibraryAwaitedClipTests : IDisposable
         public Hindsound.Audio.WaveFacts WaveFacts => default;
     }
 
-    private const float ListTop = 86, RowX = 300;
+    private const float ListTop = 118, RowX = 300;
 
     private readonly ScreenRig _rig = new();
 

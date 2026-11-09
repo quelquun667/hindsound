@@ -108,7 +108,7 @@ internal sealed partial class SettingsScreen
         }
 
         // Everything goes through one bitmap and the open list is drawn in it: drawing here would go over it. Its closing repaints all.
-        if (PopupOpen || change == WaveChange.None)
+        if (PopupOpen || BoxOpen || change == WaveChange.None)
         {
             return;
         }

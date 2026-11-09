@@ -89,6 +89,26 @@ internal interface ICanvas
     {
     }
 
+    /// <summary>
+    /// A filled shape in design pixels, smooth at the edge, with nothing allocated per pixel: the points are joined in order and the
+    /// last one back to the first, and where the outline crosses itself a pixel is filled or empty by the even-odd rule. Fewer than
+    /// three points draw nothing. A fake canvas that does not care for it keeps this default and draws nothing.
+    /// </summary>
+    void FillPolygon(ReadOnlySpan<(float X, float Y)> points, uint rgb)
+    {
+    }
+
+    /// <summary>
+    /// Everything drawn so far gets darker: <paramref name="opacity"/> of black over it, 0 leaves it as it is and 1 or more makes
+    /// it black. It walks the whole window with no mask to allocate, so use it once for a box laid over the page, not per widget.
+    /// It darkens the bitmap as it stands: a part painted alone afterwards (a partial repaint) would show bright over it, so every
+    /// path that paints only a part must stay out while the box is open.
+    /// A fake canvas that does not care for it keeps this default and draws nothing.
+    /// </summary>
+    void Dim(float opacity)
+    {
+    }
+
     /// <summary>A soft light around the box, over what is already drawn.</summary>
     void Glow(Box box, float sigma, float opacity, uint rgb);
 

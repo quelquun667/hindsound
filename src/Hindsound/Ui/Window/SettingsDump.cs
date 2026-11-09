@@ -154,6 +154,43 @@ internal static unsafe class SettingsDump
 
         public Library.ClipLines? Lines => lines;
 
+        /// <summary>Made-up collections, for the pictures of the menu and the stars. Null leaves the list as it was before them.</summary>
+        public Library.LibraryData? Index { get; init; }
+
+        /// <summary>What the made-up index reads as: a file in trouble shows its sentence in place of the line.</summary>
+        public Library.LibraryStatus IndexStatus { get; set; } = Library.LibraryStatus.Loaded;
+
+        /// <summary>The labels of a clip, by the path of its main file.</summary>
+        public Dictionary<string, Library.ClipLabels> Labels { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public Library.ClipLabels LabelsOf(Library.ClipGroup line) => Labels.TryGetValue(line.Main.Path, out var labels) ? labels : new(false, []);
+
+        /// <summary>The library of the pictures: three collections, two stars, and three clips in the first collection.</summary>
+        public static SampleLibrary Labeled(params (string Name, int Seconds, bool TwoFiles, bool Rescued)[] clips) => Labeled(0, clips);
+
+        /// <param name="leftOut">How many clips the cap left out of the list.</param>
+        /// <param name="clips">As for <see cref="Of"/>.</param>
+        public static SampleLibrary Labeled(int leftOut, (string Name, int Seconds, bool TwoFiles, bool Rescued)[] clips)
+        {
+            var sample = Of(leftOut, clips);
+            var labeled = new SampleLibrary(sample.Lines, sample.Seconds)
+            {
+                Index = new Library.LibraryData
+                {
+                    Collections = [new() { Id = "c1", Name = "pets" }, new() { Id = "c2", Name = "Sam" }, new() { Id = "c3", Name = "Alex" }],
+                },
+            };
+            var rows = sample.Lines!.Lines;
+            for (var i = 0; i < rows.Count; i++)
+            {
+                labeled.Labels[rows[i].Main.Path] = new Library.ClipLabels(i is 0 or 3, i is 1 or 3 or 5 ? ["c1"] : []);
+            }
+
+            return labeled;
+        }
+
+        private IReadOnlyDictionary<string, int> Seconds => seconds;
+
         /// <param name="leftOut">How many clips the cap left out of the list.</param>
         /// <param name="clips">A name without its extension, its seconds, and its two kinds of line.</param>
         public static SampleLibrary Of(int leftOut, params (string Name, int Seconds, bool TwoFiles, bool Rescued)[] clips)
@@ -471,7 +508,7 @@ internal static unsafe class SettingsDump
             s.WaveTick();
         }, focus: true);
 
-        // The Library page. The same names as its mock-ups, made-up clips, and no star, filter or collections yet.
+        // The Library page. The same names as its mock-ups, made-up clips and collections.
         (string, int, bool, bool)[] clips =
         [
             ("Hindsound_Discord_2026-11-08_21-14-03", 30, false, false),
@@ -493,12 +530,30 @@ internal static unsafe class SettingsDump
 
         Shot("library-liste", (s, _) =>
         {
-            ShowClips(s, SampleLibrary.Of(0, clips));
+            ShowClips(s, SampleLibrary.Labeled(clips));
             s.SelectClip(chosenClip);
+        });
+
+        // The menu open on the first collection, reached the way the keyboard reaches it. The clip is chosen once there: on the
+        // way, Favorites does not hold it, and a view without the chosen clip lets it go.
+        Shot("library-filtre", (s, _) =>
+        {
+            ShowClips(s, SampleLibrary.Labeled(clips));
+            s.TabTo(SettingsScreen.ClipFilterId);
+            s.Key(Vk.Down, 0);
+            s.Key(Vk.Down, 0);
+            s.SelectClip(chosenClip);
+            s.Key(Vk.Enter, 0);
+        });
+        Shot("library-collection-vide", (s, _) =>
+        {
+            ShowClips(s, SampleLibrary.Labeled(clips));
+            s.TabTo(SettingsScreen.ClipFilterId);
+            s.Key(Vk.End, 0);
         });
         Shot("library-clip-absent", (s, _) =>
         {
-            ShowClips(s, SampleLibrary.Of(0, clips));
+            ShowClips(s, SampleLibrary.Labeled(clips));
             s.SelectClip(chosenClip);
             s.ClipGestureEnded(chosenClip, ShellOutcome.Gone);
         });
@@ -509,7 +564,17 @@ internal static unsafe class SettingsDump
         {
             var older = Enumerable.Range(0, Library.ClipScanner.MaxLines - 6).Select(i => ($"Hindsound_{i:0000}", 30, false, false));
             var last = clips.Take(6).Select((clip, i) => i == 3 ? clip with { Item4 = true } : clip);
-            ShowClips(s, SampleLibrary.Of(500, [.. older, .. last]));
+            var library = SampleLibrary.Labeled(500, [.. older, .. last]);
+
+            // The labels of the sample go to the first rows: the ones the picture shows are the last six.
+            var rows = library.Lines!.Lines;
+            library.Labels.Clear();
+            for (var i = 0; i < 6; i++)
+            {
+                library.Labels[rows[rows.Count - 6 + i].Main.Path] = new Library.ClipLabels(i is 0 or 3, i is 1 or 3 or 5 ? ["c1"] : []);
+            }
+
+            ShowClips(s, library);
             s.TabTo(SettingsScreen.ClipListId);
             s.Key(Vk.End, 0);
             s.Key(Vk.Up, 0);
@@ -522,5 +587,80 @@ internal static unsafe class SettingsDump
             s.SelectClip($@"C:\Clips\{name}.mp3");
         });
 
-        return FolderPicker.SelfCheck() ? 0 : 3;    }
+        // The line of collections, its +N, and the box of a collection in each of its states. Made-up names only.
+        static SampleLibrary Eight((string, int, bool, bool)[] clips)
+        {
+            var library = SampleLibrary.Labeled(clips);
+            foreach (var (id, name) in new[] { ("c4", "Best of the group chat"), ("c5", "trips"), ("c6", "games"), ("c7", "music"), ("c8", "cats") })
+            {
+                library.Index!.Collections.Add(new() { Id = id, Name = name });
+            }
+
+            library.Labels[chosenClip] = new Library.ClipLabels(false, ["c1", "c4", "c7"]);
+            return library;
+        }
+
+        static void Chosen(SettingsScreen s, SampleLibrary library)
+        {
+            ShowClips(s, library);
+            s.SelectClip(chosenClip);
+        }
+
+        static SampleLibrary InTrouble((string, int, bool, bool)[] clips, Library.LibraryStatus status)
+        {
+            var library = SampleLibrary.Labeled(clips);
+            library.IndexStatus = status;
+            return library;
+        }
+
+        Shot("library-8-collections", (s, _) => Chosen(s, Eight(clips)));
+        Shot("library-plus-liste", (s, _) =>
+        {
+            Chosen(s, Eight(clips));
+            s.TabTo(ChipLine.ChipsId);
+            s.Key(Vk.End, 0);
+            s.Key(Vk.Enter, 0);
+        }, focus: true);
+        Shot("library-nouvelle-collection", (s, _) =>
+        {
+            Chosen(s, SampleLibrary.Labeled(clips));
+            s.TabTo(ChipLine.NewId);
+            s.Key(Vk.Enter, 0);
+            s.EditChanged("dogs");
+        }, focus: true);
+        Shot("library-nom-pris", (s, _) =>
+        {
+            Chosen(s, SampleLibrary.Labeled(clips));
+            s.TabTo(ChipLine.NewId);
+            s.Key(Vk.Enter, 0);
+            s.EditChanged("pets");
+        }, focus: true);
+        Shot("library-nom-vide", (s, _) =>
+        {
+            Chosen(s, SampleLibrary.Labeled(clips));
+            s.TabTo(ChipLine.NewId);
+            s.Key(Vk.Enter, 0);
+        }, focus: true);
+        Shot("library-supprimer", (s, _) =>
+        {
+            ShowClips(s, SampleLibrary.Labeled(clips));
+            s.TabTo(SettingsScreen.ClipFilterId);
+            s.Key(Vk.Down, 0);
+            s.Key(Vk.Down, 0);
+            s.SelectClip(chosenClip);
+            s.TabTo(CollectionActions.DeleteId);
+            s.Key(Vk.Enter, 0);
+        }, focus: true);
+        Shot("library-erreur-fichier", (s, _) => Chosen(s, InTrouble(clips, Library.LibraryStatus.Corrupt)));
+        Shot("library-erreur-lecture", (s, _) => Chosen(s, InTrouble(clips, Library.LibraryStatus.Unreadable)));
+        Shot("library-version-recente", (s, _) => Chosen(s, InTrouble(clips, Library.LibraryStatus.TooNew)));
+        Shot("library-recommencer", (s, _) =>
+        {
+            Chosen(s, InTrouble(clips, Library.LibraryStatus.Corrupt));
+            s.TabTo(SettingsScreen.StartOverId);
+            s.Key(Vk.Enter, 0);
+        }, focus: true);
+
+        return FolderPicker.SelfCheck() ? 0 : 3;
+    }
 }

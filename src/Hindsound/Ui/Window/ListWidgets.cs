@@ -8,7 +8,8 @@ namespace Hindsound.Ui.Window;
 /// <param name="Rescued">The clip is in the rescue folder.</param>
 /// <param name="TwoFiles">The two tracks of a clip saved as separate files.</param>
 /// <param name="Missing">An action found the file gone, and the next reading has not removed the row yet.</param>
-internal readonly record struct ListRow(string Name, string? Duration = null, bool Rescued = false, bool TwoFiles = false, bool Missing = false)
+/// <param name="Star">Whether the clip is a favorite. Null draws no star: the labels of the clips are not known.</param>
+internal readonly record struct ListRow(string Name, string? Duration = null, bool Rescued = false, bool TwoFiles = false, bool Missing = false, bool? Star = null)
 {
     /// <param name="group">The line of the scan.</param>
     /// <param name="seconds">The length read so far.</param>
@@ -24,13 +25,15 @@ internal readonly record struct ListRow(string Name, string? Duration = null, bo
     /// <param name="seconds">The length read so far.</param>
     /// <param name="rescued">See <see cref="Rescued"/>, when the caller already knows.</param>
     /// <param name="missing">See <see cref="Missing"/>.</param>
-    public static ListRow Of(ClipGroup group, int? seconds, bool rescued, bool missing = false) =>
+    /// <param name="star">See <see cref="Star"/>.</param>
+    public static ListRow Of(ClipGroup group, int? seconds, bool rescued, bool missing = false, bool? star = null) =>
         new(
             NameOf(group),
             seconds is { } length ? NotificationStates.FormatDuration(length) : null,
             rescued,
             group.Files.Count > 1,
-            missing);
+            missing,
+            star);
 
     /// <summary>
     /// Main is the system track of a clip saved as two files, but the line stands for both, as Copy and Show in folder do: it is
@@ -60,6 +63,14 @@ internal sealed class RowList : Widget
 
     private const string Prefix = "Hindsound_", RescuedNote = "Rescued", TwoFilesNote = "2 files";
 
+    /// <summary>The star sits in the last pixels of the row, after the duration; a press there is about the star alone.</summary>
+    private const float StarFromRight = 18, StarRadius = 8, StarZone = 36;
+
+    private const uint StarOutline = 0x8E95A3;
+
+    /// <summary>F, for favorite: puts the star on the chosen row or takes it off.</summary>
+    public const uint StarKey = 0x46;
+
     private readonly RowListState _state;
     private readonly Func<int, ListRow> _rowAt;
     private readonly Action _selectionChanged;
@@ -82,6 +93,12 @@ internal sealed class RowList : Widget
 
     /// <summary>A press landed on a row, whether or not it changes the choice.</summary>
     public Action? RowPressed { get; init; }
+
+    /// <summary>
+    /// A press on the star of a row, or <see cref="StarKey"/> on the chosen one, with the index of the row. Null: the stars cannot
+    /// be changed, and a press there chooses the row like anywhere else on it.
+    /// </summary>
+    public Action<int>? StarPressed { get; init; }
 
     /// <summary>The sentence of the end slot.</summary>
     public string? EndNote { get; init; }
@@ -106,6 +123,11 @@ internal sealed class RowList : Widget
 
     public override bool OnKey(uint vk)
     {
+        if (vk == StarKey)
+        {
+            return PressStar(_state.Selected);
+        }
+
         var selected = _state.Selected;
         var top = _state.Top;
         if (!_state.Key(vk))
@@ -152,9 +174,16 @@ internal sealed class RowList : Widget
             return;
         }
 
+        var row = _state.RowAt(y - Bounds.Y);
+
+        // The star is a switch of its own: choosing the row as well would move the foot under a user who only marked a clip.
+        if (x >= RowsRight - StarZone && PressStar(row))
+        {
+            return;
+        }
+
         var selected = _state.Selected;
         var top = _state.Top;
-        var row = _state.RowAt(y - Bounds.Y);
         if (row != RowListState.None)
         {
             // Before the choice is told, and even when it is the row already chosen: the user has just said which clip they want.
@@ -233,6 +262,17 @@ internal sealed class RowList : Widget
         }
     }
 
+    private bool PressStar(int row)
+    {
+        if (StarPressed is not { } press || row < 0 || row >= _state.Count || _rowAt(row).Star is null)
+        {
+            return false;
+        }
+
+        press(row);
+        return true;
+    }
+
     private int RowUnder(float x, float y) =>
         x >= Bounds.X && x < RowsRight ? _state.RowAt(y - Bounds.Y) : RowListState.None;
 
@@ -281,8 +321,8 @@ internal sealed class RowList : Widget
         var line = _rowAt(index);
         var mid = row.MidY;
 
-        // The star of a later version has the last 44 pixels of the row. The name's room never depends on the duration, which
-        // arrives later: it would move every name of the list.
+        // The star has the last 44 pixels of the row. The name's room never depends on the duration, which arrives later: it
+        // would move every name of the list.
         var limit = row.Right - NoteRight;
         if (line.TwoFiles)
         {
@@ -299,6 +339,11 @@ internal sealed class RowList : Widget
         {
             var figures = line.Missing ? Theme.Faded : chosen ? Theme.Text : Theme.Muted;
             c.TextRight(duration, Face.Mono, 13, row.Right - DurationRight, mid, figures);
+        }
+
+        if (line.Star is { } star)
+        {
+            c.Star(row.Right - StarFromRight, mid, StarRadius, star, line.Missing ? Theme.Faded : star ? ui.Accent : StarOutline);
         }
     }
 

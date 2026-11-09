@@ -185,7 +185,7 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
 
     public bool Listening => _capture.Listening;
 
-    public bool PopupOpen => _popup is not null;
+    public bool PopupOpen => _popup is not null || _moreList is not null;
 
     public bool WantsMeter =>
         (Section == Section.Audio || (Section == Section.FirstRun && _firstRunStep == 1)) && Editor.Settings.Audio.MicEnabled && _status?.MicCapturing == true;
@@ -287,6 +287,7 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
         CancelCapture();
         LeaveFocused();
         _popup = null;
+        DropLibraryOverlays();
         var leftCard = Section == Section.UpdateCard;
         Section = section;
         WakeWave();
@@ -429,13 +430,15 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
             BuildFoot();
         }
 
+        BuildBox();
         _scroll = Math.Clamp(_scroll, 0, MaxScroll);
     }
 
     private void Refresh()
     {
         Rebuild();
-        if (_focusId is not null && Find(_focusId) is not { CanFocus: true })
+        // In an open box, the field and Cancel go grey while the action is out, and the focus waits there for the answer.
+        if (_focusId is not null && _box is null && Find(_focusId) is not { CanFocus: true })
         {
             // A foot button of the Library that goes dim hands the focus back to its list: from the side bar, the next arrow would leave the page.
             var backToList = _focusId is ClipCopyId or ClipShowId && Section == Section.Library && Find(ClipListId) is { CanFocus: true };
@@ -471,6 +474,16 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
     /// <summary>Tab and Shift+Tab.</summary>
     public void MoveFocus(bool forward)
     {
+        if (_box is not null)
+        {
+            if (NameBox.NextStop(_stops, _focusId, forward) is { } inBox)
+            {
+                SetFocus(inBox);
+            }
+
+            return;
+        }
+
         var stops = Section == Section.UpdateCard ? _stops.FindAll(w => w.Id.StartsWith(CardPrefix, StringComparison.Ordinal)) : _stops;
         var current = stops.FindIndex(w => w.Id == _focusId);
         var next = FocusRing.Next(stops.Count, current, forward, i => stops[i].CanFocus);
@@ -607,6 +620,11 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
             return KeyRepeat.Swallowed(vk);
         }
 
+        if (OverlayKey(vk, modifiers) is { } overlay)
+        {
+            return overlay;
+        }
+
         if (_popup is { } popup)
         {
             return PopupKey(popup, vk, modifiers);
@@ -706,6 +724,15 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
     {
         if (Focus is TextField field)
         {
+            // A field greyed while its box waits for an answer still shows its native box: what is typed there was never sent,
+            // so the box takes the text back rather than letting the draft drift from the name that left.
+            if (!field.Enabled)
+            {
+                _forceEditText = true;
+                Refresh();
+                return;
+            }
+
             field.Typed(text, field.Id switch
             {
                 HexFieldId => t => Editor.SetAccentHex(t),
@@ -857,6 +884,7 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
     {
         CancelCapture();
         KeepSlider();
+        _moreList?.Close();
         if (_popup is not null)
         {
             _popup = null;
@@ -901,6 +929,16 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
             return;
         }
 
+        if (_moreList is { } more)
+        {
+            if (more.Hover(x, y))
+            {
+                _host.Invalidate();
+            }
+
+            return;
+        }
+
         if (Find(_pressedId) is { } pressed)
         {
             pressed.OnDrag(x, LocalY(pressed, y));
@@ -909,7 +947,7 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
         }
 
         var hover = HitTest(x, y)?.Id;
-        if (hover != _hoverId || hover == NavId || (Find(hover) is RowList list && list.HoverMoved(x, y)))
+        if (hover != _hoverId || hover == NavId || (Find(hover) is RowList list && list.HoverMoved(x, y)) || (Find(hover) is CollectionChips chips && chips.HoverMoved(x, y)))
         {
             _hoverId = hover;
             _host.Invalidate();
@@ -938,6 +976,13 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
         if (_popup is { } popup)
         {
             popup.Press(x, y);
+            return;
+        }
+
+        if (_moreList is { } more)
+        {
+            more.Press(x, y);
+            _host.Invalidate();
             return;
         }
 
@@ -1014,6 +1059,18 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
             return;
         }
 
+        if (_moreList is { } more)
+        {
+            more.Wheel(notches);
+            _host.Invalidate();
+            return;
+        }
+
+        if (_box is not null)
+        {
+            return;
+        }
+
         if (ClipList is { } list)
         {
             list.OnWheel(notches);
@@ -1030,6 +1087,20 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
 
     private Widget? HitTest(float x, float y)
     {
+        // The box keeps the mouse among its own: the foot and the page under it are only to be seen.
+        if (_box is not null)
+        {
+            foreach (var widget in _chrome)
+            {
+                if (widget.Id.StartsWith(NameBox.Prefix, StringComparison.Ordinal) && widget.Bounds.Contains(x, y) && widget.Enabled && widget is not Painted)
+                {
+                    return widget;
+                }
+            }
+
+            return null;
+        }
+
         foreach (var widget in _chrome)
         {
             if (widget.Bounds.Contains(x, y) && widget.Enabled && widget is not Painted)
@@ -1260,7 +1331,7 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
     public void Paint(ICanvas c)
     {
         var accent = Editor.AccentRgb;
-        var hover = _popup is null ? Find(_hoverId) : null;
+        var hover = _popup is null && _moreList is null ? Find(_hoverId) : null;
         var ui = new UiState(accent, Focus, Find(_pressedId), hover, _mouseX, _mouseY, _scroll, ShowFocus && !_capture.Listening, NoNativeEdit ? null : _editId);
         c.SetOrigin(0);
         c.FillRect(new Box(0, 0, WindowWidth, WindowHeight), Theme.Base);
@@ -1295,5 +1366,6 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
         }
 
         _popup?.Paint(c, accent);
+        _moreList?.Paint(c, accent);
     }
 }

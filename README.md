@@ -37,7 +37,7 @@ It has been tried on one Windows 11 PC, and some things are [not tried yet](#not
 - **Stays out of your game:** the notification does not take the focus, and over a game, clicks pass through it. In exclusive
   fullscreen, you get a short sound instead.
 - **Your clips in one list:** the `Library` page shows them newest first, with their length, and copies one or shows it in its
-  folder. Your files never move.
+  folder. Star your favorites and tick them into your own collections. Your files never move.
 - **Your color:** six accent colors, or any bright color you type.
 - **No account:** the only network use is the daily check for a new version, which you can turn off. See [Updates](#updates).
 
@@ -125,10 +125,10 @@ Apps, find Hindsound, and uninstall it.
 | Program files, Start menu shortcut, the Start with Windows entry, the log | Removed |
 | Your clips (`Music\Hindsound`, or the folder you chose) | Kept |
 | Rescued clips (`%LOCALAPPDATA%\Hindsound\Rescued`) | Kept |
-| Settings (`%AppData%\Hindsound\settings.json`) | The uninstaller asks. The default answer keeps them. |
+| Settings and collections (`%AppData%\Hindsound\settings.json` and `library.json`) | The uninstaller asks once for both. The default answer keeps them. A silent uninstall keeps them. |
 
 **Built from source.** There is no uninstaller. Turn off `Start with Windows`, quit Hindsound, and delete the folder. Your
-settings stay in `%AppData%\Hindsound`, and your log and rescued clips in `%LOCALAPPDATA%\Hindsound`: delete those too if
+settings and collections stay in `%AppData%\Hindsound`, and your log and rescued clips in `%LOCALAPPDATA%\Hindsound`: delete those too if
 you want nothing left.
 
 ## First run
@@ -195,7 +195,19 @@ listed), and of the rescue folder. A folder you filled with music shows that mus
   saved as two files is one line, and both buttons act on both files. If the file is gone, it says `This clip was moved or deleted`,
   and the line goes at the next look. If the button could not do its job, it says `That didn't work. Your clip is untouched.`
 - **Your files:** `Library` never moves, renames or deletes a file. To do that, use the Explorer: the list follows.
-- **Long lists:** it shows the 2,000 most recent clips, and says so at the end of the list.
+- **Long lists:** it shows the 2,000 most recent clips, and says so at the end of the list. A clip with a star or in a collection
+  is always listed, however old.
+- **Favorites:** each line has a star. Click the star of a line to star that clip, without choosing it, or press `F` with the list focused to star the chosen clip. Do it again to take the star off.
+- **Collections:** under the list, `Selected clip in:` shows the collections, with a box to tick for each. A clip can be in
+  several. The ticked ones come first; those that don't fit are behind `+N`. `New collection...` makes one, up to 40 characters.
+- **The menu above the list:** `All clips`, `Favorites`, or one of your collections. When it shows a collection, `Rename` and
+  `Delete` are next to it. Deleting a collection deletes no clip, and the clips keep their star and their other collections.
+- **Where they are kept:** in `library.json`, next to `settings.json`. Hindsound writes it only when you change something, and
+  never touches your clips to do it. A clip renamed or moved in a folder Hindsound reads keeps its star and collections. A clip
+  gone for 30 days loses them. The names of your collections are never written to the log.
+- **If the file has a problem:** a line in amber takes the place of the collections, and your clips stay listed. If the file
+  can't be read, or a newer version of Hindsound wrote it, nothing is changed. If it is damaged, `Start over` keeps a copy of it
+  next to it and starts with no collections. Your clips are not touched.
 
 ### Hotkeys
 | Action | Default |
@@ -328,6 +340,8 @@ Hindsound has only run on one Windows 11 PC so far. These have not been tried fo
 - the `Now` page with real music playing, and with a real microphone
 - a memory of 30:00 really filled, and the wave of the `Now` page over it
 - the `Library` page with a real mouse
+- the star, the collections, `+N`, and the box to name a collection in the real window, typing in it included
+- a clip sent to the Recycle Bin, then restored, getting its collections back
 - `Show in folder` in the real Explorer, `Copy` from `Library` then a paste, and the `Library` line in the menu of the icon
 - typing a hotkey, and the Browse button
 - changing the audio output

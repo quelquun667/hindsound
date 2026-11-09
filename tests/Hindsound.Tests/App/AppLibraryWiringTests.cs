@@ -44,6 +44,14 @@ public sealed class AppLibraryWiringTests : IDisposable
         };
     }
 
+    // The app writes its log from other threads while the test reads it: reading must let the writer keep the file open.
+    private static string SharedText(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
+    }
+
     private void Clip(string name)
     {
         Directory.CreateDirectory(Clips);
@@ -228,8 +236,8 @@ public sealed class AppLibraryWiringTests : IDisposable
         _rig.Press(Vk.Enter);
 
         var log = _temp.Combine("settings.log");
-        Turn(() => File.Exists(log) && File.ReadAllText(log).Contains("would be selected now", StringComparison.Ordinal));
-        Assert.DoesNotContain("Collection-Canary-7F3", File.ReadAllText(log), StringComparison.OrdinalIgnoreCase);
+        Turn(() => File.Exists(log) && SharedText(log).Contains("would be selected now", StringComparison.Ordinal));
+        Assert.DoesNotContain("Collection-Canary-7F3", SharedText(log), StringComparison.OrdinalIgnoreCase);
     }
 
     // ---------------------------------------------------------------- where it looks

@@ -31,6 +31,9 @@ public sealed class LibraryAction
     public static LibraryAction DeleteCollection(string collectionId) =>
         new(null, (store, _, scan, now) => store.DeleteCollection(collectionId, scan, now));
 
+    /// <summary>Puts a damaged file aside and starts with no collections. Refused on a file that is not damaged.</summary>
+    public static LibraryAction StartOver() => new(null, (store, _, _, _) => store.StartOver());
+
     private static string PathOf(ClipGroup line)
     {
         ArgumentNullException.ThrowIfNull(line);
@@ -171,6 +174,18 @@ public sealed class LibraryReads
     public Func<DateTime?>? ClipStarted { get; set; }
 
     /// <summary>
+    /// Told on the thread of the window, in place of a look, when the look of an action failed before it could deliver: whether
+    /// the action was written is then unknown. Never after <see cref="Close"/>.
+    /// </summary>
+    public Action<LibraryAction>? ActionFailed { get; set; }
+
+    /// <summary>
+    /// Told in place of <see cref="ActionFailed"/> when the look failed after the action had been applied: the store has answered, so
+    /// what became of the action is known, but the reading that goes with it was never delivered. Never after <see cref="Close"/>.
+    /// </summary>
+    public Action<LibraryAction, LibraryOutcome>? ActionOutcomeKnown { get; set; }
+
+    /// <summary>
     /// Asks for a look. The file of the index gives <see cref="ClipScanRequest.IndexFolders"/>, whatever this one says. Call it
     /// at the opening of the view, and, only while the Library view is the one on screen, at the end of a clip and when the
     /// window comes back to the front; on coming back to the Library view from another one, ask again. A hidden list is not
@@ -266,14 +281,26 @@ public sealed class LibraryReads
         Action? ended;
         while (TakeNext(out var action, out var folders, out ended))
         {
+            LibraryOutcome? applied = null;
             try
             {
-                Look(folders, action);
+                Look(folders, action, outcome => applied = outcome);
             }
             catch (Exception ex)
             {
                 // What is on screen stays as it is. The next request, or the next window, looks again.
                 _journal?.Invoke($"library read: failed ({ClipFolders.Describe(ex)})");
+
+                // An action gets an answer all the same: a screen waiting on it would wait for ever. One that was applied says what
+                // became of it, and not that nothing was saved.
+                if (action is not null && applied is { } known && ActionOutcomeKnown is { } told)
+                {
+                    OnLoop(() => told(action, known));
+                }
+                else if (action is not null && ActionFailed is { } failed)
+                {
+                    OnLoop(() => failed(action));
+                }
             }
         }
 
@@ -321,7 +348,7 @@ public sealed class LibraryReads
         }
     }
 
-    private void Look(ClipScanRequest folders, LibraryAction? action)
+    private void Look(ClipScanRequest folders, LibraryAction? action, Action<LibraryOutcome> applied)
     {
         // One line for one failure in one look: a folder of locked files must not fill the log.
         var told = new HashSet<string>();
@@ -361,6 +388,7 @@ public sealed class LibraryReads
         {
             var change = action.Apply(_store, listing.Groups, scan, _utcNow());
             acted = new LibraryActed(action, change?.Outcome ?? action.OutcomeWithoutClip(scan), change?.CollectionId);
+            applied(acted.Outcome);
             library = change?.Library ?? library;
         }
 

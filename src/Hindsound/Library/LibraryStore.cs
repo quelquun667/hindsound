@@ -91,8 +91,11 @@ public enum LibraryOutcome
     /// <summary>No name to give the collection.</summary>
     NameEmpty,
 
-    /// <summary>Another collection has this name, in any case.</summary>
+    /// <summary>Another collection has this name, in any case, or the menu of the list has it: All clips, Favorites.</summary>
     NameTaken,
+
+    /// <summary>Longer than <see cref="LibraryStore.MaxNameLength"/>.</summary>
+    NameTooLong,
 
     /// <summary>No collection has this id: the file changed since it was read.</summary>
     UnknownCollection,
@@ -125,6 +128,9 @@ public readonly record struct LibraryChange(LibraryOutcome Outcome, LibraryRead 
 public sealed class LibraryStore
 {
     public const int CurrentVersion = 1;
+
+    /// <summary>In UTF-16 units, as the text box counts them. A name in the file that is longer stays as it is, and is only cut on screen.</summary>
+    public const int MaxNameLength = 40;
 
     // Generated at build time: the published exe is trimmed and has no reflection-based serializer.
     private static readonly JsonTypeInfo<LibraryData> TypeInfo = new LibraryJsonContext(new JsonSerializerOptions
@@ -390,16 +396,43 @@ public sealed class LibraryStore
     // An entry with no file would be written, then judged damaged at the next read, and the whole library with it.
     private static bool HasNoFile(ClipGroup clip) => clip.Files.Count == 0;
 
-    private static LibraryOutcome? Refusal(LibraryData data, string name, LibraryCollection? except)
+    private static LibraryOutcome? Refusal(LibraryData data, string name, LibraryCollection? except) =>
+        NameRefusal(data.Collections, name, except?.Id);
+
+    /// <summary>
+    /// Why this name cannot be given, or null if it can. The one rule for a name: the box of the name asks it at each key, and the
+    /// actions ask it again against the file.
+    /// </summary>
+    /// <param name="collections">The collections as they are.</param>
+    /// <param name="typed">The name as typed: it counts once trimmed.</param>
+    /// <param name="exceptId">The collection being renamed: it may keep its name, or change its case.</param>
+    public static LibraryOutcome? NameRefusal(IReadOnlyList<LibraryCollection> collections, string typed, string? exceptId = null)
     {
+        var name = typed.Trim();
         if (name.Length == 0)
         {
             return LibraryOutcome.NameEmpty;
         }
 
-        return data.Collections.Exists(c => c != except && string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase))
-            ? LibraryOutcome.NameTaken
-            : null;
+        if (name.Length > MaxNameLength)
+        {
+            return LibraryOutcome.NameTooLong;
+        }
+
+        if (LibraryFilter.IsReservedName(name))
+        {
+            return LibraryOutcome.NameTaken;
+        }
+
+        foreach (var collection in collections)
+        {
+            if (collection.Id != exceptId && string.Equals(collection.Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                return LibraryOutcome.NameTaken;
+            }
+        }
+
+        return null;
     }
 
     private static string FreeId(LibraryData data)

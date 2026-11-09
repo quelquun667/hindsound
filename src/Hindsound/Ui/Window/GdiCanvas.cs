@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Hindsound.Audio;
 
@@ -206,6 +207,158 @@ internal sealed unsafe class GdiCanvas : ICanvas, IDisposable
             {
                 Pixels.Blend(row + x, rgb, coverage(x + 0.5f, y + 0.5f));
             }
+        }
+    }
+
+    public void Dim(float opacity)
+    {
+        // Nothing to darken, and a NaN counts as nothing: no walk over the whole window for it.
+        if (!(opacity > 0))
+        {
+            return;
+        }
+
+        // What is left of each colour is keep / 256, for the three colours of two pixels at once. Red and blue sit two bytes apart,
+        // with a byte of nothing between them, so one multiplication does both; the product of a byte and a number up to 256 is
+        // at most 0xFF00, which never reaches into the next field. The alpha bytes are left as they are.
+        const ulong RedBlue = 0x00FF00FF00FF00FF, Green = 0x0000FF000000FF00, Alpha = 0xFF000000FF000000;
+        var keep = 256 - (ulong)MathF.Round(Math.Min(opacity, 1f) * 256);
+        var count = (long)Width * Height;
+        var pixel = _pixels.Origin;
+        var pairs = pixel + (count & ~1L);
+        for (; pixel < pairs; pixel += 2)
+        {
+            var both = Unsafe.ReadUnaligned<ulong>(pixel);
+            var dimmed = (both & Alpha) | (((both & RedBlue) * keep >> 8) & RedBlue) | (((both & Green) * keep >> 8) & Green);
+            Unsafe.WriteUnaligned(pixel, dimmed);
+        }
+
+        if ((count & 1) != 0)
+        {
+            var value = *pixel;
+            *pixel = (value & 0xFF000000) | (uint)(((value & 0x00FF00FF) * keep >> 8) & 0x00FF00FF) | (uint)(((value & 0x0000FF00) * keep >> 8) & 0x0000FF00);
+        }
+    }
+
+    // Eight rows of samples in each row of pixels, each with the exact width of what lies inside: the edges of a star are smooth
+    // from the first corner on, and a pixel costs one pass over the edges per sample row, never one per sample.
+    private const int SampleRows = 8;
+
+    // A star has ten corners: a longer outline gets its working space from the heap, once per call.
+    private const int OnTheStack = 64;
+
+    // A shape wider than this on the bitmap gets its row of coverage from the heap, once per call.
+    private const int CoverOnTheStack = 512;
+
+    public void FillPolygon(ReadOnlySpan<(float X, float Y)> points, uint rgb)
+    {
+        var count = points.Length;
+        if (count < 3)
+        {
+            return;
+        }
+
+        Span<float> work = count <= OnTheStack ? stackalloc float[count * 3] : new float[count * 3];
+        Span<float> xs = work[..count], ys = work.Slice(count, count), crossings = work.Slice(2 * count, count);
+        float minX = float.MaxValue, minY = float.MaxValue, maxX = float.MinValue, maxY = float.MinValue;
+        for (var i = 0; i < count; i++)
+        {
+            xs[i] = points[i].X * _s;
+            ys[i] = (points[i].Y + _originY) * _s;
+            minX = MathF.Min(minX, xs[i]);
+            maxX = MathF.Max(maxX, xs[i]);
+            minY = MathF.Min(minY, ys[i]);
+            maxY = MathF.Max(maxY, ys[i]);
+        }
+
+        // Written so that a NaN corner ends in an empty range, not in a loop over the whole bitmap.
+        if (!(maxX > minX) || !(maxY > minY))
+        {
+            return;
+        }
+
+        // Clamped as floats first: a corner far off the bitmap must not overflow the conversion.
+        var left = (int)Math.Clamp(MathF.Floor(minX), 0f, Width);
+        var right = (int)Math.Clamp(MathF.Ceiling(maxX), 0f, Width);
+        var top = (int)Math.Clamp(MathF.Floor(minY), 0f, Height);
+        var bottom = (int)Math.Clamp(MathF.Ceiling(maxY), 0f, Height);
+        var width = right - left;
+        if (width <= 0 || top >= bottom)
+        {
+            return;
+        }
+
+        Span<float> cover = width <= CoverOnTheStack ? stackalloc float[width] : new float[width];
+        for (var y = top; y < bottom; y++)
+        {
+            cover.Clear();
+            for (var sample = 0; sample < SampleRows; sample++)
+            {
+                var at = y + (sample + 0.5f) / SampleRows;
+                var crossed = 0;
+                for (int i = 0, j = count - 1; i < count; j = i++)
+                {
+                    if (ys[i] > at != ys[j] > at)
+                    {
+                        crossings[crossed++] = xs[i] + (at - ys[i]) * (xs[j] - xs[i]) / (ys[j] - ys[i]);
+                    }
+                }
+
+                // The crossings are in pairs, once in and once out, but not in order: an insertion sort of a few numbers.
+                for (var i = 1; i < crossed; i++)
+                {
+                    var value = crossings[i];
+                    var k = i - 1;
+                    while (k >= 0 && crossings[k] > value)
+                    {
+                        crossings[k + 1] = crossings[k];
+                        k--;
+                    }
+
+                    crossings[k + 1] = value;
+                }
+
+                for (var i = 0; i + 1 < crossed; i += 2)
+                {
+                    AddSpan(cover, crossings[i] - left, crossings[i + 1] - left);
+                }
+            }
+
+            var row = _pixels.Row(y) + left;
+            for (var x = 0; x < width; x++)
+            {
+                Pixels.Blend(row + x, rgb, cover[x] / SampleRows);
+            }
+        }
+    }
+
+    /// <summary>Adds the part of each pixel that the span from <paramref name="from"/> to <paramref name="to"/> covers.</summary>
+    private static void AddSpan(Span<float> cover, float from, float to)
+    {
+        from = MathF.Max(from, 0f);
+        to = MathF.Min(to, cover.Length);
+        if (!(to > from))
+        {
+            return;
+        }
+
+        var first = (int)from;
+        var last = (int)to;
+        if (first == last)
+        {
+            cover[first] += to - from;
+            return;
+        }
+
+        cover[first] += first + 1 - from;
+        for (var x = first + 1; x < last; x++)
+        {
+            cover[x] += 1;
+        }
+
+        if (last < cover.Length)
+        {
+            cover[last] += to - last;
         }
     }
 

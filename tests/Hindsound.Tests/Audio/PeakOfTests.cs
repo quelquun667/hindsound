@@ -260,14 +260,16 @@ public class PeakOfBesideTheWriterTests
             {
                 var first = (ring.OldestPosition + Packet - 1) / Packet;
                 var peak = ring.PeakOf(first * Packet, PacketsRead * Packet, out var firstHeld);
-                if (firstHeld > first * Packet)
+
+                // A writer that gets ahead between the reading of the oldest position and the read leaves only the end of the
+                // range: its peak is that of the packets still held, or 0 if the writer also overtook the read itself.
+                if (firstHeld > first * Packet && peak == 0)
                 {
-                    Assert.Equal(0, peak);
                     continue;
                 }
 
                 var expected = 0;
-                for (var packet = first; packet < first + PacketsRead; packet++)
+                for (var packet = firstHeld / Packet; packet < first + PacketsRead; packet++)
                 {
                     expected = Math.Max(expected, SampleCodec.ToShort(Loudness(packet)));
                 }
@@ -280,6 +282,25 @@ public class PeakOfBesideTheWriterTests
             Volatile.Write(ref stop, true);
             writer.Join();
         }
+    }
+
+    // The case a busy machine makes of the test above, with no thread: the start of the range left before the read began.
+    [Fact]
+    public void A_range_partly_gone_before_the_read_gives_the_peak_of_what_is_held()
+    {
+        var ring = new RingBuffer(Capacity);
+        var samples = new float[Packet];
+        for (long packet = 0; packet < 3 * 64; packet++)
+        {
+            Array.Fill(samples, Loudness(packet));
+            ring.Write(samples);
+        }
+
+        var asked = ring.OldestPosition - Packet;
+        var peak = ring.PeakOf(asked, 2 * Packet, out var firstHeld);
+
+        Assert.Equal(ring.OldestPosition, firstHeld);
+        Assert.Equal(SampleCodec.ToShort(Loudness(firstHeld / Packet)), peak);
     }
 
     // Proved by logic and not by timing: with the writers' gate held, a writer cannot get through and a read still ends.

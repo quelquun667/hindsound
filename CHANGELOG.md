@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Stars: each clip of `Library` has one. Click it, or press F on the chosen clip, to make it a favorite.
+- Collections: under the list, tick the collections the chosen clip is in, such as a sound or a name. A clip can be in several. Those that don't fit on the line are behind `+N`.
+- A menu above the list shows `All clips`, `Favorites` or one collection. `Rename` and `Delete` appear next to it when it shows a collection.
+- `New collection...`, `Rename` and `Delete` open a small box. Esc closes it and nothing changes. Deleting a collection never deletes a clip.
+- Stars and collections are kept in `library.json`, next to `settings.json`. It is written only when you change something, and your clips are never moved or renamed.
+- A clip with a star or in a collection is always listed, even past the 2,000 most recent.
+- If the collections file can't be read or saved, a line in amber says so, and your clips stay listed. A damaged file can be started over.
+
+### Changed
+
+- `Library` shows six clips at a time, under the menu.
+- Uninstalling: the same answer that deletes your settings now deletes your collections too. A silent uninstall keeps both.
+
 ## [0.3.0] - 2026-11-09
 
 ### Added

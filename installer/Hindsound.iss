@@ -164,14 +164,15 @@ begin
 #ifdef TrialDeleteSettings
   Result := True;
 #else
-  // A silent uninstallation asks nothing and keeps the settings.
+  // A silent uninstallation asks nothing and keeps the settings and the collections.
   Result := (not UninstallSilent) and
-    (MsgBox('Also delete your Hindsound settings?' #13#10 'Your clips are kept either way.', mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES);
+    (MsgBox('Also delete your Hindsound settings and collections?' #13#10 'Your clips are kept either way.', mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES);
 #endif
 end;
 
 // By name, not the whole folder: the clips folder can be set to any folder, this one included, and the question says clips stay.
-// settings.json, its .bak copies and a .tmp left by a crash all start with this name. The folder goes only if nothing else is in it.
+// settings.json, its .bak copies and a .tmp left by a crash all start with this name, and so does library.json, which holds the
+// collections, with its own. The folder goes only if nothing else is in it.
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   Folder: String;
@@ -180,6 +181,7 @@ begin
   begin
     Folder := ExpandConstant('{#RoamingDataDir}');
     DelTree(Folder + '\settings.json*', False, True, False);
+    DelTree(Folder + '\library.json*', False, True, False);
     RemoveDir(Folder);
   end;
 end;

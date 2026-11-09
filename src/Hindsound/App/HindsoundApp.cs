@@ -27,6 +27,11 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     private const int ProbeNowMs = 2_400;
     private const int ProbeNowOpenings = 3;
     private const int ProbeLibraryLimitMs = 120_000;
+
+    // The canary of the log: a collection named so must never be read there, whatever happens to it.
+    private const string ProbeCanary = "Collection-Canary-7F3";
+    private const string StartedLine = "started, settings:";
+    private const string ProbeCollection = ProbeCanary, ProbeCollectionRenamed = ProbeCanary + " renamed";
     private const int StartupReadTries = 3;
     private const int StartupReadGapMs = 200;
     private const int SelfTestFailDelayMs = 1500;
@@ -150,7 +155,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     {
         UiErrors.Handler = ex => _journal.Write("error: " + ex);
         LoadSettings();
-        _journal.Write($"started, settings: {_store.Path} ({_store.LastStatus}), {Journal.Memory()}");
+        _journal.Write($"{StartedLine} {_store.Path} ({_store.LastStatus}), {Journal.Memory()}");
         if (_options.NoClipboard)
         {
             _journal.Write("clipboard: never touched in this run (--no-clipboard), whatever the settings say");
@@ -1304,6 +1309,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     /// <summary>Whether a window holds a Library page right now.</summary>
     internal bool HasLibrary => _library is not null;
 
+    /// <summary>For a test: the Library page of the window, as the screen has it.</summary>
+    internal WindowLibrary? LibraryPanel => _library;
+
     /// <summary>The window has gone, and its library with it.</summary>
     internal void LibraryWindowClosed()
     {
@@ -1708,9 +1716,89 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
                 Key(Vk.Enter);
             }
 
-            _loop.After(ProbeStepMs, done);
+            _loop.After(ProbeStepMs, Star);
         }
+
+        // The collections, on the index beside the probe's settings: a star by its key, then a collection made, ticked, renamed and
+        // deleted, and the star taken off. The name is the canary the log must never show.
+        void Star()
+        {
+            if (!window.Screen.TabTo(SettingsScreen.ClipListId))
+            {
+                Fail("the focus never came back to the list");
+                return;
+            }
+
+            Key(RowList.StarKey);
+            Wait(() => Indexed(index => index.Clips.Exists(clip => clip.Favorite)), Create, "the star never reached the index");
+        }
+
+        void Create()
+        {
+            _library?.CreateCollection(ProbeCollection);
+            Wait(() => CollectionId(ProbeCollection) is not null, Tick, "the collection was never made");
+        }
+
+        void Tick()
+        {
+            var id = CollectionId(ProbeCollection)!;
+            if (_library?.Lines?.Lines is not [var line, ..])
+            {
+                Fail("no line to tick");
+                return;
+            }
+
+            _library.SetIn(line, id, true);
+            Wait(() => Indexed(index => index.Clips.Exists(clip => clip.Collections.Contains(id))), RenameCollection, "the tick never reached the index");
+        }
+
+        void RenameCollection()
+        {
+            _library?.RenameCollection(CollectionId(ProbeCollection)!, ProbeCollectionRenamed);
+            Wait(() => CollectionId(ProbeCollectionRenamed) is not null, Delete, "the collection was never renamed");
+        }
+
+        void Delete()
+        {
+            _library?.DeleteCollection(CollectionId(ProbeCollectionRenamed)!);
+            Wait(() => Indexed(index => index.Collections.Count == 0 && !index.Clips.Exists(clip => clip.Collections.Count > 0)), Unstar, "the collection was never deleted");
+        }
+
+        void Unstar()
+        {
+            if (_library?.Lines?.Lines.FirstOrDefault(line => _library.LabelsOf(line).Favorite) is { } starred)
+            {
+                _library.SetFavorite(starred, false);
+            }
+
+            Wait(() => Indexed(index => !index.Clips.Exists(clip => clip.Favorite)), Collected, "the star was never taken off");
+        }
+
+        void Collected()
+        {
+            var told = File.Exists(_journal.Path) && LogNamesTheCanary(File.ReadAllLines(_journal.Path));
+            _journal.Write($"probe: Library, a star, a collection made, ticked, renamed and deleted, the star taken off, the name of the collection in the log {told}");
+            if (told)
+            {
+                Fail("the name of a collection reached the log");
+                return;
+            }
+
+            done();
+        }
+
+        bool Indexed(Predicate<LibraryData> found) => _library is { IsWorking: false, Index: { } index } && found(index);
+
+        string? CollectionId(string name) =>
+            _library is { IsWorking: false, Index: { } index } ? index.Collections.Find(collection => collection.Name == name)?.Id : null;
     }
+
+    /// <summary>
+    /// Whether a line of the log holds the canary. The line that prints the path of the settings is left out: that path is chosen by
+    /// whoever runs the probe, and may hold the canary itself.
+    /// </summary>
+    internal static bool LogNamesTheCanary(IEnumerable<string> lines) =>
+        lines.Any(line => !line.Contains(StartedLine, StringComparison.Ordinal) && line.Contains(ProbeCanary, StringComparison.OrdinalIgnoreCase));
 
     // Apart: a lambda written inside the probe would keep its window alive for as long as this is set, and spoil the measures after closing.
     private static Func<ClipScanRequest> OnlyFolder(string folder) => () => new ClipScanRequest { OutputFolder = folder, RescueFolder = folder };
