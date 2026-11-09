@@ -6,11 +6,17 @@ namespace Hindsound.Ui.Window;
 /// <summary>What the three labels of the wave's axis say.</summary>
 internal readonly record struct WaveAxis(string Left, string Middle, string Right);
 
-/// <summary>A change of source that shows in the window, and the column its line goes on.</summary>
-internal readonly record struct WaveMarker(int Column, string? App)
+/// <summary>
+/// A change of source that shows in the window, and the column its line goes on. A change that falls inside a bar, or past the last
+/// one, leaves that bar half old and half new: it is <paramref name="Mixed"/>, goes grey with the past, and the line stands on its right.
+/// </summary>
+internal readonly record struct WaveMarker(int Column, string? App, bool Mixed = false)
 {
     /// <summary>No line to draw.</summary>
     public static readonly WaveMarker None = new(-1, null);
+
+    /// <summary>The first bar that is wholly new: the one the line stands on the left of.</summary>
+    public int FirstNewColumn => Mixed ? Column + 1 : Column;
 
     public bool Shows => Column >= 0;
 }
@@ -148,15 +154,29 @@ internal static class WaveView
             return WaveMarker.None;
         }
 
-        var column = Math.Min(FirstColumnOf(change.Frame, facts, columns), columns - 1);
-        return column < 0 ? WaveMarker.None : new WaveMarker(column, change.App);
+        var slices = SlicesOnScreen(facts);
+        var slice = WaveLane.SliceOf(change.Frame);
+        var last = LastColumnOfSlice(slice, slices, columns);
+        var first = Math.Min(last, (slice * columns + slices - 1) / slices);
+        var right = LastColumnOfSlice(WaveLane.SliceOf(facts.End - 1), slices, columns);
+        var shift = columns - 1 - right;
+        if (first + shift > columns - 1)
+        {
+            // Nothing after the change yet: every bar is from before it.
+            return new WaveMarker(columns - 1, change.App, Mixed: true);
+        }
+
+        // A bar that starts on the frame of the change is wholly new. Any other holds the old source too, and goes left of the line.
+        var clean = first * slices / columns * WaveLane.FramesPerSlice == change.Frame;
+        var column = (int)(clean ? first : last) + (int)shift;
+        return column < 0 ? WaveMarker.None : new WaveMarker(Math.Min(column, columns - 1), change.App, Mixed: !clean);
     }
 
     /// <summary>The colour of a bar of the PC side. The microphone has no mixed past: pass no marker for it.</summary>
     public static WaveTone ToneOf(int column, int zoneFirstColumn, WaveMarker marker)
     {
         var saved = column >= zoneFirstColumn;
-        return marker.Shows && column < marker.Column
+        return marker.Shows && column < marker.FirstNewColumn
             ? saved ? WaveTone.GrayLight : WaveTone.GrayDark
             : saved ? WaveTone.Accent : WaveTone.AccentDim;
     }

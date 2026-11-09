@@ -125,7 +125,7 @@ internal sealed class NowWave
             change |= WaveChange.Lanes;
         }
 
-        if (marker.Column != _marker.Column || !ReferenceEquals(marker.App, _marker.App))
+        if (marker.Column != _marker.Column || marker.Mixed != _marker.Mixed || !ReferenceEquals(marker.App, _marker.App))
         {
             _marker = marker;
             change |= WaveChange.Lanes | WaveChange.Titles;
@@ -346,7 +346,7 @@ internal sealed class NowWave
 
         var s = (float)_scale;
         var grid = _systemGrid;
-        var x = (grid.X(_marker.Column) - (grid.Gap + 1) / 2) / s;
+        var x = (_marker.FirstNewColumn >= grid.Columns ? grid.End : grid.X(_marker.FirstNewColumn) - (grid.Gap + 1) / 2) / s;
         var titleRight = SettingsScreen.Left + c.Measure(_systemTitle, Face.Medium, 13) + 12;
         var width = c.Measure(text, Face.Body, 13);
         var top = x < titleRight ? SystemLane.Y : SystemTitleY - 1;
