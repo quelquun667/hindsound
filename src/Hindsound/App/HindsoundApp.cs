@@ -100,7 +100,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         _options = options;
         _journal = journal;
         _updaterMayRun = updaterMayRun;
-        _going = new WindowGoing(() => _leave.MayOpenSettings, () => _window?.Screen, () => _window?.BringBack(), CreateWindow, OpenLastClipFolder, _journal.Write);
+        _going = new WindowGoing(() => _leave.MayOpenSettings, () => _window?.Screen, () => _window?.BringBack(), target => (OpenInstead ?? CreateWindow)(target), OpenLastClipFolder, _journal.Write);
         _store = new SettingsStore(options.SettingsPath);
         _pending = new PendingNotices(journal.Write);
         _pretendGameUntilMs = options.SelfTestGameSeconds is { } game ? NowMs + (long)(game * 1000) : 0;
@@ -164,7 +164,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         }
 
         _loop = new UiLoop();
-        _notification = new Notification { Clicked = OnNotificationClicked, Finished = OnNotificationFinished };
+        _notification = new Notification { Clicked = () => NotificationClicked(_notification.Showing), Finished = OnNotificationFinished };
         _pipeline = new ClipPipeline(this, _loop.Post, _loop.After, ex => _journal.Write("clip error: " + ex))
         {
             SavingSlowly = OnSavingSlowly,
@@ -1069,7 +1069,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         }
     }
 
-    private void OnTrayMessage(uint code, nuint wParam)
+    internal void OnTrayMessage(uint code, nuint wParam)
     {
         switch (TrayMenu.GestureOf(code))
         {
@@ -1177,7 +1177,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         });
     }
 
-    private void OnNotificationClicked() => _going.Click(_notification.Showing);
+    internal void NotificationClicked(NotificationContent? showing) => _going.Click(showing);
 
     private void OpenLastClipFolder()
     {
@@ -1198,6 +1198,22 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
     private void OpenWindow(Section target) => _going.Open(target);
 
+    /// <summary>What a test puts in place of making a real window: it is told the page the gesture asked for.</summary>
+    internal Action<Section>? OpenInstead { get; set; }
+
+    /// <summary>The settings page the menu entry goes back to.</summary>
+    internal Section LastSettingsPage => _going.LastSettingsPage;
+
+    /// <summary>What the screen of a new window is given: the page it remembers, the updater, and the Now page with its wave.</summary>
+    internal void WireScreen(SettingsScreen screen)
+    {
+        screen.SettingsPageSeen = _going.SettingsPageSeen;
+
+        // Always: without an updater, the panel says this copy does not update itself.
+        screen.SetUpdates(this);
+        screen.SetNow(this);
+    }
+
     /// <summary>Only one at a time, and only while it is open: closing destroys it, and the memory goes back.</summary>
     /// <param name="target">The view to land on. <see cref="Section.FirstRun"/> opens the first-launch card.</param>
     private void CreateWindow(Section target)
@@ -1209,11 +1225,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         var window = new SettingsWindow(_settings, this, ReadMicPeak, firstRun, _options.Offscreen, screen, OnSettingsClosed);
         _window = window;
 
-        window.Screen.SettingsPageSeen = _going.SettingsPageSeen;
-
-        // Always: without an updater, the panel says this copy does not update itself.
-        window.Screen.SetUpdates(this);
-        window.Screen.SetNow(this);
+        WireScreen(window.Screen);
         window.Screen.ShowSection(target);
         if (_lastStatus is { } status)
         {
