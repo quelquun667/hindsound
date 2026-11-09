@@ -120,7 +120,7 @@ public sealed class SettingsStore
     {
         try
         {
-            var target = FreeBackupPath();
+            var target = AtomicFile.FreeBackupPath(Path);
             File.Copy(Path, target, overwrite: false);
             return target;
         }
@@ -138,48 +138,14 @@ public sealed class SettingsStore
     public void Save(AppSettings settings)
     {
         settings.Normalize();
-        var folder = System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(Path))!;
-        Directory.CreateDirectory(folder);
-
-        var temp = System.IO.Path.Combine(folder, System.IO.Path.GetFileName(Path) + "." + Guid.NewGuid().ToString("N") + ".tmp");
-        try
-        {
-            File.WriteAllText(temp, JsonSerializer.Serialize(settings, TypeInfo));
-            if (File.Exists(Path))
-            {
-                File.Replace(temp, Path, null);
-            }
-            else
-            {
-                File.Move(temp, Path);
-            }
-        }
-        finally
-        {
-            if (File.Exists(temp))
-            {
-                File.Delete(temp);
-            }
-        }
-    }
-
-    // Never overwrites an earlier .bak: settings.json.bak, then settings.json.1.bak, .2.bak, ...
-    private string FreeBackupPath()
-    {
-        var target = Path + ".bak";
-        for (var i = 1; File.Exists(target); i++)
-        {
-            target = $"{Path}.{i}.bak";
-        }
-
-        return target;
+        AtomicFile.Write(Path, JsonSerializer.Serialize(settings, TypeInfo));
     }
 
     private string? KeepBrokenFile()
     {
         try
         {
-            var target = FreeBackupPath();
+            var target = AtomicFile.FreeBackupPath(Path);
             File.Move(Path, target);
             return target;
         }

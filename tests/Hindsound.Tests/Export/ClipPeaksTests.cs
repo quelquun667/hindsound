@@ -20,6 +20,16 @@ public class ClipPeaksTests
         return new AudioSnapshot(system, []);
     }
 
+    [Theory]
+    [InlineData(float.NaN)]
+    [InlineData(-1f)]
+    [InlineData(0f)]
+    [InlineData(float.NegativeInfinity)]
+    public void ToBar_gives_an_empty_bar_for_a_peak_that_is_not_positive(float linear)
+    {
+        Assert.Equal(0f, ClipPeaks.ToBar(linear));
+    }
+
     [Fact]
     public void There_are_24_bars_and_they_follow_hand_computed_values()
     {

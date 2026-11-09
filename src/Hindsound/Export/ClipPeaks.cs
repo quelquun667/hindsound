@@ -72,7 +72,8 @@ public sealed record ClipPeaks(IReadOnlyList<float> Bars, bool IsSilent)
 
     private static double ToDb(float linear) => 20 * Math.Log10(linear);
 
-    private static float ToBar(float linear)
+    /// <summary>A linear peak on the bar scale, 0 to 1. The live wave uses it too, so a clip and its wave agree.</summary>
+    internal static float ToBar(float linear)
     {
         if (!(linear > 0f)) return 0f;
         var db = ToDb(linear);
