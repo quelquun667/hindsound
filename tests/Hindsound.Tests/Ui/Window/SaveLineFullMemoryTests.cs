@@ -31,6 +31,9 @@ public class SaveLineFullMemoryTests
     public void A_clip_shorter_than_the_memory_is_not_rounded_up()
     {
         Assert.Equal("Save: last 0:29 of 0:30", WaveView.SaveLine(30, Facts(300, 29.4)));
+
+        // One second under the memory is full for the band, but this clip is 0:29: it must not be said longer than itself.
+        Assert.Equal("Save: last 0:29", WaveView.SaveLine(29, Facts(30, 30)));
     }
 
     [Fact]
