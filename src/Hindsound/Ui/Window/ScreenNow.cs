@@ -58,13 +58,23 @@ internal sealed partial class SettingsScreen
     // Time goes on while a source delivers nothing, so this is the only state in which the picture can stay still for good.
     private bool TimeStandsStill => _status?.Activity is CaptureActivity.Paused or CaptureActivity.Stopped or CaptureActivity.NoDevice;
 
-    /// <summary>The window was minimized or came back. Nobody sees a minimized wave: the next tick after coming back catches up.</summary>
+    /// <summary>The window is minimized: nobody sees it, so it draws nothing until it comes back.</summary>
+    public bool Minimized => _minimized;
+
+    /// <summary>
+    /// The window was minimized or came back. Nobody sees a minimized wave: the next tick after coming back catches up. What was not
+    /// drawn meanwhile is drawn once on the way back, which this asks for as Windows may not.
+    /// </summary>
     public void WindowMinimized(bool minimized)
     {
         if (minimized != _minimized)
         {
             _minimized = minimized;
             _host.WaveWanted(WantsWave);
+            if (!minimized)
+            {
+                _host.Invalidate();
+            }
         }
     }
 
