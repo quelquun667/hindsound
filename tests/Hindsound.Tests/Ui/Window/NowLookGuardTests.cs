@@ -61,6 +61,22 @@ public class NowLookGuardTests
     }
 
     [Fact]
+    public void Losing_the_capture_with_nothing_kept_clears_the_line_though_no_second_moved()
+    {
+        // Nothing in memory, then the device goes: the seconds, the clip and the changes are all as they were, only the line must go.
+        var wave = new NowWave();
+        var facts = NowRig.Held(null, null, 0);
+        wave.Look(Scale, facts, 30, ScreenRig.Capturing());
+        Assert.Equal("Save: last 0:00 of 0:30", wave.SaveText);
+
+        var lost = ScreenRig.Capturing(false, CaptureActivity.NoDevice) with { SystemCapturing = false, Buffered = TimeSpan.Zero };
+        var change = wave.Look(Scale, facts, 30, lost);
+
+        Assert.Equal(string.Empty, wave.SaveText);
+        Assert.True((change & WaveChange.SaveLine) != 0);
+    }
+
+    [Fact]
     public void Another_app_at_the_same_second_changes_the_name_in_the_line()
     {
         var wave = new NowWave();
