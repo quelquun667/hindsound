@@ -1,4 +1,5 @@
 using Hindsound.Audio;
+using Hindsound.Export;
 
 namespace Hindsound.Ui.Window;
 
@@ -42,13 +43,30 @@ internal enum WaveTone
 /// </summary>
 internal static class WaveView
 {
+    /// <summary>The line of a microphone that was on and is no longer captured.</summary>
+    public const string MicLost = "Mic lost";
+
+    // The word of the Record list, so that the page says one thing.
+    private const string WholePc = "Whole PC";
+
     private const int Rate = InternalFormat.SampleRate;
 
+    // -50 dB, on both lanes: under it, a headset's own noise is not sound, and no bar is drawn at all.
+    private const double SilenceFloorPeak = 0.0031622776601683794;
+
     /// <summary>
-    /// The height of a bar from the level of its loudest slice, 0 to <see cref="WaveLane.FullLevel"/>: the one place to
-    /// change if loud music turns out to look like a solid block. The levels follow the dB scale of a clip's bars.
+    /// The height of a bar from a level, 0 to <see cref="WaveLane.FullLevel"/>: the one place to change if loud music turns out to look
+    /// like a solid block. The square root of the peak: it tells voices apart better than the dB scale of the levels (-12 dB is 50 %
+    /// here, 80 % there) and keeps a weak microphone in sight, which a straight line crushes (-30 dB is 18 %, not 3 %).
     /// </summary>
-    public static byte Height(byte level) => level;
+    public static byte Height(byte level)
+    {
+        var peak = ClipPeaks.PeakOfBar(level / (float)WaveLane.FullLevel);
+        return peak < SilenceFloorPeak ? (byte)0 : (byte)Math.Round(Math.Sqrt(peak) * WaveLane.FullLevel);
+    }
+
+    // The one place that says how the slices of a column make a bar: the loudest. Trying the mean is this line: (byte)(sum / count).
+    private static byte ColumnLevel(byte loudest, long sum, int count) => loudest;
 
     /// <summary>
     /// Fills one bar per column, the newest on the right: <see cref="Height"/>, or <see cref="WaveLane.Empty"/> where
@@ -85,19 +103,23 @@ internal static class WaveView
                 continue;
             }
 
-            var loudest = WaveLane.Empty;
+            var loudest = (byte)0;
+            var sum = 0L;
+            var count = 0;
             var first = column * slices / columns;
             var stop = Math.Max(first + 1, (column + 1) * slices / columns);
             for (var slice = first; slice < stop; slice++)
             {
                 var level = lane.LevelOf(slice);
-                if (level != WaveLane.Empty && (loudest == WaveLane.Empty || level > loudest))
+                if (level != WaveLane.Empty)
                 {
-                    loudest = level;
+                    loudest = Math.Max(loudest, level);
+                    sum += level;
+                    count++;
                 }
             }
 
-            bars[at] = loudest == WaveLane.Empty ? WaveLane.Empty : Height(loudest);
+            bars[at] = count == 0 ? WaveLane.Empty : Height(ColumnLevel(loudest, sum, count));
         }
     }
 
@@ -114,6 +136,10 @@ internal static class WaveView
 
         return Math.Max(0, FirstColumnOf(ZoneStart(clipSeconds, facts), facts, columns));
     }
+
+    /// <summary>The first column of what the memory holds. As many as there are columns when it holds nothing.</summary>
+    public static int HeldFrom(in WaveFacts facts, int columns) =>
+        facts.End <= facts.Start ? columns : Math.Max(0, FirstColumnOf(facts.Start, facts, columns));
 
     /// <summary>The line of the last change of source. It goes away once its frame leaves the window.</summary>
     public static WaveMarker MarkerOf(in WaveFacts facts, int columns)
@@ -146,35 +172,38 @@ internal static class WaveView
             activity == CaptureActivity.Paused ? "paused" : "now");
     }
 
-    /// <summary>The name of the PC side: the whole PC, or the one application asked for.</summary>
-    public static string SystemLaneTitle(AudioEngineStatus? status)
+    /// <summary>
+    /// The name of the PC side. "Whole PC" as long as the mixed past shows, even with an app chosen: the title of the app alone would
+    /// lie for as long as the memory lasts. The app alone once the line has left the wave. Not running comes first: the present wins.
+    /// </summary>
+    public static string SystemLaneTitle(AudioEngineStatus? status, WaveMarker marker)
     {
         if (status?.SourceApp is not { } exe)
         {
-            return "PC sound";
+            return WholePc;
         }
 
         var app = AppName(exe);
-        return status.SourceAppMissing ? app + " (not running)" : app;
+        return status.SourceAppMissing ? app + " (not running)" : marker.Shows ? WholePc : app;
     }
 
     /// <summary>
-    /// The name of the microphone's lane. Paused or stopped, no capture is open on purpose: that is not a lost microphone.
+    /// The name of the microphone's lane: a lost one is said here, in amber, with its past still under it. Turned off is said in the lane
+    /// itself (<see cref="MicLaneText"/>). Paused, stopped or with no device at all, no capture is open and that is not a lost microphone:
+    /// the band already says why.
     /// </summary>
     public static string MicLaneTitle(AudioEngineStatus? status)
     {
-        if (status is null)
+        if (status is null || !status.MicEnabled)
         {
             return "Mic";
         }
 
-        if (!status.MicEnabled)
-        {
-            return "Mic off";
-        }
-
-        return status.MicCapturing || status.Activity is CaptureActivity.Paused or CaptureActivity.Stopped ? "Mic" : "Mic lost";
+        return status.MicCapturing || status.Activity is CaptureActivity.Paused or CaptureActivity.Stopped or CaptureActivity.NoDevice ? "Mic" : MicLost;
     }
+
+    /// <summary>What the lane of the microphone says in its middle, with no base line, or null when it shows its bars.</summary>
+    public static string? MicLaneText(AudioEngineStatus? status) => status is { MicEnabled: false } ? "Mic off" : null;
 
     /// <summary>
     /// The line under the wave. The time counted from before a change of source is said out loud: the clip holds it,
@@ -217,7 +246,7 @@ internal static class WaveView
     }
 
     /// <summary>The words on the line of a change of source.</summary>
-    public static string MarkerText(string? app) => app is null ? "PC sound from here" : AppName(app) + " only from here";
+    public static string MarkerText(string? app) => app is null ? WholePc + " from here" : AppName(app) + " only from here";
 
     /// <summary>
     /// What to say when nothing can be captured, or null. The same two cases as the status band: with an application
@@ -233,7 +262,7 @@ internal static class WaveView
         return status.SourceApp is { } exe ? "Can't capture " + AppName(exe) : "No audio device";
     }
 
-    private static string SourceName(string? app) => app is null ? "PC sound" : AppName(app);
+    private static string SourceName(string? app) => app is null ? WholePc : AppName(app);
 
     private static string AppName(string exe) => Path.GetFileNameWithoutExtension(exe);
 

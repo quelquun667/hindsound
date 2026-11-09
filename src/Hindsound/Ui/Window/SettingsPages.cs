@@ -16,7 +16,7 @@ internal sealed partial class SettingsScreen
     public const string FirstRunUpdatesId = "run.updates";
     private const string CardPrefix = "card.";
 
-    private const float Left = 200, Right = 728, Width = Right - Left, RowHeight = 30, FieldWidth = 220;
+    internal const float Left = 200, Right = 728, Width = Right - Left, RowHeight = 30, FieldWidth = 220;
     private const string HexFieldId = "general.hex", TemplateFieldId = "export.template", ClipFieldId = "durations.custom", SwatchId = "general.accent";
 
     private readonly FieldState _clipField;

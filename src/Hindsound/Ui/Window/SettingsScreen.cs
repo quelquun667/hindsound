@@ -72,6 +72,17 @@ internal interface IWindowHost
     /// <summary>Starts or stops reading the microphone level.</summary>
     void MeterWanted(bool wanted);
 
+    /// <summary>Starts or stops the timer of the live wave.</summary>
+    void WaveWanted(bool wanted)
+    {
+    }
+
+    /// <summary>
+    /// This part of the bitmap has already been drawn again: put it on screen, with no full paint. The wave's way of showing what
+    /// changed; everything else goes through <see cref="Invalidate"/>.
+    /// </summary>
+    void InvalidateArea(Box area) => Invalidate();
+
     /// <summary>The system's folder picker. Null if the user backed out.</summary>
     string? PickFolder(string startFolder);
 
@@ -188,6 +199,7 @@ internal sealed partial class SettingsScreen
     public void UpdateStatus(AudioEngineStatus status)
     {
         _status = status;
+        WakeWave();
         if (!status.MicCapturing)
         {
             _meter.Reset();
@@ -274,6 +286,7 @@ internal sealed partial class SettingsScreen
         _popup = null;
         var leftCard = Section == Section.UpdateCard;
         Section = section;
+        WakeWave();
         _scroll = 0;
         if (NavRows.IsSettingsPage(section))
         {
@@ -379,6 +392,7 @@ internal sealed partial class SettingsScreen
     private void OnSettingChanged(SettingsChange change)
     {
         _backend.Applied(change);
+        WakeWave();
         Refresh();
     }
 
@@ -413,6 +427,7 @@ internal sealed partial class SettingsScreen
 
         SyncEdit();
         _host.MeterWanted(WantsMeter);
+        _host.WaveWanted(WantsWave);
         _host.Invalidate();
     }
 

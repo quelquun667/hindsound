@@ -439,10 +439,10 @@ public class WaveViewZoneTests
     [Fact]
     public void The_title_of_the_PC_side_says_what_is_captured()
     {
-        Assert.Equal("PC sound", WaveView.SystemLaneTitle(null));
-        Assert.Equal("PC sound", WaveView.SystemLaneTitle(Status()));
-        Assert.Equal("Discord", WaveView.SystemLaneTitle(Status(app: "Discord.exe")));
-        Assert.Equal("Discord (not running)", WaveView.SystemLaneTitle(Status(app: "Discord.exe", missing: true)));
+        Assert.Equal("Whole PC", WaveView.SystemLaneTitle(null, WaveMarker.None));
+        Assert.Equal("Whole PC", WaveView.SystemLaneTitle(Status(), WaveMarker.None));
+        Assert.Equal("Discord", WaveView.SystemLaneTitle(Status(app: "Discord.exe"), WaveMarker.None));
+        Assert.Equal("Discord (not running)", WaveView.SystemLaneTitle(Status(app: "Discord.exe", missing: true), WaveMarker.None));
     }
 
     [Fact]
@@ -490,7 +490,7 @@ public class WaveViewZoneTests
             "Save: last 0:30 (0:25 from before Discord)",
             WaveView.SaveLine(30, Facts(300, 300, 1000, new SourceChange(995 * Rate, "Discord.exe"))));
         Assert.Equal(
-            "Save: last 0:30 (0:25 from before PC sound)",
+            "Save: last 0:30 (0:25 from before Whole PC)",
             WaveView.SaveLine(30, Facts(300, 300, 1000, new SourceChange(995 * Rate, null))));
         Assert.Equal(
             "Save: last 0:12 of 0:30 (0:07 from before Discord)",
@@ -531,6 +531,6 @@ public class WaveViewZoneTests
     public void The_line_of_a_change_says_where_the_new_source_starts()
     {
         Assert.Equal("Discord only from here", WaveView.MarkerText("Discord.exe"));
-        Assert.Equal("PC sound from here", WaveView.MarkerText(null));
+        Assert.Equal("Whole PC from here", WaveView.MarkerText(null));
     }
 }

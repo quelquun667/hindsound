@@ -7,7 +7,7 @@ namespace Hindsound.Ui.Window;
 
 internal static unsafe partial class WindowNative
 {
-    public const uint WM_SETICON = 0x0080, WM_GETICON = 0x007F, WM_DESTROY = 0x0002, WM_SETFOCUS = 0x0007, WM_KILLFOCUS = 0x0008, WM_PAINT = 0x000F, WM_ERASEBKGND = 0x0014, WM_ACTIVATE = 0x0006,
+    public const uint WM_SETICON = 0x0080, WM_GETICON = 0x007F, WM_DESTROY = 0x0002, WM_SIZE = 0x0005, SIZE_MINIMIZED = 1, WM_SETFOCUS = 0x0007, WM_KILLFOCUS = 0x0008, WM_PAINT = 0x000F, WM_ERASEBKGND = 0x0014, WM_ACTIVATE = 0x0006,
         WM_SETFONT = 0x0030, WM_KEYDOWN = 0x0100, WM_KEYUP = 0x0101, WM_CHAR = 0x0102, WM_SYSKEYDOWN = 0x0104, WM_SYSKEYUP = 0x0105, WM_SYSCHAR = 0x0106,
         WM_COMMAND = 0x0111, WM_CTLCOLOREDIT = 0x0133, WM_MOUSEMOVE = 0x0200, WM_LBUTTONDOWN = 0x0201, WM_LBUTTONUP = 0x0202, WM_MOUSEWHEEL = 0x020A,
         WM_CAPTURECHANGED = 0x0215, WM_MOUSELEAVE = 0x02A3, WM_DPICHANGED = 0x02E0, EM_SETSEL = 0x00B1, EM_SETLIMITTEXT = 0x00C5, EN_CHANGE = 0x0300, TME_LEAVE = 0x0002;
@@ -74,6 +74,8 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
     private const uint Style = WindowNative.WS_OVERLAPPED | WindowNative.WS_CAPTION | WindowNative.WS_SYSMENU | WindowNative.WS_MINIMIZEBOX | WindowNative.WS_CLIPCHILDREN;
     private const nuint MeterTimer = 1;
     private const uint MeterIntervalMs = 100;
+    private const nuint WaveTimer = 2;
+    private const uint WaveIntervalMs = 100;
     private const nint EditId = 100;
 
     // A window gets its messages on the thread that made it: one on another thread must not take them from it.
@@ -97,6 +99,7 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
     private bool _settingEditText;
     private bool _trackingLeave;
     private bool _meterOn;
+    private bool _waveOn;
     private bool _editVisible;
     private readonly CaptureKeys _captureKeys = new();
     private bool _charForEdit;
@@ -346,6 +349,25 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
         }
     }
 
+    // The picture is in the bitmap already, so this is no full paint: WM_PAINT only copies this part of it to the screen.
+    public void InvalidateArea(Box area)
+    {
+        if (_hwnd == 0)
+        {
+            return;
+        }
+
+        var scale = Scale;
+        Native.RECT rect = new()
+        {
+            Left = (int)MathF.Floor(area.X * scale),
+            Top = (int)MathF.Floor(area.Y * scale),
+            Right = (int)MathF.Ceiling(area.Right * scale),
+            Bottom = (int)MathF.Ceiling(area.Bottom * scale),
+        };
+        WindowNative.InvalidateRect(_hwnd, &rect, 0);
+    }
+
     public void ShowEdit(Box box, string text, Face face, float size, bool resetText)
     {
         if (_edit == 0)
@@ -445,6 +467,24 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
         }
     }
 
+    public void WaveWanted(bool wanted)
+    {
+        if (wanted == _waveOn || _hwnd == 0)
+        {
+            return;
+        }
+
+        _waveOn = wanted;
+        if (wanted)
+        {
+            Native.SetTimer(_hwnd, WaveTimer, WaveIntervalMs, 0);
+        }
+        else
+        {
+            Native.KillTimer(_hwnd, WaveTimer);
+        }
+    }
+
     public string? PickFolder(string startFolder) => FolderPicker.Pick(_hwnd, "Choose the clips folder", startFolder);
 
     public void CloseWindow() => Close();
@@ -541,8 +581,16 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
                 {
                     Screen.MeterTick(_readMicPeak());
                 }
+                else if (wParam == WaveTimer)
+                {
+                    Screen.WaveTick();
+                }
 
                 return 0;
+
+            case WindowNative.WM_SIZE:
+                Screen.WindowMinimized(wParam == WindowNative.SIZE_MINIMIZED);
+                return Native.DefWindowProcW(hwnd, message, wParam, lParam);
 
             case WindowNative.WM_ACTIVATE:
                 if ((int)(wParam & 0xFFFF) == WindowNative.WA_INACTIVE)
@@ -696,6 +744,12 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
         {
             Native.KillTimer(_hwnd, MeterTimer);
             _meterOn = false;
+        }
+
+        if (_waveOn)
+        {
+            Native.KillTimer(_hwnd, WaveTimer);
+            _waveOn = false;
         }
 
         _canvas.Dispose();

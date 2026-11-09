@@ -60,6 +60,8 @@ internal sealed unsafe class GdiCanvas : ICanvas, IDisposable
 
     public void SetOrigin(float dy) => _originY = dy;
 
+    public double Scale => _s;
+
     private int X(float x) => (int)MathF.Round(x * _s);
 
     private int Y(float y) => (int)MathF.Round((y + _originY) * _s);

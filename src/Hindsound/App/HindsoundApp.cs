@@ -1308,6 +1308,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
     });
 
+    // Only ever looks at what the engine already holds: opening the window opens no audio.
+    WaveFacts INowPanel.WaveFacts => _engine?.WaveFacts ?? default;
+
     // The level comes from what the capture already holds. If the microphone is off this reads nothing and opens nothing.
     private float ReadMicPeak()
     {

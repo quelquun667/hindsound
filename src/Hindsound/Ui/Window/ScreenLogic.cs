@@ -149,6 +149,12 @@ internal static class StatusText
         var (mark, title) = Headline(status);
         var mic = !status.MicEnabled ? "mic off" : status.MicCapturing ? "mic on" : "mic not captured";
         var paused = status.Activity == CaptureActivity.Paused;
+        if (status.Activity == CaptureActivity.NoDevice)
+        {
+            // A state of error is never cut: with the figures beside it, the title became "No audio d...".
+            return new StatusBand(mark, title, string.Empty, string.Empty, string.Empty, "Pause", true, KeptDuration.CanSave(status.Buffered));
+        }
+
         return new StatusBand(
             mark,
             title,

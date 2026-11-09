@@ -59,6 +59,9 @@ internal readonly record struct Box(float X, float Y, float W, float H)
 /// <summary>What the widgets draw on. The real one is GDI over a bitmap; the tests measure text with a fake.</summary>
 internal interface ICanvas
 {
+    /// <summary>Physical pixels per design unit. What counts its own pixels, like a wave, starts from this.</summary>
+    double Scale => 1;
+
     /// <summary>Shifts everything drawn from now on: how the scrolled part of a page moves.</summary>
     void SetOrigin(float dy);
 

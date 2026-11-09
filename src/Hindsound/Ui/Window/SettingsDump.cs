@@ -138,6 +138,12 @@ internal static unsafe class SettingsDump
         }
     }
 
+    /// <summary>A memory that holds what the picture needs and never changes, with no engine and no capture behind it.</summary>
+    private sealed class SampleNow(Audio.WaveFacts facts) : INowPanel
+    {
+        public Audio.WaveFacts WaveFacts => facts;
+    }
+
     public static int Write(string folder, double scale)
     {
         Directory.CreateDirectory(folder);
@@ -320,6 +326,90 @@ internal static unsafe class SettingsDump
             s.SetLastClip(new LastClipInfo(clip.Duration, DateTime.Now, clip.SizeBytes) { Notice = NotificationStates.ForClip(clip, clip.Duration, true, false, Theme.Amber) });
         }, firstRun: true);
 
-        return FolderPicker.SelfCheck() ? 0 : 3;
-    }
+        // The Now page. The same names as its mock-ups, and made-up samples through real tracks and real lanes.
+        const int rate = Audio.InternalFormat.SampleRate, memory = NowSamples.MemoryFrames, slicesPerSecond = rate / Audio.WaveLane.FramesPerSlice;
+        var voice = NowSamples.Voice(NowSamples.Slices, 11);
+        var weakMic = NowSamples.WeakMic(NowSamples.Slices, 23);
+        var voiceTrack = NowSamples.Track(voice);
+        var micTrack = NowSamples.Track(weakMic);
+        var musicTrack = NowSamples.Track(NowSamples.LoudMusic(NowSamples.Slices, 37));
+        var justStartedVoice = NowSamples.Track(voice.AsSpan(voice.Length - 12 * slicesPerSecond));
+        var justStartedMic = NowSamples.Track(weakMic.AsSpan(weakMic.Length - 12 * slicesPerSecond));
+
+        // An app that closed, a mic that was lost: the track stops, and the window goes on without it.
+        var closedApp = NowSamples.Track(voice.AsSpan(0, voice.Length - 60 * slicesPerSecond));
+        var lostMic = NowSamples.Track(weakMic.AsSpan(0, weakMic.Length - 40 * slicesPerSecond));
+
+        static Audio.WaveFacts Memory(Audio.SourceTrack? system, Audio.SourceTrack? mic, int seconds = memory / rate, params Audio.SourceChange[] changes) =>
+            new(system, mic, 0, (long)seconds * rate, memory, changes);
+
+        static void Wave(SettingsScreen s, Audio.WaveFacts facts)
+        {
+            s.SetNow(new SampleNow(facts));
+            for (var i = 0; i < 12; i++)
+            {
+                s.WaveTick();
+            }
+        }
+
+        var starting = sampleStatus with { Buffered = TimeSpan.FromSeconds(12) };
+        Shot("now-demarrage", (s, _) =>
+        {
+            s.UpdateStatus(starting);
+            s.SetLastClip(null);
+            Wave(s, Memory(justStartedVoice, justStartedMic, 12));
+        });
+        Shot("now-plein", (s, _) => Wave(s, Memory(voiceTrack, micTrack)));
+        Shot("now-musique", (s, _) => Wave(s, Memory(musicTrack, micTrack)));
+        Shot("now-app", (s, _) =>
+        {
+            s.Editor.SetSourceApp("Discord.exe");
+            s.UpdateStatus(sampleStatus with { SystemDeviceName = "Discord.exe", OwnSoundsExcluded = false, SourceApp = "Discord.exe" });
+            Wave(s, Memory(voiceTrack, micTrack, changes: new Audio.SourceChange(memory - 5L * rate, "Discord.exe")));
+        });
+        Shot("now-retour-pc", (s, _) => Wave(s, Memory(voiceTrack, micTrack, changes: new Audio.SourceChange(memory - 270L * rate, null))));
+        Shot("now-micro-coupe", (s, _) =>
+        {
+            s.UpdateStatus(sampleStatus with { MicEnabled = false, MicCapturing = false });
+            Wave(s, Memory(voiceTrack, null));
+        });
+        Shot("now-micro-perdu", (s, _) =>
+        {
+            s.UpdateStatus(sampleStatus with { MicCapturing = false });
+            Wave(s, Memory(voiceTrack, lostMic));
+        });
+        Shot("now-pause", (s, _) =>
+        {
+            s.UpdateStatus(sampleStatus with { Activity = Audio.CaptureActivity.Paused });
+            Wave(s, Memory(voiceTrack, micTrack));
+        });
+        Shot("now-app-absente", (s, _) =>
+        {
+            s.Editor.SetSourceApp("Discord.exe");
+            s.UpdateStatus(sampleStatus with { SourceApp = "Discord.exe", SourceAppMissing = true, OwnSoundsExcluded = false });
+            Wave(s, Memory(closedApp, micTrack));
+        });
+        Shot("now-sans-peripherique", (s, _) =>
+        {
+            s.UpdateStatus(sampleStatus with { Activity = Audio.CaptureActivity.NoDevice, SystemCapturing = false, MicCapturing = false, Buffered = TimeSpan.Zero });
+            s.SetLastClip(null);
+            Wave(s, Memory(null, null, 0));
+        });
+        Shot("now-nom-long", (s, _) =>
+        {
+            s.SetChoices([new AudioDeviceChoice("out-1", "Speakers")], [new AudioDeviceChoice("mic-1", "Headset Microphone")], [new AudioAppChoice("SpaceTruckersOnline2.exe", "SpaceTruckersOnline2")]);
+            s.Editor.SetSourceApp("SpaceTruckersOnline2.exe");
+            s.UpdateStatus(starting with { OwnSoundsExcluded = false, SourceApp = "SpaceTruckersOnline2.exe" });
+            s.SetLastClip(null);
+            Wave(s, Memory(justStartedVoice, justStartedMic, 12, new Audio.SourceChange(7L * rate, "SpaceTruckersOnline2.exe")));
+        });
+        Shot("now-list", (s, _) =>
+        {
+            Wave(s, Memory(voiceTrack, micTrack));
+            s.Key(Vk.Tab, 0);
+            s.Key(Vk.Space, 0);
+            s.WaveTick();
+        }, focus: true);
+
+        return FolderPicker.SelfCheck() ? 0 : 3;    }
 }

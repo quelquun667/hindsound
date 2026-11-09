@@ -7,7 +7,10 @@ namespace Hindsound.Tests.Ui.Window;
 /// <summary>The side bar with the Now page: one stop for Tab, the caption out of the way, and where the window lands.</summary>
 public sealed class ScreenNowNavTests : IDisposable
 {
-    private sealed class FakeNow : INowPanel;
+    private sealed class FakeNow : INowPanel
+    {
+        public Hindsound.Audio.WaveFacts WaveFacts => default;
+    }
 
     private readonly ScreenRig _rig = new();
 
