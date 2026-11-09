@@ -194,6 +194,7 @@ internal static unsafe partial class Native
     [LibraryImport(U)] public static partial nint CreatePopupMenu();
     [LibraryImport(U, StringMarshalling = StringMarshalling.Utf16)]
     public static partial int AppendMenuW(nint menu, uint flags, nuint id, string? text);
+    [LibraryImport(U)] public static partial int SetMenuDefaultItem(nint menu, uint item, uint byPosition);
     [LibraryImport(U)] public static partial int TrackPopupMenuEx(nint menu, uint flags, int x, int y, nint owner, nint param);
     [LibraryImport(U)] public static partial int DestroyMenu(nint menu);
     [LibraryImport(U)] public static partial nint CreateIconIndirect(ICONINFO* info);

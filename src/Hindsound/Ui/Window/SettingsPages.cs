@@ -170,10 +170,11 @@ internal sealed partial class SettingsScreen
             c.FillRect(new Box(0, BandHeight, NavWidth, ViewBottom - BandHeight), Theme.Panel);
             c.FillRect(new Box(NavWidth - 1, BandHeight, 1, ViewBottom - BandHeight), Theme.Line);
         }));
-        Chrome(new NavList(SectionNames, () => (int)Section, i => ShowSection((Section)i))
+        var rows = Rows;
+        Chrome(new NavList(rows, () => rows.IndexOf(Section), i => ShowSection(rows.Rows[i].Section))
         {
             Id = NavId,
-            Bounds = new Box(12, BandHeight + 16, NavWidth - 25, 5 * 36 + 4 * 4),
+            Bounds = new Box(12, BandHeight + 16, NavWidth - 25, rows.Height),
         });
     }
 
@@ -238,6 +239,9 @@ internal sealed partial class SettingsScreen
                 break;
             case Section.UpdateCard:
                 BuildUpdateCard();
+                break;
+            case Section.Now:
+                BuildNow();
                 break;
             default:
                 BuildFirstRun();
@@ -962,7 +966,7 @@ internal sealed partial class SettingsScreen
         _firstRunStep = 0;
         _firstRunClipDone = false;
         _focusId = NavId;
-        Section = Section.Hotkeys;
+        Section = FirstSection;
         _scroll = 0;
         Refresh();
     }

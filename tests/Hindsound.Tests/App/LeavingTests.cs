@@ -118,7 +118,7 @@ public class TrayMenuTests
         var items = TrayMenu.Items(paused: true, hasLastClip: false, closingAfterClip: false);
 
         Assert.Equal(
-            [TrayCommand.Save30s, TrayCommand.Save15s, TrayCommand.Save1m, TrayCommand.Save5m, TrayCommand.None, TrayCommand.CopyLast, TrayCommand.TogglePause, TrayCommand.OpenFolder, TrayCommand.Settings, TrayCommand.None, TrayCommand.Quit],
+            [TrayCommand.OpenHindsound, TrayCommand.Save30s, TrayCommand.Save15s, TrayCommand.Save1m, TrayCommand.Save5m, TrayCommand.None, TrayCommand.CopyLast, TrayCommand.TogglePause, TrayCommand.OpenFolder, TrayCommand.Settings, TrayCommand.None, TrayCommand.Quit],
             items.Select(item => item.Command));
         Assert.False(items.Single(item => item.Command == TrayCommand.CopyLast).Enabled);
         Assert.Equal("Resume capture", items.Single(item => item.Command == TrayCommand.TogglePause).Text);

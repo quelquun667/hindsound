@@ -12,7 +12,7 @@ namespace Hindsound.App;
 /// The wiring: the message loop, the tray icon, the shortcuts, the engine and the clip path. Everything here runs on the
 /// thread of the message loop, unless it says otherwise, and every other thread comes back through <see cref="UiLoop.Post"/>.
 /// </summary>
-internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost, IUpdatesPanel
+internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost, IUpdatesPanel, INowPanel
 {
     private const int SelfTestConfirmUpdateMs = 500;
     private const int SelfTestUpdateCheckMs = 3000;
@@ -53,6 +53,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     private bool _startTouchesRunKey;
     private AudioEngineOptions? _engineOptions;
     private SettingsWindow? _window;
+    private Section _lastSettingsPage = Section.Hotkeys;
     private bool _firstRun;
     private IReadOnlyList<HotkeyResult> _hotkeyResults = [];
     private AudioEngineStatus? _lastStatus;
@@ -237,7 +238,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
                 throw new InvalidOperationException("--selftest-fail " + AppOptions.FailCard);
             }
 
-            OpenSettings(firstRun: true);
+            Go(WindowGesture.FirstRunCard);
         }
         catch (Exception ex)
         {
@@ -1074,7 +1075,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
                 break;
             case TrayGesture.OpenSettings:
                 ReloadSettingsIfChanged();
-                OpenSettings(firstRun: false);
+                Go(WindowGesture.OpenApp);
                 break;
         }
     }
@@ -1110,16 +1111,18 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
             case TrayCommand.OpenFolder:
                 OpenClipsFolder();
                 break;
+            case TrayCommand.OpenHindsound:
+                Go(WindowGesture.OpenApp);
+                break;
             case TrayCommand.Settings:
-                OpenSettings(firstRun: false);
+                Go(WindowGesture.SettingsMenu);
                 break;
             case TrayCommand.Quit:
                 _quitChosen |= UpdateExit.ChoosesQuit(command);
                 AskToLeave(click.Screen);
                 break;
             case TrayCommand.UpdateNow:
-                OpenSettings(firstRun: false);
-                _window?.Screen.ShowUpdateCard();
+                Go(WindowGesture.UpdateMenu);
 
                 // Nothing can click the card from outside: the test flow confirms it by itself, as the user would.
                 if (_options.Offscreen && _updateWhy == UpdateWiring.TestFolder)
@@ -1171,23 +1174,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         });
     }
 
-    private void OnNotificationClicked()
-    {
-        // Before the settings: a failed update is a Problem, which opens the settings too, but at its own section.
-        if (_notification.Showing is { ClickShowsUpdates: true })
-        {
-            OpenSettings(firstRun: false);
-            _window?.Screen.ShowUpdates();
-        }
-        else if (_notification.Showing is { ClickOpensSettings: true })
-        {
-            OpenSettings(firstRun: false);
-        }
-        else
-        {
-            OpenLastClipFolder();
-        }
-    }
+    private void OnNotificationClicked() => Go(WindowRoutes.ClickOn(_notification.Showing));
 
     private void OpenLastClipFolder()
     {
@@ -1202,10 +1189,31 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         }
     }
 
-    // ---------------------------------------------------------------- the settings window
+    // ---------------------------------------------------------------- the window
+
+    private void Go(WindowGesture gesture)
+    {
+        var route = WindowRoutes.Of(gesture, _window?.Screen.Section, _lastSettingsPage);
+        if (route.Action == WindowAction.OpenClipFolder)
+        {
+            OpenLastClipFolder();
+            return;
+        }
+
+        OpenWindow(route.Section ?? Section.Now);
+        if (route.Action == WindowAction.ShowUpdates)
+        {
+            _window?.Screen.ShowUpdates();
+        }
+        else if (route.Action == WindowAction.ShowUpdateCard)
+        {
+            _window?.Screen.ShowUpdateCard();
+        }
+    }
 
     /// <summary>Only one at a time, and only while it is open: closing destroys it, and the memory goes back.</summary>
-    private void OpenSettings(bool firstRun)
+    /// <param name="target">The view to land on. <see cref="Section.FirstRun"/> opens the first-launch card.</param>
+    private void OpenWindow(Section target)
     {
         if (!_leave.MayOpenSettings)
         {
@@ -1215,16 +1223,23 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         if (_window is { } open)
         {
             open.BringBack();
+            open.Screen.ShowSection(target);
             return;
         }
+
+        var firstRun = target == Section.FirstRun;
 
         // The screen the user is looking at, whatever the active window is: a game on the first one, a click on the second.
         var screen = ForegroundWindow.CursorScreen();
         var window = new SettingsWindow(_settings, this, ReadMicPeak, firstRun, _options.Offscreen, screen, OnSettingsClosed);
         _window = window;
 
+        window.Screen.SettingsPageSeen = page => _lastSettingsPage = page;
+
         // Always: without an updater, the panel says this copy does not update itself.
         window.Screen.SetUpdates(this);
+        window.Screen.SetNow(this);
+        window.Screen.ShowSection(target);
         if (_lastStatus is { } status)
         {
             window.Screen.UpdateStatus(status);
@@ -1243,7 +1258,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
             ReloadSettingsIfChanged();
             LoadChoices();
         };
-        _journal.Write($"settings window opened, first launch {firstRun}, on the screen of the cursor {screen.Monitor.Left},{screen.Monitor.Top},{screen.Monitor.Right},{screen.Monitor.Bottom}{(_options.Offscreen ? " (drawn off screen instead)" : string.Empty)}, {Journal.Memory()}");
+        _journal.Write($"settings window opened on {target}, first launch {firstRun}, on the screen of the cursor {screen.Monitor.Left},{screen.Monitor.Top},{screen.Monitor.Right},{screen.Monitor.Bottom}{(_options.Offscreen ? " (drawn off screen instead)" : string.Empty)}, {Journal.Memory()}");
         if (_options.Offscreen && firstRun)
         {
             _loop.After(ProbeStepMs, () => _window?.ProbePicture(Path.ChangeExtension(_journal.Path, ".firstrun.png")));
@@ -1255,7 +1270,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     {
         _journal.Write("a second launch asks to see the app");
         ReloadSettingsIfChanged();
-        OpenSettings(firstRun: false);
+        Go(WindowGesture.OpenApp);
     }
 
     // Listing devices touches audio objects, which belong off the loop's thread. It opens nothing: no microphone starts.
@@ -1364,7 +1379,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         var gdi = WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0);
         var user = WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1);
         _journal.Write($"probe: before opening, {Journal.Memory()}, GDI objects {gdi}, USER objects {user}");
-        OpenSettings(firstRun: false);
+
+        // The steps below walk the settings from their first page.
+        OpenWindow(Section.Hotkeys);
         var window = _window!;
         var hwnd = window.Hwnd;
         var seen = new List<string>();
@@ -1432,7 +1449,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
                 }
                 else if (cycles++ < 3)
                 {
-                    OpenSettings(firstRun: false);
+                    OpenWindow(Section.Now);
                     _loop.After(ProbeStepMs, Cycle);
                 }
                 else

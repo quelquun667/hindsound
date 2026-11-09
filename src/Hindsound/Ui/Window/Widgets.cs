@@ -642,9 +642,9 @@ internal sealed class HotkeyField(HotkeyAction action, Func<HotkeyFieldView> vie
 }
 
 /// <summary>The sections of the side bar. One stop for Tab; the arrows change the section.</summary>
-internal sealed class NavList(IReadOnlyList<string> labels, Func<int> selected, Action<int> pick) : Widget
+internal sealed class NavList(NavRows rows, Func<int> selected, Action<int> pick) : Widget
 {
-    private const float ItemHeight = 36, Gap = 4;
+    private const float ItemHeight = NavRows.ItemHeight;
 
     public override bool CanFocus => true;
 
@@ -654,9 +654,9 @@ internal sealed class NavList(IReadOnlyList<string> labels, Func<int> selected, 
         var next = vk switch
         {
             Vk.Up or Vk.Left => Math.Max(0, current - 1),
-            Vk.Down or Vk.Right => Math.Min(labels.Count - 1, current + 1),
+            Vk.Down or Vk.Right => Math.Min(rows.Rows.Count - 1, current + 1),
             Vk.Home => 0,
-            Vk.End => labels.Count - 1,
+            Vk.End => rows.Rows.Count - 1,
             _ => -1,
         };
         if (next < 0)
@@ -672,15 +672,9 @@ internal sealed class NavList(IReadOnlyList<string> labels, Func<int> selected, 
         return true;
     }
 
-    private int IndexAt(float y)
-    {
-        var index = (int)((y - Bounds.Y) / (ItemHeight + Gap));
-        return index >= 0 && index < labels.Count && y - Bounds.Y - index * (ItemHeight + Gap) < ItemHeight ? index : -1;
-    }
-
     public override void OnPress(float x, float y)
     {
-        var index = IndexAt(y);
+        var index = rows.IndexAt(y - Bounds.Y);
         if (index >= 0)
         {
             pick(index);
@@ -690,10 +684,15 @@ internal sealed class NavList(IReadOnlyList<string> labels, Func<int> selected, 
     public override void Paint(ICanvas c, UiState ui)
     {
         var chosen = selected();
-        var hover = ui.Hovered(this) ? IndexAt(ui.MouseY) : -1;
-        for (var i = 0; i < labels.Count; i++)
+        var hover = ui.Hovered(this) ? rows.IndexAt(ui.MouseY - Bounds.Y) : -1;
+        if (rows.CaptionMidY is { } captionMid)
         {
-            var item = new Box(Bounds.X, Bounds.Y + i * (ItemHeight + Gap), Bounds.W, ItemHeight);
+            c.TextMid(NavRows.Caption, Face.Medium, 12, Bounds.X + 14, Bounds.Y + captionMid, Theme.Faded);
+        }
+
+        for (var i = 0; i < rows.Rows.Count; i++)
+        {
+            var item = new Box(Bounds.X, Bounds.Y + rows.TopOf(i), Bounds.W, ItemHeight);
             var on = i == chosen;
             if (on)
             {
@@ -705,7 +704,7 @@ internal sealed class NavList(IReadOnlyList<string> labels, Func<int> selected, 
                 c.FillRound(item, 4, Theme.Raised);
             }
 
-            c.TextMid(labels[i], Face.Medium, 14, item.X + 14, item.MidY, on || i == hover ? Theme.Text : Theme.Muted);
+            c.TextMid(rows.Rows[i].Label, Face.Medium, 14, item.X + 14, item.MidY, on || i == hover ? Theme.Text : Theme.Muted);
             if (on && ui.Focused(this))
             {
                 ui.FocusOutline(c, item, 4);

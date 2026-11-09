@@ -16,6 +16,9 @@ internal enum Section
 
     /// <summary>Confirms an update. Not in the side bar: it opens from the Updates section, the tray menu or a notification.</summary>
     UpdateCard,
+
+    /// <summary>What the memory holds, as it comes in. First in the side bar: the order of the lines is in <see cref="NavRows"/>, not here.</summary>
+    Now,
 }
 
 /// <summary>What the screen asks of the app. The real one is <see cref="App.HindsoundApp"/>.</summary>
@@ -86,8 +89,6 @@ internal sealed partial class SettingsScreen
     private const float ScrollStep = 48;
     private const string NavId = "nav";
 
-    private static readonly string[] SectionNames = ["Hotkeys", "Durations", "Audio", "Export", "General"];
-
     private readonly ISettingsBackend _backend;
     private readonly IWindowHost _host;
     private readonly HotkeyCapture _capture = new();
@@ -141,6 +142,9 @@ internal sealed partial class SettingsScreen
     public SettingsEditor Editor { get; }
 
     public Section Section { get; private set; }
+
+    /// <summary>A page of the settings came on screen. The app keeps it: this screen is gone when the window closes, and the menu of the icon leads back to that page.</summary>
+    public Action<Section>? SettingsPageSeen { get; set; }
 
     /// <summary>Off for the picture of a page at rest.</summary>
     public bool ShowFocus { get; set; } = true;
@@ -268,6 +272,11 @@ internal sealed partial class SettingsScreen
         var leftCard = Section == Section.UpdateCard;
         Section = section;
         _scroll = 0;
+        if (NavRows.IsSettingsPage(section))
+        {
+            SettingsPageSeen?.Invoke(section);
+        }
+
         if (_focusId is not null && _focusId != NavId && !_focusId.StartsWith("band.", StringComparison.Ordinal) && !_focusId.StartsWith("foot.", StringComparison.Ordinal))
         {
             _focusId = NavId;

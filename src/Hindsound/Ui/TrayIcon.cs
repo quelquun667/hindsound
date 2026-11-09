@@ -29,6 +29,7 @@ internal enum TrayCommand : uint
 
     // Last, so the numbers above never move: the --offscreen tests post them.
     UpdateNow,
+    OpenHindsound,
 }
 
 /// <summary>One line of the tray menu. <see cref="TrayCommand.None"/> is a separator.</summary>
@@ -39,6 +40,8 @@ internal enum TrayGesture
 {
     None,
     Menu,
+
+    /// <summary>Opens the app, on the Now page.</summary>
     OpenSettings,
 }
 
@@ -95,6 +98,7 @@ internal static class TrayMenu
 
         List<TrayMenuItem> items =
         [
+            new(TrayCommand.OpenHindsound, "Open Hindsound"),
             SaveItem(TrayCommand.Save30s, "Save up to 30s", 30, buffered),
             SaveItem(TrayCommand.Save15s, "Save up to 15s", 15, buffered),
             SaveItem(TrayCommand.Save1m, "Save up to 1 min", 60, buffered),
@@ -115,6 +119,10 @@ internal static class TrayMenu
         items.Add(new(TrayCommand.Quit, "Quit"));
         return items;
     }
+
+    /// <summary>The line in bold, the same gesture as a left click on the icon. None when the menu does not offer it.</summary>
+    public static TrayCommand DefaultOf(IReadOnlyList<TrayMenuItem> items) =>
+        items.Any(item => item.Command == TrayCommand.OpenHindsound) ? TrayCommand.OpenHindsound : TrayCommand.None;
 
     // The menu is read in one look, just before the clip: an entry says when it would come out shorter than its words.
     /// <summary><see cref="Items"/> from the last status of the engine: whether it is paused and what the memory holds are read from it, every time the menu opens.</summary>
@@ -382,6 +390,12 @@ internal sealed unsafe class TrayIcon : IDisposable
             {
                 Native.AppendMenuW(menu, item.Enabled ? Native.MF_STRING : Native.MF_GRAYED, (nuint)item.Command, item.Text);
             }
+        }
+
+        var bold = TrayMenu.DefaultOf(items);
+        if (bold != TrayCommand.None)
+        {
+            Native.SetMenuDefaultItem(menu, (uint)bold, 0);
         }
 
         // Without being the foreground window, the menu would not close on an outside click.

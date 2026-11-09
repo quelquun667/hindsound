@@ -164,13 +164,16 @@ Good to know:
   could throw it out of fullscreen. The notification shows when you are back on the desktop, within 30 seconds for a normal
   clip, and at any time for a clip that had a problem. A borderless game gets the notification right away, unless you set
   `In fullscreen games` to `Sound only`.
-- **A click on the notification,** on the desktop, opens the folder of your last clip, or the settings if it reports a problem
-  there.
-- **The icon:** a left click opens the settings. A right click opens the menu: `Save up to 30s`, `Save up to 15s`,
-  `Save up to 1 min`, `Save up to 5 min`, `Copy last clip`, `Pause capture`, `Open clips folder`, `Settings`, `Quit`. An entry
-  longer than what is kept says so, such as `Save up to 5 min (only 0:12)`, and they are all grey with less than a second kept.
-  While a new version is ready (with `Ask me`, also when one is available), the menu adds `Update to X...`.
-- **Starting Hindsound again** while it runs opens the settings of the one already running.
+- **A click on the notification,** on the desktop, depends on what it says. About a clip: the folder of your last clip. About
+  the capture, such as `Capture on` or `Microphone lost`: the `Now` page. `Capture on` with `Save hotkey is taken`: Settings >
+  Hotkeys. A problem with the settings file: the settings. A new version: Settings > General > Updates.
+- **The icon:** a left click opens the window on the `Now` page, or brings it up as it is if it is already open. A right click
+  opens the menu: `Open Hindsound`, `Save up to 30s`, `Save up to 15s`, `Save up to 1 min`, `Save up to 5 min`, `Copy last clip`,
+  `Pause capture`, `Open clips folder`, `Settings`, `Quit`. `Settings` goes to the last page of the settings you looked at,
+  `Hotkeys` at first. A save entry longer than what is kept says so, such as `Save up to 5 min (only 0:12)`, and they are all grey
+  with less than a second kept. While a new version is ready (with `Ask me`, also when one is available), the menu adds
+  `Update to X...`.
+- **Starting Hindsound again** while it runs does the same as a left click on the icon.
 - **Quitting during a save:** Hindsound finishes the clip first, for 5 minutes at most. A second `Quit` leaves at once.
 
 ### Hotkeys
@@ -188,7 +191,7 @@ You can change them all in Settings > Hotkeys. If another app already holds a co
 
 ## Settings
 
-A left click on the icon opens them. There is no OK button: a change is saved at once, in `%AppData%\Hindsound\settings.json`.
+They are in the left column of the window, under `Settings`, or through `Settings` in the menu of the icon. There is no OK button: a change is saved at once, in `%AppData%\Hindsound\settings.json`.
 
 | Page | Setting | Choices (default in bold) |
 | --- | --- | --- |
@@ -280,7 +283,7 @@ This is not a promise about any anti-cheat: it has not been tried against one, a
 | What you see | What it means |
 | --- | --- |
 | `Hotkey already in use by another app`, in Settings > Hotkeys | Another program holds this combination. Press another one. |
-| `Capture on`, with `Save hotkey is taken` | Your save hotkey does nothing for now. A click on the notification opens the settings, where you can change it. |
+| `Capture on`, with `Save hotkey is taken` | Your save hotkey does nothing for now. A click on the notification opens Settings > Hotkeys, where you can change it. |
 | `Output folder not writable`, `Clip kept in Hindsound\Rescued` | Your clip is safe in `%LOCALAPPDATA%\Hindsound\Rescued`. Pick another folder in Settings > Export. |
 | `Saved as WAV. Paste` or `Saved as WAV. MP3 failed.` | The MP3 encoder failed. Your clip is there as a WAV file. |
 | `It's silent. Check Settings > Audio.` | The clip was saved but holds no sound. Check `Record`, `Output` and `Microphone`. |
