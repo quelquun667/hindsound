@@ -647,6 +647,15 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
     {
         WindowNative.PAINTSTRUCT paint;
         var dc = WindowNative.BeginPaint(hwnd, &paint);
+
+        // Windows still sends the message after an InvalidateRect: drawing the page for nobody costs a full paint at each news. The
+        // page stays dirty, and the way back from minimized asks for the paint.
+        if (Screen.Minimized)
+        {
+            WindowNative.EndPaint(hwnd, &paint);
+            return;
+        }
+
         if (_dirty)
         {
             _dirty = false;

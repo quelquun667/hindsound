@@ -95,6 +95,9 @@ internal sealed class NowWave
         _followed = true;
     }
 
+    /// <summary>The page is coming back after an absence, during which nothing was read: its next full paint reads first.</summary>
+    public void ReadAgain() => _followed = false;
+
     /// <summary>Works out the picture and says what changed. Draws nothing, and allocates nothing unless the words change.</summary>
     public WaveChange Look(double scale, in WaveFacts facts, int clipSeconds, AudioEngineStatus? status)
     {
@@ -125,7 +128,7 @@ internal sealed class NowWave
             change |= WaveChange.Lanes;
         }
 
-        if (marker.Column != _marker.Column || !ReferenceEquals(marker.App, _marker.App))
+        if (marker.Column != _marker.Column || marker.Mixed != _marker.Mixed || !ReferenceEquals(marker.App, _marker.App))
         {
             _marker = marker;
             change |= WaveChange.Lanes | WaveChange.Titles;
@@ -221,7 +224,7 @@ internal sealed class NowWave
         if (titles)
         {
             c.TextMid(_systemTitle, Face.Medium, 13, SettingsScreen.Left, SystemTitleY, Theme.Muted);
-            var micTitle = WaveView.MicLaneTitle(status);
+            var micTitle = WaveView.MicLaneTitle(status, _micLane.HasTrack);
             c.TextMid(micTitle, Face.Medium, 13, SettingsScreen.Left, MicTitleY, micTitle == WaveView.MicLost ? Theme.Amber : Theme.Muted);
         }
 
@@ -229,7 +232,7 @@ internal sealed class NowWave
         PaintLane(c, SystemLane, _systemGrid, _systemBars, _systemLane.HasTrack, _marker, look, systemWords, fills: true);
         PaintMarker(c, titles);
 
-        PaintLane(c, MicLane, _micGrid, _micBars, _micLane.HasTrack, WaveMarker.None, look, WaveView.MicLaneText(status), fills: false);
+        PaintLane(c, MicLane, _micGrid, _micBars, _micLane.HasTrack, WaveMarker.None, look, WaveView.MicLaneText(status, _micLane.HasTrack), fills: false);
         PaintZoneLine(c, accent, frozen);
     }
 
@@ -346,7 +349,7 @@ internal sealed class NowWave
 
         var s = (float)_scale;
         var grid = _systemGrid;
-        var x = (grid.X(_marker.Column) - (grid.Gap + 1) / 2) / s;
+        var x = (_marker.FirstNewColumn >= grid.Columns ? grid.End : grid.X(_marker.FirstNewColumn) - (grid.Gap + 1) / 2) / s;
         var titleRight = SettingsScreen.Left + c.Measure(_systemTitle, Face.Medium, 13) + 12;
         var width = c.Measure(text, Face.Body, 13);
         var top = x < titleRight ? SystemLane.Y : SystemTitleY - 1;

@@ -23,6 +23,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     private const int ProbeStepMs = 300;
     private const string ProbeTextField = "export.template";
     private const int ProbeAfterCloseMs = 10_000;
+    private const int ProbeNowMs = 2_400;
+    private const int ProbeNowOpenings = 3;
     private const int StartupReadTries = 3;
     private const int StartupReadGapMs = 200;
     private const int SelfTestFailDelayMs = 1500;
@@ -53,7 +55,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     private bool _startTouchesRunKey;
     private AudioEngineOptions? _engineOptions;
     private SettingsWindow? _window;
-    private Section _lastSettingsPage = Section.Hotkeys;
+    private readonly WindowGoing _going;
     private bool _firstRun;
     private IReadOnlyList<HotkeyResult> _hotkeyResults = [];
     private AudioEngineStatus? _lastStatus;
@@ -98,6 +100,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         _options = options;
         _journal = journal;
         _updaterMayRun = updaterMayRun;
+        _going = new WindowGoing(() => _leave.MayOpenSettings, () => _window?.Screen, () => _window?.BringBack(), target => (OpenInstead ?? CreateWindow)(target), OpenLastClipFolder, _journal.Write);
         _store = new SettingsStore(options.SettingsPath);
         _pending = new PendingNotices(journal.Write);
         _pretendGameUntilMs = options.SelfTestGameSeconds is { } game ? NowMs + (long)(game * 1000) : 0;
@@ -161,7 +164,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         }
 
         _loop = new UiLoop();
-        _notification = new Notification { Clicked = OnNotificationClicked, Finished = OnNotificationFinished };
+        _notification = new Notification { Clicked = () => NotificationClicked(_notification.Showing), Finished = OnNotificationFinished };
         _pipeline = new ClipPipeline(this, _loop.Post, _loop.After, ex => _journal.Write("clip error: " + ex))
         {
             SavingSlowly = OnSavingSlowly,
@@ -1066,7 +1069,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         }
     }
 
-    private void OnTrayMessage(uint code, nuint wParam)
+    internal void OnTrayMessage(uint code, nuint wParam)
     {
         switch (TrayMenu.GestureOf(code))
         {
@@ -1174,7 +1177,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         });
     }
 
-    private void OnNotificationClicked() => Go(WindowRoutes.ClickOn(_notification.Showing));
+    internal void NotificationClicked(NotificationContent? showing) => _going.Click(showing);
 
     private void OpenLastClipFolder()
     {
@@ -1191,43 +1194,30 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
     // ---------------------------------------------------------------- the window
 
-    private void Go(WindowGesture gesture)
-    {
-        var route = WindowRoutes.Of(gesture, _window?.Screen.Section, _lastSettingsPage);
-        _journal.Write($"window gesture {gesture}: {route.Action} {route.Section}, the window was on {_window?.Screen.Section.ToString() ?? "nothing"}");
-        if (route.Action == WindowAction.OpenClipFolder)
-        {
-            OpenLastClipFolder();
-            return;
-        }
+    private void Go(WindowGesture gesture) => _going.Go(gesture);
 
-        OpenWindow(route.Section ?? Section.Now);
-        if (route.Action == WindowAction.ShowUpdates)
-        {
-            _window?.Screen.ShowUpdates();
-        }
-        else if (route.Action == WindowAction.ShowUpdateCard)
-        {
-            _window?.Screen.ShowUpdateCard();
-        }
+    private void OpenWindow(Section target) => _going.Open(target);
+
+    /// <summary>What a test puts in place of making a real window: it is told the page the gesture asked for.</summary>
+    internal Action<Section>? OpenInstead { get; set; }
+
+    /// <summary>The settings page the menu entry goes back to.</summary>
+    internal Section LastSettingsPage => _going.LastSettingsPage;
+
+    /// <summary>What the screen of a new window is given: the page it remembers, the updater, and the Now page with its wave.</summary>
+    internal void WireScreen(SettingsScreen screen)
+    {
+        screen.SettingsPageSeen = _going.SettingsPageSeen;
+
+        // Always: without an updater, the panel says this copy does not update itself.
+        screen.SetUpdates(this);
+        screen.SetNow(this);
     }
 
     /// <summary>Only one at a time, and only while it is open: closing destroys it, and the memory goes back.</summary>
     /// <param name="target">The view to land on. <see cref="Section.FirstRun"/> opens the first-launch card.</param>
-    private void OpenWindow(Section target)
+    private void CreateWindow(Section target)
     {
-        if (!_leave.MayOpenSettings)
-        {
-            return;
-        }
-
-        if (_window is { } open)
-        {
-            open.BringBack();
-            open.Screen.ShowSection(target);
-            return;
-        }
-
         var firstRun = target == Section.FirstRun;
 
         // The screen the user is looking at, whatever the active window is: a game on the first one, a click on the second.
@@ -1235,11 +1225,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         var window = new SettingsWindow(_settings, this, ReadMicPeak, firstRun, _options.Offscreen, screen, OnSettingsClosed);
         _window = window;
 
-        window.Screen.SettingsPageSeen = page => _lastSettingsPage = page;
-
-        // Always: without an updater, the panel says this copy does not update itself.
-        window.Screen.SetUpdates(this);
-        window.Screen.SetNow(this);
+        WireScreen(window.Screen);
         window.Screen.ShowSection(target);
         if (_lastStatus is { } status)
         {
@@ -1435,6 +1421,15 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
             _journal.Write($"probe: reached {string.Join(" -> ", seen)}");
             _journal.Write($"probe: open, {Journal.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, {Journal.CpuMilliseconds():F0} ms of CPU so far");
 
+            // The wave of the Now page is made only once the page runs: the measure after closing has to follow a window that had one.
+            window.Screen.ShowSection(Section.Now);
+            _loop.After(ProbeNowMs, CloseOnNow);
+        }
+
+        void CloseOnNow()
+        {
+            _journal.Write($"probe: {ProbeNowMs} ms on Now, {Journal.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
+
             // The page the first opening below must come back to, with this window gone.
             window.Screen.ShowSection(Section.Export);
             window.Close();
@@ -1466,14 +1461,15 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
                     _loop.After(ProbeStepMs, Cycle);
                 }
-                else if (cycles++ < 3)
+                else if (cycles++ <= ProbeNowOpenings)
                 {
+                    // Long enough for the page to make its wave and read the memory, as a person looking at it would.
                     OpenWindow(Section.Now);
-                    _loop.After(ProbeStepMs, Cycle);
+                    _loop.After(ProbeNowMs, Cycle);
                 }
                 else
                 {
-                    _journal.Write($"probe: after 3 more openings, {Journal.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
+                    _journal.Write($"probe: after the menu and {ProbeNowOpenings} openings on Now of {ProbeNowMs} ms each, {Journal.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
                     _journal.Write($"probe: folder dialog usable {FolderPicker.SelfCheck()}");
                     _loop.Quit();
                 }

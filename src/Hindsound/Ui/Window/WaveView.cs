@@ -6,11 +6,17 @@ namespace Hindsound.Ui.Window;
 /// <summary>What the three labels of the wave's axis say.</summary>
 internal readonly record struct WaveAxis(string Left, string Middle, string Right);
 
-/// <summary>A change of source that shows in the window, and the column its line goes on.</summary>
-internal readonly record struct WaveMarker(int Column, string? App)
+/// <summary>
+/// A change of source that shows in the window, and the column its line goes on. A change that falls inside a bar, or past the last
+/// one, leaves that bar half old and half new: it is <paramref name="Mixed"/>, goes grey with the past, and the line stands on its right.
+/// </summary>
+internal readonly record struct WaveMarker(int Column, string? App, bool Mixed = false)
 {
     /// <summary>No line to draw.</summary>
     public static readonly WaveMarker None = new(-1, null);
+
+    /// <summary>The first bar that is wholly new: the one the line stands on the left of.</summary>
+    public int FirstNewColumn => Mixed ? Column + 1 : Column;
 
     public bool Shows => Column >= 0;
 }
@@ -148,15 +154,29 @@ internal static class WaveView
             return WaveMarker.None;
         }
 
-        var column = Math.Min(FirstColumnOf(change.Frame, facts, columns), columns - 1);
-        return column < 0 ? WaveMarker.None : new WaveMarker(column, change.App);
+        var slices = SlicesOnScreen(facts);
+        var slice = WaveLane.SliceOf(change.Frame);
+        var last = LastColumnOfSlice(slice, slices, columns);
+        var first = Math.Min(last, (slice * columns + slices - 1) / slices);
+        var right = LastColumnOfSlice(WaveLane.SliceOf(facts.End - 1), slices, columns);
+        var shift = columns - 1 - right;
+        if (first + shift > columns - 1)
+        {
+            // Nothing after the change yet: every bar is from before it.
+            return new WaveMarker(columns - 1, change.App, Mixed: true);
+        }
+
+        // A bar that starts on the frame of the change is wholly new. Any other holds the old source too, and goes left of the line.
+        var clean = first * slices / columns * WaveLane.FramesPerSlice == change.Frame;
+        var column = (int)(clean ? first : last) + (int)shift;
+        return column < 0 ? WaveMarker.None : new WaveMarker(Math.Min(column, columns - 1), change.App, Mixed: !clean);
     }
 
     /// <summary>The colour of a bar of the PC side. The microphone has no mixed past: pass no marker for it.</summary>
     public static WaveTone ToneOf(int column, int zoneFirstColumn, WaveMarker marker)
     {
         var saved = column >= zoneFirstColumn;
-        return marker.Shows && column < marker.Column
+        return marker.Shows && column < marker.FirstNewColumn
             ? saved ? WaveTone.GrayLight : WaveTone.GrayDark
             : saved ? WaveTone.Accent : WaveTone.AccentDim;
     }
@@ -189,11 +209,12 @@ internal static class WaveView
     /// <summary>
     /// The name of the microphone's lane: a lost one is said here, in amber, with its past still under it. Turned off is said in the lane
     /// itself (<see cref="MicLaneText"/>). Paused, stopped or with no device at all, no capture is open and that is not a lost microphone:
-    /// the band already says why.
+    /// the band already says why. A microphone that never gave a track was not on and then lost: it was never captured, and the lane
+    /// says so in its middle (<see cref="MicLaneText"/>) instead of this title.
     /// </summary>
-    public static string MicLaneTitle(AudioEngineStatus? status)
+    public static string MicLaneTitle(AudioEngineStatus? status, bool hasTrack = true)
     {
-        if (status is null || !status.MicEnabled)
+        if (status is null || !status.MicEnabled || !hasTrack)
         {
             return "Mic";
         }
@@ -202,7 +223,20 @@ internal static class WaveView
     }
 
     /// <summary>What the lane of the microphone says in its middle, with no base line, or null when it shows its bars.</summary>
-    public static string? MicLaneText(AudioEngineStatus? status) => status is { MicEnabled: false } ? "Mic off" : null;
+    public static string? MicLaneText(AudioEngineStatus? status, bool hasTrack = true)
+    {
+        if (status is null)
+        {
+            return null;
+        }
+
+        if (!status.MicEnabled)
+        {
+            return "Mic off";
+        }
+
+        return !hasTrack && !status.MicCapturing && status.Activity == CaptureActivity.Capturing ? "Mic not captured" : null;
+    }
 
     /// <summary>
     /// The line under the wave. The time counted from before a change of source is said out loud: the clip holds it,
@@ -241,7 +275,18 @@ internal static class WaveView
         var before = LastChange(facts) is { } change && change.Frame > start && change.Frame <= facts.End
             ? SecondsOf(change.Frame - start)
             : 0;
-        return (SecondsOf(facts.End - start), before);
+        var kept = SecondsOf(facts.End - start);
+
+        // A clip that reaches the whole memory holds what the band calls full, with the same second of margin: the measure can stay a
+        // hair under the setting for good, and the line would then say "4:59 of 5:00" under a band that says 5:00. A shorter clip is
+        // not rounded up: 0:29 of 0:30 while the memory fills is true.
+        var cap = (int)Math.Min(facts.BufferFrames / Rate, int.MaxValue);
+        if (cap > 0 && clipSeconds >= cap)
+        {
+            kept = KeptDuration.Shown(kept, cap);
+        }
+
+        return (kept, before);
     }
 
     /// <summary>The words on the line of a change of source.</summary>

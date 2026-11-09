@@ -792,7 +792,7 @@ public class NowPagePictureTests
         var change = new SourceChange(50 * NowRig.Rate, "Discord.exe");
         using var rig = Painted(NowRig.Held(NowRig.Loud(60), NowRig.Loud(60), 60, change));
         var grid = rig.SystemGrid;
-        var x = grid.X(rig.Wave.Marker.Column) - (grid.Gap + 1) / 2;
+        var x = grid.X(rig.Wave.Marker.FirstNewColumn) - (grid.Gap + 1) / 2;
 
         Assert.Equal(Theme.Text, rig.At(x, 128));
         Assert.Equal(Theme.Text, rig.At(x, grid.Mid - 20));
@@ -804,7 +804,7 @@ public class NowPagePictureTests
         var change = new SourceChange(1 * NowRig.Rate, null);
         using var rig = Painted(NowRig.Held(NowRig.Loud(60), NowRig.Loud(60), 60, change));
         var grid = rig.SystemGrid;
-        var x = grid.X(rig.Wave.Marker.Column) - (grid.Gap + 1) / 2;
+        var x = grid.X(rig.Wave.Marker.FirstNewColumn) - (grid.Gap + 1) / 2;
         Assert.True(x < 240);
 
         Assert.Equal(Theme.Base, rig.At(x, 136));

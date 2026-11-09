@@ -197,6 +197,8 @@ You can change them all in Settings > Hotkeys. If another app already holds a co
 
 They are in the left column of the window, under `Settings`, or through `Settings` in the menu of the icon. There is no OK button: a change is saved at once, in `%AppData%\Hindsound\settings.json`.
 
+`Now`, above the settings in the same column, is not a setting: it draws a wave for the PC sound and one for the microphone, with the part a save would keep in the accent color and `Save: last 0:30` under it. `Record` is on that page too, and it is the same setting as on `Audio`.
+
 | Page | Setting | Choices (default in bold) |
 | --- | --- | --- |
 | Durations | Clip length | 15s, **30s**, 1 min, 2 min, 5 min, Custom (up to 30:00) |
@@ -307,6 +309,8 @@ Hindsound has only run on one Windows 11 PC so far. These have not been tried fo
 - recording only a real game or Discord
 - the notification in real games in exclusive fullscreen
 - the settings window with a real mouse and on a second screen
+- the `Now` page on a real window, with real music playing
+- the bold `Open Hindsound` line in the menu of the icon
 - typing a hotkey, and the Browse button
 - changing the audio output
 - a damaged settings file with Start with Windows on

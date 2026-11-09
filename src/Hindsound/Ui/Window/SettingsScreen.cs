@@ -93,7 +93,7 @@ internal interface IWindowHost
 /// The whole window as plain logic: pages, focus, keyboard, mouse, what is shown and in what order. Win32 only delivers
 /// the input and the canvas, so the keyboard can be tested here, with no window.
 /// </summary>
-internal sealed partial class SettingsScreen
+internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
 {
     public const float WindowWidth = 760, WindowHeight = 488, BandHeight = 72, FootHeight = 76, NavWidth = 168;
     public const float ViewBottom = WindowHeight - FootHeight;
@@ -287,6 +287,12 @@ internal sealed partial class SettingsScreen
         var leftCard = Section == Section.UpdateCard;
         Section = section;
         WakeWave();
+        if (section == Section.Now)
+        {
+            // Nothing read the memory while another page was up: without this, the right of the wave stays empty until the next tick.
+            _wave?.ReadAgain();
+        }
+
         _scroll = 0;
         if (NavRows.IsSettingsPage(section))
         {
