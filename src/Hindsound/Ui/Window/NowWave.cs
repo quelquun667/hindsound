@@ -8,11 +8,14 @@ internal enum WaveChange
 {
     None = 0,
 
-    /// <summary>A bar, the kept part, the saved part or the line of a change of source.</summary>
+    /// <summary>A bar, the kept part or the saved part. Nothing to write again: the commonest change by far.</summary>
     Lanes = 1,
 
+    /// <summary>A title, or the line of a change of source and its words.</summary>
+    Titles = 2,
+
     /// <summary>The line under the wave says something else.</summary>
-    SaveLine = 2,
+    SaveLine = 4,
 }
 
 /// <summary>
@@ -59,7 +62,10 @@ internal sealed class NowWave
     private string? _markerText;
     private string? _markerApp;
 
-    /// <summary>All a tick repaints for the lanes, their titles, the line of a change and the line of the saved part.</summary>
+    /// <summary>All a tick repaints for the bars: the two lanes and the line of the saved part. No words but those inside a lane.</summary>
+    public static Box BarsArea { get; } = new(SettingsScreen.Left, SystemTop, SettingsScreen.Width, MicTop + MicHeight + 8 - SystemTop);
+
+    /// <summary>The same with the titles over the lanes, and the line of a change with its words.</summary>
     public static Box WaveArea { get; } = new(SettingsScreen.Left, SystemTitleY - 10, SettingsScreen.Width, MicTop + MicHeight + 8 - (SystemTitleY - 10));
 
     /// <summary>All a tick repaints for the line under the wave.</summary>
@@ -92,7 +98,7 @@ internal sealed class NowWave
     /// <summary>Works out the picture and says what changed. Draws nothing, and allocates nothing unless the words change.</summary>
     public WaveChange Look(double scale, in WaveFacts facts, int clipSeconds, AudioEngineStatus? status)
     {
-        var change = UseScale(scale) ? WaveChange.Lanes : WaveChange.None;
+        var change = UseScale(scale) ? WaveChange.Lanes | WaveChange.Titles : WaveChange.None;
         WaveView.Compose(_systemLane, facts, _nextSystem);
         WaveView.Compose(_micLane, facts, _nextMic);
         if (!_nextSystem.AsSpan().SequenceEqual(_systemBars))
@@ -112,12 +118,17 @@ internal sealed class NowWave
         var held = WaveView.HeldFrom(facts, columns);
         var zone = WaveView.ZoneOf(clipSeconds, facts, columns);
         var marker = WaveView.MarkerOf(facts, columns);
-        if (held != _held || zone != _zone || marker.Column != _marker.Column || !ReferenceEquals(marker.App, _marker.App))
+        if (held != _held || zone != _zone)
         {
             _held = held;
             _zone = zone;
-            _marker = marker;
             change |= WaveChange.Lanes;
+        }
+
+        if (marker.Column != _marker.Column || !ReferenceEquals(marker.App, _marker.App))
+        {
+            _marker = marker;
+            change |= WaveChange.Lanes | WaveChange.Titles;
         }
 
         // Only on the first look after this status, or when the line comes or goes: this is what cuts the name of the exe out.
@@ -128,7 +139,7 @@ internal sealed class NowWave
             _titleMixed = marker.Shows;
             _systemTitle = WaveView.SystemLaneTitle(status, marker);
             _noCapture = WaveView.NoCaptureText(status);
-            change |= WaveChange.Lanes;
+            change |= WaveChange.Lanes | WaveChange.Titles;
         }
 
         if (marker.Shows && (_markerText is null || !ReferenceEquals(marker.App, _markerApp)))
@@ -165,7 +176,7 @@ internal sealed class NowWave
         }
 
         Look(c.Scale, facts, clipSeconds, status);
-        PaintLanes(c, accent, status);
+        PaintLanes(c, accent, status, titles: true);
         PaintSaveLine(c);
 
         var activity = status?.Activity ?? CaptureActivity.Capturing;
@@ -186,10 +197,14 @@ internal sealed class NowWave
         }
     }
 
-    /// <summary><see cref="WaveArea"/> from the last look.</summary>
-    public void PaintLanes(ICanvas c, uint accent, AudioEngineStatus? status)
+    /// <summary><see cref="WaveArea"/> from the last look, or only <see cref="BarsArea"/> and what is under its words.</summary>
+    public void PaintLanes(ICanvas c, uint accent, AudioEngineStatus? status, bool titles)
     {
-        c.FillRect(WaveArea, Theme.Base);
+        if (titles)
+        {
+            c.FillRect(WaveArea, Theme.Base);
+        }
+
         var frozen = status?.Activity == CaptureActivity.Paused;
         var ground = Theme.Panel;
         var zoneGround = Theme.Mix(accent, ground, ZoneGroundShare);
@@ -203,13 +218,17 @@ internal sealed class NowWave
             frozen,
             zoneGround);
 
-        c.TextMid(_systemTitle, Face.Medium, 13, SettingsScreen.Left, SystemTitleY, Theme.Muted);
+        if (titles)
+        {
+            c.TextMid(_systemTitle, Face.Medium, 13, SettingsScreen.Left, SystemTitleY, Theme.Muted);
+            var micTitle = WaveView.MicLaneTitle(status);
+            c.TextMid(micTitle, Face.Medium, 13, SettingsScreen.Left, MicTitleY, micTitle == WaveView.MicLost ? Theme.Amber : Theme.Muted);
+        }
+
         var systemWords = _titleStatus is null || _systemLane.HasTrack && _held < Columns ? null : _noCapture;
         PaintLane(c, SystemLane, _systemGrid, _systemBars, _systemLane.HasTrack, _marker, look, systemWords, fills: true);
-        PaintMarker(c);
+        PaintMarker(c, titles);
 
-        var micTitle = WaveView.MicLaneTitle(status);
-        c.TextMid(micTitle, Face.Medium, 13, SettingsScreen.Left, MicTitleY, micTitle == WaveView.MicLost ? Theme.Amber : Theme.Muted);
         PaintLane(c, MicLane, _micGrid, _micBars, _micLane.HasTrack, WaveMarker.None, look, WaveView.MicLaneText(status), fills: false);
         PaintZoneLine(c, accent, frozen);
     }
@@ -236,6 +255,8 @@ internal sealed class NowWave
 
     private void PaintLane(ICanvas c, Box lane, in WaveGrid grid, byte[] bars, bool hasTrack, WaveMarker marker, in LaneColors look, string? words, bool fills)
     {
+        // The frame's corners are blended: over themselves they would come out darker at each repaint.
+        c.FillRect(lane, Theme.Base);
         c.Frame(lane, 4, Theme.Base, Theme.Line);
         var s = (float)_scale;
         var inner = lane.Inflate(-1);
@@ -316,7 +337,7 @@ internal sealed class NowWave
         column <= 0 ? first : column >= grid.Columns ? none : grid.X(column) - (grid.Gap + 1) / 2;
 
     // The line never crosses the title of the lane, and the words go on whichever side has room.
-    private void PaintMarker(ICanvas c)
+    private void PaintMarker(ICanvas c, bool withWords)
     {
         if (!_marker.Shows || _markerText is not { } text)
         {
@@ -330,6 +351,11 @@ internal sealed class NowWave
         var width = c.Measure(text, Face.Body, 13);
         var top = x < titleRight ? SystemLane.Y : SystemTitleY - 1;
         c.FillRect(new Box(x, top, 1 / s, SystemLane.Bottom - top), Theme.Text);
+        if (!withWords)
+        {
+            return;
+        }
+
         if (x - 6 - width >= titleRight)
         {
             c.TextRight(text, Face.Body, 13, x - 6, SystemTitleY, Theme.Text);
@@ -344,6 +370,7 @@ internal sealed class NowWave
     // The saved part, under both lanes. A soft row each side in place of the mock's glow, which cost a blur at each move of the line.
     private void PaintZoneLine(ICanvas c, uint accent, bool frozen)
     {
+        c.FillRect(new Box(SettingsScreen.Left, MicLane.Bottom, SettingsScreen.Width, BarsArea.Bottom - MicLane.Bottom), Theme.Base);
         if (_zone >= Columns)
         {
             return;

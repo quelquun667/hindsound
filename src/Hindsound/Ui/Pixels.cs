@@ -79,14 +79,50 @@ internal readonly unsafe struct Pixels(uint* origin, int width, int height)
 
     public void FillRoundRect(float left, float top, float right, float bottom, float radius, uint rgb)
     {
+        var opaque = 0xFF000000 | rgb;
+        var startX = Math.Max(0, (int)left);
+        var stopX = Math.Min(Width, (int)MathF.Ceiling(right));
+        if (stopX <= startX)
+        {
+            return;
+        }
+
         for (var y = Math.Max(0, (int)top); y < Math.Min(Height, (int)MathF.Ceiling(bottom)); y++)
         {
             var row = Row(y);
-            for (var x = Math.Max(0, (int)left); x < Math.Min(Width, (int)MathF.Ceiling(right)); x++)
+
+            // A pixel a full pixel away from the edges and off the corners is simply covered: only the rim needs its distance worked
+            // out. Same pixels, and a lane of the live wave stops costing a square root per pixel at each repaint.
+            var (solidFrom, solidTo) = SolidSpan(y + 0.5f, left, top, right, bottom, radius);
+            solidFrom = Math.Clamp(solidFrom, startX, stopX);
+            solidTo = Math.Clamp(solidTo, solidFrom, stopX);
+            for (var x = startX; x < solidFrom; x++)
+            {
+                Blend(row + x, rgb, RoundRectCoverage(x + 0.5f, y + 0.5f, left, top, right, bottom, radius));
+            }
+
+            new Span<uint>(row + solidFrom, solidTo - solidFrom).Fill(opaque);
+            for (var x = solidTo; x < stopX; x++)
             {
                 Blend(row + x, rgb, RoundRectCoverage(x + 0.5f, y + 0.5f, left, top, right, bottom, radius));
             }
         }
+    }
+
+    private static (int From, int To) SolidSpan(float py, float left, float top, float right, float bottom, float radius)
+    {
+        const float clear = 1;
+        var above = py - top;
+        var below = bottom - py;
+        if (above < clear || below < clear)
+        {
+            return (0, 0);
+        }
+
+        var inset = above >= radius + clear && below >= radius + clear ? clear : radius + clear;
+        var from = (int)MathF.Ceiling(left + inset - 0.5f);
+        var to = (int)MathF.Floor(right - inset - 0.5f) + 1;
+        return from < to ? (from, to) : (0, 0);
     }
 
     /// <summary>Adds a blurred copy of the mask, in the given colour, over the buffer. Transparent pixels stay transparent.</summary>

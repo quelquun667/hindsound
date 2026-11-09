@@ -19,6 +19,9 @@ internal sealed partial class SettingsScreen
     private bool _minimized;
     private bool _waveAsleep;
 
+    // Worked out once per build of the page: reading it from the settings parses text, and a tick allocates nothing.
+    private uint _waveAccent;
+
     /// <summary>
     /// The Now page draws from this panel, and the window opens on it. Null, the default, leaves the side bar at the pages of
     /// the settings and the window on Hotkeys.
@@ -97,8 +100,9 @@ internal sealed partial class SettingsScreen
         _canvas.SetOrigin(0);
         if ((change & WaveChange.Lanes) != 0)
         {
-            wave.PaintLanes(_canvas, Editor.AccentRgb, _status);
-            _host.InvalidateArea(NowWave.WaveArea);
+            var titles = (change & WaveChange.Titles) != 0;
+            wave.PaintLanes(_canvas, _waveAccent, _status, titles);
+            _host.InvalidateArea(titles ? NowWave.WaveArea : NowWave.BarsArea);
         }
 
         if ((change & WaveChange.SaveLine) != 0)
@@ -115,6 +119,7 @@ internal sealed partial class SettingsScreen
     {
         // Without this, it would keep the scrolling room of the page before it.
         _contentBottom = 0;
+        _waveAccent = Editor.AccentRgb;
         RowLabel("Record", RecordTop);
         List("now.record", new Box(RecordLeft, RecordTop, FieldWidth, RowHeight), () => SettingsEditor.RecordChoices(_apps, Editor.Settings.Audio.SourceApp, _status is { SourceApp: not null, SourceAppMissing: false }), () => Editor.Settings.Audio.SourceApp ?? string.Empty, Editor.SetSourceApp);
         Add(new Painted((c, ui) =>

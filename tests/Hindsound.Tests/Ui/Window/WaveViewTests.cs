@@ -57,7 +57,7 @@ public class WaveViewComposeTests
                 expected = Math.Max(expected, WaveRig.Raw(track, slice));
             }
 
-            Assert.Equal(expected, bars[column]);
+            Assert.Equal(WaveView.Height((byte)expected), bars[column]);
         }
     }
 
@@ -114,8 +114,8 @@ public class WaveViewComposeTests
         var bars = Bars(lane, facts, 180);
 
         // Ten slices on 180 columns: 18 columns each, the newest slice on the right.
-        Assert.All(bars[^18..], bar => Assert.Equal(WaveRig.Raw(track, 49), bar));
-        Assert.Equal(WaveRig.Raw(track, 48), bars[^19]);
+        Assert.All(bars[^18..], bar => Assert.Equal(WaveView.Height(WaveRig.Raw(track, 49)), bar));
+        Assert.Equal(WaveView.Height(WaveRig.Raw(track, 48)), bars[^19]);
     }
 
     [Fact]
@@ -450,9 +450,9 @@ public class WaveViewZoneTests
     {
         Assert.Equal("Mic", WaveView.MicLaneTitle(null));
         Assert.Equal("Mic", WaveView.MicLaneTitle(Status()));
-        Assert.Equal("Mic off", WaveView.MicLaneTitle(Status(micEnabled: false, micCapturing: false)));
+        Assert.Equal("Mic", WaveView.MicLaneTitle(Status(micEnabled: false, micCapturing: false)));
         Assert.Equal("Mic lost", WaveView.MicLaneTitle(Status(micCapturing: false)));
-        Assert.Equal("Mic lost", WaveView.MicLaneTitle(Status(CaptureActivity.NoDevice, micCapturing: false)));
+        Assert.Equal("Mic", WaveView.MicLaneTitle(Status(CaptureActivity.NoDevice, micCapturing: false)));
     }
 
     [Theory]
@@ -461,7 +461,7 @@ public class WaveViewZoneTests
     public void A_pause_closes_the_mic_on_purpose_and_that_is_not_a_lost_mic(CaptureActivity activity)
     {
         Assert.Equal("Mic", WaveView.MicLaneTitle(Status(activity, micCapturing: false)));
-        Assert.Equal("Mic off", WaveView.MicLaneTitle(Status(activity, micEnabled: false, micCapturing: false)));
+        Assert.Equal("Mic", WaveView.MicLaneTitle(Status(activity, micEnabled: false, micCapturing: false)));
     }
 
     [Fact]

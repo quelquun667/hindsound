@@ -51,8 +51,8 @@ internal static class WaveView
 
     private const int Rate = InternalFormat.SampleRate;
 
-    // -50 dB, on both lanes: under it, a headset's own noise is not sound, and no bar is drawn at all.
-    private const double SilenceFloorPeak = 0.0031622776601683794;
+    // -50 dB on the scale of the levels, on both lanes: under it, a headset's own noise is not sound, and no bar is drawn at all.
+    private const byte SilenceFloorLevel = 42;
 
     /// <summary>
     /// The height of a bar from a level, 0 to <see cref="WaveLane.FullLevel"/>: the one place to change if loud music turns out to look
@@ -61,8 +61,7 @@ internal static class WaveView
     /// </summary>
     public static byte Height(byte level)
     {
-        var peak = ClipPeaks.PeakOfBar(level / (float)WaveLane.FullLevel);
-        return peak < SilenceFloorPeak ? (byte)0 : (byte)Math.Round(Math.Sqrt(peak) * WaveLane.FullLevel);
+        return level < SilenceFloorLevel ? (byte)0 : (byte)Math.Round(Math.Sqrt(ClipPeaks.PeakOfBar(level / (float)WaveLane.FullLevel)) * WaveLane.FullLevel);
     }
 
     // The one place that says how the slices of a column make a bar: the loudest. Trying the mean is this line: (byte)(sum / count).
