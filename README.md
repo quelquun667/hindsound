@@ -351,7 +351,7 @@ Hindsound has only run on one Windows 11 PC so far. These have not been tried fo
 - a change of display scale
 - unplugging a headset
 - Windows 10
-- the windows of the Setup and its uninstaller
+- the windows of the Setup and its uninstaller, and the uninstaller deleting or keeping `library.json`
 
 ## Roadmap
 
