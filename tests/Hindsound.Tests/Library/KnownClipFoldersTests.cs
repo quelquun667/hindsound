@@ -189,7 +189,7 @@ public sealed class KnownClipFoldersTests : IDisposable
         store.Save(settings);
         Assert.Contains("knownClipFolders", File.ReadAllText(store.Path));
 
-        // A model without the key, generated with the options of SettingsStore, is what the versions before it read with.
+        // A model without the key, written with the options of SettingsStore, is what the versions before it read with.
         var older = JsonSerializer.Deserialize(File.ReadAllText(store.Path), OlderSettingsJson.Default.OlderSettings);
 
         Assert.NotNull(older);
