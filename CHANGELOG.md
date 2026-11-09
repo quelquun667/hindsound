@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-09
+
 ### Added
 
 - Stars: each clip of `Library` has one. Click it, or press F on the chosen clip, to make it a favorite.
