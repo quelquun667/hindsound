@@ -41,6 +41,10 @@ It has been tried on one Windows 11 PC, and some things are [not tried yet](#not
 
 ## Screenshots
 
+| Now: what the memory holds |
+| --- |
+| <img src="assets/screenshots/now.png" alt="Now page: a wave for the PC sound and one for the microphone, the last 0:30 bright, and Save: last 0:30 under the wave" width="400"> |
+
 | Hotkeys | Durations and memory |
 | --- | --- |
 | <img src="assets/screenshots/settings-hotkeys.png" alt="Settings, Hotkeys page: Save clip is Ctrl+Shift+F10, the five others are not set" width="400"> | <img src="assets/screenshots/settings-durations.png" alt="Settings, Durations page: clip length 30s, 5:00 kept in memory, about 87 MB of RAM" width="400"> |
