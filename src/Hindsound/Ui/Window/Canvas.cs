@@ -7,6 +7,24 @@ internal static class Theme
 {
     public const uint Base = 0x0D0F13, Panel = 0x15181E, Raised = 0x21252D, Hover = 0x2B303A, Line = 0x3A404C, Control = 0x6B7382,
         Text = AccentColors.LightOnAccent, Muted = 0xAAB1BE, Amber = 0xFFB547, Hot = 0xFF6A5C, Faded = 0x6B7382;
+
+    /// <summary>
+    /// <paramref name="share"/> of <paramref name="toward"/> over the rest of <paramref name="ground"/>, as a plain colour: how the
+    /// dimmed accent, the two greys, the halos and a tinted ground are made, with no alpha for the canvas to blend. Work it out
+    /// once per paint, not once per bar. Any colour works, white and black included, and the result never leaves the box of the two.
+    /// </summary>
+    public static uint Mix(uint toward, uint ground, float share)
+    {
+        var t = share > 0 ? Math.Min(share, 1f) : 0f;
+        return Channel(toward, ground, 16, t) | Channel(toward, ground, 8, t) | Channel(toward, ground, 0, t);
+    }
+
+    private static uint Channel(uint toward, uint ground, int shift, float t)
+    {
+        var x = (toward >> shift) & 0xFF;
+        var y = (ground >> shift) & 0xFF;
+        return Math.Min(255u, (uint)MathF.Round(x * t + y * (1 - t))) << shift;
+    }
 }
 
 /// <summary>The four fonts of the interface, drawn by DirectWrite (see <see cref="FontFaces"/>), by GDI if it cannot start.</summary>
@@ -55,6 +73,18 @@ internal interface ICanvas
     void Ring(Box box, float radius, float thickness, uint rgb);
 
     void Stroke(float ax, float ay, float bx, float by, float width, uint rgb);
+
+    /// <summary>
+    /// A whole lane of a wave in one call, in physical pixels (see <see cref="WaveGrid"/>), with nothing allocated: one bar per level,
+    /// mirrored around the base line, the oldest on the left. A level is 0 to <c>WaveLane.FullLevel</c>: 0 draws the base line only,
+    /// <c>WaveLane.Empty</c> draws nothing, not even a line. <paramref name="columns"/> gives the colour of each bar and, where
+    /// it asks for one, a halo of <see cref="WaveGrid.Edge"/> around it, drawn as two opaque rectangles. A run of 0s draws one
+    /// unbroken line in <paramref name="baseline"/>. Draws the shorter of the two spans, and at most <see cref="WaveGrid.Columns"/>.
+    /// A fake canvas that does not care for it keeps this default and draws nothing.
+    /// </summary>
+    void Bars(in WaveGrid grid, ReadOnlySpan<byte> levels, ReadOnlySpan<BarColumn> columns, uint baseline)
+    {
+    }
 
     /// <summary>A soft light around the box, over what is already drawn.</summary>
     void Glow(Box box, float sigma, float opacity, uint rgb);

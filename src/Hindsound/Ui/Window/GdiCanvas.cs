@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Hindsound.Audio;
 
 namespace Hindsound.Ui.Window;
 
@@ -90,6 +91,108 @@ internal sealed unsafe class GdiCanvas : ICanvas, IDisposable
         float x1 = ax * _s, y1 = (ay + _originY) * _s, x2 = bx * _s, y2 = (by + _originY) * _s, w = width * _s;
         Cover((int)(MathF.Min(x1, x2) - w - 1), (int)(MathF.Min(y1, y2) - w - 1), (int)(MathF.Max(x1, x2) + w + 2), (int)(MathF.Max(y1, y2) + w + 2), rgb, (px, py) =>
             Pixels.Clamp(0.5f - Sdf.Segment(px, py, x1, y1, x2, y2, w)));
+    }
+
+    // A lane is about a hundred tall, thin bars. Drawn bar by bar, each one reaches into a different cache line on every row of
+    // the bitmap and the next bar loads the same lines again; drawn row by row, the bitmap is walked once, top to bottom. Same
+    // pixels either way: the halos only ever fill the gap beside their own bar, and the gap holds both neighbours' halos.
+    private const int BarsPerPass = 512;
+
+    public void Bars(in WaveGrid grid, ReadOnlySpan<byte> levels, ReadOnlySpan<BarColumn> columns, uint baseline)
+    {
+        var count = Math.Min(Math.Min(levels.Length, columns.Length), grid.Columns);
+        var mid = grid.Mid + (int)MathF.Round(_originY * _s);
+        Span<int> reach = stackalloc int[Math.Min(count, BarsPerPass)];
+        for (var first = 0; first < count; first += BarsPerPass)
+        {
+            BarsOf(grid, levels, columns, baseline, mid, first, Math.Min(count, first + BarsPerPass), count, reach);
+        }
+    }
+
+    private void BarsOf(in WaveGrid grid, ReadOnlySpan<byte> levels, ReadOnlySpan<BarColumn> columns, uint baseline, int mid, int first, int last, int count, Span<int> reach)
+    {
+        var tallest = 0;
+        var anyHalo = false;
+        for (var i = first; i < last; i++)
+        {
+            var level = levels[i];
+            if (level == WaveLane.Empty)
+            {
+                reach[i - first] = -1;
+                continue;
+            }
+
+            if (level == 0)
+            {
+                // A run of silence is one line: it reaches into the gap only when the next column is silent too.
+                var x = grid.X(i);
+                var right = x + (i + 1 < count && levels[i + 1] == 0 ? grid.Pitch : grid.Bar);
+                Fill(x, mid, right, mid + grid.Line, baseline);
+                reach[i - first] = -1;
+                continue;
+            }
+
+            var h = Math.Max(1, (int)MathF.Round(Math.Min(level, WaveLane.FullLevel) / (float)WaveLane.FullLevel * grid.Half));
+            reach[i - first] = h;
+            tallest = Math.Max(tallest, h);
+            anyHalo |= columns[i].HasHalo;
+        }
+
+        if (tallest == 0)
+        {
+            return;
+        }
+
+        var edge = anyHalo ? grid.Edge : 0;
+        var stop = Math.Min(Height, mid + tallest + grid.Line + edge);
+        for (var y = Math.Max(0, mid - tallest - edge); y < stop; y++)
+        {
+            var row = _pixels.Row(y);
+            for (var i = first; i < last; i++)
+            {
+                var h = reach[i - first];
+                if (h < 0)
+                {
+                    continue;
+                }
+
+                int top = mid - h, bottom = mid + h + grid.Line, x = grid.X(i);
+                var column = columns[i];
+                if (y >= top && y < bottom)
+                {
+                    if (column.HasHalo)
+                    {
+                        // A cross, not a box: the corners stay clear, which keeps the bars looking round-edged and separate.
+                        Put(row, x - grid.Edge, x, column.Halo);
+                        Put(row, x + grid.Bar, x + grid.Bar + grid.Edge, column.Halo);
+                    }
+
+                    Put(row, x, x + grid.Bar, column.Color);
+                }
+                else if (column.HasHalo && y >= top - grid.Edge && y < bottom + grid.Edge)
+                {
+                    Put(row, x, x + grid.Bar, column.Halo);
+                }
+            }
+        }
+    }
+
+    // A bar is a few pixels wide: a plain loop, with no call to Fill.
+    private void Put(uint* row, int left, int right, uint rgb)
+    {
+        var value = 0xFF000000 | rgb;
+        for (var x = Math.Max(0, left); x < Math.Min(Width, right); x++)
+        {
+            row[x] = value;
+        }
+    }
+
+    private void Fill(int left, int top, int right, int bottom, uint rgb)
+    {
+        for (var y = Math.Max(0, top); y < Math.Min(Height, bottom); y++)
+        {
+            Put(_pixels.Row(y), left, right, rgb);
+        }
     }
 
     private void Cover(int left, int top, int right, int bottom, uint rgb, Func<float, float, float> coverage)
