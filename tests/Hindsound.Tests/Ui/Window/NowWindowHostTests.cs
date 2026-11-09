@@ -34,6 +34,14 @@ public sealed class NowWindowHostTests : IDisposable
     private static extern int ValidateRect(nint hwnd, nint rect);
 
     [DllImport("user32.dll")]
+    private static extern int GetClientRect(nint hwnd, out Rect rect);
+
+    [DllImport("user32.dll")]
+    private static extern int SetWindowPos(nint hwnd, nint after, int x, int y, int width, int height, uint flags);
+
+    private const uint NoMoveNoOrderNoActivate = 0x0002 | 0x0004 | 0x0010;
+
+    [DllImport("user32.dll")]
     private static extern int KillTimer(nint hwnd, nuint id);
 
     public void Dispose()
@@ -102,21 +110,31 @@ public sealed class NowWindowHostTests : IDisposable
         Assert.Equal((int)MathF.Ceiling(area.Bottom * scale), rect.Bottom);
     }
 
-    [Fact]
-    public void A_tick_that_changes_the_wave_invalidates_its_area_and_not_the_window()
+    // A screen too small for the window at this scale makes the window narrower, as on the machines that run these tests: Windows
+    // cuts what is invalid at the edge of the client area. Whatever the screen, the area starts where it should, and never at the corner.
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1044)]
+    public void A_tick_that_changes_the_wave_invalidates_its_area_and_not_the_window(int outerWidth)
     {
         _window.Show();
         _window.ProbeDpiChange(144);
+        if (outerWidth > 0)
+        {
+            _ = SetWindowPos(_window.Hwnd, 0, 0, 0, outerWidth, 788, NoMoveNoOrderNoActivate);
+        }
+
         _ = ValidateRect(_window.Hwnd, 0);
 
         WindowNative.SendMessageW(_window.Hwnd, Hindsound.Ui.Native.WM_TIMER, WaveTimer, 0);
 
         var area = NowWave.WaveArea;
         var rect = UpdateRect();
+        _ = GetClientRect(_window.Hwnd, out var client);
         Assert.Equal((int)MathF.Floor(area.X * 1.5f), rect.Left);
         Assert.Equal((int)MathF.Floor(area.Y * 1.5f), rect.Top);
-        Assert.Equal((int)MathF.Ceiling(area.Right * 1.5f), rect.Right);
+        Assert.Equal(Math.Min((int)MathF.Ceiling(area.Right * 1.5f), client.Right), rect.Right);
         // The first look also finds a new line under the wave: the union ends at the bottom of that one.
-        Assert.Equal((int)MathF.Ceiling(NowWave.SaveArea.Bottom * 1.5f), rect.Bottom);
+        Assert.Equal(Math.Min((int)MathF.Ceiling(NowWave.SaveArea.Bottom * 1.5f), client.Bottom), rect.Bottom);
     }
 }
