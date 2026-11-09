@@ -1194,6 +1194,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     private void Go(WindowGesture gesture)
     {
         var route = WindowRoutes.Of(gesture, _window?.Screen.Section, _lastSettingsPage);
+        _journal.Write($"window gesture {gesture}: {route.Action} {route.Section}, the window was on {_window?.Screen.Section.ToString() ?? "nothing"}");
         if (route.Action == WindowAction.OpenClipFolder)
         {
             OpenLastClipFolder();
@@ -1430,6 +1431,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
             _journal.Write($"probe: reached {string.Join(" -> ", seen)}");
             _journal.Write($"probe: open, {Journal.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, {Journal.CpuMilliseconds():F0} ms of CPU so far");
+
+            // The page the first opening below must come back to, with this window gone.
+            window.Screen.ShowSection(Section.Export);
             window.Close();
             _loop.After(ProbeAfterCloseMs, AfterClosing);
         }
@@ -1445,6 +1449,18 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
                 if (_window is { } open)
                 {
                     open.Close();
+                    _loop.After(ProbeStepMs, Cycle);
+                }
+                else if (cycles == 0)
+                {
+                    cycles++;
+                    Go(WindowGesture.SettingsMenu);
+                    if (_window?.Screen.Section != Section.Export)
+                    {
+                        _exitCode = 1;
+                        _journal.Write($"probe: FAILED, the settings of the menu landed on {_window?.Screen.Section}, not on the last page seen");
+                    }
+
                     _loop.After(ProbeStepMs, Cycle);
                 }
                 else if (cycles++ < 3)

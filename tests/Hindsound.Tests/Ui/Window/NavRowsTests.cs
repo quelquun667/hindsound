@@ -29,7 +29,7 @@ public class NavRowsTests
 
         Assert.Equal("Now", rows.Rows[0].Label);
         Assert.Equal([Section.Now, .. Pages], rows.Rows.Select(row => row.Section));
-        Assert.Equal(54f, rows.CaptionMidY);
+        Assert.Equal(52f, rows.CaptionMidY);
         Assert.Equal([0f, 64f, 104f, 144f, 184f, 224f], Enumerable.Range(0, 6).Select(rows.TopOf));
         Assert.Equal(260, rows.Height);
     }
@@ -37,10 +37,11 @@ public class NavRowsTests
     [Fact]
     public void The_line_of_library_will_give_the_heights_of_the_picture()
     {
-        // On the picture: Now at 88, Library at 128, the caption around 182, Hotkeys at 192, from a list that starts at 88.
+        // On the picture: Now at 88, Library at 128, Hotkeys at 192, from a list that starts at 88. The caption sits 2 px
+        // higher than on it, which was drawn without a focus ring under it.
         Assert.Equal(0f, TwoViews.TopOf(0));
         Assert.Equal(40f, TwoViews.TopOf(1));
-        Assert.Equal(94f, TwoViews.CaptionMidY);
+        Assert.Equal(92f, TwoViews.CaptionMidY);
         Assert.Equal(104f, TwoViews.TopOf(2));
         Assert.Equal(300, TwoViews.Height);
     }

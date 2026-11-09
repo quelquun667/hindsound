@@ -12,8 +12,9 @@ internal sealed class NavRows
     public const float ItemHeight = 36, Gap = 4;
     public const string Caption = "Settings";
 
-    // From the bottom of the last view: the top of the next line, and the middle of the caption.
-    private const float CaptionBlock = 28, CaptionMid = 18;
+    // From the bottom of the last view: the top of the next line, and the middle of the caption, just high enough to stay
+    // out of the focus ring of the line under it.
+    private const float CaptionBlock = 28, CaptionMid = 16;
 
     private static readonly NavRow[] SettingsPages =
     [
