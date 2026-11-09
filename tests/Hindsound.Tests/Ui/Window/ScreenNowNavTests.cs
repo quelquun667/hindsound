@@ -222,6 +222,23 @@ public sealed class ScreenNowNavTests : IDisposable
     }
 
     [Fact]
+    public void A_gesture_that_leaves_the_page_ends_a_hotkey_capture()
+    {
+        Screen.SetNow(new FakeNow());
+        Screen.ShowSection(Section.Hotkeys);
+        _rig.FocusOn(Screen.StopIds().First(id => id.StartsWith("hotkey.", StringComparison.Ordinal)));
+        _rig.Press(Vk.Enter);
+        Assert.True(Screen.Listening);
+
+        // Hotkeys again, as a click on a refused hotkey would ask: nothing to leave.
+        Screen.ShowSection(Section.Hotkeys);
+        Assert.True(Screen.Listening);
+
+        Screen.ShowSection(Section.Now);
+        Assert.False(Screen.Listening);
+    }
+
+    [Fact]
     public void Now_has_nothing_to_scroll_after_a_long_page()
     {
         Screen.SetNow(new FakeNow());

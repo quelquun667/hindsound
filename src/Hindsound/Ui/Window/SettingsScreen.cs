@@ -267,6 +267,9 @@ internal sealed partial class SettingsScreen
             return;
         }
 
+        // A click on a notification or in the menu can land here in the middle of a capture: the field goes away, and the
+        // next key must not become a hotkey nobody sees, with the others still suspended.
+        CancelCapture();
         LeaveFocused();
         _popup = null;
         var leftCard = Section == Section.UpdateCard;
