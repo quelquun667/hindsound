@@ -498,6 +498,50 @@ public class NowPageTickTests
     }
 
     [Fact]
+    public void The_saved_part_moving_alone_draws_the_bars_and_nothing_else_does()
+    {
+        // No track and no line: all the bars are 0, the words stay, and only the edge of the saved part ever moves.
+        using var rig = new NowRig(NowRig.FullUntil(null, null, 100));
+        rig.Settle();
+        var moved = 0;
+
+        for (var i = 1; i <= 100; i++)
+        {
+            var zone = rig.Wave.ZoneColumn;
+            rig.Host.Reset();
+            rig.Panel.Facts = NowRig.FullUntil(null, null, 100 + i * 0.1);
+            rig.Screen.WaveTick();
+
+            if (zone == rig.Wave.ZoneColumn)
+            {
+                Assert.Empty(rig.Host.Areas);
+            }
+            else
+            {
+                moved++;
+                Assert.Equal([NowWave.BarsArea], rig.Host.Areas);
+            }
+        }
+
+        Assert.NotEqual(0, moved);
+    }
+
+    [Fact]
+    public void A_change_on_the_lane_of_the_mic_alone_is_drawn()
+    {
+        var system = NowRig.Loud(20);
+        using var rig = new NowRig(NowRig.Held(system, NowRig.Loud(20), 20));
+        rig.Settle();
+        var before = rig.Wave.MicBars[^1];
+
+        rig.Panel.Facts = NowRig.Held(system, NowSamples.Track(NowRig.Peaks(20, 0.05f)), 20);
+        rig.Screen.WaveTick();
+
+        Assert.True(rig.Wave.MicBars[^1] < before);
+        Assert.Equal([NowWave.BarsArea], rig.Host.Areas);
+    }
+
+    [Fact]
     public void A_change_of_scale_gives_a_new_grid_and_a_full_paint()
     {
         using var rig = Rig();
