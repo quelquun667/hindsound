@@ -32,9 +32,12 @@ internal static class UpdateWiring
     /// Null: this run never reaches the network nor a Setup. The only place that makes the network transport or a real start.
     /// Touches neither the disk nor the network: everything begins at <see cref="UpdateFlow.AtLaunch"/>.
     /// </summary>
-    public static UpdateFlow? Create(bool updaterMayRun, AppOptions options, string? exeFolder, IUpdateHost host, DateTimeOffset now)
+    public static UpdateFlow? Create(bool updaterMayRun, AppOptions options, string? exeFolder, IUpdateHost host, DateTimeOffset now) =>
+        Create(updaterMayRun, options, exeFolder, host, now, Channel);
+
+    /// <summary>The same, for <paramref name="channel"/>: the tests give one without touching the platform layer.</summary>
+    public static UpdateFlow? Create(bool updaterMayRun, AppOptions options, string? exeFolder, IUpdateHost host, DateTimeOffset now, UpdateChannel channel)
     {
-        var channel = Channel;
         switch (Why(updaterMayRun, options, exeFolder, channel))
         {
             case Installed or AnnouncesOnly:
@@ -84,6 +87,9 @@ internal static class UpdateWiring
 
     /// <summary>Does this run check for new versions on its own? The log says it at launch.</summary>
     public static bool IsActive(string why) => why is Installed or AnnouncesOnly;
+
+    /// <summary>The launch line of the log. It names the manifest, so the log of any run tells which channel the copy took.</summary>
+    public static string LaunchLine(string why, UpdateChannel channel) => $"updates: active {IsActive(why)} ({why}), channel {channel.ManifestName}";
 
     /// <summary>The version the release was built with (-p:Version=X.Y.Z). A build without it says 1.0.0, and is not installed anyway.</summary>
     public static UpdateVersion InstalledVersion()

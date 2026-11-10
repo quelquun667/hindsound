@@ -1,5 +1,6 @@
 using Hindsound.Export;
 using Hindsound.Ui;
+using Hindsound.Updates;
 
 namespace Hindsound.App;
 
@@ -32,7 +33,7 @@ internal static class NotificationDump
         }
     }
 
-    private static List<(string Name, NotificationContent Content)> Samples(uint accent)
+    internal static List<(string Name, NotificationContent Content)> Samples(uint accent)
     {
         float[] bars =
         [
@@ -85,6 +86,7 @@ internal static class NotificationDump
             ("micback", NotificationStates.MicBack()),
             ("update-ready", NotificationStates.UpdateReady("0.2.0", accent)),
             ("update-available", NotificationStates.UpdateAvailable("0.2.0", accent)),
+            ("release-out", ReleaseNotice.Content(new UpdateVersion(0, 2, 0), accent)),
             ("updated", NotificationStates.CaptureOn(300, "Ctrl+Shift+F10", updatedTo: "0.2.0", keptSeconds: 0)),
             ("update-failed", NotificationStates.UpdateFailed("0.1.0", willRetry: true)),
             ("update-failed-noretry", NotificationStates.UpdateFailed("0.1.0", willRetry: false)),

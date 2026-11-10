@@ -6,7 +6,7 @@ namespace Hindsound.Linux.Tests.Packaging;
 
 /// <summary>
 /// The type2 runtime at the head of the AppImage is MIT, but it is one static executable with libraries built into it,
-/// libfuse under the LGPL-2.1 among them. Each of them needs its row in the notices and its upstream text in licenses/,
+/// libfuse under the LGPL-2.1 among them. Each of them needs its row in the notices and its upstream text in licenses/linux/,
 /// copied unchanged from the version the runtime of release 20251108 was built with: the git blob of each file is pinned
 /// here, as the upstream repository has it at that tag.
 /// </summary>
@@ -36,7 +36,7 @@ public sealed partial class AppImageRuntimeLicenceTests
         var row = Row("AppImage type2 runtime");
 
         Assert.StartsWith("MIT, ", row[3], StringComparison.Ordinal);
-        Assert.Equal("Copyright (c) 2004-23 probonopd", row[4]);
+        Assert.Equal("Copyright (c) 2004-23 probonopd (its `LICENSE`); Copyright (c) 2004-24 Simon Peter, portions Copyright (c) 2007 Alexander Larsson (the header of `src/runtime/runtime.c` at the tag); MD5 code from WjCryptLib_Md5, by Alexander Peslyak, modified by WaterJuice, public domain", row[4]);
         Assert.Contains("`LICENSE` of [AppImage/type2-runtime]", row[6], StringComparison.Ordinal);
         Assert.Contains("at the tag `20251108`", row[6], StringComparison.Ordinal);
         Assert.DoesNotContain("Not recorded yet", string.Join('\n', NoticeLines()), StringComparison.Ordinal);
@@ -60,7 +60,7 @@ public sealed partial class AppImageRuntimeLicenceTests
     {
         var linked = LicenceLink().Matches(Row(component)[5]).Select(match => match.Groups[1].Value).ToList();
 
-        Assert.Equal(Components[component].Files.Select(file => "licenses/" + file), linked);
+        Assert.Equal(Components[component].Files.Select(file => "licenses/linux/" + file), linked);
     }
 
     [Theory]
@@ -70,8 +70,8 @@ public sealed partial class AppImageRuntimeLicenceTests
         var (files, blobs, _) = Components[component];
         for (var i = 0; i < files.Length; i++)
         {
-            var path = Path.Combine(Root, "licenses", files[i]);
-            Assert.True(File.Exists(path), files[i] + " is not in licenses/");
+            var path = Path.Combine(Root, "licenses", "linux", files[i]);
+            Assert.True(File.Exists(path), files[i] + " is not in licenses/linux/");
             Assert.NotEqual(0, new FileInfo(path).Length);
             Assert.Equal(blobs[i], GitBlob(path));
         }
@@ -80,7 +80,7 @@ public sealed partial class AppImageRuntimeLicenceTests
     [Fact]
     public void Every_library_the_runtime_licence_names_has_a_row()
     {
-        var named = NamedLibrary().Matches(File.ReadAllText(Path.Combine(Root, "licenses", "AppImage-type2-runtime-LICENSE.txt")))
+        var named = NamedLibrary().Matches(File.ReadAllText(Path.Combine(Root, "licenses", "linux", "AppImage-type2-runtime-LICENSE.txt")))
             .Select(match => match.Groups[1].Value)
             .ToList();
         var rows = NoticeLines().Where(line => line.StartsWith("| ", StringComparison.Ordinal) && line.Contains("in the AppImage runtime)", StringComparison.Ordinal)).ToList();

@@ -2042,7 +2042,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     {
         _updateWhy = UpdateWiring.Why(_updaterMayRun, _options, ExeFolder, UpdateWiring.Channel);
         _updates = UpdateWiring.Create(_updaterMayRun, _options, ExeFolder, this, DateTimeOffset.Now);
-        _journal.Write($"updates: active {UpdateWiring.IsActive(_updateWhy)} ({_updateWhy})");
+        _journal.Write(UpdateWiring.LaunchLine(_updateWhy, UpdateWiring.Channel));
         LaunchReport report;
         try
         {
@@ -2182,11 +2182,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     // One path in a game and out of it: the announcement waits for the desktop, as a clip does.
     void IUpdateHost.Announce(UpdateVersion version, UpdateMode mode)
     {
-        var content = _updates?.Channel.AnnouncesOnly == true
-            ? ReleaseNotice.Content(version, Accent)
-            : mode == UpdateMode.Auto
-                ? NotificationStates.UpdateReady(version.ToString(), Accent)
-                : NotificationStates.UpdateAvailable(version.ToString(), Accent);
+        var content = UpdateNotice.For(_updates?.Channel, version, mode, Accent);
         _pending.AddUpdate(content, NowMs);
         ArmPendingPoll();
         ShowNextPendingOnDesktop();

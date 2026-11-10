@@ -22,8 +22,8 @@ New versions
 ------------
 
 This copy never updates itself. When a new version is out, a notification says so, and a click on it opens the page of
-the release. To update, download the new zip there, quit Hindsound, and replace the files of this folder with those of
-the new zip. Your settings stay.
+the release; so does the Download button in Settings > General > Updates. To update, download the new zip there, quit
+Hindsound, and replace the files of this folder with those of the new zip. Your settings stay.
 
 
 Remove it
@@ -34,5 +34,6 @@ Remove it
 2. Quit Hindsound from the menu of its icon.
 3. Delete this folder.
 
-Hindsound leaves these, and you can delete them too: your settings and collections in %AppData%\Hindsound, the log and
-the rescued clips in %LocalAppData%\Hindsound, and your clips in Music\Hindsound or the folder you chose.
+Hindsound leaves these, and you can delete them too: your settings and collections in %AppData%\Hindsound, the log, the
+rescued clips and the state of the update checks (the updates-portable folder) in %LocalAppData%\Hindsound, and your
+clips in Music\Hindsound or the folder you chose.

@@ -65,7 +65,7 @@ fetch() {
 # What both packages hold, under a prefix: bin holds the program and the encoder side by side.
 lay_out() {
     local bin=$1 share=$2 doc=$3
-    mkdir -p -- "$bin" "$share/applications" "$doc/licenses"
+    mkdir -p -- "$bin" "$share/applications" "$doc/licenses/linux"
     install -m 755 -- "$publish/hindsound" "$bin/hindsound"
     install -m 644 -- "$lame" "$bin/libmp3lame.so.0"
     install -m 644 -- "$here/$APP_ID.desktop" "$share/applications/$APP_ID.desktop"
@@ -77,7 +77,9 @@ lay_out() {
     done
     install -m 644 -- "$repo/LICENSE" "$doc/LICENSE"
     install -m 644 -- "$repo/THIRD-PARTY-NOTICES.md" "$doc/THIRD-PARTY-NOTICES.md"
-    install -m 644 -- "$repo"/licenses/* "$doc/licenses/"
+    install -m 644 -- "$repo"/licenses/*.txt "$doc/licenses/"
+    # The texts of the AppImage runtime: kept apart in the repository so the Windows Setup and zip leave them out.
+    install -m 644 -- "$repo"/licenses/linux/*.txt "$doc/licenses/linux/"
 }
 
 # The AppImage: the AppDir has AppRun, the desktop entry and the icon at its root, as appimagetool asks.

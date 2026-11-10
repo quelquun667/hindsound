@@ -78,6 +78,9 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
     private UpdateStateData _state = new();
     private UpdateManifest? _manifest;
     private bool _passRunning;
+
+    /// <summary>Where the state and the downloaded files of this flow live.</summary>
+    internal string Folder => folder;
     private bool _passIsManual;
     private bool _clickStands;
     private int _timerGeneration;

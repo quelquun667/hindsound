@@ -36,9 +36,9 @@ internal static class WindowsPlatform
             PlatformDefaults.UpdateNetwork = () => new WinHttpTransport();
 
             // Only the zip's copy changes channel: without portable.txt the default stays the installed app's, as before.
-            var channel = PortableCopy.WindowsChannel(AppContext.BaseDirectory, out var markerIgnored);
+            var channel = ChannelFor(AppContext.BaseDirectory, out var markerIgnored);
             PortableMarkerIgnored = markerIgnored;
-            if (channel.AnnouncesOnly)
+            if (channel is not null)
             {
                 PlatformDefaults.UpdateChannel = channel;
             }
@@ -47,6 +47,16 @@ internal static class WindowsPlatform
             PlatformDefaults.Shell = () => new WindowsShell();
             _installed = true;
         }
+    }
+
+    /// <summary>
+    /// The channel a copy in <paramref name="exeFolder"/> sets, or null when it keeps the installed app's default. Only the
+    /// folder of the exe tells the zip's copy apart, so the tests point it at folders of their own.
+    /// </summary>
+    internal static UpdateChannel? ChannelFor(string exeFolder, out bool markerIgnored)
+    {
+        var channel = PortableCopy.WindowsChannel(exeFolder, out markerIgnored);
+        return channel.AnnouncesOnly ? channel : null;
     }
 
     /// <summary>The desktop parts of a Windows run.</summary>

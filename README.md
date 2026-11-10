@@ -152,9 +152,10 @@ Apps, find Hindsound, and uninstall it.
 | Rescued clips (`%LOCALAPPDATA%\Hindsound\Rescued`) | Kept |
 | Settings and collections (`%AppData%\Hindsound\settings.json` and `library.json`) | The uninstaller asks once for both. The default answer keeps them. A silent uninstall keeps them. |
 
-**The portable zip, or built from source.** There is no uninstaller. Turn off `Start with Windows`, quit Hindsound, and delete the folder. Your
-settings and collections stay in `%AppData%\Hindsound`, and your log and rescued clips in `%LOCALAPPDATA%\Hindsound`: delete those too if
-you want nothing left.
+**The portable zip, or built from source.** There is no uninstaller. Turn off `Start with Windows`, quit Hindsound, and
+delete the folder. Your settings and collections stay in `%AppData%\Hindsound`, and your log, rescued clips and the state
+of the update checks (`updates-portable` for the portable zip) in `%LOCALAPPDATA%\Hindsound`: delete those too if you
+want nothing left.
 
 ### Linux
 
@@ -404,7 +405,8 @@ clip, 173 MB for a 5:00 clip.
 
 Settings > General > Updates shows the running version, when it last checked, and the buttons `Check now`, `Update now`, `What's new` and `Skip this version`. A build from source, or Hindsound started with a command-line option for a test or a check, never updates itself. The
 portable zip and the Linux app never install anything: they only tell you that a version is out, and their link opens the
-page of its release.
+page of its release. In the portable zip, that section offers `Ask me` and `Off` only, and a `Download` button in place of
+`Update now` and `What's new`, which opens the page of the release.
 
 **What GitHub sees.** Once a day, Hindsound asks GitHub for one small file that describes the latest version. GitHub sees your IP address and the time. The request carries no identifier and no version number. When a new version is downloaded, GitHub also sees that download. The first launch tells you about this check.
 

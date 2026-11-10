@@ -23,13 +23,19 @@ internal static class ShortcutNotice
 
         _ = Task.Run(async () =>
         {
-            // Notify(s app_name, u replaces_id, s app_icon, s summary, s body, as actions, a{sv} hints, i expire_timeout).
-            var sent = await bus.CallAsync(Notify, "susssasa{sv}i", Write).ConfigureAwait(false);
+            var sent = await SendAsync(bus).ConfigureAwait(false);
             if (!sent.Ok)
             {
                 log("hotkeys: the notice could not be shown: " + sent.Error);
             }
         });
+    }
+
+    /// <summary>Sends the notice itself, apart from <see cref="ShowOnce"/> so that a test can read back what a server receives.</summary>
+    internal static Task<BusAnswer<bool>> SendAsync(SessionBus bus)
+    {
+        // Notify(s app_name, u replaces_id, s app_icon, s summary, s body, as actions, a{sv} hints, i expire_timeout).
+        return bus.CallAsync(Notify, "susssasa{sv}i", Write);
     }
 
     private static void Write(ref MessageWriter writer) => FreedesktopNotification.Write(ref writer, ShortcutNoticeRequest.Build());

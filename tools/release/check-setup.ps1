@@ -65,6 +65,12 @@ function Assert-InstalledFolder([string]$Folder) {
     }
     Write-Output "Exe: file version $fileVersion"
 
+    # portable.txt next to Hindsound.exe turns a copy into the portable one, which only announces new versions:
+    # an installed copy must never have it, or it would stop updating itself.
+    if (Test-Path -LiteralPath (Join-Path $Folder 'portable.txt')) {
+        throw "The installed folder has a portable.txt: an installed copy is never portable."
+    }
+
     Assert-SameFile (Join-Path $Folder 'libmp3lame.64.dll') $DllPath
     Write-Output "DLL: the compiled one, SHA-256 $(Get-Sha256 $DllPath)"
 

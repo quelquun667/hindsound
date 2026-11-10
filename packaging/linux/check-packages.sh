@@ -71,6 +71,12 @@ check_layout() {
     has "$doc/THIRD-PARTY-NOTICES.md"
     has "$doc/licenses/LAME-COPYING.txt"
     has "$doc/licenses/Tmds.DBus.Protocol-COPYING.txt"
+    # The texts of the AppImage runtime and of the libraries built into it: THIRD-PARTY-NOTICES.md links them.
+    local licence
+    for licence in AppImage-type2-runtime-LICENSE.txt musl-COPYRIGHT.txt libfuse-LGPL2.txt libfuse-LICENSE.txt \
+        squashfuse-LICENSE.txt zstd-LICENSE.txt zlib-LICENSE.txt mimalloc-LICENSE.txt; do
+        has "$doc/licenses/linux/$licence"
+    done
     if command -v desktop-file-validate > /dev/null; then
         desktop-file-validate -- "$share/applications/$APP_ID.desktop" || fail "$label: the desktop entry is not valid"
     fi

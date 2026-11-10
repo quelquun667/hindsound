@@ -325,6 +325,19 @@ try {
     [IO.File]::WriteAllText((Join-Path $noExe 'libmp3lame.64.dll'), 'fake dll')
     Assert-Refused 'a published folder without the exe refused' { & $buildZip -PublishDir $noExe -Version '1.2.3' -OutFile (Join-Path $temp 'zip-3\Hindsound-1.2.3-win-x64-portable.zip') } 'Missing for the zip'
     Report 'no zip left after a refusal' (-not (Test-Path -LiteralPath (Join-Path $temp 'zip-3\Hindsound-1.2.3-win-x64-portable.zip')))
+    # The read-back: a source changed after the zip is written leaves an entry with other bytes, and the zip is refused.
+    $changedPublish = Join-Path $temp 'portable-publish-changed'
+    New-Item -ItemType Directory -Path $changedPublish | Out-Null
+    foreach ($name in 'Hindsound.exe', 'libmp3lame.64.dll') {
+        [IO.File]::WriteAllText((Join-Path $changedPublish $name), "fake $name")
+    }
+    $changedZip = Join-Path $temp 'zip-4\Hindsound-1.2.3-win-x64-portable.zip'
+    Assert-Refused 'a zip whose dll differs from its source refused' { & $buildZip -PublishDir $changedPublish -Version '1.2.3' -OutFile $changedZip -AfterWrite { [IO.File]::WriteAllText((Join-Path $changedPublish 'libmp3lame.64.dll'), 'another dll') } } 'libmp3lame.64.dll in the zip has the SHA-256'
+    Report 'no zip left after a read-back refusal' (-not (Test-Path -LiteralPath $changedZip))
+    Report 'no partial zip left after a read-back refusal' (-not (Test-Path -LiteralPath "$changedZip.partial"))
+    [IO.File]::WriteAllText((Join-Path $changedPublish 'libmp3lame.64.dll'), 'fake libmp3lame.64.dll')
+    Assert-Refused 'a zip whose exe differs from its source refused' { & $buildZip -PublishDir $changedPublish -Version '1.2.3' -OutFile $changedZip -AfterWrite { [IO.File]::WriteAllText((Join-Path $changedPublish 'Hindsound.exe'), 'another exe') } } 'Hindsound.exe in the zip has the SHA-256'
+    Assert-Accepted 'a zip whose sources stay the same accepted with the hook' { & $buildZip -PublishDir $changedPublish -Version '1.2.3' -OutFile (Join-Path $temp 'zip-5\Hindsound-1.2.3-win-x64-portable.zip') -AfterWrite { } }
 
     # --- write-release-notes ---
     $writeNotes = Join-Path $PSScriptRoot 'write-release-notes.ps1'
@@ -762,6 +775,7 @@ try {
     Assert-Refused 'another exe version refused' { & $checkSetup -CheckFolder $goodFolder -Version '1.2.3' -DllPath $compiledDll -RepoRoot $fakeRepo } 'file version'
     Assert-Refused 'no licence in the repository refused' { & $checkSetup -CheckFolder $goodFolder -Version $packageVersion -DllPath $compiledDll -RepoRoot $noLicences } 'no licenses'
     Assert-FolderRefused 'no exe refused' { Remove-Item -LiteralPath (Join-Path $args[0] 'Hindsound.exe') } 'has no*Hindsound.exe'
+    Assert-FolderRefused 'a portable.txt in the installed folder refused' { [IO.File]::WriteAllText((Join-Path $args[0] 'portable.txt'), 'portable') } 'has a portable.txt'
     Assert-FolderRefused 'no DLL refused' { Remove-Item -LiteralPath (Join-Path $args[0] 'libmp3lame.64.dll') } 'has no*libmp3lame.64.dll'
     Assert-FolderRefused 'the DLL of the package in place of the compiled one refused' { Copy-Item -LiteralPath $packageDll -Destination (Join-Path $args[0] 'libmp3lame.64.dll') -Force } 'differs'
     Assert-FolderRefused 'no LICENSE refused' { Remove-Item -LiteralPath (Join-Path $args[0] 'LICENSE') } 'has no*LICENSE'
@@ -944,6 +958,7 @@ try {
         Report "$($workflow[0]) puts no expression in a run block" (-not $runText.Contains('${{'))
         Report "$($workflow[0]) lets no step fail silently" (-not ($text -match 'continue-on-error'))
         Report "$($workflow[0]) does not use the test parameters of build-lame" (-not ($text -match '-ExpectedSha256|-VsDevCmd'))
+        Report "$($workflow[0]) does not use the test parameter of build-portable-zip" (-not ($text -match '-AfterWrite'))
         Report "$($workflow[0]) does not give build-lame its addresses" (-not ($text -match '-Urls'))
         foreach ($uses in @($workflow[1] | Where-Object { $_ -match '^\s*(- )?uses:' })) {
             # A workflow of this repository runs at the commit of the run: its path is its pin.

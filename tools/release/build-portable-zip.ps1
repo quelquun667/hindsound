@@ -17,6 +17,9 @@
     The repository, for LICENSE, THIRD-PARTY-NOTICES.md, licenses and packaging\windows.
 .PARAMETER Timestamp
     The date of every entry. By default the date of the commit of RepoRoot.
+.PARAMETER AfterWrite
+    For test-release-scripts.ps1 only: runs once the zip is written and before it is read back, to change a source and
+    see the read-back refuse the zip. A workflow never passes it.
 .EXAMPLE
     ./tools/release/build-portable-zip.ps1 -PublishDir publish -Version 0.1.0 -OutFile out/Hindsound-0.1.0-win-x64-portable.zip
 #>
@@ -25,7 +28,8 @@ param(
     [Parameter(Mandatory = $true)][string]$Version,
     [Parameter(Mandatory = $true)][string]$OutFile,
     [string]$RepoRoot = (Join-Path $PSScriptRoot '..\..'),
-    [Nullable[DateTimeOffset]]$Timestamp = $null
+    [Nullable[DateTimeOffset]]$Timestamp = $null,
+    [scriptblock]$AfterWrite = $null
 )
 
 $ErrorActionPreference = 'Stop'
@@ -125,6 +129,10 @@ try {
     }
     finally {
         $stream.Dispose()
+    }
+
+    if ($null -ne $AfterWrite) {
+        & $AfterWrite
     }
 
     # Read back: exactly these entries, each with the bytes of its source.

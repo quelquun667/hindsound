@@ -17,6 +17,15 @@ internal static class Program
     /// <summary>Holds the name for as long as the channel lives. <paramref name="first"/> says whether nobody held it before.</summary>
     internal static WindowsInstanceChannel TakeInstance(AppOptions options, out bool first) => new(new Mutex(true, MutexNameFor(options), out first), first);
 
+    /// <summary>The only trace that an installed copy had a portable.txt next to it, and stayed installed.</summary>
+    internal static void WriteMarkerLine(Journal journal, bool markerIgnored)
+    {
+        if (markerIgnored)
+        {
+            journal.Write(Updates.PortableCopy.MarkerIgnoredLine);
+        }
+    }
+
     [STAThread]
     private static int Main(string[] args)
     {
@@ -24,10 +33,7 @@ internal static class Program
         var options = AppOptions.Parse(args);
         var journal = new Journal(Journal.PathFor(options.SettingsPath));
         Ui.TextEngine.Log = journal.Write;
-        if (WindowsPlatform.PortableMarkerIgnored)
-        {
-            journal.Write(Updates.PortableCopy.MarkerIgnoredLine);
-        }
+        WriteMarkerLine(journal, WindowsPlatform.PortableMarkerIgnored);
 
         // Only the log can be done from here: on a thread other than the loop's, the runtime ends the process anyway.
         // Every thread this app starts catches its own exceptions, so this is for those of a library.
