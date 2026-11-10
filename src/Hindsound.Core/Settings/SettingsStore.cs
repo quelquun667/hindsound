@@ -43,8 +43,8 @@ public sealed class SettingsStore
         Path = path ?? DefaultPath;
     }
 
-    public static string DefaultPath { get; } = System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Hindsound", "settings.json");
+    public static string DefaultPath { get; } = UserFolders.Under(
+        Environment.SpecialFolder.ApplicationData, "Hindsound", "settings.json");
 
     public string Path { get; }
 

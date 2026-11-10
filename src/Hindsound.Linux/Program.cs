@@ -1,6 +1,7 @@
 using System.Runtime.Versioning;
 using Hindsound.App;
 using Hindsound.Linux.App;
+using Hindsound.Linux.Desktop;
 using Hindsound.Linux.Export;
 
 namespace Hindsound.Linux;
@@ -47,6 +48,13 @@ internal static class Program
         {
             // Nothing is kept yet: a clip now would be empty. The app starts, and the next --save finds it.
             journal.Write("--save with no running instance: starting the app instead");
+        }
+
+        // Before the app reaches the portal of global shortcuts, which knows an app only by its entry. A run off screen is a
+        // test's, and writes nothing in the user's menu.
+        if (!options.Offscreen)
+        {
+            ApplicationEntry.AtLaunch(LaunchPaths.Current(), journal.Write);
         }
 
         // A clip that cannot be encoded falls back to WAV without a word: a user who gets WAV files finds the reason here.

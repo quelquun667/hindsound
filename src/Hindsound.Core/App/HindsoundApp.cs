@@ -1260,7 +1260,45 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
             return;
         }
 
+        // Without a window, the clip itself is what there is to show: selected in its folder, as "Show in folder" does.
+        if (!_shell.HasWindow && showing?.ClipPath is { } clip)
+        {
+            ShowClipInFolder(clip);
+            return;
+        }
+
         _going.Click(showing);
+    }
+
+    // Off the loop: the file manager can take as long as it likes. A clip moved or deleted since leaves its folder to open.
+    // Nothing here writes the path to the log: a file name can hold a first name.
+    private void ShowClipInFolder(string clip)
+    {
+        if (Path.GetDirectoryName(clip) is not { Length: > 0 } folder)
+        {
+            OpenClipsFolder();
+            return;
+        }
+
+        var shell = _options.Offscreen ? new OffscreenFolderShell(_journal.Write) : _shell.NewFolderShell();
+        OffLoop.Start(
+            () =>
+            {
+                if (!File.Exists(clip))
+                {
+                    _journal.Write("show in folder from the notification: the clip is gone, its folder instead");
+                    OpenWithShell(folder);
+                    return;
+                }
+
+                var result = shell.ShowSelected(folder, [clip]);
+                if (result < 0)
+                {
+                    _journal.Write($"show in folder from the notification: failed (0x{result:X8}), the folder instead");
+                    OpenWithShell(folder);
+                }
+            },
+            ex => _journal.Write($"show in folder from the notification: failed ({ClipFolders.Describe(ex)})"));
     }
 
     private void OpenLastClipFolder()

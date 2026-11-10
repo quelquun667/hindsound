@@ -65,5 +65,5 @@ public sealed record ExportOptions
     public string FileNameTemplate { get; init; } = DefaultFileNameTemplate;
 
     public static string DefaultOutputFolder() =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyMusic), "Hindsound");
+        Hindsound.Settings.UserFolders.Under(Environment.SpecialFolder.MyMusic, "Hindsound");
 }

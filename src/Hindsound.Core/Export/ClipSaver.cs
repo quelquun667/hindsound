@@ -35,7 +35,7 @@ public sealed class ClipSaver
 
     /// <summary><c>%LOCALAPPDATA%\Hindsound\Rescued</c></summary>
     public static string DefaultRescueFolder =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Hindsound", "Rescued");
+        Hindsound.Settings.UserFolders.Under(Environment.SpecialFolder.LocalApplicationData, "Hindsound", "Rescued");
 
     /// <summary>
     /// Saves the snapshot on a worker thread, so the caller (the hotkey handler) is never blocked.

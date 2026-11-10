@@ -276,7 +276,8 @@ internal sealed class PortalHotkeys : IHotkeyNative
 
         // Before any other call to the portal, or it is refused; a desktop without the interface answers an error, ignored.
         // "The application ID must be able to match the basename of a .desktop file that describes the application"
-        // (org.freedesktop.host.portal.Registry): nothing of the app installs one, an AppImage least of all.
+        // (org.freedesktop.host.portal.Registry): a launch from an AppImage or from the folder of the archive has written it
+        // before the hotkeys open (ApplicationEntry, from the entry point); a copy installed by hand has the one of its package.
         var registered = await _bus.CallAsync(new BusMethod(_portal, PortalPath, RegistryInterface, "Register"), "sa{sv}", PortalMessages.WriteRegister).ConfigureAwait(false);
         if (!registered.Ok && announce)
         {

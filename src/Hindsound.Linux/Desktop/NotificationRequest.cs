@@ -47,6 +47,12 @@ internal sealed record NotificationRequest(
     /// <summary>The urgency levels of the specification: 0 low, 1 normal, 2 critical.</summary>
     public const byte LowUrgency = 0;
 
+    /// <summary>
+    /// A clip's notification: GNOME and Plasma show a low one only in their list, with no banner, and the clip is what the user
+    /// pressed the key for.
+    /// </summary>
+    public const byte NormalUrgency = 1;
+
     /// <summary>-1: the server's own settings decide how long it stays.</summary>
     public const int ServerTimeout = -1;
 
@@ -74,7 +80,7 @@ internal sealed record NotificationRequest(
             content.Title,
             markup ? Escape(body) : body,
             actions,
-            LowUrgency,
+            content.ClipPath is null ? LowUrgency : NormalUrgency,
             SuppressSound: true,
             DBusNames.AppId,
             ServerTimeout);

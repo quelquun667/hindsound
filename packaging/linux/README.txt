@@ -21,7 +21,8 @@ From this folder:
 libmp3lame.so.0 stays next to hindsound: it is the MP3 encoder. ~/.local/bin is on the PATH of Ubuntu once you log in
 again. Then start Hindsound from the list of applications, or run "hindsound".
 
-You can also run ./hindsound from this folder without installing anything.
+You can also run ./hindsound from this folder, without copying anything. It then adds itself to the list of
+applications, with an entry and an icon in ~/.local/share that start it from this folder; Uninstall below removes them.
 
 
 Save a clip from a key
@@ -52,13 +53,21 @@ Settings
 Uninstall
 ---------
 
+Turn "Start with the session" off in the menu of the icon first, or the last line below removes it for you. Then:
+
     rm ~/.local/bin/hindsound ~/.local/bin/libmp3lame.so.0
     rm ~/.local/share/applications/io.github.quelquun667.Hindsound.desktop
     rm ~/.local/share/icons/hicolor/*/apps/io.github.quelquun667.Hindsound.png
     rm -f ~/.config/autostart/io.github.quelquun667.Hindsound.desktop
 
-The last line removes what "Start with the session" adds. Your clips stay, and so do ~/.config/Hindsound (the settings)
-and ~/.local/share/Hindsound (the log, rescued clips and the update state).
+The last line removes what "Start with the session" adds: if you delete the program without it, your session tries to
+start a file that is gone at each login.
+
+What Hindsound leaves, and you can delete too:
+
+    ~/Music/Hindsound                the clips (or the folder your settings name)
+    ~/.config/Hindsound              the settings
+    ~/.local/share/Hindsound         the log, the clips rescued after a failed save (Rescued) and the update state (updates)
 
 
 Licenses

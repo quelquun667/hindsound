@@ -112,7 +112,8 @@ public class SettingsMappingTests
     [InlineData("   ")]
     public void The_default_folder_is_the_real_music_folder(string stored)
     {
-        var real = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyMusic), "Hindsound");
+        // DoNotVerify, as the app asks: an account with no Music folder still has its path, never an empty string.
+        var real = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyMusic, Environment.SpecialFolderOption.DoNotVerify), "Hindsound");
         var settings = new AppSettings { Export = new ExportSettings { OutputFolder = stored } };
 
         Assert.Equal(real, SettingsMapping.ToExportOptions(settings).OutputFolder);

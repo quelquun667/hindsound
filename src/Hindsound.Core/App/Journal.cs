@@ -30,7 +30,7 @@ internal sealed class Journal
     /// <summary>Next to a file given by <c>--settings</c>, so a test leaves nothing elsewhere; otherwise in %LOCALAPPDATA%\Hindsound.</summary>
     public static string PathFor(string? settingsPath) =>
         settingsPath is null
-            ? System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Hindsound", "hindsound.log")
+            ? Hindsound.Settings.UserFolders.Under(Environment.SpecialFolder.LocalApplicationData, "Hindsound", "hindsound.log")
             : System.IO.Path.ChangeExtension(System.IO.Path.GetFullPath(settingsPath), ".log");
 
     public string Path { get; }

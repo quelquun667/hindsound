@@ -81,9 +81,10 @@ public sealed class LameMp3OnLinuxTests
         PutLibraryBesideTheProgram();
         if (BuiltDirectory is null) return;
 
-        var lame = LameLibrary.Shared;
+        // A fresh load, not LameLibrary.Shared: Shared keeps what the first clip of the run loaded, and an earlier test in the
+        // same process (the smoke test saves an MP3) loads it before the library is put here.
+        var lame = LameLibrary.Load(LameLibrary.ProgramCandidates);
 
-        Assert.NotNull(lame);
         Assert.Equal(Path.Combine(AppContext.BaseDirectory, LameLibrary.SystemName), lame.LoadedFrom);
         Assert.Equal("3.100", lame.Version);
     }

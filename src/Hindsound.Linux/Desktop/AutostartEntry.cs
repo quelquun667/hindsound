@@ -13,20 +13,31 @@ internal sealed class AutostartEntry : IRunKey
 {
     public const string FileName = DBusNames.AppId + ".desktop";
 
-    private readonly string _folder;
+    private readonly string? _folder;
 
     public AutostartEntry(Action<string> log)
-        : this(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData, Environment.SpecialFolderOption.DoNotVerify), "autostart"))
+        : this(FolderIn(UserFolders.Find(Environment.SpecialFolder.ApplicationData)))
     {
     }
 
-    /// <param name="folder">The autostart folder: for a test, one of its own.</param>
-    internal AutostartEntry(string folder) => _folder = folder;
+    /// <param name="folder">The autostart folder: for a test, one of its own. Null when the system knows no config folder.</param>
+    internal AutostartEntry(string? folder) => _folder = folder;
 
-    public string FilePath => Path.Combine(_folder, FileName);
+    /// <summary>The entry file. Throws when there is no autostart folder.</summary>
+    public string FilePath => Path.Combine(_folder ?? throw new IOException(NoFolder), FileName);
+
+    private const string NoFolder = "No config folder, so no autostart folder.";
+
+    /// <summary>The autostart folder in the config folder; none without one, as a relative folder would be no autostart folder at all.</summary>
+    internal static string? FolderIn(string? config) => config is null ? null : Path.Combine(config, "autostart");
 
     public RunEntry State(string? program)
     {
+        if (_folder is null)
+        {
+            return RunEntry.None;
+        }
+
         string text;
         try
         {
@@ -45,7 +56,7 @@ internal sealed class AutostartEntry : IRunKey
     public void Enable(string program)
     {
         var text = AutostartFile.Text(program);
-        Directory.CreateDirectory(_folder);
+        Directory.CreateDirectory(_folder ?? throw new IOException(NoFolder));
 
         // Whole or not at all: the session never reads half an entry.
         var temporary = FilePath + ".tmp";
@@ -55,6 +66,11 @@ internal sealed class AutostartEntry : IRunKey
 
     public void Disable()
     {
+        if (_folder is null)
+        {
+            return;
+        }
+
         try
         {
             File.Delete(FilePath);

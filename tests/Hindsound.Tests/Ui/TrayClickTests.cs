@@ -55,36 +55,6 @@ public class TrayClickTests
     }
 
     [Fact]
-    public void What_was_true_at_the_click_is_read_before_the_menu_shows()
-    {
-        var order = new List<string>();
-
-        TrayMenu.ReadThenShow(
-            () =>
-            {
-                order.Add("read");
-                return new TrayClick(null, Second, 0);
-            },
-            () =>
-            {
-                order.Add("show");
-                return TrayCommand.None;
-            });
-
-        Assert.Equal(["read", "show"], order);
-    }
-
-    [Fact]
-    public void The_command_comes_with_what_was_read()
-    {
-        var (click, command) = TrayMenu.ReadThenShow(() => new TrayClick("Valorant", Second, 0), () => TrayCommand.Save1m);
-
-        Assert.Equal("Valorant", click.AppName);
-        Assert.Equal(Second, click.Screen);
-        Assert.Equal(TrayCommand.Save1m, command);
-    }
-
-    [Fact]
     public void The_next_status_after_the_click_goes_to_its_screen()
     {
         var click = new TrayClick(null, Second, 1000);

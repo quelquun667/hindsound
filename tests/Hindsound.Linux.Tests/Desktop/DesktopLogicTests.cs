@@ -28,7 +28,7 @@ public sealed class DesktopLogicTests : IDisposable
         new(NotificationKind.Silent, "Clip saved", body, keys ?? [], 0, NotificationVisual.Bars, 0, []) { ClipPath = clip };
 
     [Fact]
-    public void A_clip_notification_is_silent_low_and_offers_the_folder()
+    public void A_clip_notification_is_silent_of_normal_urgency_and_offers_the_folder()
     {
         var request = NotificationRequest.For(Content(clip: "/home/u/Music/Hindsound/a.mp3"), 7, markup: false);
 
@@ -38,7 +38,7 @@ public sealed class DesktopLogicTests : IDisposable
         Assert.Equal("Clip saved", request.Summary);
         Assert.Equal("Saved", request.Body);
         Assert.Equal(["default", "Open", "show-folder", "Show in folder"], request.Actions);
-        Assert.Equal(0, request.Urgency);
+        Assert.Equal(1, request.Urgency);
         Assert.True(request.SuppressSound);
         Assert.Equal("io.github.quelquun667.Hindsound", request.DesktopEntry);
         Assert.Equal(-1, request.ExpireTimeout);

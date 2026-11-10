@@ -137,7 +137,8 @@ you want nothing left.
 
 A first Linux version, for 64-bit Ubuntu 22.04 and later, is on its way. It has no window. From the start it captures the
 sound of the whole PC, and the microphone if your settings name one. It saves a clip on its hotkey, on `hindsound --save`
-or from the menu of its icon, says so with a notification, and copies the clip when the desktop allows it.
+or from the menu of its icon, says so with a notification, and copies the clip when the desktop allows it. A click on the
+notification of a clip shows the clip in its folder.
 
 **Download.** Until a release carries it, take it from the CI: open a recent run of the
 [CI workflow](https://github.com/quelquun667/hindsound/actions/workflows/ci.yml) on `main`, and download the
@@ -163,6 +164,12 @@ or from the menu of its icon, says so with a notification, and copies the clip w
 
 `SHA256SUMS` in the artifact has the checksums of both.
 
+**In the list of applications.** On its first launch from the AppImage or from the unpacked folder, Hindsound adds itself
+to the list of applications: it writes `~/.local/share/applications/io.github.quelquun667.Hindsound.desktop`, which starts
+the file you launched, and its icon in `~/.local/share/icons/hicolor/<size>/apps/`. The shortcut portal knows an app only
+by this entry. A launch from elsewhere writes it again; an entry installed by a package of the system is never covered. To
+take it away, delete the entry and the icons.
+
 **Save from a key.** On X11, and on Wayland where the desktop offers global shortcuts (GNOME 48 and later, so Ubuntu
 26.04, and KDE), Hindsound uses its hotkey. Ubuntu 24.04 on Wayland has no such shortcuts: open Settings > Keyboard >
 View and Customize Shortcuts > Custom Shortcuts, add one, and set its command to the full path of the program followed by
@@ -180,6 +187,20 @@ replace the file.
 
 **Not there yet:** the window (settings, `Now`, `Library`), listening to a clip, recording one application, and any
 processor other than x64.
+
+**Remove it.** Before you delete the AppImage (or the program), turn `Start with the session` off in the menu of the icon,
+or delete `~/.config/autostart/io.github.quelquun667.Hindsound.desktop`: otherwise your session tries to start a file that
+is gone at each login. Then delete the program. Hindsound leaves these, and you can delete them too:
+
+- `~/Music/Hindsound`, or the folder your settings name: your clips.
+- `~/.config/Hindsound`: the settings.
+- `~/.local/share/Hindsound`: the log, the clips rescued after a failed save (`Rescued`) and the state of the update
+  check (`updates`).
+- `~/.local/share/applications/io.github.quelquun667.Hindsound.desktop` and
+  `~/.local/share/icons/hicolor/*/apps/io.github.quelquun667.Hindsound.png`: its entry in the list of applications and its
+  icons, written at its first launch.
+
+If you installed the tar.gz into `~/.local`, its `README.txt` lists the files to remove.
 
 **Build it.** With the .NET 10 SDK, on Linux or Windows:
 
@@ -428,7 +449,8 @@ sound server, no desktop and no FUSE, to write a test MP3. Not tried for real:
 - capturing a real PC and a real microphone, through PipeWire or PulseAudio
 - the hotkey through the shortcut portal (GNOME 48 and later, KDE) and on X11
 - `hindsound --save` bound to a key in the Settings of Ubuntu 24.04
-- the notification of a clip and its `Show in folder`, and the notice of a new version
+- the notification of a clip, a click on it and its `Show in folder`, and the notice of a new version
+- the entry in the list of applications written at the first launch, and its icon
 - copying a clip, then pasting it into Discord or a file manager
 - the icon and its menu, on GNOME with AppIndicator and on KDE
 - `Start with the session`

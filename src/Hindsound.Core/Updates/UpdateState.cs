@@ -54,8 +54,8 @@ internal sealed class UpdateStateStore(string path)
     // A state of a few hundred bytes: anything far larger is not ours, and is not worth the memory.
     private const long MaxStateBytes = 64 * 1024;
 
-    public static string DefaultFolder { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Hindsound", "updates");
+    public static string DefaultFolder { get; } = Hindsound.Settings.UserFolders.Under(
+        Environment.SpecialFolder.LocalApplicationData, "Hindsound", "updates");
 
     public UpdateStateData Load() => TryLoad(out var state) ? state : new UpdateStateData();
 

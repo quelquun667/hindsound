@@ -27,7 +27,10 @@ internal sealed class ShellRunRig : IDisposable
 
     private string LogPath => Path.Combine(_folder, "settings.log");
 
-    public void Run(Action<ShellRunRig> whileRunning)
+    public void Run(Action<ShellRunRig> whileRunning) => Run(whileRunning, offscreen: true);
+
+    /// <param name="offscreen">False runs without --offscreen, so that the app asks the tray to show its menu.</param>
+    public void Run(Action<ShellRunRig> whileRunning, bool offscreen)
     {
         var settings = Path.Combine(_folder, "settings.json");
         File.WriteAllText(settings, $$$"""
@@ -35,7 +38,8 @@ internal sealed class ShellRunRig : IDisposable
              "export":{"outputFolder":{{{JsonSerializer.Serialize(Path.Combine(_folder, "clips"))}}},"copyToClipboard":false},
              "general":{"startWithWindows":false,"confirmSound":"never"}}
             """);
-        var options = AppOptions.Parse(["--settings", settings, "--no-mic", "--no-hotkeys", "--no-clipboard", "--offscreen"]);
+        string[] args = ["--settings", settings, "--no-mic", "--no-hotkeys", "--no-clipboard"];
+        var options = AppOptions.Parse(offscreen ? [.. args, "--offscreen"] : args);
         Shell.Loop.WhileRunning = () => whileRunning(this);
         var desktop = new DesktopParts(Screens, new RigQuiet(), new RigSound(), new RigOpener(), new RigMeter());
         App = new HindsoundApp(options, new Journal(LogPath), desktop: desktop, shell: Shell, instance: new RigInstance());
@@ -151,9 +155,10 @@ internal sealed class ShellRunRig : IDisposable
 
         public bool Update(TrayState state, uint accent, string tip) => true;
 
-        public void ShowMenu(IReadOnlyList<TrayMenuItem> items)
-        {
-        }
+        /// <summary>Runs when the app shows the menu: what showing it changes on the desktop.</summary>
+        public Action? Shown { get; set; }
+
+        public void ShowMenu(IReadOnlyList<TrayMenuItem> items) => Shown?.Invoke();
 
         public void Dispose()
         {

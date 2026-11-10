@@ -55,6 +55,12 @@ internal sealed unsafe class LameLibrary
     public static IReadOnlyList<string> Candidates(string programDirectory) =>
         [Path.Combine(programDirectory, SystemName), SystemName];
 
+    /// <summary>
+    /// Where the app looks: next to the program, which for the published single file is the folder it unpacks or lives in
+    /// (<see cref="AppContext.BaseDirectory"/>), not the folder of the host process, then the system.
+    /// </summary>
+    public static IReadOnlyList<string> ProgramCandidates => Candidates(AppContext.BaseDirectory);
+
     /// <summary>The library of the app, loaded on first use. Null while it cannot be loaded, with the reason in <see cref="LastError"/>.</summary>
     public static LameLibrary? Shared
     {
@@ -66,7 +72,7 @@ internal sealed unsafe class LameLibrary
                 {
                     try
                     {
-                        _shared = Load(Candidates(AppContext.BaseDirectory));
+                        _shared = Load(ProgramCandidates);
                         LastError = null;
                     }
                     catch (DllNotFoundException ex)

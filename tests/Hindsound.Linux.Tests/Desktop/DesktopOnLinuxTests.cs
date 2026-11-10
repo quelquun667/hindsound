@@ -210,7 +210,7 @@ public sealed class DesktopOnLinuxTests : IDisposable
         Assert.Equal("Clip saved", first.Summary);
         Assert.Equal("Saved", first.Body);
         Assert.Equal(["default", "Open", "show-folder", "Show in folder"], first.Actions);
-        Assert.Equal((byte)0, first.Hints["urgency"].GetByte());
+        Assert.Equal((byte)1, first.Hints["urgency"].GetByte());
         Assert.True(first.Hints["suppress-sound"].GetBool());
         Assert.Equal("io.github.quelquun667.Hindsound", first.Hints["desktop-entry"].GetString());
         Assert.Equal(-1, first.Expire);

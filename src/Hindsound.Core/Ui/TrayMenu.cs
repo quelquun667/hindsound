@@ -77,13 +77,6 @@ internal readonly record struct TrayClick(string? AppName, ScreenInfo Screen, lo
 /// <summary>What the tray menu offers. Pure: tested without any window.</summary>
 internal static class TrayMenu
 {
-    /// <summary>What was true at the click comes first: <paramref name="show"/> makes our own hidden window the active one.</summary>
-    public static (TrayClick Click, TrayCommand Command) ReadThenShow(Func<TrayClick> read, Func<TrayCommand> show)
-    {
-        var click = read();
-        return (click, show());
-    }
-
     /// <param name="paused">The capture is paused.</param>
     /// <param name="hasLastClip">There is a clip to copy.</param>
     /// <param name="closingAfterClip">Quit was asked for and a clip is still being written: a second Quit is all that is left to do.</param>

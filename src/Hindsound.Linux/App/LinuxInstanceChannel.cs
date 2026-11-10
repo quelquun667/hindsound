@@ -36,7 +36,7 @@ internal sealed class LinuxInstanceChannel : IInstanceChannel
     /// <summary>Holds the name for <paramref name="options"/> for as long as the channel lives.</summary>
     public static LinuxInstanceChannel Take(AppOptions options, Action<string> log)
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = Hindsound.Settings.UserFolders.Find(Environment.SpecialFolder.UserProfile);
         if (InstancePlace.For(Environment.GetEnvironmentVariable, home, SingleInstance.NameFor(options)) is not { } place)
         {
             log("single instance: no folder fits a socket, so every launch counts as the first");

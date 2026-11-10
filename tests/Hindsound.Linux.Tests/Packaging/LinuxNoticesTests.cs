@@ -82,7 +82,23 @@ public sealed partial class LinuxNoticesTests
     {
         var notices = File.ReadAllText(Path.Combine(Root, "THIRD-PARTY-NOTICES.md"));
         Assert.DoesNotContain("The Windows build of Hindsound contains or ships the components below", notices, StringComparison.Ordinal);
-        Assert.Contains("\"Linux build only\"", notices, StringComparison.Ordinal);
+        Assert.Contains("says whether a component is in the Windows build, in the Linux packages", notices, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Every_row_of_the_notices_says_in_which_build_the_component_is()
+    {
+        var rows = File.ReadAllLines(Path.Combine(Root, "THIRD-PARTY-NOTICES.md"))
+            .Where(line => line.StartsWith("| ", StringComparison.Ordinal) && !line.StartsWith("| Component ", StringComparison.Ordinal))
+            .Select(line => line.Split('|').Select(cell => cell.Trim()).ToArray())
+            .ToList();
+
+        Assert.NotEmpty(rows);
+        foreach (var row in rows)
+        {
+            Assert.Equal(9, row.Length);
+            Assert.False(string.IsNullOrWhiteSpace(row[7]), row[1] + " has no \"In\" cell");
+        }
     }
 
     /// <summary>The licences/ files the Text cell of the package's row links to.</summary>
