@@ -7,7 +7,7 @@ namespace Hindsound.Linux.Tests.Packaging;
 
 /// <summary>
 /// The files of packaging/linux, read as text: the desktop entry, the icons, AppRun and the two scripts. The packages
-/// themselves are made and started only by the linux-package job of the CI; these tests keep the files that job uses in
+/// themselves are made and started only by the linux job of release-files.yml, in the CI and for a release; these tests keep the files that job uses in
 /// line with the app (its id, its program name) on every system.
 /// </summary>
 public sealed partial class LinuxPackageFilesTests
@@ -124,10 +124,14 @@ public sealed partial class LinuxPackageFilesTests
     [Fact]
     public void The_CI_makes_and_checks_both_packages()
     {
-        var ci = File.ReadAllText(Path.Combine(RepositoryRoot(), ".github", "workflows", "ci.yml"));
-        Assert.Contains("bash packaging/linux/build-packages.sh ", ci, StringComparison.Ordinal);
-        Assert.Contains("bash packaging/linux/check-packages.sh ", ci, StringComparison.Ordinal);
-        Assert.Contains("bash tools/release/build-lame-linux.sh ", ci, StringComparison.Ordinal);
+        // The CI makes them through release-files.yml, the workflow a tag runs as well.
+        var workflows = Path.Combine(RepositoryRoot(), ".github", "workflows");
+        var ci = File.ReadAllText(Path.Combine(workflows, "ci.yml"));
+        Assert.Contains("uses: ./.github/workflows/release-files.yml\n", ci.Replace("\r\n", "\n", StringComparison.Ordinal), StringComparison.Ordinal);
+        var files = File.ReadAllText(Path.Combine(workflows, "release-files.yml"));
+        Assert.Contains("bash packaging/linux/build-packages.sh ", files, StringComparison.Ordinal);
+        Assert.Contains("bash packaging/linux/check-packages.sh ", files, StringComparison.Ordinal);
+        Assert.Contains("bash tools/release/build-lame-linux.sh ", files, StringComparison.Ordinal);
     }
 
     private static Dictionary<string, string> Entry() =>

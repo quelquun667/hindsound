@@ -1,0 +1,2 @@
+This copy of Hindsound is portable: it does not install updates.
+When a new version is out, it tells you, with a link to the release.

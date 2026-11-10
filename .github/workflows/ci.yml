@@ -115,65 +115,29 @@ jobs:
           path: ${{ runner.temp }}/pulseaudio.log
           if-no-files-found: warn
 
-  # The Linux app, published as the users get it: one self-contained, trimmed file, with its MP3 encoder, made into an
-  # AppImage and a tar.gz. Built on the oldest Ubuntu the runners offer, so that it runs on the newer ones; both packages
-  # are started once (--prove-mp3) and kept as an artifact of the run.
-  linux-package:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 20
+  # Until a release builds them, the files of the rehearsal below carry the version of the latest release in the changelog.
+  release-version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Set up .NET
-        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
-        with:
-          dotnet-version: 10.0.x
-
-      # Until a release builds them, the packages carry the version of the latest release in the changelog.
       - name: Read the version
+        id: version
         run: |
           version=$(grep -m 1 -oP '^## \[\K[0-9]+\.[0-9]+\.[0-9]+(?=\])' CHANGELOG.md)
-          echo "HINDSOUND_VERSION=$version" >> "$GITHUB_ENV"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Publish the Linux app
-        run: >-
-          dotnet publish src/Hindsound.Linux/Hindsound.Linux.csproj -c Release -r linux-x64 --self-contained
-          -p:PublishSingleFile=true -p:PublishTrimmed=true -p:Version=${{ env.HINDSOUND_VERSION }}
-          -p:PublishDir=${{ runner.temp }}/hindsound-linux-x64/
-
-      # The same LAME 3.100 as the Windows build, compiled here; it leaves libmp3lame.so.0 (and the lame command of the
-      # tests, which is not shipped) in its second folder.
-      - name: Build the MP3 encoder
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends build-essential curl file binutils
-          bash tools/release/build-lame-linux.sh "${{ runner.temp }}/lame-work" "${{ runner.temp }}/lame"
-
-      - name: Install the checker of desktop entries
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends desktop-file-utils
-
-      - name: Make the AppImage and the tar.gz
-        run: >-
-          bash packaging/linux/build-packages.sh "${{ runner.temp }}/hindsound-linux-x64" "${{ runner.temp }}/lame/libmp3lame.so.0"
-          "$HINDSOUND_VERSION" "${{ runner.temp }}/packages"
-
-      - name: Check the packages
-        run: bash packaging/linux/check-packages.sh "${{ runner.temp }}/packages" "$HINDSOUND_VERSION"
-
-      # The packages ship libmp3lame.so.0 under the LGPL: its source goes with them, the archive the encoder was built from,
-      # which build-lame-linux.sh verified against the SHA-256 of the notices.
-      - name: Add the LAME source
-        run: cp -- "${{ runner.temp }}/lame-work/lame-3.100.tar.gz" "${{ runner.temp }}/packages/"
-
-      # A zip of the artifact drops the executable bit: the README says to give it back to the AppImage.
-      - name: Keep the packages
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: hindsound-linux-x64
-          path: ${{ runner.temp }}/packages/
-          if-no-files-found: error
+  # A rehearsal of the release, with nothing published: every file a tag would attach (the Setup, the portable zip, the
+  # AppImage, the tar.gz, the manifests, SHA256SUMS and the LAME source), built and checked by the very workflow the tag
+  # runs, and kept as artifacts of the run: hindsound-windows-x64, hindsound-linux-x64 and release-files.
+  release-files:
+    needs: release-version
+    uses: ./.github/workflows/release-files.yml
+    with:
+      version: ${{ needs.release-version.outputs.version }}

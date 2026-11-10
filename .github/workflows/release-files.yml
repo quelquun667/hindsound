@@ -1,0 +1,186 @@
+name: Release files
+
+# Builds and checks every file of a release, and publishes nothing: it has no token that could. release.yml calls it on a
+# tag, then attaches the files it made to the draft; ci.yml calls it on every pull request, so that a pull request builds
+# exactly what a tag will. The files are kept as the artifact release-files of the run.
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: The version X.Y.Z, in the names of the files, in the programs and in the manifests.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  # The Setup and the portable zip, from one published folder: the same exe and the same compiled DLL in both.
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      VERSION: ${{ inputs.version }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 10.0.x
+
+      # prove-encoding.ps1 runs tests of this project with --no-build, with the compiled DLL put in their output folder.
+      - name: Build the tests
+        run: dotnet build tests/Hindsound.Tests/Hindsound.Tests.csproj -c Release
+
+      - name: Publish the app
+        run: dotnet publish src/Hindsound/Hindsound.csproj -p:PublishProfile=win-x64 "-p:Version=$env:VERSION" "-p:PublishDir=$env:RUNNER_TEMP/publish/"
+
+      # The published folder still holds the DLL of the NAudio.Lame package here: the exports are compared with it.
+      - name: Build LAME
+        timeout-minutes: 15
+        run: ./tools/release/build-lame.ps1 -WorkDir "$env:RUNNER_TEMP/lame" -OutFile "$env:RUNNER_TEMP/lame/libmp3lame.64.dll" -ReferenceDll "$env:RUNNER_TEMP/publish/libmp3lame.64.dll"
+
+      - name: Replace the DLL in the published folder
+        run: Copy-Item -LiteralPath "$env:RUNNER_TEMP/lame/libmp3lame.64.dll" -Destination "$env:RUNNER_TEMP/publish/libmp3lame.64.dll" -Force
+
+      - name: Prove the encoding with the compiled DLL
+        timeout-minutes: 10
+        run: ./tools/release/prove-encoding.ps1 -DllPath "$env:RUNNER_TEMP/lame/libmp3lame.64.dll" -ResultsDir "$env:RUNNER_TEMP/encoding-results"
+
+      - name: Build the Setup
+        run: |
+          $iscc = ./tools/release/get-iscc.ps1 -Destination "$env:RUNNER_TEMP/inno"
+          & $iscc /Q "/DMyAppVersion=$env:VERSION" "/DPublishDir=$env:RUNNER_TEMP/publish" "/O$env:RUNNER_TEMP/out" "/FHindsound-$env:VERSION-Setup" installer/Hindsound.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Check the Setup
+        timeout-minutes: 15
+        run: ./tools/release/check-setup.ps1 -SetupPath "$env:RUNNER_TEMP/out/Hindsound-$env:VERSION-Setup.exe" -Version $env:VERSION -DllPath "$env:RUNNER_TEMP/lame/libmp3lame.64.dll" -WorkDir "$env:RUNNER_TEMP/setup-check"
+
+      - name: Write the update manifest
+        run: ./tools/release/write-manifest.ps1 -Version $env:VERSION -SetupPath "$env:RUNNER_TEMP/out/Hindsound-$env:VERSION-Setup.exe" -Repository $env:GITHUB_REPOSITORY -OutFile "$env:RUNNER_TEMP/out/hindsound-update-win-x64.json"
+
+      - name: Make the portable zip
+        run: ./tools/release/build-portable-zip.ps1 -PublishDir "$env:RUNNER_TEMP/publish" -Version $env:VERSION -OutFile "$env:RUNNER_TEMP/out/Hindsound-$env:VERSION-win-x64-portable.zip"
+
+      # The LGPL source of LAME goes with every release, as verified by build-lame.ps1.
+      - name: Add the LAME source
+        run: Copy-Item -LiteralPath "$env:RUNNER_TEMP/lame/lame-3.100.tar.gz" -Destination "$env:RUNNER_TEMP/out/lame-3.100.tar.gz"
+
+      - name: Keep the Windows files
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: hindsound-windows-x64
+          path: ${{ runner.temp }}/out/
+          if-no-files-found: error
+          overwrite: true
+
+  # The Linux app, published as the users get it: one self-contained, trimmed file, with its MP3 encoder, made into an
+  # AppImage and a tar.gz. Built on the oldest Ubuntu the runners offer, so that it runs on the newer ones; both packages
+  # are started once (--prove-mp3).
+  linux:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    env:
+      HINDSOUND_VERSION: ${{ inputs.version }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish the Linux app
+        run: >-
+          dotnet publish src/Hindsound.Linux/Hindsound.Linux.csproj -c Release -r linux-x64 --self-contained
+          -p:PublishSingleFile=true -p:PublishTrimmed=true "-p:Version=$HINDSOUND_VERSION"
+          "-p:PublishDir=$RUNNER_TEMP/hindsound-linux-x64/"
+
+      # The same LAME 3.100 as the Windows build, compiled here; it leaves libmp3lame.so.0 (and the lame command of the
+      # tests, which is not shipped) in its second folder.
+      - name: Build the MP3 encoder
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential curl file binutils
+          bash tools/release/build-lame-linux.sh "$RUNNER_TEMP/lame-work" "$RUNNER_TEMP/lame"
+
+      - name: Install the checker of desktop entries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends desktop-file-utils
+
+      - name: Make the AppImage and the tar.gz
+        run: >-
+          bash packaging/linux/build-packages.sh "$RUNNER_TEMP/hindsound-linux-x64" "$RUNNER_TEMP/lame/libmp3lame.so.0"
+          "$HINDSOUND_VERSION" "$RUNNER_TEMP/packages"
+
+      - name: Check the packages
+        run: bash packaging/linux/check-packages.sh "$RUNNER_TEMP/packages" "$HINDSOUND_VERSION"
+
+      # The packages ship libmp3lame.so.0 under the LGPL: its source goes with them, the archive the encoder was built from,
+      # which build-lame-linux.sh verified against the SHA-256 of the notices.
+      - name: Add the LAME source
+        run: cp -- "$RUNNER_TEMP/lame-work/lame-3.100.tar.gz" "$RUNNER_TEMP/packages/"
+
+      # A zip of the artifact drops the executable bit: the README says to give it back to the AppImage.
+      - name: Keep the packages
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: hindsound-linux-x64
+          path: ${{ runner.temp }}/packages/
+          if-no-files-found: error
+          overwrite: true
+
+  # The files of the release, together: the two announce manifests and one SHA256SUMS are written here, then everything is
+  # checked as the release job checks the files it downloads back from the draft.
+  assemble:
+    needs: [windows, linux]
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      VERSION: ${{ inputs.version }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Take the Windows files
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: hindsound-windows-x64
+          path: ${{ runner.temp }}/windows
+
+      - name: Take the Linux files
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: hindsound-linux-x64
+          path: ${{ runner.temp }}/linux
+
+      - name: Gather the files of the release
+        run: ./tools/release/assemble-release.ps1 -Version $env:VERSION -Repository $env:GITHUB_REPOSITORY -WindowsFolder "$env:RUNNER_TEMP/windows" -LinuxFolder "$env:RUNNER_TEMP/linux" -OutFolder "$env:RUNNER_TEMP/release"
+
+      - name: Check the files of the release
+        run: ./tools/release/check-release-files.ps1 -Folder "$env:RUNNER_TEMP/release" -Version $env:VERSION -Repository $env:GITHUB_REPOSITORY
+
+      - name: Keep the files of the release
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-files
+          path: ${{ runner.temp }}/release/
+          if-no-files-found: error
+          overwrite: true

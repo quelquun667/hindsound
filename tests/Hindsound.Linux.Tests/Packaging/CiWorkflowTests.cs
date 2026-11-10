@@ -44,6 +44,14 @@ public sealed partial class CiWorkflowTests
         Assert.NotEmpty(uses);
         foreach (var reference in uses)
         {
+            // A workflow of this repository, called by its path, runs at the commit of the run itself.
+            var local = Regex.Match(reference, @"^\./\.github/workflows/([a-z-]+\.yml)$");
+            if (local.Success)
+            {
+                Assert.True(File.Exists(Path.Combine(RepositoryRoot(), ".github", "workflows", local.Groups[1].Value)), reference);
+                continue;
+            }
+
             Assert.Matches("^[^@]+@[0-9a-f]{40}$", reference);
         }
     }

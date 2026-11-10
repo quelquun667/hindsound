@@ -14,13 +14,16 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
+  # Before the long build: a tag that is not a release, or that has no notes, or a failing test, makes no release.
+  check:
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
     permissions:
-      contents: write
+      contents: read
     env:
       TAG: ${{ github.ref_name }}
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
     defaults:
       run:
         shell: pwsh
@@ -34,54 +37,72 @@ jobs:
           persist-credentials: false
 
       - name: Check the tag
+        id: tag
         env:
           RELEASE_CONFIRM_VERSION: ${{ vars.RELEASE_CONFIRM_VERSION }}
         run: |
           $version = ./tools/release/check-tag.ps1 -Tag $env:TAG -MainRef origin/main -CheckVersionJump -ConfirmVersion $env:RELEASE_CONFIRM_VERSION
           "VERSION=$version" >> $env:GITHUB_ENV
+          "version=$version" >> $env:GITHUB_OUTPUT
 
-      # Before the long steps: a tag without notes creates no release.
       - name: Extract the release notes
-        run: ./tools/release/extract-changelog.ps1 -Version $env:VERSION -OutFile "$env:RUNNER_TEMP/release-notes.md"
+        run: |
+          ./tools/release/extract-changelog.ps1 -Version $env:VERSION -OutFile "$env:RUNNER_TEMP/changelog.md"
+          ./tools/release/write-release-notes.ps1 -Version $env:VERSION -ChangelogFile "$env:RUNNER_TEMP/changelog.md" -OutFile "$env:RUNNER_TEMP/release-notes.md"
 
       - name: Set up .NET
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: 10.0.x
 
+      # The tests marked Category=Linux need Linux itself: the CI runs them on Ubuntu for every pull request.
       - name: Test
-        run: dotnet test Hindsound.slnx -c Release --filter "Category!=Device"
+        run: dotnet test Hindsound.slnx -c Release --filter "Category!=Device&Category!=Linux"
 
       - name: Test the release scripts
         run: ./tools/release/test-release-scripts.ps1
 
-      - name: Publish the app
-        run: dotnet publish src/Hindsound/Hindsound.csproj -p:PublishProfile=win-x64 "-p:Version=$env:VERSION" "-p:PublishDir=$env:RUNNER_TEMP/publish/"
+  # Every file of the release, built and checked on Windows and on Linux by the same workflow as for a pull request.
+  files:
+    needs: check
+    permissions:
+      contents: read
+    uses: ./.github/workflows/release-files.yml
+    with:
+      version: ${{ needs.check.outputs.version }}
 
-      # The published folder still holds the DLL of the NAudio.Lame package here: the exports are compared with it.
-      - name: Build LAME
-        timeout-minutes: 15
-        run: ./tools/release/build-lame.ps1 -WorkDir "$env:RUNNER_TEMP/lame" -OutFile "$env:RUNNER_TEMP/lame/libmp3lame.64.dll" -ReferenceDll "$env:RUNNER_TEMP/publish/libmp3lame.64.dll"
+  release:
+    needs: [check, files]
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.ref_name }}
+      VERSION: ${{ needs.check.outputs.version }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Replace the DLL in the published folder
-        run: Copy-Item -LiteralPath "$env:RUNNER_TEMP/lame/libmp3lame.64.dll" -Destination "$env:RUNNER_TEMP/publish/libmp3lame.64.dll" -Force
-
-      - name: Prove the encoding with the compiled DLL
-        timeout-minutes: 10
-        run: ./tools/release/prove-encoding.ps1 -DllPath "$env:RUNNER_TEMP/lame/libmp3lame.64.dll" -ResultsDir "$env:RUNNER_TEMP/encoding-results"
-
-      - name: Build the Setup
+      - name: Write the release notes
         run: |
-          $iscc = ./tools/release/get-iscc.ps1 -Destination "$env:RUNNER_TEMP/inno"
-          & $iscc /Q "/DMyAppVersion=$env:VERSION" "/DPublishDir=$env:RUNNER_TEMP/publish" "/O$env:RUNNER_TEMP/out" "/FHindsound-$env:VERSION-Setup" installer/Hindsound.iss
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./tools/release/extract-changelog.ps1 -Version $env:VERSION -OutFile "$env:RUNNER_TEMP/changelog.md"
+          ./tools/release/write-release-notes.ps1 -Version $env:VERSION -ChangelogFile "$env:RUNNER_TEMP/changelog.md" -OutFile "$env:RUNNER_TEMP/release-notes.md"
 
-      - name: Check the Setup
-        timeout-minutes: 15
-        run: ./tools/release/check-setup.ps1 -SetupPath "$env:RUNNER_TEMP/out/Hindsound-$env:VERSION-Setup.exe" -Version $env:VERSION -DllPath "$env:RUNNER_TEMP/lame/libmp3lame.64.dll" -WorkDir "$env:RUNNER_TEMP/setup-check"
+      - name: Take the files of the release
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-files
+          path: ${{ runner.temp }}/out
 
-      - name: Write the update manifest
-        run: ./tools/release/write-manifest.ps1 -Version $env:VERSION -SetupPath "$env:RUNNER_TEMP/out/Hindsound-$env:VERSION-Setup.exe" -Repository $env:GITHUB_REPOSITORY -OutFile "$env:RUNNER_TEMP/out/hindsound-update-win-x64.json"
+      # Checked again here: these are the files that go up.
+      - name: Check the files of the release
+        run: ./tools/release/check-release-files.ps1 -Folder "$env:RUNNER_TEMP/out" -Version $env:VERSION -Repository $env:GITHUB_REPOSITORY
 
       # Draft, then files, then publication: an immutable release takes no file once published.
       # A draft found here comes from a failed run being rerun, and is reused.
@@ -105,20 +126,20 @@ jobs:
           }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      # The LGPL source of LAME goes with every release, as verified by build-lame.ps1. The files are then downloaded back and
-      # checked: once published, an immutable release cannot be corrected.
+      # Every file is named, so that a missing one stops the upload. The files are then downloaded back and checked, each
+      # against the one sent: once published, an immutable release cannot be corrected.
       - name: Attach the files
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh release upload $env:TAG "$env:RUNNER_TEMP/out/Hindsound-$env:VERSION-Setup.exe" "$env:RUNNER_TEMP/out/hindsound-update-win-x64.json" "$env:RUNNER_TEMP/lame/lame-3.100.tar.gz" --clobber
+          gh release upload $env:TAG "$env:RUNNER_TEMP/out/Hindsound-$env:VERSION-Setup.exe" "$env:RUNNER_TEMP/out/Hindsound-$env:VERSION-win-x64-portable.zip" "$env:RUNNER_TEMP/out/hindsound-$env:VERSION-linux-x64.AppImage" "$env:RUNNER_TEMP/out/hindsound-$env:VERSION-linux-x64.tar.gz" "$env:RUNNER_TEMP/out/hindsound-update-win-x64.json" "$env:RUNNER_TEMP/out/hindsound-update-win-x64-portable.json" "$env:RUNNER_TEMP/out/hindsound-update-linux-x64.json" "$env:RUNNER_TEMP/out/lame-3.100.tar.gz" "$env:RUNNER_TEMP/out/SHA256SUMS" --clobber
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           gh release download $env:TAG --dir "$env:RUNNER_TEMP/verify"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          ./tools/release/check-release-files.ps1 -Folder "$env:RUNNER_TEMP/verify" -Version $env:VERSION -Repository $env:GITHUB_REPOSITORY
+          ./tools/release/check-release-files.ps1 -Folder "$env:RUNNER_TEMP/verify" -Version $env:VERSION -Repository $env:GITHUB_REPOSITORY -Expected "$env:RUNNER_TEMP/out"
 
-      # A rerun builds the commit of its event, even after the tag moved to a fix: such a Setup must not go out under the tag.
+      # A rerun builds the commit of its event, even after the tag moved to a fix: such a build must not go out under the tag.
       # --latest: the app reads releases/latest, so the choice is not left to GitHub.
       - name: Publish the release
         env:
@@ -127,3 +148,18 @@ jobs:
         run: |
           ./tools/release/check-remote-tag.ps1 -Tag $env:TAG -Commit (git rev-parse HEAD)
           gh release edit $env:TAG --draft=false --latest
+
+  # A failure anywhere above stops the run before the step that publishes: this says so at the end of its log. It has no
+  # token and runs nothing but echo.
+  report-failure:
+    needs: [check, files, release]
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - name: Say that nothing was published
+        run: |
+          echo "::error::The release of $TAG failed. Unless the step Publish the release is the one that failed, nothing was published: the release of $TAG is a draft, or does not exist. Rerun the failed jobs, or see tools/release/README.md."

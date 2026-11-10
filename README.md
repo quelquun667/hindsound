@@ -68,8 +68,19 @@ window, is [on its way](#linux).
 
 ## Installation
 
-Download the Setup from the [Releases page](https://github.com/quelquun667/hindsound/releases), as explained in
-[The Setup](#the-setup) below, or build Hindsound from source.
+Download it from the [Releases page](https://github.com/quelquun667/hindsound/releases), or build it from source. Each
+release holds:
+
+| File | For |
+| --- | --- |
+| `Hindsound-X.Y.Z-Setup.exe` | Windows, recommended: it installs Hindsound for your user and keeps it up to date. See [The Setup](#the-setup). |
+| `Hindsound-X.Y.Z-win-x64-portable.zip` | Windows, without installing anything. See [The portable zip](#the-portable-zip). |
+| `hindsound-X.Y.Z-linux-x64.AppImage` | Linux: one file to run. See [Linux](#linux). |
+| `hindsound-X.Y.Z-linux-x64.tar.gz` | Linux, where the AppImage does not run: a folder to unpack. See [Linux](#linux). |
+| `SHA256SUMS` | The SHA-256 of every file of the release. |
+
+The portable zip and the Linux packages come with the releases after 0.5.0. The `.json` files of a release are read by
+Hindsound to learn about a new version, and `lame-3.100.tar.gz` is the source of its MP3 encoder.
 
 ### Build from source
 
@@ -99,14 +110,25 @@ The filter leaves out the tests that need real audio devices. To build the Setup
 3. Follow the Setup. It installs for your Windows user only, without administrator rights, in
    `%LocalAppData%\Programs\Hindsound`, and adds a Start menu shortcut. .NET comes with it.
 
+### The portable zip
+
+1. Download `Hindsound-X.Y.Z-win-x64-portable.zip` from the [Releases page](https://github.com/quelquun667/hindsound/releases).
+2. Unzip it where you want to keep Hindsound, and start `Hindsound.exe` in the folder. You will probably see the screen
+   explained below.
+
+Keep `libmp3lame.64.dll` and `portable.txt` next to `Hindsound.exe`: the first is the MP3 encoder, the second makes the copy
+portable. A portable copy never updates itself: when a new version is out, it says so, and its link opens the page of the
+release. Its settings are in `%AppData%\Hindsound`, as for the Setup.
+
 ### "Windows protected your PC"
 
-Windows will probably stop the Setup with a screen titled **Windows protected your PC**.
+Windows will probably stop the Setup, or `Hindsound.exe` from the portable zip, with a screen titled **Windows protected
+your PC**.
 
 Hindsound is not signed for now: no certificate tells Windows who published the file, so Windows warns you. This screen does
 not mean a virus was found, and it does not prove the file is safe either.
 
-1. Make sure the Setup comes from this repository's Releases page.
+1. Make sure the file comes from this repository's Releases page.
 2. Click **More info**.
 3. Click **Run anyway**.
 
@@ -114,8 +136,9 @@ This screen can come back with each new version.
 
 ### Updating
 
-An installed Hindsound updates itself, see [Updates](#updates). A build from source never does: quit Hindsound, run
-`git pull`, and run the `dotnet publish` command again.
+An installed Hindsound updates itself, see [Updates](#updates). The portable zip never does: when a new version is out, it
+says so; download the new zip, quit Hindsound, and replace the files of its folder with those of the new zip. A build from
+source never does either: quit Hindsound, run `git pull`, and run the `dotnet publish` command again.
 
 ### Uninstalling
 
@@ -129,7 +152,7 @@ Apps, find Hindsound, and uninstall it.
 | Rescued clips (`%LOCALAPPDATA%\Hindsound\Rescued`) | Kept |
 | Settings and collections (`%AppData%\Hindsound\settings.json` and `library.json`) | The uninstaller asks once for both. The default answer keeps them. A silent uninstall keeps them. |
 
-**Built from source.** There is no uninstaller. Turn off `Start with Windows`, quit Hindsound, and delete the folder. Your
+**The portable zip, or built from source.** There is no uninstaller. Turn off `Start with Windows`, quit Hindsound, and delete the folder. Your
 settings and collections stay in `%AppData%\Hindsound`, and your log and rescued clips in `%LOCALAPPDATA%\Hindsound`: delete those too if
 you want nothing left.
 
@@ -140,11 +163,12 @@ sound of the whole PC, and the microphone if your settings name one. It saves a 
 or from the menu of its icon, says so with a notification, and copies the clip when the desktop allows it. A click on the
 notification of a clip shows the clip in its folder.
 
-**Download.** Until a release carries it, take it from the CI: open a recent run of the
+**Download.** From the [latest release](https://github.com/quelquun667/hindsound/releases/latest), from the release after
+0.5.0 on. Between releases, the CI builds the same files on every change: open a recent run of the
 [CI workflow](https://github.com/quelquun667/hindsound/actions/workflows/ci.yml) on `main`, and download the
-`hindsound-linux-x64` artifact (GitHub asks you to sign in). It holds the same program twice; take one:
+`hindsound-linux-x64` artifact (GitHub asks you to sign in). Either way the program comes twice; take one:
 
-- `hindsound-<version>-linux-x64.AppImage`, one file. The zip of the artifact drops its executable bit, so give it back.
+- `hindsound-<version>-linux-x64.AppImage`, one file. A download does not keep its executable bit, so give it back.
   Give it a name that stays before the first run, as the shortcut below and `Start with the session` point to it:
 
   ```sh
@@ -162,7 +186,8 @@ notification of a clip shows the clip in its folder.
   ./hindsound-*-linux-x64/hindsound
   ```
 
-`SHA256SUMS` in the artifact has the checksums of both.
+`SHA256SUMS`, next to them, has their checksums: run `sha256sum --check --ignore-missing SHA256SUMS` in the folder where
+you downloaded them.
 
 **In the list of applications.** On its first launch from the AppImage or from the unpacked folder, Hindsound adds itself
 to the list of applications: it writes `~/.local/share/applications/io.github.quelquun667.Hindsound.desktop`, which starts
@@ -377,7 +402,9 @@ clip, 173 MB for a 5:00 clip.
 | `Ask me` | Checks once a day and tells you. Nothing is downloaded or installed until you click `Update now`. |
 | `Off` | No automatic check. Only `Check now` reaches the network, when you click it. |
 
-Settings > General > Updates shows the running version, when it last checked, and the buttons `Check now`, `Update now`, `What's new` and `Skip this version`. A build from source, or Hindsound started with a command-line option for a test or a check, never updates itself.
+Settings > General > Updates shows the running version, when it last checked, and the buttons `Check now`, `Update now`, `What's new` and `Skip this version`. A build from source, or Hindsound started with a command-line option for a test or a check, never updates itself. The
+portable zip and the Linux app never install anything: they only tell you that a version is out, and their link opens the
+page of its release.
 
 **What GitHub sees.** Once a day, Hindsound asks GitHub for one small file that describes the latest version. GitHub sees your IP address and the time. The request carries no identifier and no version number. When a new version is downloaded, GitHub also sees that download. The first launch tells you about this check.
 

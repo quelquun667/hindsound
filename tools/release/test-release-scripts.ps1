@@ -237,25 +237,183 @@ try {
     Assert-Refused 'missing Setup refused' { & $writeManifest -Version '1.2.3' -SetupPath (Join-Path $temp 'none.exe') -Repository 'owner/name' -OutFile (Join-Path $temp 'none.json') } 'none.exe'
     Report 'no manifest left after a refusal' (-not (Test-Path -LiteralPath (Join-Path $temp 'none.json')))
 
-    # --- check-release-files: the files of the draft, downloaded back ---
+    # --- write-announce-manifest: the manifest of the Linux app and of the portable zip ---
+    $writeAnnounce = Join-Path $PSScriptRoot 'write-announce-manifest.ps1'
+    $announceFile = Join-Path $temp 'hindsound-update-linux-x64.json'
+    & $writeAnnounce -Version '1.2.3' -Repository 'owner/name' -OutFile $announceFile
+    $announceBytes = [IO.File]::ReadAllBytes($announceFile)
+    Assert-Equal 'announce manifest starts without a BOM' ([int][char]'{') $announceBytes[0]
+    $announce = [Text.Encoding]::UTF8.GetString($announceBytes) | ConvertFrom-Json
+    Assert-Equal 'announce manifest fields' 'product version url published' (($announce.PSObject.Properties | ForEach-Object Name) -join ' ')
+    Assert-Equal 'announce manifest product' 'Hindsound' $announce.product
+    Assert-Equal 'announce manifest version' '1.2.3' $announce.version
+    Assert-Equal 'announce manifest names the page of the release' 'https://github.com/owner/name/releases/tag/v1.2.3' $announce.url
+    Report 'announce manifest published is UTC' ([Text.Encoding]::UTF8.GetString($announceBytes) -cmatch '"published":\s*"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"')
+    Assert-Refused 'announce manifest of a bad version refused' { & $writeAnnounce -Version '1.2' -Repository 'owner/name' -OutFile (Join-Path $temp 'none-announce.json') } 'Not a version'
+    Assert-Refused 'announce manifest of a bad repository refused' { & $writeAnnounce -Version '1.2.3' -Repository 'owner/name/../x' -OutFile (Join-Path $temp 'none-announce.json') } 'Not owner/name'
+    Report 'no announce manifest left after a refusal' (-not (Test-Path -LiteralPath (Join-Path $temp 'none-announce.json')))
+
+    # --- build-portable-zip ---
+    $buildZip = Join-Path $PSScriptRoot 'build-portable-zip.ps1'
+    $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+    $fakePublish = Join-Path $temp 'portable-publish'
+    New-Item -ItemType Directory -Path $fakePublish | Out-Null
+    [IO.File]::WriteAllText((Join-Path $fakePublish 'Hindsound.exe'), 'fake exe')
+    [IO.File]::WriteAllText((Join-Path $fakePublish 'libmp3lame.64.dll'), 'fake dll')
+    [IO.File]::WriteAllText((Join-Path $fakePublish 'Hindsound.pdb'), 'symbols, which the Setup does not install')
+    function Get-ZipEntries([string]$Path) {
+        Add-Type -AssemblyName System.IO.Compression
+        $stream = [IO.File]::OpenRead($Path)
+        try {
+            $zip = New-Object IO.Compression.ZipArchive($stream, [IO.Compression.ZipArchiveMode]::Read)
+            try {
+                foreach ($entry in $zip.Entries) {
+                    $read = $entry.Open()
+                    $memory = New-Object IO.MemoryStream
+                    try { $read.CopyTo($memory) } finally { $read.Dispose() }
+                    [pscustomobject]@{ Name = $entry.FullName; Bytes = $memory.ToArray() }
+                }
+            }
+            finally {
+                $zip.Dispose()
+            }
+        }
+        finally {
+            $stream.Dispose()
+        }
+    }
+    function Get-BytesSha256([byte[]]$Bytes) {
+        $sha = [Security.Cryptography.SHA256]::Create()
+        try { ([BitConverter]::ToString($sha.ComputeHash($Bytes)) -replace '-', '').ToLowerInvariant() } finally { $sha.Dispose() }
+    }
+    $zipFile = Join-Path $temp 'zip-1\Hindsound-1.2.3-win-x64-portable.zip'
+    $null = & $buildZip -PublishDir $fakePublish -Version '1.2.3' -OutFile $zipFile
+    $zipEntries = @(Get-ZipEntries $zipFile)
+    $top = 'Hindsound-1.2.3-win-x64-portable'
+    [string[]]$expectedEntries = @("$top/Hindsound.exe", "$top/libmp3lame.64.dll", "$top/LICENSE", "$top/THIRD-PARTY-NOTICES.md", "$top/portable.txt", "$top/README.txt") +
+        @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'licenses') -Filter '*.txt' -File | ForEach-Object { "$top/licenses/$($_.Name)" })
+    [Array]::Sort($expectedEntries, [StringComparer]::Ordinal)
+    Assert-Equal 'the zip holds one folder with the files of the Setup, portable.txt and README.txt' ($expectedEntries -join ' | ') (($zipEntries | ForEach-Object Name) -join ' | ')
+    $sourceOf = @{
+        "$top/Hindsound.exe" = Join-Path $fakePublish 'Hindsound.exe'
+        "$top/libmp3lame.64.dll" = Join-Path $fakePublish 'libmp3lame.64.dll'
+        "$top/LICENSE" = Join-Path $repoRoot 'LICENSE'
+        "$top/THIRD-PARTY-NOTICES.md" = Join-Path $repoRoot 'THIRD-PARTY-NOTICES.md'
+        "$top/portable.txt" = Join-Path $repoRoot 'packaging\windows\portable.txt'
+        "$top/README.txt" = Join-Path $repoRoot 'packaging\windows\README.txt'
+    }
+    foreach ($entry in $zipEntries) {
+        $source = if ($sourceOf.ContainsKey($entry.Name)) { $sourceOf[$entry.Name] } else { Join-Path $repoRoot ('licenses\' + $entry.Name.Substring("$top/licenses/".Length)) }
+        Assert-Equal "the zip entry $($entry.Name) has the bytes of its source" (Get-FileHash -Algorithm SHA256 -LiteralPath $source).Hash.ToLowerInvariant() (Get-BytesSha256 $entry.Bytes)
+    }
+    # What the Setup installs, read from its script, is in the zip too; and the Setup never installs portable.txt.
+    $issText = [IO.File]::ReadAllText((Join-Path $repoRoot 'installer\Hindsound.iss'))
+    $issSources = @([regex]::Matches($issText, '(?m)^Source: "\{#(?:RepoRoot|PublishDir)\}\\([^"]+)"') | ForEach-Object { $_.Groups[1].Value })
+    Assert-Equal 'the Setup installs five kinds of file' 5 $issSources.Count
+    foreach ($issSource in $issSources) {
+        $pattern = "$top/" + [regex]::Escape($issSource.Replace('\', '/')).Replace('\*', '[^/]+')
+        Report "the zip holds what the Setup installs from $issSource" (@($zipEntries | Where-Object { $_.Name -cmatch "\A$pattern\z" }).Count -ge 1)
+    }
+    Report 'the Setup never installs portable.txt' (-not ($issText -match 'portable'))
+    $zipAgain = Join-Path $temp 'zip-2\Hindsound-1.2.3-win-x64-portable.zip'
+    $null = & $buildZip -PublishDir $fakePublish -Version '1.2.3' -OutFile $zipAgain
+    Assert-Equal 'the same commit gives the same zip' (Get-FileHash -LiteralPath $zipFile).Hash (Get-FileHash -LiteralPath $zipAgain).Hash
+    Assert-Refused 'a zip of another name refused' { & $buildZip -PublishDir $fakePublish -Version '1.2.3' -OutFile (Join-Path $temp 'zip-3\Hindsound-1.2.4-win-x64-portable.zip') } 'must be named'
+    Assert-Refused 'a zip of a bad version refused' { & $buildZip -PublishDir $fakePublish -Version '1.2' -OutFile (Join-Path $temp 'zip-3\Hindsound-1.2-win-x64-portable.zip') } 'Not a version'
+    $noExe = Join-Path $temp 'portable-publish-no-exe'
+    New-Item -ItemType Directory -Path $noExe | Out-Null
+    [IO.File]::WriteAllText((Join-Path $noExe 'libmp3lame.64.dll'), 'fake dll')
+    Assert-Refused 'a published folder without the exe refused' { & $buildZip -PublishDir $noExe -Version '1.2.3' -OutFile (Join-Path $temp 'zip-3\Hindsound-1.2.3-win-x64-portable.zip') } 'Missing for the zip'
+    Report 'no zip left after a refusal' (-not (Test-Path -LiteralPath (Join-Path $temp 'zip-3\Hindsound-1.2.3-win-x64-portable.zip')))
+
+    # --- write-release-notes ---
+    $writeNotes = Join-Path $PSScriptRoot 'write-release-notes.ps1'
+    $changelogPart = Join-Path $temp 'changelog-part.md'
+    [IO.File]::WriteAllText($changelogPart, "### Added`n`n- Something new.`n")
+    $releaseNotes = Join-Path $temp 'release-notes-out.md'
+    & $writeNotes -Version '1.2.3' -ChangelogFile $changelogPart -OutFile $releaseNotes
+    $releaseNotesText = [IO.File]::ReadAllText($releaseNotes)
+    Report 'the notes start with the changelog' ($releaseNotesText.StartsWith("### Added`n`n- Something new.`n`n## Downloads`n"))
+    foreach ($name in 'Hindsound-1.2.3-Setup.exe', 'Hindsound-1.2.3-win-x64-portable.zip', 'hindsound-1.2.3-linux-x64.AppImage', 'hindsound-1.2.3-linux-x64.tar.gz', 'hindsound-update-win-x64.json', 'hindsound-update-win-x64-portable.json', 'hindsound-update-linux-x64.json', 'lame-3.100.tar.gz', 'SHA256SUMS') {
+        Report "the notes say whom $name is for" ($releaseNotesText -cmatch "(?m)^\| [^\n]*``$([regex]::Escape($name))``[^\n]*\| [^|\n]+\. \|$")
+    }
+    Report 'the notes have no BOM and no carriage return' (([IO.File]::ReadAllBytes($releaseNotes)[0] -eq [byte][char]'#') -and -not $releaseNotesText.Contains("`r"))
+    [IO.File]::WriteAllText((Join-Path $temp 'changelog-empty.md'), "`n")
+    Assert-Refused 'notes without a changelog refused' { & $writeNotes -Version '1.2.3' -ChangelogFile (Join-Path $temp 'changelog-empty.md') -OutFile (Join-Path $temp 'notes-none.md') } 'is empty'
+
+    # --- assemble-release and check-release-files: the files of the release, gathered, then downloaded back ---
+    $assemble = Join-Path $PSScriptRoot 'assemble-release.ps1'
     $checkFiles = Join-Path $PSScriptRoot 'check-release-files.ps1'
     $filesNumber = 0
-    function New-ReleaseFiles([string]$ManifestVersion = '1.2.3', [string]$Repository = 'owner/name') {
+    function Get-OrdinalNames([string]$Folder) {
+        [string[]]$names = @(Get-ChildItem -LiteralPath $Folder | ForEach-Object Name)
+        [Array]::Sort($names, [StringComparer]::Ordinal)
+        , $names
+    }
+    function Write-Sums([string]$Folder, [string[]]$Names) {
+        $text = ($Names | ForEach-Object { "$((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $Folder $_)).Hash.ToLowerInvariant())  $_`n" }) -join ''
+        [IO.File]::WriteAllText((Join-Path $Folder 'SHA256SUMS'), $text, (New-Object Text.UTF8Encoding $false))
+    }
+    # The folders of the two jobs, as their artifacts hold them.
+    function New-JobFiles([string]$ManifestVersion = '1.2.3', [string]$Repository = 'owner/name') {
         $script:filesNumber++
-        $folder = Join-Path $temp "release-files-$($script:filesNumber)"
-        New-Item -ItemType Directory -Path $folder | Out-Null
-        $file = Join-Path $folder 'Hindsound-1.2.3-Setup.exe'
+        $root = Join-Path $temp "release-files-$($script:filesNumber)"
+        $windows = Join-Path $root 'windows'
+        $linux = Join-Path $root 'linux'
+        New-Item -ItemType Directory -Path $windows, $linux | Out-Null
+        $file = Join-Path $windows 'Hindsound-1.2.3-Setup.exe'
         [IO.File]::WriteAllBytes($file, [byte[]](1..200 | ForEach-Object { $_ % 7 }))
-        & $writeManifest -Version $ManifestVersion -SetupPath $file -Repository $Repository -OutFile (Join-Path $folder 'hindsound-update-win-x64.json')
-        [IO.File]::WriteAllText((Join-Path $folder 'lame-3.100.tar.gz'), 'fake source')
-        $folder
+        & $writeManifest -Version $ManifestVersion -SetupPath $file -Repository $Repository -OutFile (Join-Path $windows 'hindsound-update-win-x64.json')
+        Copy-Item -LiteralPath $zipFile -Destination (Join-Path $windows 'Hindsound-1.2.3-win-x64-portable.zip')
+        [IO.File]::WriteAllText((Join-Path $windows 'lame-3.100.tar.gz'), 'fake source')
+        [IO.File]::WriteAllText((Join-Path $linux 'hindsound-1.2.3-linux-x64.AppImage'), 'fake AppImage')
+        [IO.File]::WriteAllText((Join-Path $linux 'hindsound-1.2.3-linux-x64.tar.gz'), 'fake archive')
+        Write-Sums $linux @('hindsound-1.2.3-linux-x64.AppImage', 'hindsound-1.2.3-linux-x64.tar.gz')
+        [IO.File]::WriteAllText((Join-Path $linux 'lame-3.100.tar.gz'), 'fake source')
+        $root
+    }
+    function Invoke-Assemble([string]$Root) {
+        & $assemble -Version '1.2.3' -Repository 'owner/name' -WindowsFolder (Join-Path $Root 'windows') -LinuxFolder (Join-Path $Root 'linux') -OutFolder (Join-Path $Root 'release')
+    }
+    function New-ReleaseFiles([string]$ManifestVersion = '1.2.3', [string]$Repository = 'owner/name') {
+        $root = New-JobFiles $ManifestVersion $Repository
+        $null = Invoke-Assemble $root
+        Join-Path $root 'release'
     }
     $releaseFiles = New-ReleaseFiles
     $fakeLameSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $releaseFiles 'lame-3.100.tar.gz')).Hash.ToLowerInvariant()
-    function Test-ReleaseFiles([string]$Folder) {
-        & $checkFiles -Folder $Folder -Version '1.2.3' -Repository 'owner/name' -LameSha256 $fakeLameSha256
+    function Test-ReleaseFiles([string]$Folder, [string]$Expected = '') {
+        & $checkFiles -Folder $Folder -Version '1.2.3' -Repository 'owner/name' -LameSha256 $fakeLameSha256 -Expected $Expected
     }
+    $allNames = @('Hindsound-1.2.3-Setup.exe', 'Hindsound-1.2.3-win-x64-portable.zip', 'SHA256SUMS', 'hindsound-1.2.3-linux-x64.AppImage', 'hindsound-1.2.3-linux-x64.tar.gz', 'hindsound-update-linux-x64.json', 'hindsound-update-win-x64-portable.json', 'hindsound-update-win-x64.json', 'lame-3.100.tar.gz')
+    Assert-Equal 'the release gathers the files of both jobs, the announce manifests and SHA256SUMS' ($allNames -join ' ') ((Get-OrdinalNames $releaseFiles) -join ' ')
     Assert-Accepted 'the files of the release pass' { Test-ReleaseFiles $releaseFiles }
+    $sumsBytes = [IO.File]::ReadAllBytes((Join-Path $releaseFiles 'SHA256SUMS'))
+    $sumsLines = [Text.Encoding]::UTF8.GetString($sumsBytes).TrimEnd("`n").Split("`n")
+    Assert-Equal 'SHA256SUMS lists every other file, in ordinal order' (($allNames | Where-Object { $_ -cne 'SHA256SUMS' }) -join ' ') (($sumsLines | ForEach-Object { $_.Substring(66) }) -join ' ')
+    Report 'SHA256SUMS is in the form of sha256sum, with LF only and no BOM' (($sumsBytes[0] -ne 0xEF) -and -not ($sumsBytes -contains 13) -and ($sumsBytes[-1] -eq 10) -and @($sumsLines | Where-Object { $_ -cnotmatch '\A[0-9a-f]{64}  \S+\z' }).Count -eq 0)
+    Assert-Equal 'the release names the page of the release for the Linux app' 'https://github.com/owner/name/releases/tag/v1.2.3' ([IO.File]::ReadAllText((Join-Path $releaseFiles 'hindsound-update-linux-x64.json')) | ConvertFrom-Json).url
+    Assert-Equal 'the release names the page of the release for the portable zip' 'https://github.com/owner/name/releases/tag/v1.2.3' ([IO.File]::ReadAllText((Join-Path $releaseFiles 'hindsound-update-win-x64-portable.json')) | ConvertFrom-Json).url
+
+    # assemble-release refuses what the jobs should not have made.
+    $jobFiles = New-JobFiles
+    [IO.File]::WriteAllText((Join-Path $jobFiles 'linux\hindsound-1.2.3-linux-x64.AppImage'), 'damaged AppImage')
+    Assert-Refused 'a Linux package that does not match its SHA256SUMS refused' { Invoke-Assemble $jobFiles } 'the Linux SHA256SUMS gives'
+    $jobFiles = New-JobFiles
+    [IO.File]::WriteAllText((Join-Path $jobFiles 'linux\lame-3.100.tar.gz'), 'another source')
+    Assert-Refused 'two different LAME sources refused' { Invoke-Assemble $jobFiles } 'differs between the jobs'
+    $jobFiles = New-JobFiles
+    [IO.File]::WriteAllText((Join-Path $jobFiles 'windows\Hindsound.pdb'), 'not a file of the release')
+    Assert-Refused 'a file more from the Windows job refused' { Invoke-Assemble $jobFiles } 'The Windows files are'
+    $jobFiles = New-JobFiles
+    Remove-Item -LiteralPath (Join-Path $jobFiles 'linux\SHA256SUMS')
+    Assert-Refused 'Linux packages without their SHA256SUMS refused' { Invoke-Assemble $jobFiles } 'The Linux files are'
+    $jobFiles = New-JobFiles
+    New-Item -ItemType Directory -Path (Join-Path $jobFiles 'release') | Out-Null
+    [IO.File]::WriteAllText((Join-Path $jobFiles 'release\left.txt'), 'left by an earlier run')
+    Assert-Refused 'a folder of the release that is not empty refused' { Invoke-Assemble $jobFiles } 'is not empty'
+
+    # check-release-files refuses a release that is not exactly right.
     Assert-Refused 'another LAME source refused' { & $checkFiles -Folder $releaseFiles -Version '1.2.3' -Repository 'owner/name' } 'lame-3.100.tar.gz on the release'
     $releaseFiles = New-ReleaseFiles
     [IO.File]::WriteAllText((Join-Path $releaseFiles 'Hindsound-1.2.2-Setup.exe'), 'left by an earlier run')
@@ -263,6 +421,9 @@ try {
     $releaseFiles = New-ReleaseFiles
     Remove-Item -LiteralPath (Join-Path $releaseFiles 'lame-3.100.tar.gz')
     Assert-Refused 'a file missing on the release refused' { Test-ReleaseFiles $releaseFiles } 'expected'
+    $releaseFiles = New-ReleaseFiles
+    Remove-Item -LiteralPath (Join-Path $releaseFiles 'hindsound-1.2.3-linux-x64.AppImage')
+    Assert-Refused 'a release without the AppImage refused' { Test-ReleaseFiles $releaseFiles } 'expected'
     $releaseFiles = New-ReleaseFiles '1.2.4'
     Assert-Refused 'a manifest of another version refused' { Test-ReleaseFiles $releaseFiles } 'the version 1.2.4'
     $releaseFiles = New-ReleaseFiles '1.2.3' 'other/name'
@@ -276,6 +437,61 @@ try {
     $damagedBytes[0] = $damagedBytes[0] -bxor 0xFF
     [IO.File]::WriteAllBytes($damaged, $damagedBytes)
     Assert-Refused 'a Setup of the same size with other bytes refused' { Test-ReleaseFiles $releaseFiles } 'the SHA-256'
+    foreach ($announceName in 'hindsound-update-linux-x64.json', 'hindsound-update-win-x64-portable.json') {
+        $releaseFiles = New-ReleaseFiles
+        & $writeAnnounce -Version '1.2.3' -Repository 'other/name' -OutFile (Join-Path $releaseFiles $announceName)
+        Assert-Refused "$announceName naming another page refused" { Test-ReleaseFiles $releaseFiles } "$announceName on the release gives the address"
+        $releaseFiles = New-ReleaseFiles
+        & $writeAnnounce -Version '1.2.4' -Repository 'owner/name' -OutFile (Join-Path $releaseFiles $announceName)
+        Assert-Refused "$announceName of another version refused" { Test-ReleaseFiles $releaseFiles } 'the version 1.2.4'
+        $releaseFiles = New-ReleaseFiles
+        $wrongSetup = Join-Path $releaseFiles 'Hindsound-1.2.3-Setup.exe'
+        & $writeManifest -Version '1.2.3' -SetupPath $wrongSetup -Repository 'owner/name' -OutFile (Join-Path $releaseFiles $announceName)
+        Assert-Refused "$announceName naming the Setup refused" { Test-ReleaseFiles $releaseFiles } 'has the fields'
+    }
+    $releaseFiles = New-ReleaseFiles
+    $noPortable = Join-Path $releaseFiles 'Hindsound-1.2.3-win-x64-portable.zip'
+    Remove-Item -LiteralPath $noPortable
+    $noPortableStream = [IO.File]::Open($noPortable, [IO.FileMode]::CreateNew)
+    try {
+        $noPortableZip = New-Object IO.Compression.ZipArchive($noPortableStream, [IO.Compression.ZipArchiveMode]::Create)
+        foreach ($name in "$top/Hindsound.exe", "$top/libmp3lame.64.dll") { $null = $noPortableZip.CreateEntry($name) }
+        $noPortableZip.Dispose()
+    }
+    finally {
+        $noPortableStream.Dispose()
+    }
+    Assert-Refused 'a portable zip without portable.txt refused' { Test-ReleaseFiles $releaseFiles } "has no $top/portable.txt"
+    $releaseFiles = New-ReleaseFiles
+    [IO.File]::AppendAllText((Join-Path $releaseFiles 'hindsound-1.2.3-linux-x64.tar.gz'), 'x')
+    Assert-Refused 'a file that does not match SHA256SUMS refused' { Test-ReleaseFiles $releaseFiles } 'and SHA256SUMS gives'
+    $releaseFiles = New-ReleaseFiles
+    $sumsPath = Join-Path $releaseFiles 'SHA256SUMS'
+    [IO.File]::WriteAllText($sumsPath, (@([IO.File]::ReadAllLines($sumsPath) | Where-Object { $_ -notmatch 'AppImage' }) -join "`n") + "`n")
+    Assert-Refused 'SHA256SUMS without a file refused' { Test-ReleaseFiles $releaseFiles } 'SHA256SUMS on the release lists'
+    $releaseFiles = New-ReleaseFiles
+    $sumsPath = Join-Path $releaseFiles 'SHA256SUMS'
+    [IO.File]::WriteAllText($sumsPath, [IO.File]::ReadAllText($sumsPath).Replace("`n", "`r`n"))
+    Assert-Refused 'SHA256SUMS with carriage returns refused' { Test-ReleaseFiles $releaseFiles } 'carriage return'
+
+    # Downloaded back: each file against the one sent.
+    $releaseFiles = New-ReleaseFiles
+    $sent = Join-Path $temp 'release-files-sent'
+    Copy-Item -LiteralPath $releaseFiles -Destination $sent -Recurse
+    Assert-Accepted 'the files downloaded back are those sent' { Test-ReleaseFiles $releaseFiles $sent }
+    [IO.File]::AppendAllText((Join-Path $sent 'hindsound-1.2.3-linux-x64.AppImage'), 'x')
+    Assert-Refused 'a file served with another size than the one sent refused' { Test-ReleaseFiles $releaseFiles $sent } 'and the file sent'
+    Remove-Item -LiteralPath $sent -Recurse -Force
+    Copy-Item -LiteralPath $releaseFiles -Destination $sent -Recurse
+    $sentArchive = Join-Path $sent 'hindsound-1.2.3-linux-x64.tar.gz'
+    $sentBytes = [IO.File]::ReadAllBytes($sentArchive)
+    $sentBytes[0] = $sentBytes[0] -bxor 0xFF
+    [IO.File]::WriteAllBytes($sentArchive, $sentBytes)
+    Assert-Refused 'a file served with other bytes than the one sent refused' { Test-ReleaseFiles $releaseFiles $sent } 'and the file sent'
+    Remove-Item -LiteralPath $sent -Recurse -Force
+    Copy-Item -LiteralPath $releaseFiles -Destination $sent -Recurse
+    [IO.File]::WriteAllText((Join-Path $sent 'extra.txt'), 'sent but not served')
+    Assert-Refused 'a file sent but not served refused' { Test-ReleaseFiles $releaseFiles $sent } 'The files sent were'
 
     # --- check-tag: version jumps ---
     $outside = Join-Path $temp 'not-a-repository'
@@ -648,50 +864,80 @@ try {
 
     $workflowFolder = Join-Path $PSScriptRoot '..\..\.github\workflows'
     $release = @(Get-Content -LiteralPath (Join-Path $workflowFolder 'release.yml'))
+    $files = @(Get-Content -LiteralPath (Join-Path $workflowFolder 'release-files.yml'))
+    $ci = @(Get-Content -LiteralPath (Join-Path $workflowFolder 'ci.yml'))
     $lame = @(Get-Content -LiteralPath (Join-Path $workflowFolder 'lame.yml'))
     $releaseText = $release -join "`n"
+    $filesText = $files -join "`n"
+    $ciText = $ci -join "`n"
     $lameText = $lame -join "`n"
 
     $stepOrder = @(
-        'Check out', 'Check the tag', 'Extract the release notes', 'Set up .NET', 'Test', 'Test the release scripts', 'Publish the app',
-        'Build LAME', 'Replace the DLL in the published folder', 'Prove the encoding with the compiled DLL', 'Build the Setup', 'Check the Setup',
-        'Write the update manifest', 'Create the draft release', 'Attach the files', 'Publish the release'
+        'Check out', 'Check the tag', 'Extract the release notes', 'Set up .NET', 'Test', 'Test the release scripts',
+        'Check out', 'Write the release notes', 'Take the files of the release', 'Check the files of the release', 'Create the draft release', 'Attach the files', 'Publish the release',
+        'Say that nothing was published'
     )
     $releaseSteps = @($release | ForEach-Object { if ($_ -match '^\s+- name: (.+)$') { $Matches[1] } })
     Assert-Equal 'release.yml has its steps in order' ($stepOrder -join ' | ') ($releaseSteps -join ' | ')
-    foreach ($step in @(@('Build LAME', 'build-lame'), @('Prove the encoding with the compiled DLL', 'prove-encoding'), @('Check the Setup', 'check-setup'))) {
-        Report "the step $($step[0]) runs $($step[1])" ($releaseText -cmatch "- name: $($step[0])\n(?:\s+timeout-minutes: \d+\n)?\s+run: \./tools/release/$($step[1])\.ps1 ")
+    $filesStepOrder = @(
+        'Check out', 'Set up .NET', 'Build the tests', 'Publish the app', 'Build LAME', 'Replace the DLL in the published folder', 'Prove the encoding with the compiled DLL', 'Build the Setup', 'Check the Setup',
+        'Write the update manifest', 'Make the portable zip', 'Add the LAME source', 'Keep the Windows files',
+        'Check out', 'Set up .NET', 'Publish the Linux app', 'Build the MP3 encoder', 'Install the checker of desktop entries', 'Make the AppImage and the tar.gz', 'Check the packages', 'Add the LAME source', 'Keep the packages',
+        'Check out', 'Take the Windows files', 'Take the Linux files', 'Gather the files of the release', 'Check the files of the release', 'Keep the files of the release'
+    )
+    $filesSteps = @($files | ForEach-Object { if ($_ -match '^\s+- name: (.+)$') { $Matches[1] } })
+    Assert-Equal 'release-files.yml has its steps in order' ($filesStepOrder -join ' | ') ($filesSteps -join ' | ')
+    foreach ($step in @(@('Build LAME', 'build-lame'), @('Prove the encoding with the compiled DLL', 'prove-encoding'), @('Check the Setup', 'check-setup'), @('Make the portable zip', 'build-portable-zip'), @('Gather the files of the release', 'assemble-release'), @('Check the files of the release', 'check-release-files'))) {
+        Report "the step $($step[0]) runs $($step[1])" ($filesText -cmatch "- name: $($step[0])\n(?:\s+timeout-minutes: \d+\n)?\s+run: \./tools/release/$($step[1])\.ps1 ")
     }
-    Report 'the compiled DLL replaces the one in the published folder' ($releaseText -cmatch '- name: Replace the DLL in the published folder\n\s+run: Copy-Item -LiteralPath "\$env:RUNNER_TEMP/lame/libmp3lame\.64\.dll" -Destination "\$env:RUNNER_TEMP/publish/libmp3lame\.64\.dll" -Force')
+    Report 'the tests the proof of the encoding runs are built first' ($filesText -cmatch '- name: Build the tests\n\s+run: dotnet build tests/Hindsound\.Tests/Hindsound\.Tests\.csproj -c Release\n')
+    Report 'the compiled DLL replaces the one in the published folder' ($filesText -cmatch '- name: Replace the DLL in the published folder\n\s+run: Copy-Item -LiteralPath "\$env:RUNNER_TEMP/lame/libmp3lame\.64\.dll" -Destination "\$env:RUNNER_TEMP/publish/libmp3lame\.64\.dll" -Force')
+    Report 'the zip is made from the folder the Setup is built from' (($filesText -cmatch '"/DPublishDir=\$env:RUNNER_TEMP/publish"') -and ($filesText -cmatch 'build-portable-zip\.ps1 -PublishDir "\$env:RUNNER_TEMP/publish" '))
     Report 'the lame workflow builds and proves' (($lameText -cmatch '\./tools/release/build-lame\.ps1 ') -and ($lameText -cmatch '\./tools/release/prove-encoding\.ps1 '))
     Report 'the release sees all the tags'($releaseText -match '(?m)^\s+fetch-depth: 0$')
     Report 'the release checks the version jump, with the confirmation' ($releaseText -cmatch 'check-tag\.ps1 -Tag \$env:TAG -MainRef origin/main -CheckVersionJump -ConfirmVersion \$env:RELEASE_CONFIRM_VERSION')
     Report 'the confirmation comes from a repository variable, through env' ($releaseText -cmatch 'RELEASE_CONFIRM_VERSION: \$\{\{ vars\.RELEASE_CONFIRM_VERSION \}\}')
     Report 'the release attaches the Setup, the manifest and the LAME source' ($releaseText -cmatch 'gh release upload [^\n]*Setup\.exe[^\n]*hindsound-update-win-x64\.json[^\n]*lame-3\.100\.tar\.gz')
-    Report 'the release downloads its files back and checks them, before publishing' ($releaseText -cmatch '--clobber\n\s+if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}\n\s+gh release download \$env:TAG --dir "\$env:RUNNER_TEMP/verify"\n\s+if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}\n\s+\./tools/release/check-release-files\.ps1 -Folder "\$env:RUNNER_TEMP/verify" -Version \$env:VERSION -Repository \$env:GITHUB_REPOSITORY\n\n\s+# A rerun')
-    Report 'the release does not give check-release-files its LAME hash' (-not ($releaseText -match '-LameSha256'))
+    $uploadLine = @($release | Where-Object { $_ -cmatch 'gh release upload ' })
+    Assert-Equal 'the release uploads in one command' 1 $uploadLine.Count
+    foreach ($name in 'Hindsound-$env:VERSION-Setup.exe', 'Hindsound-$env:VERSION-win-x64-portable.zip', 'hindsound-$env:VERSION-linux-x64.AppImage', 'hindsound-$env:VERSION-linux-x64.tar.gz', 'hindsound-update-win-x64.json', 'hindsound-update-win-x64-portable.json', 'hindsound-update-linux-x64.json', 'lame-3.100.tar.gz', 'SHA256SUMS') {
+        Report "the release attaches $name" ($uploadLine[0].Contains("`"`$env:RUNNER_TEMP/out/$name`""))
+    }
+    Report 'the release downloads its files back and checks them against those sent, before publishing' ($releaseText -cmatch '--clobber\n\s+if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}\n\s+gh release download \$env:TAG --dir "\$env:RUNNER_TEMP/verify"\n\s+if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}\n\s+\./tools/release/check-release-files\.ps1 -Folder "\$env:RUNNER_TEMP/verify" -Version \$env:VERSION -Repository \$env:GITHUB_REPOSITORY -Expected "\$env:RUNNER_TEMP/out"\n\n\s+# A rerun')
+    Report 'the release publishes only after the check of the files downloaded back' ($releaseText.IndexOf('-Folder "$env:RUNNER_TEMP/verify"') -gt 0 -and $releaseText.IndexOf('-Folder "$env:RUNNER_TEMP/verify"') -lt $releaseText.IndexOf('--draft=false') -and ([regex]::Matches($releaseText, '--draft=false')).Count -eq 1)
+    Report 'the release sends the files the release-files workflow checked' ($releaseText -cmatch '- name: Take the files of the release\n\s+uses: actions/download-artifact@[0-9a-f]{40} # v[0-9.]+\n\s+with:\n\s+name: release-files\n\s+path: \$\{\{ runner\.temp \}\}/out\n' -and $filesText -cmatch '\n\s+name: release-files\n\s+path: \$\{\{ runner\.temp \}\}/release/\n')
+    Report 'the release does not give check-release-files its LAME hash' (-not ($releaseText -match '-LameSha256') -and -not ($filesText -match '-LameSha256'))
     Report 'get-iscc verifies its package before extracting it' ([IO.File]::ReadAllText((Join-Path $PSScriptRoot 'get-iscc.ps1')) -cmatch 'if \(\$actual -ne \$packageSha256\) \{\s+throw [^\n]+\n\}\s+\$content = ')
     Assert-Equal 'the token goes to the three steps of the release' 3 ([regex]::Matches($releaseText, 'GH_TOKEN:')).Count
     $firstToken = @($release | Select-String 'GH_TOKEN:')[0].LineNumber
     $draftStep = @($release | Select-String '- name: Create the draft release')[0].LineNumber
     Report 'no step before the draft gets the token' ($firstToken -gt $draftStep)
     Report 'the release job ends by itself after 60 minutes' ($releaseText -cmatch '(?m)^    timeout-minutes: 60$')
-    Report 'no step of the release is conditional' (-not ($releaseText -match '(?m)^\s+if:'))
-    Report 'the release runs the tests' ($releaseText -cmatch '- name: Test\n\s+run: dotnet test Hindsound\.slnx -c Release --filter "Category!=Device"')
+    # The one condition: the job that reports a failure, which has no permission, no token and runs no script.
+    Assert-Equal 'no step of the release is conditional, only the job that reports a failure' '    if: failure()' (@($release | Where-Object { $_ -match '^\s+if:' }) -join ' / ')
+    $reportJob = $releaseText.Substring($releaseText.IndexOf("`n  report-failure:`n"))
+    Report 'the job that reports a failure is the last, without permission or token, and runs no script' (($reportJob -cmatch '\n    permissions: \{\}\n') -and -not ($reportJob -match 'GH_TOKEN|gh |\./tools/|uses:') -and -not ($reportJob.Substring(1) -cmatch '\n  [a-z-]+:\n'))
+    Report 'the job that reports a failure waits for every other job' ($reportJob -cmatch '\n    needs: \[check, files, release\]\n')
+    Report 'no step of release-files is conditional' (-not ($filesText -match '(?m)^\s+if:'))
+    Report 'the release runs the tests' ($releaseText -cmatch '- name: Test\n\s+run: dotnet test Hindsound\.slnx -c Release --filter "Category!=Device&Category!=Linux"')
     Report 'the release tests its scripts' ($releaseText -cmatch '- name: Test the release scripts\n\s+run: \./tools/release/test-release-scripts\.ps1')
+    Report 'the release waits for the checks and for the files of Windows and Linux' (($releaseText -cmatch '\n  release:\n    needs: \[check, files\]\n') -and ($releaseText -cmatch '\n  files:\n    needs: check\n    permissions:\n      contents: read\n    uses: \./\.github/workflows/release-files\.yml\n    with:\n      version: \$\{\{ needs\.check\.outputs\.version \}\}\n'))
+    Report 'the files of the release wait for the Windows and the Linux jobs' (($filesText -cmatch '\n  assemble:\n    needs: \[windows, linux\]\n') -and ($filesText -cmatch '\n  linux:\n    runs-on: ubuntu-22\.04\n'))
+    Report 'release-files is called only, reads only, and publishes nothing' (($filesText -cmatch '\non:\n  workflow_call:\n') -and ($filesText -match '(?m)^permissions:\n  contents: read$') -and -not ($filesText -match 'contents: write|GH_TOKEN|github\.token|gh release|secrets\.'))
+    Report 'the CI rehearses the release with the same workflow, and publishes nothing' (($ciText -cmatch '\n    uses: \./\.github/workflows/release-files\.yml\n') -and ($ciText -match '(?m)^permissions:\n  contents: read$') -and -not ($ciText -match 'contents: write|GH_TOKEN|github\.token|gh release|secrets\.'))
     Report 'the release starts as a verified draft' ($releaseText.Contains('gh release create $env:TAG --draft --verify-tag '))
     Report 'a failure of gh release view other than "release not found" stops the step' ($releaseText.Contains('2>&1' + "`n" + '          $viewExit = $LASTEXITCODE') -and $releaseText.Contains('if ($viewExit -ne 0 -and "$view" -notmatch ''release not found'') { throw'))
     Report 'a published release is refused' ($releaseText.Contains('if ($isDraft -eq ''false'') { throw "$env:TAG is already published." }'))
     Report 'a draft is reused' ($releaseText.Contains('if ($isDraft -eq ''true'') {'))
     Report 'the token stays out of git' ($releaseText -match '(?m)^\s+persist-credentials: false$')
     Report 'the workflow starts with no permission' ($releaseText -match '(?m)^permissions: \{\}$')
-    Report 'the version comes from check-tag' ($releaseText.Contains('"VERSION=$version" >> $env:GITHUB_ENV'))
+    Report 'the version comes from check-tag' ($releaseText.Contains('"VERSION=$version" >> $env:GITHUB_ENV') -and $releaseText.Contains('"version=$version" >> $env:GITHUB_OUTPUT') -and $releaseText.Contains('version: ${{ steps.tag.outputs.version }}'))
     Report 'the releases run one at a time, none cancelled' ($releaseText -cmatch '(?m)^concurrency:\n  group: release\n  cancel-in-progress: false$')
     Report 'the release is published as the latest, which the app reads' ($releaseText.Contains('gh release edit $env:TAG --draft=false --latest'))
     Report 'the release checks the tag on the remote just before publishing' ($releaseText -cmatch '- name: Publish the release\n\s+env:\n[^\n]+\n[^\n]+\n\s+run: \|\n\s+\./tools/release/check-remote-tag\.ps1 -Tag \$env:TAG -Commit \(git rev-parse HEAD\)\n\s+gh release edit \$env:TAG --draft=false')
     Report 'the lame workflow only reads' (($lameText -match '(?m)^permissions:\n  contents: read$') -and -not ($lameText -match 'contents: write|GH_TOKEN|gh release'))
 
-    foreach ($workflow in @(@('release.yml', $release), @('lame.yml', $lame))) {
+    foreach ($workflow in @(@('release.yml', $release), @('release-files.yml', $files), @('ci.yml', $ci), @('lame.yml', $lame))) {
         $text = $workflow[1] -join "`n"
         $runText = @(Get-RunBlocks $workflow[1]) -join "`n"
         Report "$($workflow[0]) has run blocks" ($runText.Length -gt 0)
@@ -700,7 +946,14 @@ try {
         Report "$($workflow[0]) does not use the test parameters of build-lame" (-not ($text -match '-ExpectedSha256|-VsDevCmd'))
         Report "$($workflow[0]) does not give build-lame its addresses" (-not ($text -match '-Urls'))
         foreach ($uses in @($workflow[1] | Where-Object { $_ -match '^\s*(- )?uses:' })) {
-            Report "$($workflow[0]) pins $($uses.Trim())" ($uses -cmatch '@[0-9a-f]{40} # v[0-9]')
+            # A workflow of this repository runs at the commit of the run: its path is its pin.
+            $local = [regex]::Match($uses, '\A    uses: \./\.github/workflows/([a-z-]+\.yml)\z')
+            if ($local.Success) {
+                Report "$($workflow[0]) calls $($local.Groups[1].Value) of this commit" (Test-Path -LiteralPath (Join-Path $workflowFolder $local.Groups[1].Value) -PathType Leaf)
+            }
+            else {
+                Report "$($workflow[0]) pins $($uses.Trim())" ($uses -cmatch '@[0-9a-f]{40} # v[0-9]')
+            }
         }
     }
 }

@@ -1,6 +1,7 @@
 # Releasing Hindsound
 
-A tag `vX.Y.Z` on `main` is all it takes: GitHub Actions builds the Setup and the manifest, and publishes the Release.
+A tag `vX.Y.Z` on `main` is all it takes: GitHub Actions builds every file of the release, for Windows and for Linux, and
+publishes the Release.
 
 Last checked: 2026-11-08, with the releases of 0.0.9 and 0.0.10 on GitHub.
 
@@ -46,37 +47,50 @@ Never `git push --all` or `--mirror`: the other local branches were not scanned 
 
 ## What happens
 
-`release.yml` runs these steps in order. A failure stops everything after it, and no Release comes out.
+`release.yml` runs four jobs: `check`, then `files` (the workflow `release-files.yml`), then `release`, which publishes.
+A failure stops everything after it, and no Release comes out; the job `report-failure` then says so at the end of the log.
 
 One release runs at a time: a tag pushed during a run waits for it, and no run is cancelled to make room. GitHub keeps one
 waiting run only: a third tag pushed meanwhile cancels the waiting one, whose version then stays below the highest tag and is
 never published.
 
-| Step | What it does |
+| Job, step | What it does |
 | --- | --- |
-| Check the tag | `check-tag.ps1`: the form `vX.Y.Z`, the commit on `origin/main`, the version jump below. |
-| Extract the release notes | `extract-changelog.ps1`: the section of this version in `CHANGELOG.md`. Missing or empty: failure. |
-| Test | All the tests but `Category=Device`, then `test-release-scripts.ps1`. |
-| Publish the app | `dotnet publish` with the `win-x64` profile and this version. |
-| Build LAME | `build-lame.ps1`: downloads `lame-3.100.tar.gz`, checks its SHA-256 before extracting it, compiles with `nmake` and `Makefile.MSVC`, then `check-lame-dll.ps1`: x64, only Windows DLLs needed, every export of the DLL of the package, version 3.100. |
-| Replace the DLL in the published folder | The compiled DLL takes the place of the package's. |
-| Prove the encoding | `prove-encoding.ps1`: the compiled DLL in the tests' output folder, then 6 test cases with `--no-build` that write a real MP3 through NAudio.Lame and read it back. One decodes the whole file and compares its level with the sine that went in. |
-| Build the Setup | `get-iscc.ps1`, then ISCC on `installer/Hindsound.iss`. |
-| Check the Setup | `check-setup.ps1`: silent installation in a temporary folder of the runner; exe at the file version of the tag, DLL with the hash of the compiled one, `LICENSE`, `THIRD-PARTY-NOTICES.md` and `licenses\*.txt` identical to the repo; the installed exe draws its notifications (`--dump-notifications`), exit code 0 and BMP files; the installed exe writes one second of sine as an MP3 through the path of a clip (`--prove-mp3`), exit code 0, one MP3 and no WAV; silent uninstallation. |
-| Write the update manifest | `write-manifest.ps1`: `hindsound-update-win-x64.json`. |
-| Create the draft release | A draft, with the notes. |
-| Attach the files | The Setup, the manifest, `lame-3.100.tar.gz`. Then they are downloaded back, and `check-release-files.ps1` wants exactly these three, a manifest that matches the Setup and its address, and the SHA-256 of the LAME source. |
-| Publish the release | `check-remote-tag.ps1`: the tag on GitHub must still point at the commit built. Then the draft goes public, marked as the latest release (`--latest`): the app reads that one, and sees the new version from then on. |
+| check: Check the tag | `check-tag.ps1`: the form `vX.Y.Z`, the commit on `origin/main`, the version jump below. |
+| check: Extract the release notes | `extract-changelog.ps1`: the section of this version in `CHANGELOG.md`. Missing or empty: failure. Then `write-release-notes.ps1` adds the list of the files and whom each one is for. |
+| check: Test | All the tests but `Category=Device` and `Category=Linux` (those run on Ubuntu in the CI), then `test-release-scripts.ps1`. |
+| files, windows: Publish the app | `dotnet publish` with the `win-x64` profile and this version. |
+| files, windows: Build LAME | `build-lame.ps1`: downloads `lame-3.100.tar.gz`, checks its SHA-256 before extracting it, compiles with `nmake` and `Makefile.MSVC`, then `check-lame-dll.ps1`: x64, only Windows DLLs needed, every export of the DLL of the package, version 3.100. |
+| files, windows: Replace the DLL in the published folder | The compiled DLL takes the place of the package's. |
+| files, windows: Prove the encoding | `prove-encoding.ps1`: the compiled DLL in the tests' output folder, then 6 test cases with `--no-build` that write a real MP3 through NAudio.Lame and read it back. One decodes the whole file and compares its level with the sine that went in. |
+| files, windows: Build the Setup | `get-iscc.ps1`, then ISCC on `installer/Hindsound.iss`. |
+| files, windows: Check the Setup | `check-setup.ps1`: silent installation in a temporary folder of the runner; exe at the file version of the tag, DLL with the hash of the compiled one, `LICENSE`, `THIRD-PARTY-NOTICES.md` and `licenses\*.txt` identical to the repo; the installed exe draws its notifications (`--dump-notifications`), exit code 0 and BMP files; the installed exe writes one second of sine as an MP3 through the path of a clip (`--prove-mp3`), exit code 0, one MP3 and no WAV; silent uninstallation. |
+| files, windows: Write the update manifest | `write-manifest.ps1`: `hindsound-update-win-x64.json`, read by the installed app. |
+| files, windows: Make the portable zip | `build-portable-zip.ps1`, from the folder the Setup was built from: the files the Setup installs, plus `packaging/windows/portable.txt` and `README.txt`, in one folder named like the zip. The zip is read back, entry by entry. |
+| files, linux | On ubuntu-22.04: the Linux app published, `build-lame-linux.sh`, then `packaging/linux/build-packages.sh` and `check-packages.sh`, which start both packages once (`--prove-mp3`). |
+| files, assemble | `assemble-release.ps1`: the files of both jobs, the same LAME source from both, `write-announce-manifest.ps1` for `hindsound-update-win-x64-portable.json` and `hindsound-update-linux-x64.json` (the page of the release, nothing to download), and one `SHA256SUMS` for every file. Then `check-release-files.ps1`, and the artifact `release-files`. |
+| release: Check the files of the release | `check-release-files.ps1` on the artifact, before anything goes up. |
+| release: Create the draft release | A draft, with the notes. |
+| release: Attach the files | The nine files, each named. Then they are downloaded back, and `check-release-files.ps1` wants exactly these nine, the manifests right, `SHA256SUMS` right, the SHA-256 of the LAME source, and each file with the size and SHA-256 of the one sent. |
+| release: Publish the release | `check-remote-tag.ps1`: the tag on GitHub must still point at the commit built. Then the draft goes public, marked as the latest release (`--latest`): the app reads that one, and sees the new version from then on. |
+
+The files of a release: `Hindsound-X.Y.Z-Setup.exe`, `Hindsound-X.Y.Z-win-x64-portable.zip`,
+`hindsound-X.Y.Z-linux-x64.AppImage`, `hindsound-X.Y.Z-linux-x64.tar.gz`, `hindsound-update-win-x64.json`,
+`hindsound-update-win-x64-portable.json`, `hindsound-update-linux-x64.json`, `lame-3.100.tar.gz` and `SHA256SUMS`.
+
+`ci.yml` calls `release-files.yml` too, on every pull request and push to `main`, with the version of the latest release in
+`CHANGELOG.md`: the same files are built and checked, and kept as the artifacts `hindsound-windows-x64`,
+`hindsound-linux-x64` and `release-files` of the run. That workflow has no token that could write: only `release.yml`
+talks to the Release.
 
 `lame.yml` runs only the compilation, its checks and the proof of the encoding. It publishes nothing, on a manual start or on a
 push to `main` that changes `tools/release/build-lame.ps1`, `check-lame-dll.ps1`, `lame-exports.txt`, `prove-encoding.ps1` or
 `lame.yml` itself.
 
 `build-lame-linux.sh WORK_DIR OUT_DIR` is the Linux counterpart of `build-lame.ps1`: the same archive and SHA-256, the
-archive's own `configure`, and it leaves `libmp3lame.so.0` and a `lame` command (for the tests only) in `OUT_DIR`. No release
-runs it yet. `ci.yml` does: `core-on-linux` for the MP3 tests of the Linux app, and `linux-package` (ubuntu-22.04) for the
-library the AppImage and the tar.gz ship; `linux-package` puts the verified `lame-3.100.tar.gz` in its artifact next to
-them. A release of the Linux packages will have to attach it as the Windows release does.
+archive's own `configure`, and it leaves `libmp3lame.so.0` and a `lame` command (for the tests only) in `OUT_DIR`.
+`core-on-linux` in `ci.yml` runs it for the MP3 tests of the Linux app, and the `linux` job of `release-files.yml` for the
+library the AppImage and the tar.gz ship; that job puts the verified `lame-3.100.tar.gz` in its artifact next to them.
 
 ## The version jump
 
