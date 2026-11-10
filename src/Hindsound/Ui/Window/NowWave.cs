@@ -35,6 +35,7 @@ internal sealed class NowWave
     private const float DimShare = 0.42f, ZoneGroundShare = 0.07f, HaloShare = 0.40f, GrayLightShare = 0.62f, FrozenGrayLightShare = 0.45f,
         GrayDarkShare = 0.24f, GrayHaloShare = 0.20f, FrozenBrightShare = 0.72f, ZoneLineSoftShare = 0.30f;
 
+    private const float TitleGap = 12, MinCutTitle = 80;
     private const string Filling = "Filling...";
 
     private static readonly Box SystemLane = new(SettingsScreen.Left, SystemTop, SettingsScreen.Width, SystemHeight);
@@ -57,6 +58,7 @@ internal sealed class NowWave
 
     private AudioEngineStatus? _titleStatus;
     private bool _titleKnown, _titleMixed;
+    private string? _titlePast;
     private string _systemTitle = string.Empty;
     private string? _noCapture;
     private string? _markerText;
@@ -134,12 +136,14 @@ internal sealed class NowWave
             change |= WaveChange.Lanes | WaveChange.Titles;
         }
 
-        // Only on the first look after this status, or when the line comes or goes: this is what cuts the name of the exe out.
-        if (!_titleKnown || !ReferenceEquals(status, _titleStatus) || marker.Shows != _titleMixed)
+        // Only on the first look after this status, or when the line comes or goes, or its past changes name: an older change leaving
+        // the memory leaves one app before the line, with no new status. This is what cuts the name of the exe out.
+        if (!_titleKnown || !ReferenceEquals(status, _titleStatus) || marker.Shows != _titleMixed || !ReferenceEquals(marker.Past, _titlePast))
         {
             _titleKnown = true;
             _titleStatus = status;
             _titleMixed = marker.Shows;
+            _titlePast = marker.Past;
             _systemTitle = WaveView.SystemLaneTitle(status, marker);
             _noCapture = WaveView.NoCaptureText(status);
             change |= WaveChange.Lanes | WaveChange.Titles;
@@ -223,7 +227,8 @@ internal sealed class NowWave
 
         if (titles)
         {
-            c.TextMid(_systemTitle, Face.Medium, 13, SettingsScreen.Left, SystemTitleY, Theme.Muted);
+            // Two long names with "then" between them can be wider than the lane: the title is cut there and nowhere sooner.
+            c.TextMid(ShownTitle(c), Face.Medium, 13, SettingsScreen.Left, SystemTitleY, Theme.Muted);
             var micTitle = WaveView.MicLaneTitle(status, _micLane.HasTrack);
             c.TextMid(micTitle, Face.Medium, 13, SettingsScreen.Left, MicTitleY, micTitle == WaveView.MicLost ? Theme.Amber : Theme.Muted);
         }
@@ -339,6 +344,36 @@ internal sealed class NowWave
     private static int Edge(in WaveGrid grid, int column, int first, int none) =>
         column <= 0 ? first : column >= grid.Columns ? none : grid.X(column) - (grid.Gap + 1) / 2;
 
+    // Where the line stands, in design pixels.
+    private float LineX()
+    {
+        var grid = _systemGrid;
+        return (_marker.FirstNewColumn >= grid.Columns ? grid.End : grid.X(_marker.FirstNewColumn) - (grid.Gap + 1) / 2) / (float)_scale;
+    }
+
+    // The title and the words of the line share a row, and the words win: when they fit neither left of the line nor right of the
+    // title, the title is cut so they stand whole on the left, as long as that leaves it a few letters. A "then" between two long
+    // names would otherwise leave the line bare.
+    private string ShownTitle(ICanvas c)
+    {
+        var full = c.Fit(_systemTitle, Face.Medium, 13, SettingsScreen.Width);
+        if (!_marker.Shows || _markerText is not { } text)
+        {
+            return full;
+        }
+
+        var x = LineX();
+        var width = c.Measure(text, Face.Body, 13);
+        var fullRight = SettingsScreen.Left + c.Measure(full, Face.Medium, 13) + TitleGap;
+        if (x - 6 - width >= fullRight || width <= SettingsScreen.Right - MathF.Max(x + 6, fullRight))
+        {
+            return full;
+        }
+
+        var room = x - 6 - width - TitleGap - SettingsScreen.Left;
+        return room >= MinCutTitle ? c.Fit(_systemTitle, Face.Medium, 13, room) : full;
+    }
+
     // The line never crosses the title of the lane, and the words go on whichever side has room.
     private void PaintMarker(ICanvas c, bool withWords)
     {
@@ -348,9 +383,8 @@ internal sealed class NowWave
         }
 
         var s = (float)_scale;
-        var grid = _systemGrid;
-        var x = (_marker.FirstNewColumn >= grid.Columns ? grid.End : grid.X(_marker.FirstNewColumn) - (grid.Gap + 1) / 2) / s;
-        var titleRight = SettingsScreen.Left + c.Measure(_systemTitle, Face.Medium, 13) + 12;
+        var x = LineX();
+        var titleRight = SettingsScreen.Left + c.Measure(ShownTitle(c), Face.Medium, 13) + TitleGap;
         var width = c.Measure(text, Face.Body, 13);
         var top = x < titleRight ? SystemLane.Y : SystemTitleY - 1;
         c.FillRect(new Box(x, top, 1 / s, SystemLane.Bottom - top), Theme.Text);

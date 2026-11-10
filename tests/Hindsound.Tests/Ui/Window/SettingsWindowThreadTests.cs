@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Hindsound.Ui.Window;
 
 namespace Hindsound.Tests.Ui.Window;
@@ -53,6 +54,39 @@ public sealed class SettingsWindowThreadTests
 
         PressSave(window);
 
+        Assert.Equal(1, rig.Backend.Saves);
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool GetKeyboardState(byte[] state);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetKeyboardState(byte[] state);
+
+    // The key state of this thread is what GetKeyState reads, and it follows the real keyboard: Ctrl held there is Ctrl held
+    // here, for this thread only and without a key sent to any other window.
+    [Fact]
+    public void Ctrl_held_on_the_real_keyboard_does_not_reach_the_window_off_screen()
+    {
+        const int ctrl = 0x11, leftCtrl = 0xA2;
+        using var rig = new ScreenRig();
+        using var window = Open(rig);
+        var before = new byte[256];
+        Assert.True(GetKeyboardState(before));
+        var held = (byte[])before.Clone();
+        held[ctrl] = held[leftCtrl] = 0x80;
+        try
+        {
+            Assert.True(SetKeyboardState(held));
+            Assert.True(WindowNative.GetKeyState(ctrl) < 0);
+            PressSave(window);
+        }
+        finally
+        {
+            SetKeyboardState(before);
+        }
+
+        Assert.Equal("band.save", window.Screen.FocusId);
         Assert.Equal(1, rig.Backend.Saves);
     }
 }

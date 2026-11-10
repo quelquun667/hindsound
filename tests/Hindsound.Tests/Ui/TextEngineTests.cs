@@ -571,6 +571,14 @@ public class TextLeakTests
         Assert.Equal(0, engine.HeldForTests);
     }
 
+    // The counts of USER objects here are those of the whole process, and a pool thread that called user32 takes its own with it
+    // when it ends: the test project keeps every pool thread alive, so that only the code under test moves them.
+    [Fact]
+    public void The_pool_threads_of_the_tests_are_kept_alive()
+    {
+        Assert.Equal("-1", AppContext.GetData("System.Threading.ThreadPool.ThreadsToKeepAlive")?.ToString());
+    }
+
     // A layout is made for each Measure: given back at once, so the width of a text costs nothing that stays. The five sizes
     // are used once first, as each makes its format, which the engine keeps.
     [Fact]

@@ -441,8 +441,10 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
         if (_focusId is not null && _box is null && Find(_focusId) is not { CanFocus: true })
         {
             // A foot button of the Library that goes dim hands the focus back to its list: from the side bar, the next arrow would leave the page.
-            var backToList = _focusId is ClipCopyId or ClipShowId && Section == Section.Library && Find(ClipListId) is { CanFocus: true };
-            _focusId = IsCard ? CardStops().FirstOrDefault() : backToList ? ClipListId : NavId;
+            var backToList = _focusId is ClipCopyId or ClipShowId or ClipPlayId && Section == Section.Library && Find(ClipListId) is { CanFocus: true };
+            // Rename and Delete give way to the sentence of the playback: the focus goes to the menu beside them, not to the side bar.
+            var backToMenu = _focusId is CollectionActions.RenameId or CollectionActions.DeleteId && Section == Section.Library && Find(ClipFilterId) is { CanFocus: true };
+            _focusId = IsCard ? CardStops().FirstOrDefault() : backToList ? ClipListId : backToMenu ? ClipFilterId : NavId;
         }
 
         SyncEdit();

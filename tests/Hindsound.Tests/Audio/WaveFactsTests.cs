@@ -107,7 +107,7 @@ public class WaveFactsTests
         rig.Run(1);
         await rig.Engine.SetSourceAppAsync(null);
 
-        Assert.Equal([new SourceChange(2 * Rate, App), new SourceChange(3 * Rate, null)], rig.Engine.WaveFacts.Changes);
+        Assert.Equal([new SourceChange(2 * Rate, App), new SourceChange(3 * Rate, null, App)], rig.Engine.WaveFacts.Changes);
 
         // What was read before does not change under the reader.
         Assert.Single(there);

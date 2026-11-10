@@ -464,6 +464,19 @@ internal static unsafe class SettingsDump
             s.UpdateStatus(sampleStatus with { SystemDeviceName = "Discord.exe", OwnSoundsExcluded = false, SourceApp = "Discord.exe" });
             Wave(s, Memory(voiceTrack, micTrack, changes: new Audio.SourceChange(memory - 5L * rate, "Discord.exe")));
         });
+        Shot("now-app-apres-app", (s, _) =>
+        {
+            s.Editor.SetSourceApp("Spotify.exe");
+            s.UpdateStatus(sampleStatus with { SystemDeviceName = "Spotify.exe", OwnSoundsExcluded = false, SourceApp = "Spotify.exe" });
+            Wave(s, Memory(voiceTrack, micTrack, changes: new Audio.SourceChange(memory - 60L * rate, "Spotify.exe", "Discord.exe")));
+        });
+        Shot("now-app-apres-app-long", (s, _) =>
+        {
+            s.SetChoices([new AudioDeviceChoice("out-1", "Speakers")], [new AudioDeviceChoice("mic-1", "Headset Microphone")], [new AudioAppChoice("SpaceTruckersOnline2.exe", "SpaceTruckersOnline2")]);
+            s.Editor.SetSourceApp("SpaceTruckersOnline2.exe");
+            s.UpdateStatus(sampleStatus with { OwnSoundsExcluded = false, SourceApp = "SpaceTruckersOnline2.exe" });
+            Wave(s, Memory(voiceTrack, micTrack, changes: new Audio.SourceChange(memory - 60L * rate, "SpaceTruckersOnline2.exe", "MidnightRacersDeluxeEdition.exe")));
+        });
         Shot("now-retour-pc", (s, _) => Wave(s, Memory(voiceTrack, micTrack, changes: new Audio.SourceChange(memory - 270L * rate, null))));
         Shot("now-micro-coupe", (s, _) =>
         {
@@ -558,6 +571,25 @@ internal static unsafe class SettingsDump
             s.ClipGestureEnded(chosenClip, ShellOutcome.Gone);
         });
         Shot("library-vide", (s, _) => ShowClips(s, SampleLibrary.Of(0)));
+
+        // A clip played, on a chosen output where the capture can hear it: Stop in place of Play, and the sentence beside the menu.
+        Shot("library-ecoute", (s, _) =>
+        {
+            var library = SampleLibrary.Labeled(clips);
+            ShowClips(s, library);
+            s.UpdateStatus(sampleStatus with { OwnSoundsExcluded = false });
+            s.SelectClip(chosenClip);
+            s.PreviewChanged(new Library.PreviewChange(Library.PreviewState.Playing, library.Lines!.Lines.First(line => line.Main.Path == chosenClip)));
+        });
+
+        // The chosen clip could not be played: Play again, and the reason in place of its name.
+        Shot("library-ecoute-erreur", (s, _) =>
+        {
+            var library = SampleLibrary.Labeled(clips);
+            ShowClips(s, library);
+            s.SelectClip(chosenClip);
+            s.PreviewChanged(new Library.PreviewChange(Library.PreviewState.Error, library.Lines!.Lines.First(line => line.Main.Path == chosenClip)));
+        });
 
         // The end of 2,000 lines, reached the way the user reaches it: the last row, then up to the one the picture shows chosen.
         Shot("library-plafond", (s, _) =>

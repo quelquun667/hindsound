@@ -52,6 +52,23 @@ internal sealed unsafe class Journal
         }
     }
 
+    /// <summary>
+    /// The lines of a log another thread may be writing. A plain read refuses the file while a write holds it, and holds it
+    /// against the next write: this one shares it both ways.
+    /// </summary>
+    public static List<string> ReadShared(string path)
+    {
+        var lines = new List<string>();
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream);
+        while (reader.ReadLine() is { } line)
+        {
+            lines.Add(line);
+        }
+
+        return lines;
+    }
+
     /// <summary>Working set and private bytes of this process, in MB.</summary>
     public static string Memory()
     {

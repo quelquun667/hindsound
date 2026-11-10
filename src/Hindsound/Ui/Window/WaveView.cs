@@ -9,8 +9,9 @@ internal readonly record struct WaveAxis(string Left, string Middle, string Righ
 /// <summary>
 /// A change of source that shows in the window, and the column its line goes on. A change that falls inside a bar, or past the last
 /// one, leaves that bar half old and half new: it is <paramref name="Mixed"/>, goes grey with the past, and the line stands on its right.
+/// <paramref name="Past"/> is the one app the grey past was captured from, or null when it holds the whole PC or more than one source.
 /// </summary>
-internal readonly record struct WaveMarker(int Column, string? App, bool Mixed = false)
+internal readonly record struct WaveMarker(int Column, string? App, bool Mixed = false, string? Past = null)
 {
     /// <summary>No line to draw.</summary>
     public static readonly WaveMarker None = new(-1, null);
@@ -163,14 +164,18 @@ internal static class WaveView
         if (first + shift > columns - 1)
         {
             // Nothing after the change yet: every bar is from before it.
-            return new WaveMarker(columns - 1, change.App, Mixed: true);
+            return new WaveMarker(columns - 1, change.App, Mixed: true, PastOf(facts, change));
         }
 
         // A bar that starts on the frame of the change is wholly new. Any other holds the old source too, and goes left of the line.
         var clean = first * slices / columns * WaveLane.FramesPerSlice == change.Frame;
         var column = (int)(clean ? first : last) + (int)shift;
-        return column < 0 ? WaveMarker.None : new WaveMarker(Math.Min(column, columns - 1), change.App, Mixed: !clean);
+        return column < 0 ? WaveMarker.None : new WaveMarker(Math.Min(column, columns - 1), change.App, Mixed: !clean, PastOf(facts, change));
     }
+
+    // An older change still in the memory splits the grey past between two sources: no one app can name it.
+    private static string? PastOf(in WaveFacts facts, SourceChange last) =>
+        facts.Changes.Count > 1 && facts.Changes[facts.Changes.Count - 2].Frame > facts.Start ? null : last.Before;
 
     /// <summary>The colour of a bar of the PC side. The microphone has no mixed past: pass no marker for it.</summary>
     public static WaveTone ToneOf(int column, int zoneFirstColumn, WaveMarker marker)
@@ -192,8 +197,9 @@ internal static class WaveView
     }
 
     /// <summary>
-    /// The name of the PC side. "Whole PC" as long as the mixed past shows, even with an app chosen: the title of the app alone would
-    /// lie for as long as the memory lasts. The app alone once the line has left the wave. Not running comes first: the present wins.
+    /// The name of the PC side. While the line of a change shows, the title of the app alone would lie for as long as the memory lasts:
+    /// a past from one other app says both, "Discord, then Spotify", and a past from the whole PC, or from more than one source, says
+    /// "Whole PC". The app alone once the line has left the wave. Not running comes first: the present wins.
     /// </summary>
     public static string SystemLaneTitle(AudioEngineStatus? status, WaveMarker marker)
     {
@@ -203,7 +209,25 @@ internal static class WaveView
         }
 
         var app = AppName(exe);
-        return status.SourceAppMissing ? app + " (not running)" : marker.Shows ? WholePc : app;
+        if (status.SourceAppMissing)
+        {
+            return app + " (not running)";
+        }
+
+        if (!marker.Shows)
+        {
+            return app;
+        }
+
+        // The line tells the last change that happened. A choice that has not (the process list failed and the old capture runs on) is not
+        // on it: its past would name a sequence that never took place, and the title would contradict the line under it.
+        if (marker.Past is not { } past || !string.Equals(marker.App, exe, StringComparison.OrdinalIgnoreCase))
+        {
+            return WholePc;
+        }
+
+        // The same app on both sides has no "then" to tell: the past is that app as much as the present.
+        return string.Equals(past, exe, StringComparison.OrdinalIgnoreCase) ? app : AppName(past) + ", then " + app;
     }
 
     /// <summary>

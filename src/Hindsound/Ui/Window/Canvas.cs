@@ -163,7 +163,8 @@ internal static class CanvasText
         return fits == 0 ? string.Empty : Cut(text, fits);
     }
 
-    private static string Cut(string text, int length) => text[..length].TrimEnd() + "...";
+    // A comma left just before the dots reads as a list that stops: "Discord,..." for "Discord, then Spotify".
+    private static string Cut(string text, int length) => text[..length].TrimEnd().TrimEnd(',') + "...";
 
     /// <summary>Words wrapped to a width. Returns the height used, in design pixels.</summary>
     public static float Wrapped(this ICanvas c, string text, Face face, float size, float x, float top, float width, uint rgb)

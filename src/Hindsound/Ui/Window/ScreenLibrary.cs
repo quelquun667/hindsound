@@ -24,6 +24,16 @@ internal interface ILibraryPanel
     /// <summary>Shows the clip in the Explorer. The answer comes through <see cref="SettingsScreen.ClipGestureEnded"/>.</summary>
     void ShowInFolder(ClipGroup line);
 
+    /// <summary>Plays the clip, in place of whatever plays. Each state comes back through <see cref="SettingsScreen.PreviewChanged"/>.</summary>
+    void Play(ClipGroup line)
+    {
+    }
+
+    /// <summary>Stops what plays. The state comes back through <see cref="SettingsScreen.PreviewChanged"/>.</summary>
+    void StopPlaying()
+    {
+    }
+
     /// <summary>Looks at the folders again, off the loop. The answer comes through <see cref="SettingsScreen.LibraryReadingArrived"/>.</summary>
     void ReadAgain();
 
@@ -77,7 +87,8 @@ internal interface ILibraryPanel
 /// <summary>The Library page: the clips on disk, and what can be done with the chosen one.</summary>
 internal sealed partial class SettingsScreen
 {
-    public const string ClipListId = "lib.list", ClipCopyId = "foot.copy", ClipShowId = "foot.show";
+    public const string ClipListId = "lib.list", ClipCopyId = "foot.copy", ClipShowId = "foot.show", ClipPlayId = "foot.play";
+    public const string PlayLabel = "Play", StopLabel = "Stop";
     public const string NoClipsTitle = "No clips yet", NoClipsBody = "Save a clip with your shortcut, and it shows up here.";
     public const string ClipsCappedNote = "Showing the 2,000 most recent clips.";
     public const string SelectedClipCaption = "Selected clip", NothingSelected = "Nothing selected", ShowInFolderLabel = "Show in folder";
@@ -107,6 +118,9 @@ internal sealed partial class SettingsScreen
     private string? _wantedClip;
     private string? _failedClip;
 
+    /// <summary>What the preview of this window said last, as it came back on the loop.</summary>
+    private PreviewChange _preview;
+
     // The line of collections, and what opens over the page from it.
     private readonly ChipLineState _chipLine = new();
     private CheckedListPopup? _moreList;
@@ -131,6 +145,7 @@ internal sealed partial class SettingsScreen
         _clips = new RowListState { ViewRows = ClipRowsShown };
         _clipChoice = LibraryChoice.All;
         _wantedClip = null;
+        _preview = default;
         DropLibraryOverlays();
         TakeReading();
         if (panel is null && Section == Section.Library)
@@ -267,6 +282,84 @@ internal sealed partial class SettingsScreen
         Refresh();
     }
 
+    /// <summary>
+    /// The preview of this window has a new state. It goes on whatever the page: only Stop, the end of the clip or the window
+    /// closing ends it.
+    /// </summary>
+    public void PreviewChanged(PreviewChange change)
+    {
+        _preview = change;
+        if (Section == Section.Library)
+        {
+            Refresh();
+        }
+    }
+
+    /// <summary>The state of the preview as the screen was last told it.</summary>
+    internal PreviewChange Preview => _preview;
+
+    /// <summary>Something is being played, whichever clip it is: from Play to Stop or to its end.</summary>
+    internal bool PreviewPlaying => _preview.State is PreviewState.Opening or PreviewState.Playing;
+
+    /// <summary>The sentence about the next clip is said: only while something plays, and only where it can be heard by the capture.</summary>
+    internal bool SaysPreviewCanEndUpInClip => PreviewPlaying && _status is { } status && ClipPreview.CanEndUpInClip(status);
+
+    /// <summary>
+    /// A double click on a row plays it. The first press of it has already chosen the row; a press on the star, the scroll bar or
+    /// below the rows plays nothing.
+    /// </summary>
+    public void MouseDoubleClick(float x, float y)
+    {
+        var overlay = PopupOpen || BoxOpen;
+        MouseDown(x, y);
+        if (overlay || BoxOpen || Section != Section.Library || _pressedId != ClipListId || ClipList is not { } list)
+        {
+            return;
+        }
+
+        var row = list.RowToPlayAt(x, y);
+        if (row >= 0 && row == _clips.Selected && ChosenClip is { } line && !_goneClips.Contains(line.Main.Path))
+        {
+            StartPreview(line);
+        }
+    }
+
+    private void PlayOrStop()
+    {
+        if (_library is not { } panel)
+        {
+            return;
+        }
+
+        if (ChosenClip is not { } line)
+        {
+            // A filter or a reading took the clip that plays off the list: the button is still the way to stop it.
+            if (PreviewPlaying)
+            {
+                panel.StopPlaying();
+            }
+
+            return;
+        }
+
+        if (ClipPreview.ShowsStopFor(_preview, line))
+        {
+            panel.StopPlaying();
+        }
+        else
+        {
+            StartPreview(line);
+        }
+    }
+
+    private void StartPreview(ClipGroup line)
+    {
+        if (_library is { } panel)
+        {
+            panel.Play(line);
+        }
+    }
+
     /// <summary>The list on screen. Null on every other page.</summary>
     private RowList? ClipList => Section == Section.Library ? Find(ClipListId) as RowList : null;
 
@@ -400,8 +493,16 @@ internal sealed partial class SettingsScreen
         var filter = new Box(Left, ClipFilterTop, FieldWidth, RowHeight);
         Add(new Dropdown(() => _filterItems, () => _clipChoice.Value, PickClipFilter, OpenPopup) { Id = ClipFilterId, Bounds = filter }, scrolls: false);
 
+        // While something plays where the capture can hear it, the sentence takes the place of Rename and Delete, which come back
+        // once it ends: both would not fit on the line.
+        if (SaysPreviewCanEndUpInClip)
+        {
+            var x = filter.Right + 16;
+            Add(new Painted((c, _) => c.TextMid(c.Fit(ClipPreview.CanEndUpInClipText, Face.Body, 12, Right - x), Face.Body, 12, x, filter.MidY, Theme.Muted)), scrolls: false);
+        }
+
         // Only a collection has a name to change, and an empty one still needs a way to be deleted.
-        if (LibraryFilter.NameOf(_clipChoice, ClipIndex) is { } name && _clipChoice.CollectionId is { } id)
+        else if (LibraryFilter.NameOf(_clipChoice, ClipIndex) is { } name && _clipChoice.CollectionId is { } id)
         {
             var rename = () => OpenBox(NameBoxState.ForRename(id, name, CollectionActions.RenameId, () => ClipIndex.Collections));
             var delete = () => OpenBox(NameBoxState.ForDelete(id, name, CollectionActions.DeleteId));
@@ -679,7 +780,11 @@ internal sealed partial class SettingsScreen
         var chosen = ChosenClip;
         var showWidth = Button.WidthFor(_canvas, ShowInFolderLabel);
         var copyWidth = Button.WidthFor(_canvas, "Copy");
-        var showLeft = WindowWidth - FootMargin - showWidth;
+
+        // Stop takes the place and the width of Play, so that nothing moves under the mouse.
+        var playWidth = MathF.Max(Button.WidthFor(_canvas, PlayLabel, icon: true), Button.WidthFor(_canvas, StopLabel));
+        var playLeft = WindowWidth - FootMargin - playWidth;
+        var showLeft = playLeft - FootButtonGap - showWidth;
         var copyLeft = showLeft - FootButtonGap - copyWidth;
         var buttonTop = WindowHeight - FootHeight + (FootHeight - FootButtonHeight) / 2;
         var enabled = chosen is not null && !_goneClips.Contains(chosen.Main.Path);
@@ -695,6 +800,14 @@ internal sealed partial class SettingsScreen
             Id = ClipShowId,
             Enabled = enabled,
             Bounds = new Box(showLeft, buttonTop, showWidth, FootButtonHeight),
+        });
+        var stop = ClipPreview.ShowsStopFor(_preview, chosen) || chosen is null && PreviewPlaying;
+        Chrome(new Button(stop ? StopLabel : PlayLabel, PlayOrStop)
+        {
+            Id = ClipPlayId,
+            Icon = stop ? ButtonIcon.None : ButtonIcon.Play,
+            Enabled = stop || enabled,
+            Bounds = new Box(playLeft, buttonTop, playWidth, FootButtonHeight),
         });
     }
 
@@ -742,6 +855,10 @@ internal sealed partial class SettingsScreen
         else if (string.Equals(_failedClip, chosen.Main.Path, StringComparison.OrdinalIgnoreCase))
         {
             Message.Error(c, ClipFailedMessage, FootMargin, second);
+        }
+        else if (ClipPreview.ErrorTextFor(_preview, chosen) is { } cantPlay)
+        {
+            Message.Error(c, cantPlay, FootMargin, second);
         }
         else
         {

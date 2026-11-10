@@ -273,6 +273,18 @@ internal sealed class RowList : Widget
         return true;
     }
 
+    /// <summary>The row a double click at this point plays: none on the star, the scroll bar, the note at the end or below the rows.</summary>
+    public int RowToPlayAt(float x, float y)
+    {
+        var row = RowUnder(x, y);
+        if (row < 0 || row >= _state.Count)
+        {
+            return RowListState.None;
+        }
+
+        return x >= RowsRight - StarZone && StarPressed is not null && _rowAt(row).Star is not null ? RowListState.None : row;
+    }
+
     private int RowUnder(float x, float y) =>
         x >= Bounds.X && x < RowsRight ? _state.RowAt(y - Bounds.Y) : RowListState.None;
 

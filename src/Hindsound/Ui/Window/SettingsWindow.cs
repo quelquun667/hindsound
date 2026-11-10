@@ -9,7 +9,7 @@ internal static unsafe partial class WindowNative
 {
     public const uint WM_SETICON = 0x0080, WM_GETICON = 0x007F, WM_DESTROY = 0x0002, WM_SIZE = 0x0005, SIZE_MINIMIZED = 1, WM_SETFOCUS = 0x0007, WM_KILLFOCUS = 0x0008, WM_PAINT = 0x000F, WM_ERASEBKGND = 0x0014, WM_ACTIVATE = 0x0006,
         WM_SETFONT = 0x0030, WM_KEYDOWN = 0x0100, WM_KEYUP = 0x0101, WM_CHAR = 0x0102, WM_SYSKEYDOWN = 0x0104, WM_SYSKEYUP = 0x0105, WM_SYSCHAR = 0x0106,
-        WM_COMMAND = 0x0111, WM_CTLCOLOREDIT = 0x0133, WM_MOUSEMOVE = 0x0200, WM_LBUTTONDOWN = 0x0201, WM_LBUTTONUP = 0x0202, WM_MOUSEWHEEL = 0x020A,
+        WM_COMMAND = 0x0111, WM_CTLCOLOREDIT = 0x0133, WM_MOUSEMOVE = 0x0200, WM_LBUTTONDOWN = 0x0201, WM_LBUTTONUP = 0x0202, WM_LBUTTONDBLCLK = 0x0203, CS_DBLCLKS = 0x0008, WM_MOUSEWHEEL = 0x020A,
         WM_CAPTURECHANGED = 0x0215, WM_MOUSELEAVE = 0x02A3, WM_DPICHANGED = 0x02E0, EM_SETSEL = 0x00B1, EM_SETLIMITTEXT = 0x00C5, EN_CHANGE = 0x0300, TME_LEAVE = 0x0002;
 
     public const uint WS_OVERLAPPED = 0, WS_CAPTION = 0x00C00000, WS_SYSMENU = 0x00080000, WS_MINIMIZEBOX = 0x00020000, WS_CLIPCHILDREN = 0x02000000,
@@ -291,6 +291,9 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
         {
             Native.WNDCLASSEXW cls = default;
             cls.Size = (uint)sizeof(Native.WNDCLASSEXW);
+
+            // A double click plays a row of the Library. Its second press comes as WM_LBUTTONDBLCLK, which presses as the first did.
+            cls.Style = WindowNative.CS_DBLCLKS;
             cls.WndProc = &WndProc;
             cls.Instance = instance;
             cls.ClassName = name;
@@ -327,6 +330,11 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
     private static uint ColorRef(uint rgb) => ((rgb & 0xFF) << 16) | (rgb & 0xFF00) | ((rgb >> 16) & 0xFF);
 
     private float Scale => _dpi / 96f;
+
+    // An off-screen window never has the keyboard: its keys were sent to it, and what is held on the real keyboard is not
+    // theirs. A thread that never took the focus still gets the state of that keyboard (a test thread read the Alt toggle
+    // of the PC), and Ctrl in that state makes the Enter sent to Save go nowhere: a test of the window then sees no save.
+    private uint HeldModifiers() => _offscreen ? 0 : Modifiers();
 
     private static uint Modifiers()
     {
@@ -506,7 +514,7 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
             case WindowNative.WM_SYSKEYDOWN:
                 _captureKeys.KeyDown(Screen.Listening, KeyRepeat.FromLParam(lParam));
                 var editWasHidden = !_editVisible;
-                var used = Screen.Key((uint)wParam, Modifiers(), KeyRepeat.FromLParam(lParam));
+                var used = Screen.Key((uint)wParam, HeldModifiers(), KeyRepeat.FromLParam(lParam));
 
                 // This key brought a scrolled-away field back: it is the box's, and so is its character, already on its way here.
                 _charForEdit = !used && editWasHidden && _editVisible && message == WindowNative.WM_KEYDOWN;
@@ -519,7 +527,7 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
 
             case WindowNative.WM_KEYUP:
             case WindowNative.WM_SYSKEYUP:
-                Screen.KeyUp((uint)wParam, Modifiers());
+                Screen.KeyUp((uint)wParam, HeldModifiers());
 
                 // An Alt typed for a hotkey must not open the window menu when it comes up.
                 return message == WindowNative.WM_KEYUP || _captureKeys.Swallow ? 0 : Native.DefWindowProcW(hwnd, message, wParam, lParam);
@@ -553,6 +561,15 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
                 }
 
                 Screen.MouseDown(DesignX(lParam), DesignY(lParam));
+                return 0;
+
+            case WindowNative.WM_LBUTTONDBLCLK:
+                if (!_editVisible && !_offscreen)
+                {
+                    WindowNative.SetFocus(hwnd);
+                }
+
+                Screen.MouseDoubleClick(DesignX(lParam), DesignY(lParam));
                 return 0;
 
             case WindowNative.WM_LBUTTONUP:
@@ -726,9 +743,9 @@ internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
         switch (message)
         {
             case WindowNative.WM_KEYDOWN when (uint)wParam is Vk.Tab or Vk.Enter or Vk.Escape:
-                Screen.Key((uint)wParam, Modifiers(), KeyRepeat.FromLParam(lParam));
+                Screen.Key((uint)wParam, HeldModifiers(), KeyRepeat.FromLParam(lParam));
                 return 0;
-            case WindowNative.WM_KEYDOWN when wParam == 'A' && Modifiers() == HotkeyGesture.ModControl:
+            case WindowNative.WM_KEYDOWN when wParam == 'A' && HeldModifiers() == HotkeyGesture.ModControl:
                 WindowNative.SendMessageW(_edit, WindowNative.EM_SETSEL, 0, -1);
                 return 0;
 

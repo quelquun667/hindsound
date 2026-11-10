@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `Play` in `Library` plays the chosen clip on your default output, and turns into `Stop` while it plays. A double click on a line plays it too.
+- While a clip plays, `Playback can end up in your next clip on this setup.` shows next to the menu when Hindsound records a chosen output, or on a Windows too old to leave its own sound out. On your default output, a clip played here stays out of your next clip.
+- A clip that can't be played says `Can't play this file` in place of its name.
+
+### Changed
+
+- On `Now`, while the line of a change of source is on the wave, the title of the PC side names the app captured before it and the app captured now, such as `Discord, then Spotify`. It said `Whole PC` even when the past came from one app.
+- A name cut to fit no longer ends on a comma before its dots.
+
 ## [0.4.0] - 2026-11-09
 
 ### Added

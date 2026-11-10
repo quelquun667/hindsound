@@ -346,7 +346,7 @@ public sealed class ScreenLibraryFilterTests : IDisposable
         Screen.SelectClip(LabeledLibrary.PathOf(1));
 
         Assert.Equal(
-            ["band.pause", "band.save", "nav", SettingsScreen.ClipFilterId, CollectionActions.RenameId, CollectionActions.DeleteId, SettingsScreen.ClipListId, ChipLine.ChipsId, ChipLine.NewId, SettingsScreen.ClipCopyId, SettingsScreen.ClipShowId],
+            ["band.pause", "band.save", "nav", SettingsScreen.ClipFilterId, CollectionActions.RenameId, CollectionActions.DeleteId, SettingsScreen.ClipListId, ChipLine.ChipsId, ChipLine.NewId, SettingsScreen.ClipCopyId, SettingsScreen.ClipShowId, SettingsScreen.ClipPlayId],
             Screen.StopIds());
     }
 

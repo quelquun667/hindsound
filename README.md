@@ -45,7 +45,7 @@ It has been tried on one Windows 11 PC, and some things are [not tried yet](#not
 
 | Now: what the memory holds | Library: your clips |
 | --- | --- |
-| <img src="assets/screenshots/now.png" alt="Now page: a wave for the PC sound and one for the microphone, the last 0:30 bright, and Save: last 0:30 under the wave" width="400"> | <img src="assets/screenshots/library.png" alt="Library page: the clips newest first, each with its length, one of them chosen, and Copy and Show in folder at the bottom" width="400"> |
+| <img src="assets/screenshots/now.png" alt="Now page: a wave for the PC sound and one for the microphone, the last 0:30 bright, and Save: last 0:30 under the wave" width="400"> | <img src="assets/screenshots/library.png" alt="Library page: the clips newest first, each with its length, one of them chosen, and Copy, Show in folder and Play at the bottom" width="400"> |
 
 | Hotkeys | Durations and memory |
 | --- | --- |
@@ -194,9 +194,18 @@ listed), and of the rescue folder. A folder you filled with music shows that mus
 - **The chosen clip:** choose a line to see its length, size and name at the bottom, then `Copy` it or `Show in folder`. A clip
   saved as two files is one line, and both buttons act on both files. If the file is gone, it says `This clip was moved or deleted`,
   and the line goes at the next look. If the button could not do its job, it says `That didn't work. Your clip is untouched.`
+- **Listening:** `Play`, at the bottom right, plays the chosen clip on your default output, and turns into `Stop` while it plays.
+  A double click on a line plays it too (not on its star). Choosing another line doesn't stop the sound, and its `Play` plays it
+  instead. The sound goes on if you go to another page, and stops when you stop it, when the clip ends, or when the window
+  closes. If the clip that plays leaves the list, the button still says `Stop`. Hindsound copies nothing to play a clip. A file it can't play says `Can't play this file` in place of its name.
+- **Will it end up in a clip?** When it records the whole PC on your default output, Hindsound asks Windows to leave its own
+  sound out of what it records. On the PC it was tried on, a tone played here was missing from the next clip, and the same tone
+  played by another program was in it. When it records a chosen output, or on a Windows too old to leave its sound out, `Playback can end up in your
+  next clip on this setup.` shows next to the menu while a clip plays, in place of `Rename` and `Delete`, which come back when it
+  stops. A microphone that hears your speakers can't be seen from here, so nothing says it.
 - **Your files:** `Library` never moves, renames or deletes a file. To do that, use the Explorer: the list follows.
 - **Long lists:** it shows the 2,000 most recent clips, and says so at the end of the list. A clip with a star or in a collection
-  is always listed, however old.
+  is listed too, however old, as long as the collections file can be read.
 - **Favorites:** each line has a star. Click the star of a line to star that clip, without choosing it, or press `F` with the list focused to star the chosen clip. Do it again to take the star off.
 - **Collections:** under the list, `Selected clip in:` shows the collections, with a box to tick for each. A clip can be in
   several. The ticked ones come first; those that don't fit are behind `+N`. `New collection...` makes one, up to 40 characters.
@@ -343,6 +352,7 @@ Hindsound has only run on one Windows 11 PC so far. These have not been tried fo
 - the star, the collections, `+N`, and the box to name a collection in the real window, typing in it included
 - a clip sent to the Recycle Bin, then restored, getting its collections back
 - `Show in folder` in the real Explorer, `Copy` from `Library` then a paste, and the `Library` line in the menu of the icon
+- playing a real MP3 clip, and a clip saved as two files, from `Library` with a real mouse
 - typing a hotkey, and the Browse button
 - changing the audio output
 - a damaged settings file with Start with Windows on

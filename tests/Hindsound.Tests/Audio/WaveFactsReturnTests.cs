@@ -49,6 +49,6 @@ public class WaveFactsReturnTests
         await engine.RefreshDevicesAsync();
 
         Assert.NotSame(appCapture, rig.SystemSource);
-        Assert.Equal([new SourceChange(2 * Rate, null)], engine.WaveFacts.Changes);
+        Assert.Equal([new SourceChange(2 * Rate, null, App)], engine.WaveFacts.Changes);
     }
 }

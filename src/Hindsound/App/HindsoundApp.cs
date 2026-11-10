@@ -28,6 +28,10 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     private const int ProbeNowOpenings = 3;
     private const int ProbeLibraryLimitMs = 120_000;
 
+    // The file the probe plays: pure silence, written by the probe, and removed with its other files.
+    private const string ProbeSilenceName = "probe-silence.wav";
+    private const int ProbeSilenceMs = 1500;
+
     // The canary of the log: a collection named so must never be read there, whatever happens to it.
     private const string ProbeCanary = "Collection-Canary-7F3";
     private const string StartedLine = "started, settings:";
@@ -1270,9 +1274,20 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
             (attempt, done) => SettingsMapping.CopyToClipboard(_options, attempt, (ms, then) => _loop.After(ms, then), done),
             _journal.Write,
             Directory.Exists,
-            () => _pipeline?.OldestPressUtc);
+            () => _pipeline?.OldestPressUtc,
+            PreviewPlayerInstead ?? (() => new MciPreviewPlayer()),
+            _options.Offscreen || _options.SettingsProbe ? OnlySilence : null);
         screen.SetLibrary(_library);
     }
+
+    /// <summary>For a test: what plays a clip in place of MCI.</summary>
+    internal Func<IPreviewPlayer>? PreviewPlayerInstead { get; set; }
+
+    /// <summary>
+    /// Off screen, this run is a test or a probe: it plays nothing but pure digital silence, read back from the file first. Only
+    /// a file a few megabytes small is read, on the loop, and only off screen.
+    /// </summary>
+    private static bool OnlySilence(ClipGroup line) => line.Files.Count > 0 && line.Files.All(file => SilentWav.IsPureSilence(file.Path));
 
     /// <summary>Where the Library page looks right now. Only the settings and the clip path are read, no disk.</summary>
     internal ClipScanRequest LibraryFolders() => LibraryFoldersInstead?.Invoke() ?? new ClipScanRequest
@@ -1776,7 +1791,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
         void Collected()
         {
-            var told = File.Exists(_journal.Path) && LogNamesTheCanary(File.ReadAllLines(_journal.Path));
+            var told = File.Exists(_journal.Path) && LogNamesTheCanary(Journal.ReadShared(_journal.Path));
             _journal.Write($"probe: Library, a star, a collection made, ticked, renamed and deleted, the star taken off, the name of the collection in the log {told}");
             if (told)
             {
@@ -1784,8 +1799,72 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
                 return;
             }
 
-            done();
+            Silence();
         }
+
+        // A preview, of a file of pure silence this probe writes itself and reads back: Play then Stop, then a second Play left to
+        // its end. Nothing else is ever played: the window plays only silence in a probe, whatever the row.
+        void Silence()
+        {
+            var silence = Path.Combine(folder, ProbeSilenceName);
+            try
+            {
+                SilentWav.Write(silence, ProbeSilenceMs);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Fail($"its silence could not be written ({ClipFolders.Describe(ex)})");
+                return;
+            }
+
+            if (!SilentWav.IsPureSilence(silence))
+            {
+                Fail("its silence did not read back as silence");
+                return;
+            }
+
+            window.Screen.SelectClip(silence);
+            _library?.ReadAgain();
+            Wait(() => _library is { IsWorking: false, Lines: { } lines } && lines.Lines.Any(line => line.Main.Path == silence), () => PlaySilence(silence), "the silence never showed up");
+        }
+
+        void PlaySilence(string silence)
+        {
+            if (!window.Screen.TabTo(SettingsScreen.ClipPlayId))
+            {
+                Fail("the focus never reached Play");
+                return;
+            }
+
+            Key(Vk.Enter);
+            Wait(() => PreviewIs(PreviewState.Playing, silence), StopSilence, "the silence was never played");
+        }
+
+        void StopSilence()
+        {
+            // The same button, saying Stop now.
+            Key(Vk.Enter);
+            Wait(() => PreviewIs(PreviewState.Stopped, null) && _library?.Preview?.WaitForEnd(0) == true, PlayToTheEnd, "the silence was never stopped");
+        }
+
+        void PlayToTheEnd()
+        {
+            _journal.Write($"probe: preview, played then stopped, its thread gone, {Journal.Memory()}");
+            var from = NowMs;
+            Key(Vk.Enter);
+            Wait(
+                () => PreviewIs(PreviewState.Ended, null) && _library?.Preview?.WaitForEnd(0) == true,
+                () =>
+                {
+                    _journal.Write($"probe: preview, played to its end in {NowMs - from} ms for {ProbeSilenceMs} ms of silence, its thread gone, {Journal.Memory()}");
+                    done();
+                },
+                "the silence never came to its end");
+        }
+
+        // What the screen was told, not only what the preview holds: the state must have come back on the loop.
+        bool PreviewIs(PreviewState state, string? path) =>
+            window.Screen.Preview.State == state && (path is null || window.Screen.Preview.Clip?.Main.Path == path);
 
         bool Indexed(Predicate<LibraryData> found) => _library is { IsWorking: false, Index: { } index } && found(index);
 
@@ -2243,6 +2322,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         // Never a Setup from here: every way out passes through, the end of a session and an exception included.
         Guard(() => _updates?.Stop(), "updates");
         Guard(() => _window?.Dispose(), "settings window");
+
+        // Whatever the window did on its way out, nothing plays past the app.
+        Guard(() => _library?.Close(), "library");
         Guard(() => _tray?.Dispose(), "tray");
         Guard(() => _notification?.Dispose(), "notification");
         Guard(() => _hotkeys?.Dispose(), "hotkeys");

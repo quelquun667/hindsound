@@ -17,6 +17,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The tests run on pool threads, and each pool thread that calls user32 holds a USER object of the process until it ends. An
+         idle pool thread ends by itself after 20 s: in 2 full runs out of 10, one or two ended during the 200 drawings of the text
+         leak test, and its count of USER objects fell by as many. Kept alive, the pool threads leave that count to the code under test. -->
+    <RuntimeHostConfigurationOption Include="System.Threading.ThreadPool.ThreadsToKeepAlive" Value="-1" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <!-- Mp3FileReader, to read back the MP3 files in the tests. The app itself only needs NAudio.Wasapi. -->

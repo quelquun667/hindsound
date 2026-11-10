@@ -46,7 +46,9 @@ public sealed record AudioEngineStatus(
 /// <summary>A change of what the PC side captures, kept for the live wave.</summary>
 /// <param name="Frame">Timeline frame from which on the new source alone is in the buffer.</param>
 /// <param name="App">The application now captured, by exe name. Null is the whole PC.</param>
-public readonly record struct SourceChange(long Frame, string? App);
+/// <param name="Before">What was captured just before, the same way. Kept on the change itself, so that it outlives the older
+/// changes dropped from the list and a resize of the memory.</param>
+public readonly record struct SourceChange(long Frame, string? App, string? Before = null);
 
 /// <summary>What the live wave needs from the engine, read many times a second. Reading it allocates nothing.</summary>
 /// <param name="System">The track of the PC sound, if any.</param>
@@ -387,7 +389,8 @@ public sealed class AudioEngine : IDisposable
         kept.CopyTo(next);
         if (!cancels)
         {
-            next[^1] = new SourceChange(frame, wanted);
+            // A change that replaces one on the same frame comes after what that one came after.
+            next[^1] = new SourceChange(frame, wanted, _appBeforeNote);
         }
 
         Volatile.Write(ref _sourceChanges, next);

@@ -192,7 +192,7 @@ public sealed class ScreenCollectionsTests : IDisposable
         Open(CollectionLibrary.Sample());
 
         Assert.Equal(
-            ["band.pause", "band.save", "nav", SettingsScreen.ClipFilterId, SettingsScreen.ClipListId, ChipLine.ChipsId, ChipLine.NewId, SettingsScreen.ClipCopyId, SettingsScreen.ClipShowId],
+            ["band.pause", "band.save", "nav", SettingsScreen.ClipFilterId, SettingsScreen.ClipListId, ChipLine.ChipsId, ChipLine.NewId, SettingsScreen.ClipCopyId, SettingsScreen.ClipShowId, SettingsScreen.ClipPlayId],
             Screen.StopIds());
     }
 

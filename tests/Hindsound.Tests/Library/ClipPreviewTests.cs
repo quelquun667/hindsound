@@ -206,11 +206,13 @@ public sealed class ClipPreviewTests
         var heard = new Listener();
         using var preview = new ClipPreview(player, change =>
         {
-            heard.Add(change);
+            // Before heard hears it: the test thread reads the list as soon as it has heard the end.
             if (change.State == PreviewState.Ended)
             {
                 commandsAtEnd.AddRange(player.Commands);
             }
+
+            heard.Add(change);
         });
 
         preview.Play(Line(@"C:\clips\a.mp3"));

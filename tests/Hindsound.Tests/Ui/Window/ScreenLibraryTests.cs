@@ -611,7 +611,7 @@ public sealed class ScreenLibraryTests : IDisposable
         OpenWith(5);
         Screen.SelectClip(FakeLibrary.PathOf(1));
 
-        Assert.Equal(["band.pause", "band.save", "nav", SettingsScreen.ClipFilterId, SettingsScreen.ClipListId, SettingsScreen.ClipCopyId, SettingsScreen.ClipShowId], Screen.StopIds());
+        Assert.Equal(["band.pause", "band.save", "nav", SettingsScreen.ClipFilterId, SettingsScreen.ClipListId, SettingsScreen.ClipCopyId, SettingsScreen.ClipShowId, SettingsScreen.ClipPlayId], Screen.StopIds());
     }
 
     [Fact]
@@ -635,13 +635,13 @@ public sealed class ScreenLibraryTests : IDisposable
     {
         OpenWith(5);
         Screen.SelectClip(FakeLibrary.PathOf(1));
-        Screen.TabTo(SettingsScreen.ClipShowId);
+        Screen.TabTo(SettingsScreen.ClipPlayId);
 
         Screen.Key(Vk.Tab, 0);
         Assert.Equal("band.pause", Screen.FocusId);
 
         Screen.Key(Vk.Tab, Hindsound.Input.HotkeyGesture.ModShift);
-        Assert.Equal(SettingsScreen.ClipShowId, Screen.FocusId);
+        Assert.Equal(SettingsScreen.ClipPlayId, Screen.FocusId);
     }
 
     // ---------------------------------------------------------------- the foot
@@ -769,13 +769,17 @@ public sealed class ScreenLibraryTests : IDisposable
     {
         OpenWith(5);
         var empty = Screen.WidgetById(SettingsScreen.ClipShowId)!.Bounds;
+        var emptyPlay = Screen.WidgetById(SettingsScreen.ClipPlayId)!.Bounds;
 
         Screen.SelectClip(FakeLibrary.PathOf(3));
 
         var show = Screen.WidgetById(SettingsScreen.ClipShowId)!.Bounds;
         var copy = Screen.WidgetById(SettingsScreen.ClipCopyId)!.Bounds;
+        var play = Screen.WidgetById(SettingsScreen.ClipPlayId)!.Bounds;
         Assert.Equal(empty, show);
-        Assert.Equal(SettingsScreen.WindowWidth - 24, show.Right);
+        Assert.Equal(emptyPlay, play);
+        Assert.Equal(SettingsScreen.WindowWidth - 24, play.Right);
+        Assert.Equal(play.X - 12, show.Right);
         Assert.Equal(show.X - 12, copy.Right);
     }
 

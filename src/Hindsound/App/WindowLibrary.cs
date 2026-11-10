@@ -22,6 +22,11 @@ internal sealed class WindowLibrary : ILibraryPanel
     private readonly Action<string> _journal;
     private readonly Func<string, bool>? _folderExists;
     private readonly LibraryReads _reads;
+    private readonly Func<IPreviewPlayer>? _player;
+    private readonly Func<ClipGroup, bool>? _mayPlay;
+
+    /// <summary>Made at the first Play, so that a window where nothing is played never loads MCI. Stopped when the window goes.</summary>
+    private ClipPreview? _preview;
 
     // What each action asked for is waiting to be told, by the action itself: two of the same kind can be on their way.
     private readonly Dictionary<LibraryAction, Action<LibraryOutcome>?> _waiting = new(ReferenceEqualityComparer.Instance);
@@ -40,6 +45,8 @@ internal sealed class WindowLibrary : ILibraryPanel
     /// <param name="journal">Told of failures, by type and code only.</param>
     /// <param name="clipStarted">When the oldest press yet to end was made, asked when a look starts. Without it, the moment in the request stands.</param>
     /// <param name="folderExists">Whether a folder can be seen. With it, a clip found missing from a folder that can't be seen is not said to be gone.</param>
+    /// <param name="player">What plays a clip: MCI, or a fake. Without it, Play does nothing.</param>
+    /// <param name="mayPlay">Whether this clip may be played at all. Without it, any clip may. A clip refused is told as one that can't be played.</param>
     public WindowLibrary(
         SettingsScreen screen,
         LibraryStore store,
@@ -51,8 +58,12 @@ internal sealed class WindowLibrary : ILibraryPanel
         Action<Func<bool>, Action<bool>> clipboard,
         Action<string> journal,
         Func<string, bool>? folderExists = null,
-        Func<DateTime?>? clipStarted = null)
+        Func<DateTime?>? clipStarted = null,
+        Func<IPreviewPlayer>? player = null,
+        Func<ClipGroup, bool>? mayPlay = null)
     {
+        _player = player;
+        _mayPlay = mayPlay;
         _folderExists = folderExists;
         _screen = screen;
         _folders = folders;
@@ -118,6 +129,53 @@ internal sealed class WindowLibrary : ILibraryPanel
     public void ShowInFolder(ClipGroup line) =>
         ShellFiles.ShowInFolderOffLoop(line, _shell, _post, outcome => Answer(line, outcome), _journal, folderExists: _folderExists);
 
+    public void Play(ClipGroup line)
+    {
+        if (_closed || _player is null)
+        {
+            return;
+        }
+
+        if (_mayPlay is { } may && !may(line))
+        {
+            // Told on the loop, as a real failure would be: the screen gets every state the same way.
+            _journal("preview: not played, not a file this run may play");
+            _post(() => Tell(new PreviewChange(PreviewState.Error, line)));
+            return;
+        }
+
+        (_preview ??= NewPreview()).Play(line);
+    }
+
+    public void StopPlaying() => _preview?.Stop();
+
+    /// <summary>The preview of this window, for a test. Null until the first Play.</summary>
+    internal ClipPreview? Preview => _preview;
+
+    private ClipPreview NewPreview()
+    {
+        ClipPreview? made = null;
+
+        // A state can still be on its way after the window has gone: only the preview this window holds, still open, reaches the
+        // screen. A window makes one preview at most and lets it go only in Close, so the identity is a second lock on _closed.
+        made = new ClipPreview(_player!(), change => _post(() =>
+        {
+            if (ReferenceEquals(_preview, made))
+            {
+                Tell(change);
+            }
+        }), _journal);
+        return made;
+    }
+
+    private void Tell(PreviewChange change)
+    {
+        if (!_closed)
+        {
+            _screen.PreviewChanged(change);
+        }
+    }
+
     /// <summary>A clip has ended, or the window came back to the front: worth a look only if the list is what is on screen.</summary>
     public void LookIfShown() => _screen.ReadLibraryAgain();
 
@@ -127,6 +185,10 @@ internal sealed class WindowLibrary : ILibraryPanel
     {
         _closed = true;
         _waiting.Clear();
+
+        // The sound stops with the window, and its thread goes. Never waits for MCI.
+        _preview?.Dispose();
+        _preview = null;
         _reads.Close(workEnded);
     }
 
