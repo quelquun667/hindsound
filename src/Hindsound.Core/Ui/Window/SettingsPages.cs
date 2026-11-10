@@ -602,6 +602,10 @@ internal sealed partial class SettingsScreen
 
     private static readonly DropItem[] UpdateChoices = [new("auto", "Install automatically"), new("ask", "Ask me"), new("off", "Off")];
 
+    // A copy that only tells cannot install: Install automatically tells, as Ask me does. A saved "auto" is not in this list,
+    // and a list shows a value it does not hold as its first item, Ask me: it stays first.
+    private static readonly DropItem[] AnnounceChoices = [new("ask", "Ask me"), new("off", "Off")];
+
     /// <summary>The Updates section, under the test button. Returns where the next line starts.</summary>
     private float BuildUpdates(UpdatePanelView view, float y)
     {
@@ -618,7 +622,15 @@ internal sealed partial class SettingsScreen
         // A copy that does not update itself only says so: no list, no buttons, no word about GitHub.
         if (view.Active)
         {
-            Row("When a version is out", "general.updates", y, () => UpdateChoices, () => Editor.Settings.General.Updates.Mode, Editor.SetUpdateMode);
+            if (view.AnnouncesOnly)
+            {
+                Row("When a version is out", "general.updates", y, () => AnnounceChoices, () => Editor.Settings.General.Updates.Mode, Editor.SetUpdateMode);
+            }
+            else
+            {
+                Row("When a version is out", "general.updates", y, () => UpdateChoices, () => Editor.Settings.General.Updates.Mode, Editor.SetUpdateMode);
+            }
+
             y += RowHeight + 12;
         }
 
@@ -632,7 +644,12 @@ internal sealed partial class SettingsScreen
 
         y += 20;
         var buttons = new List<(string Id, string Label, Action Click, bool Enabled)> { ("updates.check", "Check now", CheckNow, view.CheckEnabled) };
-        if (view.ShowUpdate)
+        // Where nothing installs, the button opens the page of the release, which the panel opens for What's new.
+        if (view.ShowUpdate && view.AnnouncesOnly)
+        {
+            buttons.Add(("updates.download", "Download", () => _updates?.WhatsNew(), view.UpdateEnabled));
+        }
+        else if (view.ShowUpdate)
         {
             buttons.Add(("updates.now", "Update now", ShowUpdateCard, view.UpdateEnabled));
         }

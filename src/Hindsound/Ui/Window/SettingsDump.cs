@@ -104,6 +104,15 @@ internal static unsafe class SettingsDump
             Downloaded = Next,
         }), clipBusy);
 
+        /// <summary>The portable copy, which only tells: 0.2.0 is out, and its button opens the page of the release.</summary>
+        public static SamplePanel Announcing() => new(Updates.UpdatePanel.Compute(Facts(Updates.UpdateMode.Ask) with
+        {
+            LastCheck = new DateTimeOffset(2026, 11, 6, 14, 2, 0, TimeSpan.Zero),
+            HighestSeen = Next,
+            Manifest = Next,
+            AnnouncesOnly = true,
+        }));
+
         public static SamplePanel Downloading() => new(Updates.UpdatePanel.Compute(Facts(Updates.UpdateMode.Ask) with
         {
             LastCheck = new DateTimeOffset(2026, 11, 6, 14, 2, 0, TimeSpan.Zero),
@@ -364,6 +373,11 @@ internal static unsafe class SettingsDump
         Shot("general-updates-copy", (s, _) =>
         {
             s.SetUpdates(new SamplePanel(Updates.UpdatePanel.Inactive(new Updates.UpdateVersion(0, 1, 0))));
+            s.ShowUpdates();
+        });
+        Shot("general-updates-portable", (s, _) =>
+        {
+            s.SetUpdates(SamplePanel.Announcing());
             s.ShowUpdates();
         });
         Shot("update-card", (s, _) =>

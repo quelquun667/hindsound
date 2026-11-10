@@ -24,6 +24,10 @@ internal static class Program
         var options = AppOptions.Parse(args);
         var journal = new Journal(Journal.PathFor(options.SettingsPath));
         Ui.TextEngine.Log = journal.Write;
+        if (WindowsPlatform.PortableMarkerIgnored)
+        {
+            journal.Write(Updates.PortableCopy.MarkerIgnoredLine);
+        }
 
         // Only the log can be done from here: on a thread other than the loop's, the runtime ends the process anyway.
         // Every thread this app starts catches its own exceptions, so this is for those of a library.

@@ -8,7 +8,7 @@ internal enum UpdateDelivery
 
     /// <summary>
     /// Tells the user once per version, and a click opens the page of the release. Nothing is downloaded or installed: for a
-    /// platform where the app cannot replace itself (Linux, and later a portable Windows copy).
+    /// platform where the app cannot replace itself (Linux, and the portable Windows copy).
     /// </summary>
     AnnounceOnly,
 }
@@ -23,6 +23,24 @@ internal sealed record UpdateChannel(string ManifestName, UpdateDelivery Deliver
 
     /// <summary>The Linux app: its manifest names the page of the release, which the user downloads from.</summary>
     public static UpdateChannel LinuxAnnounce { get; } = new("hindsound-update-linux-x64.json", UpdateDelivery.AnnounceOnly);
+
+    /// <summary>
+    /// The portable Windows copy, unpacked from its zip: nothing installs it, so nothing replaces it. Its manifest names the
+    /// page of the release, as Linux's does, and its state lives apart from the installed copy's.
+    /// </summary>
+    public static UpdateChannel WindowsPortable { get; } = new("hindsound-update-win-x64-portable.json", UpdateDelivery.AnnounceOnly)
+    {
+        StateFolderName = "updates-portable",
+    };
+
+    /// <summary>
+    /// The folder of the update state, under the local application data of Hindsound. The installed copy's holds the Setup
+    /// waiting on disk, its attempts and the version it expects after it: a copy that installs nothing keeps its own state,
+    /// so its launches never read nor rewrite those.
+    /// </summary>
+    public string StateFolderName { get; init; } = DefaultStateFolderName;
+
+    public const string DefaultStateFolderName = "updates";
 
     /// <summary>Throws for a name that is not a plain .json file name: the names come from the code, never from the network.</summary>
     public string ManifestUrl => UpdateUrlPolicy.ManifestUrlFor(ManifestName);

@@ -17,6 +17,12 @@ internal sealed record UpdatePanelView(string VersionLine, string StatusLine, bo
 
     /// <summary>A click stands while its version downloads: only Cancel stays active on the card.</summary>
     public bool CardBusy { get; init; }
+
+    /// <summary>
+    /// A copy that only tells about a new version: its list has no Install automatically, and its button opens the page of
+    /// the release instead of the card.
+    /// </summary>
+    public bool AnnouncesOnly { get; init; }
 }
 
 /// <summary>The window's side of the updater. Kept out of ISettingsBackend, which test doubles implement.</summary>
@@ -105,6 +111,9 @@ internal sealed record UpdatePanelFacts
     public bool ClickStands { get; init; }
 
     public UpdateCardNote Card { get; init; }
+
+    /// <summary>Nothing downloads nor installs: the offered version is only a page to open.</summary>
+    public bool AnnouncesOnly { get; init; }
 }
 
 /// <summary>The Updates section as text and switches, with no window: every line of it is tested from fixed facts.</summary>
@@ -122,6 +131,10 @@ internal static class UpdatePanel
         var idle = facts.StateKnown && facts.Pass == UpdatePassKind.None;
         var known = offered is not null;
         var ready = known && offered == facts.Downloaded;
+        if (facts.AnnouncesOnly)
+        {
+            return AnnouncingView(facts, offered, idle);
+        }
 
         return new UpdatePanelView(
             VersionLine(facts.Installed),
@@ -139,6 +152,24 @@ internal static class UpdatePanel
             SkipEnabled = known && idle && !IsSkipped(offered!.Value, facts.Skipped),
             CardLine = CardLine(facts),
             CardBusy = facts.ClickStands && facts.Pass == UpdatePassKind.Download,
+        };
+    }
+
+    /// <summary>
+    /// The section of a copy that only tells. Download opens the page of the release, the same page What's new would open,
+    /// so What's new goes; opening a page needs no idle updater, nor a mode that downloads.
+    /// </summary>
+    private static UpdatePanelView AnnouncingView(UpdatePanelFacts facts, UpdateVersion? offered, bool idle)
+    {
+        var known = offered is not null;
+        var status = known && !IsSkipped(offered!.Value, facts.Skipped) && facts.Pass == UpdatePassKind.None && facts.Problem == UpdateProblem.None
+            ? $"Version {offered} is available."
+            : StatusLine(facts, offered);
+        return new UpdatePanelView(VersionLine(facts.Installed), status, Active: true, CheckEnabled: idle, offered,
+            UpdateEnabled: known, ShowWhatsNew: false, ShowSkip: known, ShowUpdate: known)
+        {
+            SkipEnabled = known && idle && !IsSkipped(offered!.Value, facts.Skipped),
+            AnnouncesOnly = true,
         };
     }
 

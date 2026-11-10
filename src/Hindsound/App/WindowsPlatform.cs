@@ -13,6 +13,9 @@ internal static class WindowsPlatform
     private static readonly object Lock = new();
     private static bool _installed;
 
+    /// <summary>portable.txt lies next to an installed copy, which stays installed: the entry point says it in the log.</summary>
+    public static bool PortableMarkerIgnored { get; private set; }
+
     /// <summary>Fills <see cref="PlatformDefaults"/>. Called first thing by the entry point, and by the tests; once is enough.</summary>
     public static void Install()
     {
@@ -31,6 +34,15 @@ internal static class WindowsPlatform
             // RegisterHotKey grabs one combination at a time; the batch the app binds through is made of it.
             PlatformDefaults.Hotkeys = () => new KeyByKeyHotkeys(new Win32HotkeyNative());
             PlatformDefaults.UpdateNetwork = () => new WinHttpTransport();
+
+            // Only the zip's copy changes channel: without portable.txt the default stays the installed app's, as before.
+            var channel = PortableCopy.WindowsChannel(AppContext.BaseDirectory, out var markerIgnored);
+            PortableMarkerIgnored = markerIgnored;
+            if (channel.AnnouncesOnly)
+            {
+                PlatformDefaults.UpdateChannel = channel;
+            }
+
             PlatformDefaults.Desktop = Desktop;
             PlatformDefaults.Shell = () => new WindowsShell();
             _installed = true;

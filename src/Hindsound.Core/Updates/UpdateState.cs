@@ -57,6 +57,11 @@ internal sealed class UpdateStateStore(string path)
     public static string DefaultFolder { get; } = Hindsound.Settings.UserFolders.Under(
         Environment.SpecialFolder.LocalApplicationData, "Hindsound", "updates");
 
+    /// <summary>The state folder of <paramref name="channel"/>: <see cref="DefaultFolder"/> for the installed copy and Linux.</summary>
+    public static string FolderFor(UpdateChannel channel) => channel.StateFolderName == UpdateChannel.DefaultStateFolderName
+        ? DefaultFolder
+        : Hindsound.Settings.UserFolders.Under(Environment.SpecialFolder.LocalApplicationData, "Hindsound", channel.StateFolderName);
+
     public UpdateStateData Load() => TryLoad(out var state) ? state : new UpdateStateData();
 
     /// <summary>

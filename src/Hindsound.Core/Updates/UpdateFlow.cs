@@ -127,6 +127,7 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
         Run = _runProblem,
         ClickStands = _clickStands,
         Card = _card,
+        AnnouncesOnly = Channel.AnnouncesOnly,
     });
 
     /// <summary>After the Mutex, before the icon and the capture: reads the state once, cleans, and may start a waiting Setup.</summary>

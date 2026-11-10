@@ -38,7 +38,7 @@ internal static class UpdateWiring
         switch (Why(updaterMayRun, options, exeFolder, channel))
         {
             case Installed or AnnouncesOnly:
-                var folder = UpdateStateStore.DefaultFolder;
+                var folder = UpdateStateStore.FolderFor(channel);
                 return new UpdateFlow(new UpdateStateStore(Path.Combine(folder, StateFile)), folder, InstalledVersion(), PlatformDefaults.Make(PlatformDefaults.UpdateNetwork, "an update network"),
                     UpdateRunner.StartProcess, host, now, MinimumDelay)
                 {
