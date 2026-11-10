@@ -63,7 +63,11 @@ public interface ICaptureSource : IDisposable
 /// <summary>Finds devices and opens captures.</summary>
 public interface ICaptureSourceFactory
 {
-    /// <summary>The endpoint to capture from now, or null if there is none. Never throws.</summary>
+    /// <summary>
+    /// The endpoint to capture from now, or null if there is none. Throws only when it cannot tell, for instance a sound
+    /// server too slow to answer: the engine then keeps a working capture and tries again later, so a factory must not
+    /// return null for a device it merely could not look up.
+    /// </summary>
     /// <param name="flow">Which side.</param>
     /// <param name="requestedId">A specific endpoint, or null for the system default.</param>
     string? ResolveDevice(AudioFlow flow, string? requestedId);

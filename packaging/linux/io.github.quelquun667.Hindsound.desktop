@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Hindsound
+GenericName=Audio replay
+Comment=Keeps the last minutes of sound and saves them on a key
+Exec=hindsound
+Icon=io.github.quelquun667.Hindsound
+Terminal=false
+StartupNotify=false
+Categories=AudioVideo;Audio;Utility;
+Keywords=record;replay;clip;audio;
+X-GNOME-UsesNotifications=true

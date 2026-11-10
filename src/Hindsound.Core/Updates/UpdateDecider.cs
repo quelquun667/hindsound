@@ -82,6 +82,9 @@ internal sealed record UpdateSituation
     public UpdateVersion? Downloaded { get; init; }
 
     public IReadOnlyDictionary<string, int>? AttemptsByVersion { get; init; }
+
+    /// <summary>Install, or only tell. A platform that only tells never downloads nor installs, whatever the mode.</summary>
+    public UpdateDelivery Delivery { get; init; }
 }
 
 /// <summary>
@@ -96,7 +99,26 @@ internal static class UpdateDecider
     public static readonly TimeSpan DelayAfterLaunch = TimeSpan.FromMinutes(2);
     public static readonly TimeSpan BusyRetry = TimeSpan.FromMinutes(30);
 
-    public static UpdateAction Decide(UpdateSituation situation) => situation.Event switch
+    public static UpdateAction Decide(UpdateSituation situation) => situation.Delivery == UpdateDelivery.AnnounceOnly
+        ? DecideAnnounceOnly(situation)
+        : DecideSetup(situation);
+
+    /// <summary>
+    /// The mode as a delivery can honour it. Install automatically cannot install where the app does not replace itself: it
+    /// tells, as Ask me does.
+    /// </summary>
+    public static UpdateMode EffectiveMode(UpdateDelivery delivery, UpdateMode mode) =>
+        delivery == UpdateDelivery.AnnounceOnly && mode == UpdateMode.Auto ? UpdateMode.Ask : mode;
+
+    // The check when due, then one announcement per version. No click downloads, and nothing waits for the app to leave.
+    private static UpdateAction DecideAnnounceOnly(UpdateSituation situation) => situation.Event switch
+    {
+        UpdateEvent.Tick => OnTick(situation with { Mode = EffectiveMode(UpdateDelivery.AnnounceOnly, situation.Mode) }),
+        UpdateEvent.CheckNowClicked => IsBusy(situation) ? UpdateAction.None : UpdateAction.Check,
+        _ => UpdateAction.None,
+    };
+
+    private static UpdateAction DecideSetup(UpdateSituation situation) => situation.Event switch
     {
         UpdateEvent.Tick => OnTick(situation),
         UpdateEvent.CheckNowClicked => IsBusy(situation) ? UpdateAction.None : UpdateAction.Check,

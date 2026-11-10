@@ -20,7 +20,7 @@ internal sealed class FolderTransport(string folder) : IUpdateTransport
             return new TransportResult(TransportStatus.Blocked);
         }
 
-        var path = Path.Combine(folder, url == UpdateUrlPolicy.ManifestUrl ? ManifestFile : SetupFile);
+        var path = Path.Combine(folder, UpdateUrlPolicy.IsManifestUrl(url) ? ManifestFile : SetupFile);
         FileStream file;
         try
         {

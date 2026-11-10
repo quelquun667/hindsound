@@ -27,6 +27,16 @@ internal static class PlatformDefaults
     /// <summary>The transport of a real update check, over the network.</summary>
     public static Func<IUpdateTransport>? UpdateNetwork { get; set; }
 
+    /// <summary>The manifest an update check reads, and whether a newer version installs or is only told. Null: the installed Windows app's.</summary>
+    public static UpdateChannel? UpdateChannel { get; set; }
+
+    /// <summary>
+    /// The MP3 encoder, where NAudio.Lame cannot load its library (it does so through Windows calls): given the file stream,
+    /// the channel count and the bitrate, a stream that takes 16-bit interleaved PCM at <see cref="Audio.InternalFormat.SampleRate"/>
+    /// and writes MP3 to the file stream. Null keeps NAudio.Lame, as on Windows.
+    /// </summary>
+    public static Func<Stream, int, int, Stream>? Mp3Encoder { get; set; }
+
     /// <summary>The desktop as the app reads it: the screens, the quiet state, the sound, the opener, the meter.</summary>
     public static Func<DesktopParts>? Desktop { get; set; }
 

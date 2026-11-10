@@ -43,6 +43,9 @@ internal interface IAppShell
 
     /// <summary>What <c>--settings-probe</c> reads of the system and sends to the window.</summary>
     ISettingsProbe Probe { get; }
+
+    /// <summary>Whether the app has windows here: without them, the menu of the icon offers only what works without one.</summary>
+    bool HasWindow => true;
 }
 
 /// <summary>
@@ -102,11 +105,17 @@ internal interface INotificationView : IDisposable
     void Present(NotificationContent content, NotificationSpot spot, uint accent);
 }
 
-/// <summary>The icon of the app, its tooltip, and the menu it opens.</summary>
+/// <summary>
+/// The icon of the app, its tooltip, and the menu it opens. The gestures and the menu are the app's own words, never the
+/// codes of a system: each system turns its clicks into <see cref="TrayGesture"/> and shows the lines of the menu its own way.
+/// </summary>
 internal interface ITrayIcon : IDisposable
 {
-    /// <summary>A gesture on the icon: the code <see cref="TrayMenu.GestureOf"/> reads, and where it happened.</summary>
-    Action<uint, nuint>? Message { get; set; }
+    /// <summary>A gesture on the icon, on the thread of the loop: a click, or a request for the menu.</summary>
+    Action<TrayGesture>? Gesture { get; set; }
+
+    /// <summary>The line the user chose in the menu, on the thread of the loop; <see cref="TrayCommand.None"/> when the menu closed without one.</summary>
+    Action<TrayCommand>? Chosen { get; set; }
 
     /// <summary>The place that shows the icons came back after a restart: the icon must be added again.</summary>
     Action? Lost { get; set; }
@@ -123,8 +132,12 @@ internal interface ITrayIcon : IDisposable
     /// <summary>Whether the scale of the screen now asks for other pixels.</summary>
     bool IconIsStale { get; }
 
-    /// <summary>Shows the menu of <paramref name="items"/> at a point, and returns what was chosen.</summary>
-    TrayCommand ShowMenu(int x, int y, IReadOnlyList<TrayMenuItem> items);
+    /// <summary>
+    /// The menu of <paramref name="items"/>, in answer to a <see cref="TrayGesture.Menu"/>. Where the app shows its menu
+    /// itself, it opens now where the gesture was; where the desktop shows it, it is the menu the desktop shows. The line
+    /// chosen comes back through <see cref="Chosen"/>.
+    /// </summary>
+    void ShowMenu(IReadOnlyList<TrayMenuItem> items);
 }
 
 /// <summary>The end of the user's session, as the app hears it, and the reason the app gives to wait.</summary>

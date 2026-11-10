@@ -72,6 +72,12 @@ never published.
 push to `main` that changes `tools/release/build-lame.ps1`, `check-lame-dll.ps1`, `lame-exports.txt`, `prove-encoding.ps1` or
 `lame.yml` itself.
 
+`build-lame-linux.sh WORK_DIR OUT_DIR` is the Linux counterpart of `build-lame.ps1`: the same archive and SHA-256, the
+archive's own `configure`, and it leaves `libmp3lame.so.0` and a `lame` command (for the tests only) in `OUT_DIR`. No release
+runs it yet. `ci.yml` does: `core-on-linux` for the MP3 tests of the Linux app, and `linux-package` (ubuntu-22.04) for the
+library the AppImage and the tar.gz ship; `linux-package` puts the verified `lame-3.100.tar.gz` in its artifact next to
+them. A release of the Linux packages will have to attach it as the Windows release does.
+
 ## The version jump
 
 The app remembers the highest version it has read. A 9.0.0 by mistake would block everything lower, for good, for whoever

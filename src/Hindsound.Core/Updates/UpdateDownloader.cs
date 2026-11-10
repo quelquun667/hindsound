@@ -94,16 +94,19 @@ internal readonly record struct DownloadResult(DownloadStatus Status, TransportR
 /// <summary>The two network passes. Meant to run inside <see cref="UpdatePass"/>, never on the interface thread.</summary>
 internal static class UpdateDownloader
 {
-    public static CheckResult Check(IUpdateTransport transport, Func<bool> shouldStop)
+    public static CheckResult Check(IUpdateTransport transport, Func<bool> shouldStop) => Check(transport, UpdateChannel.WindowsSetup, shouldStop);
+
+    /// <summary>Reads the manifest of <paramref name="channel"/>, by the rules of its delivery.</summary>
+    public static CheckResult Check(IUpdateTransport transport, UpdateChannel channel, Func<bool> shouldStop)
     {
         using var body = new MemoryStream();
-        var result = transport.Get(UpdateUrlPolicy.ManifestUrl, TransferLimits.Manifest, data => body.Write(data), shouldStop);
+        var result = transport.Get(channel.ManifestUrl, TransferLimits.Manifest, data => body.Write(data), shouldStop);
         if (result.Status != TransportStatus.Completed)
         {
             return new CheckResult(CheckStatus.TransportFailed, result, default, null);
         }
 
-        var status = UpdateManifestReader.Read(body.GetBuffer().AsSpan(0, (int)body.Length), out var manifest);
+        var status = UpdateManifestReader.Read(body.GetBuffer().AsSpan(0, (int)body.Length), channel.Delivery, out var manifest);
         return new CheckResult(status == ManifestStatus.Valid ? CheckStatus.Found : CheckStatus.ManifestRefused, result, status, manifest);
     }
 

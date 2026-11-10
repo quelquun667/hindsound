@@ -2,13 +2,15 @@
 
 Hindsound itself is under the MIT licence: see [LICENSE](LICENSE).
 
-The Windows build of Hindsound contains or ships the components below. Every file in [licenses/](licenses) is an unchanged copy of the upstream text; the table says where each one comes from. This document records what the project checked on 2026-11-06 and 2026-11-07. It is not legal advice.
+Hindsound contains or ships the components below. A row marked "Linux build only" is about the Linux packages (the AppImage and the tar.gz) alone; the other rows describe the Windows build. Every file in [licenses/](licenses) is an unchanged copy of the upstream text; the table says where each one comes from. This document records what the project checked on 2026-11-06, 2026-11-07 and 2026-11-10. It is not legal advice.
 
 | Component | Version | Licence | Copyright | Text | Copied from |
 |---|---|---|---|---|---|
 | LAME (`libmp3lame.64.dll`) | 3.100 | GNU Library General Public License, version 2 or any later version | See [LAME](#lame) | [LAME-COPYING.txt](licenses/LAME-COPYING.txt), [LAME-LICENSE.txt](licenses/LAME-LICENSE.txt), [LAME-README.txt](licenses/LAME-README.txt) | `COPYING`, `LICENSE` and `README` in `lame-3.100.tar.gz` |
+| LAME (`libmp3lame.so.0`, Linux build only) | 3.100 | The same as `libmp3lame.64.dll` above | See [LAME](#lame) | The same three files | The same files of the same `lame-3.100.tar.gz`; see [On Linux](#on-linux) |
 | NAudio.Core and NAudio.Wasapi | 3.3.0 | MIT | Copyright 2008-2026 Mark Heath | [NAudio-LICENSE.txt](licenses/NAudio-LICENSE.txt) | `LICENSE` in [naudio/NAudio](https://github.com/naudio/NAudio) at commit `4f8889e2bd34c3978a25652c6c172fa1502ccba3`, the commit both packages name. The packages themselves state "MIT" but hold no licence file |
 | NAudio.Lame | 2.1.0 | MIT | Copyright (c) 2013-2019 Corey Murtagh | [NAudio.Lame-LICENSE.txt](licenses/NAudio.Lame-LICENSE.txt) | `LICENSE.txt` in the NuGet package |
+| Tmds.DBus.Protocol (Linux build only) | 0.95.2 | MIT | Copyright 2006 Alp Toker, Copyright 2010 Other Contributors, Copyright 2016 Tom Deseyn | [Tmds.DBus.Protocol-COPYING.txt](licenses/Tmds.DBus.Protocol-COPYING.txt) | `COPYING` in [tmds/Tmds.DBus](https://github.com/tmds/Tmds.DBus) at commit `5557e043025de2251128ab8048c9d3f0cf50495e`, the commit the package names. The package itself states "MIT" (`license` of its nuspec) but holds no licence file |
 | System.Numerics.Tensors | 9.0.0 | MIT | Copyright (c) .NET Foundation and Contributors | [System.Numerics.Tensors-LICENSE.txt](licenses/System.Numerics.Tensors-LICENSE.txt), [System.Numerics.Tensors-THIRD-PARTY-NOTICES.txt](licenses/System.Numerics.Tensors-THIRD-PARTY-NOTICES.txt) | `LICENSE.TXT` and `THIRD-PARTY-NOTICES.TXT` in the NuGet package |
 | .NET runtime | 10 (texts from 10.0.14) | MIT, with the third-party notices listed in its own file | Copyright (c) .NET Foundation and Contributors | [dotnet-runtime-LICENSE.txt](licenses/dotnet-runtime-LICENSE.txt), [dotnet-runtime-THIRD-PARTY-NOTICES.txt](licenses/dotnet-runtime-THIRD-PARTY-NOTICES.txt) | `LICENSE.TXT` and `THIRD-PARTY-NOTICES.TXT` in the `Microsoft.NETCore.App.Runtime.win-x64` 10.0.14 package |
 | Inno Setup (the Setup program, and the `unins000.exe` it installs) | 7.1.0 | Inno Setup License | Copyright (C) 1997-2026 Jordan Russell, portions Copyright (C) 2000-2026 Martijn Laan | [InnoSetup-license.txt](licenses/InnoSetup-license.txt) | `tools/license.txt` in the NuGet package Tools.InnoSetup 7.1.0, the one [get-iscc.ps1](tools/release/get-iscc.ps1) pins. The licence asks to keep its notices in the binaries, which the Setup does, and calls a mention appreciated, not required |
@@ -73,6 +75,16 @@ What is not established about it:
 
 - Neither NAudio.Lame nor RareWares says which exact source tree or build scripts produced this binary, and RareWares does not say whether it was patched. It describes the library as "the standard libmp3lame.dll" and its builds as "Intel compiles".
 - A build path inside the DLL, `E:\lame-3.100-CVS\output\Release\libmp3lame.pdb`, points to a CVS checkout, and the build is nine days younger than the source archive (2017-10-13). So `lame-3.100.tar.gz` is the published source of LAME 3.100, but it is not proven to be the exact source of this binary.
+
+### On Linux
+
+The Linux build (the AppImage and the tar.gz the CI makes) ships LAME as `libmp3lame.so.0`, a separate shared library next to the `hindsound` program, under the same licence.
+
+- It is compiled by [tools/release/build-lame-linux.sh](tools/release/build-lame-linux.sh) from the same `lame-3.100.tar.gz`, after the same SHA-256 check, with the archive's own `configure` and no file changed: the script fails if the build changes one.
+- Hindsound looks for it first in the folder of the program, then asks the system for `libmp3lame.so.0`. To use your own build, put it in that folder under that name (in the tar.gz; an AppImage is read-only), or remove the shipped one so that the system's copy is used.
+- Both packages carry this document and [licenses/](licenses).
+- The CI artifact that holds the packages (`hindsound-linux-x64`) also holds that `lame-3.100.tar.gz`, unchanged, the archive the library of those packages was built from.
+- Nothing of it has run yet on a Linux machine: the CI is the first place it will.
 
 ### The decoder inside the DLL
 

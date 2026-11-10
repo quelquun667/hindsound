@@ -62,7 +62,9 @@ public static class Encoders
         if (bitrateKbps is not (128 or 192 or 320))
             throw new ArgumentOutOfRangeException(nameof(bitrateKbps), bitrateKbps, "The MP3 bitrate must be 128, 192 or 320 kbps.");
 
-        return Open(path, channels, FileAccess.ReadWrite, stream => new LameMP3FileWriter(stream, new WaveFormat(Audio.InternalFormat.SampleRate, 16, channels), bitrateKbps));
+        return Open(path, channels, FileAccess.ReadWrite, stream => App.PlatformDefaults.Mp3Encoder is { } encoder
+            ? encoder(stream, channels, bitrateKbps)
+            : new LameMP3FileWriter(stream, new WaveFormat(Audio.InternalFormat.SampleRate, 16, channels), bitrateKbps));
     }
 
     /// <summary>Writes a whole buffer as WAV.</summary>

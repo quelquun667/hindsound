@@ -49,6 +49,56 @@ internal sealed class TrayPresence(Func<uint, uint, bool> call)
     }
 }
 
+/// <summary>
+/// The messages of the Windows notification area, turned into the gestures of the app. With NOTIFYICON_VERSION_4 the code of
+/// a message says what happened and its wParam where; a test or a probe posts the command it wants in place of the point.
+/// </summary>
+internal static class TrayMessages
+{
+    // WM_CONTEXTMENU, NIN_SELECT and NIN_KEYSELECT as plain numbers: a test holds them equal to the ones the icon registers with.
+    internal const uint ContextMenuCode = 0x007B;
+    internal const uint SelectCode = 0x0400;
+    internal const uint KeySelectCode = 0x0401;
+
+    /// <summary>The code is one of these, whatever the mouse did: a left click or Enter is a selection.</summary>
+    public static TrayGesture GestureOf(uint code) => code switch
+    {
+        ContextMenuCode => TrayGesture.Menu,
+        SelectCode or KeySelectCode => TrayGesture.OpenSettings,
+        _ => TrayGesture.None,
+    };
+
+    /// <summary>Where the menu opens: the point the wParam of the message carries, in screen coordinates.</summary>
+    public static (int X, int Y) PointOf(nuint wParam) => ((short)(wParam & 0xFFFF), (short)((wParam >> 16) & 0xFFFF));
+
+    /// <summary>The command a test or a probe posts in place of the point, off screen.</summary>
+    public static TrayCommand CommandNamedBy(nuint wParam) => (TrayCommand)(wParam & 0xFFFF);
+
+    /// <summary>
+    /// Hands one message to the app: its gesture, then, for a menu the app did not open (off screen, nothing shows), the
+    /// command the message names. <paramref name="opens"/> counts the menus opened so far.
+    /// </summary>
+    public static void Route(uint code, nuint wParam, Action<TrayGesture>? gesture, Func<int> opens, Action<TrayCommand>? chosen)
+    {
+        var asked = GestureOf(code);
+        if (asked == TrayGesture.None)
+        {
+            return;
+        }
+
+        var before = opens();
+        gesture?.Invoke(asked);
+        if (asked == TrayGesture.Menu && opens() == before)
+        {
+            chosen?.Invoke(CommandNamedBy(wParam));
+        }
+    }
+
+    /// <summary>A message of the icon, handed straight to an app built off screen, as the tests of the wiring do: it opens no menu.</summary>
+    internal static void OnTrayMessage(this HindsoundApp app, uint code, nuint wParam) =>
+        Route(code, wParam, app.OnTrayGesture, () => 0, app.OnTrayChosen);
+}
+
 /// <summary>The notification-area icon, drawn by the code, and its native menu.</summary>
 internal sealed unsafe class TrayIcon : ITrayIcon
 {
@@ -57,6 +107,7 @@ internal sealed unsafe class TrayIcon : ITrayIcon
     private readonly nint _hwnd;
     private readonly uint _callbackMessage;
     private readonly TrayPresence _presence;
+    private readonly TrayMenuOpenings _openings = new();
     private nint _icon;
     private int _iconSize;
     private string _tip = "Hindsound";
@@ -66,10 +117,15 @@ internal sealed unsafe class TrayIcon : ITrayIcon
         _hwnd = hwnd;
         _callbackMessage = callbackMessage;
         _presence = new TrayPresence(Call);
+        Message = Receive;
     }
 
-    /// <summary>A message of the icon, as the loop's window receives it: see <see cref="WindowsShell.NewTray"/>.</summary>
+    /// <summary>A message of the icon, as the loop's window receives it: see <see cref="WindowsShell.NewTray"/>. Turned into <see cref="Gesture"/> and <see cref="Chosen"/>.</summary>
     public Action<uint, nuint>? Message { get; set; }
+
+    public Action<TrayGesture>? Gesture { get; set; }
+
+    public Action<TrayCommand>? Chosen { get; set; }
 
     /// <summary>Explorer started again: the icon must be added again.</summary>
     public Action? Lost { get; set; }
@@ -104,9 +160,12 @@ internal sealed unsafe class TrayIcon : ITrayIcon
 
     public static int BigSizeAt(uint dpi) => Native.GetSystemMetricsForDpi(Native.SM_CXICON, dpi);
 
-    /// <summary>Returns the chosen command. Runs only on the user's own right click on the icon.</summary>
-    public TrayCommand ShowMenu(int x, int y, IReadOnlyList<TrayMenuItem> items)
+    private void Receive(uint code, nuint wParam) => _openings.Receive(code, wParam, Gesture, Chosen);
+
+    /// <summary>Opens the menu, modal, where the right click was, and tells the chosen command. Runs only on the user's own right click on the icon.</summary>
+    public void ShowMenu(IReadOnlyList<TrayMenuItem> items)
     {
+        var (x, y) = _openings.Open();
         var menu = Native.CreatePopupMenu();
         foreach (var item in items)
         {
@@ -131,7 +190,7 @@ internal sealed unsafe class TrayIcon : ITrayIcon
         var command = Native.TrackPopupMenuEx(menu, Native.TPM_RETURNCMD | Native.TPM_RIGHTBUTTON | Native.TPM_NONOTIFY, x, y, _hwnd, 0);
         Native.PostMessageW(_hwnd, Native.WM_NULL, 0, 0);
         Native.DestroyMenu(menu);
-        return (TrayCommand)command;
+        Chosen?.Invoke((TrayCommand)command);
     }
 
     public void Dispose()

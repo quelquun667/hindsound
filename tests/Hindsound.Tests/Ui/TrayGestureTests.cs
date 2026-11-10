@@ -7,19 +7,19 @@ public class TrayGestureTests
     [Fact]
     public void A_left_click_opens_the_settings()
     {
-        Assert.Equal(TrayGesture.OpenSettings, TrayMenu.GestureOf(Native.NIN_SELECT));
+        Assert.Equal(TrayGesture.OpenSettings, TrayMessages.GestureOf(Native.NIN_SELECT));
     }
 
     [Fact]
     public void Enter_on_the_icon_opens_the_settings()
     {
-        Assert.Equal(TrayGesture.OpenSettings, TrayMenu.GestureOf(Native.NIN_KEYSELECT));
+        Assert.Equal(TrayGesture.OpenSettings, TrayMessages.GestureOf(Native.NIN_KEYSELECT));
     }
 
     [Fact]
     public void A_right_click_opens_the_menu()
     {
-        Assert.Equal(TrayGesture.Menu, TrayMenu.GestureOf(Native.WM_CONTEXTMENU));
+        Assert.Equal(TrayGesture.Menu, TrayMessages.GestureOf(Native.WM_CONTEXTMENU));
     }
 
     [Theory]
@@ -29,6 +29,6 @@ public class TrayGestureTests
     [InlineData(0x0406u)] // the tip shows
     public void Anything_else_does_nothing(uint code)
     {
-        Assert.Equal(TrayGesture.None, TrayMenu.GestureOf(code));
+        Assert.Equal(TrayGesture.None, TrayMessages.GestureOf(code));
     }
 }

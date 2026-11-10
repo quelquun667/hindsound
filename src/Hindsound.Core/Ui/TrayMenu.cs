@@ -31,15 +31,22 @@ internal enum TrayCommand : uint
     UpdateNow,
     OpenHindsound,
     Library,
+
+    // The menu of an app without a window.
+    SaveDefault,
+    StartWithSession,
 }
 
 /// <summary>One line of the tray menu. <see cref="TrayCommand.None"/> is a separator.</summary>
-internal readonly record struct TrayMenuItem(TrayCommand Command, string Text = "", bool Enabled = true);
+/// <param name="Checked">A line that is on or off, such as Start with the session; null for a plain command.</param>
+internal readonly record struct TrayMenuItem(TrayCommand Command, string Text = "", bool Enabled = true, bool? Checked = null);
 
-/// <summary>What a message of the icon asks for.</summary>
+/// <summary>What a gesture on the icon asks for.</summary>
 internal enum TrayGesture
 {
     None,
+
+    /// <summary>A right click, or the desktop about to show the menu.</summary>
     Menu,
 
     /// <summary>Opens the app, on the Now page.</summary>
@@ -70,20 +77,6 @@ internal readonly record struct TrayClick(string? AppName, ScreenInfo Screen, lo
 /// <summary>What the tray menu offers. Pure: tested without any window.</summary>
 internal static class TrayMenu
 {
-    // The codes of the Windows notification area (WM_CONTEXTMENU, NIN_SELECT, NIN_KEYSELECT), as plain numbers so this menu
-    // does not depend on the Windows layer. A test holds them equal to the ones the icon registers with.
-    internal const uint ContextMenuCode = 0x007B;
-    internal const uint SelectCode = 0x0400;
-    internal const uint KeySelectCode = 0x0401;
-
-    /// <summary>With NOTIFYICON_VERSION_4 the code is one of these, whatever the mouse did: a left click or Enter is a selection.</summary>
-    public static TrayGesture GestureOf(uint code) => code switch
-    {
-        ContextMenuCode => TrayGesture.Menu,
-        SelectCode or KeySelectCode => TrayGesture.OpenSettings,
-        _ => TrayGesture.None,
-    };
-
     /// <summary>What was true at the click comes first: <paramref name="show"/> makes our own hidden window the active one.</summary>
     public static (TrayClick Click, TrayCommand Command) ReadThenShow(Func<TrayClick> read, Func<TrayCommand> show)
     {
@@ -127,6 +120,35 @@ internal static class TrayMenu
         items.Add(new(TrayCommand.Quit, "Quit"));
         return items;
     }
+
+    /// <summary>
+    /// The menu of an app without a window, where the settings are edited by hand: no page to open, and starting with the
+    /// session is a line of the menu.
+    /// </summary>
+    /// <param name="startsWithSession">The app starts with the user's session.</param>
+    /// <param name="clipSeconds">The length of a clip, as the shortcut saves it.</param>
+    public static IReadOnlyList<TrayMenuItem> WindowlessItems(bool paused, bool startsWithSession, int clipSeconds, bool closingAfterClip, TimeSpan? buffered = null)
+    {
+        if (closingAfterClip)
+        {
+            return [new(TrayCommand.Quit, "Quit")];
+        }
+
+        return
+        [
+            SaveItem(TrayCommand.SaveDefault, "Save clip", clipSeconds, buffered),
+            new(TrayCommand.None),
+            new(TrayCommand.TogglePause, paused ? "Resume capture" : "Pause capture"),
+            new(TrayCommand.OpenFolder, "Open clips folder"),
+            new(TrayCommand.StartWithSession, "Start with the session", Checked: startsWithSession),
+            new(TrayCommand.None),
+            new(TrayCommand.Quit, "Quit"),
+        ];
+    }
+
+    /// <summary><see cref="WindowlessItems"/> from the last status of the engine, read every time the menu opens.</summary>
+    public static IReadOnlyList<TrayMenuItem> WindowlessItemsFor(Audio.AudioEngineStatus? status, bool startsWithSession, int clipSeconds, bool closingAfterClip) =>
+        WindowlessItems(status?.Activity == Audio.CaptureActivity.Paused, startsWithSession, clipSeconds, closingAfterClip, status?.Buffered);
 
     /// <summary>The line in bold, the same gesture as a left click on the icon. None when the menu does not offer it.</summary>
     public static TrayCommand DefaultOf(IReadOnlyList<TrayMenuItem> items) =>

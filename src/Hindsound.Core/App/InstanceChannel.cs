@@ -8,6 +8,12 @@ internal enum InstanceMessage
 {
     /// <summary>The user is looking for the app: show it.</summary>
     Show,
+
+    /// <summary>
+    /// <c>hindsound --save</c> on Linux, where a desktop without global shortcuts binds that command to a key: save a clip
+    /// as the default shortcut does. Windows never sends it.
+    /// </summary>
+    Save,
 }
 
 /// <summary>
@@ -65,9 +71,25 @@ internal static class SingleInstance
     }
 
     /// <summary>A second launch: says so, tells the running instance when it may, and answers the exit code.</summary>
-    public static int Leave(IInstanceChannel channel, AppOptions options, Action<string> journal)
+    public static int Leave(IInstanceChannel channel, AppOptions options, Action<string> journal) => Leave(channel, options, journal, InstanceMessage.Show);
+
+    /// <summary>
+    /// A second launch that asks for <paramref name="message"/>. A save is always told: the name of the channel already
+    /// belongs to one settings file, so a run with its own file only ever reaches its own instance.
+    /// </summary>
+    public static int Leave(IInstanceChannel channel, AppOptions options, Action<string> journal, InstanceMessage message)
     {
         journal("another instance is running: leaving");
+
+        if (message == InstanceMessage.Save)
+        {
+            if (!channel.Tell(InstanceMessage.Save))
+            {
+                journal("the running instance could not be told to save a clip");
+            }
+
+            return ExitAnotherInstance;
+        }
 
         // The icon may be hidden: without an answer, a click on the shortcut would look like nothing happened.
         if (WakesTheFirstInstance(options) && !channel.Tell(InstanceMessage.Show))

@@ -22,6 +22,9 @@
     <InternalsVisibleTo Include="Hindsound" />
     <InternalsVisibleTo Include="Hindsound.Tests" />
     <InternalsVisibleTo Include="Hindsound.Core.Tests" />
+    <!-- The Linux app, whose assembly is named after its program, and its tests. -->
+    <InternalsVisibleTo Include="hindsound" />
+    <InternalsVisibleTo Include="Hindsound.Linux.Tests" />
   </ItemGroup>
 
   <ItemGroup>

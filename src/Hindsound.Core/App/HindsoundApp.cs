@@ -88,6 +88,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     private readonly TrayAddRetry _trayRetry = new();
     private TrayClick? _pauseClick;
     private TrayClick? _lastMenuClick;
+    private TrayClick? _menuClick;
     private bool _quitting;
     private readonly LeaveFlow _leave = new();
     private bool _lastClipHasProblem;
@@ -199,7 +200,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         _pipeline = NewPipeline(_loop.Post, _loop.After);
 
         _tray = _shell.NewTray(_loop);
-        _tray.Message = OnTrayMessage;
+        _tray.Gesture = OnTrayGesture;
+        _tray.Chosen = OnTrayChosen;
         _tray.Lost = () => NoteTray(_tray.Add(_trayState, Accent, _trayTip));
         _loop.ScaleMayHaveChanged = OnScaleMayHaveChanged;
         _sessionEnd = _shell.SessionEnd(_loop);
@@ -1127,12 +1129,12 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         }
     }
 
-    internal void OnTrayMessage(uint code, nuint wParam)
+    internal void OnTrayGesture(TrayGesture gesture)
     {
-        switch (TrayMenu.GestureOf(code))
+        switch (gesture)
         {
             case TrayGesture.Menu:
-                OnTrayMenu(wParam);
+                OnTrayMenu();
                 break;
             case TrayGesture.OpenSettings:
                 ReloadSettingsIfChanged();
@@ -1141,11 +1143,26 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         }
     }
 
-    private void OnTrayMenu(nuint wParam)
+    private void OnTrayMenu()
     {
-        var (click, command) = TrayMenu.ReadThenShow(
-            () => new TrayClick(_desktop.Screens.Foreground().AppName, PointerScreen(), NowMs),
-            () => AskTrayMenu(wParam));
+        // What was true at the click comes first: showing the menu makes our own hidden window the active one.
+        _menuClick = ReadTrayClick();
+        ReloadSettingsIfChanged();
+
+        // Off screen, nothing shows and nothing takes the focus: a message posted by a test names the command itself.
+        if (!_options.Offscreen)
+        {
+            _tray.ShowMenu(MenuItemsNow());
+        }
+    }
+
+    private TrayClick ReadTrayClick() => new(_desktop.Screens.Foreground().AppName, PointerScreen(), NowMs);
+
+    internal void OnTrayChosen(TrayCommand command)
+    {
+        // The click that opened this menu. A desktop that shows the menu without asking the app first gets what is true now.
+        var click = _menuClick ?? ReadTrayClick();
+        _menuClick = null;
         _lastMenuClick = click;
         _journal.Write($"tray menu: {command}, app name known {click.AppName is not null}, screen of the click {click.Screen.Monitor.Left},{click.Screen.Monitor.Top},{click.Screen.Monitor.Right},{click.Screen.Monitor.Bottom}");
         switch (command)
@@ -1195,32 +1212,27 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
                 }
 
                 break;
+            case TrayCommand.SaveDefault:
+                SaveClip(TimeSpan.FromSeconds(_settings.ClipSeconds), click.AppName, click.Screen);
+                break;
+            case TrayCommand.StartWithSession:
+                _settings.General.StartWithWindows = !_settings.General.StartWithWindows;
+                StartupSwitch.ApplyThenSave(true, ApplyStartupRegistration, TrySaveSettings);
+                break;
         }
     }
 
     // What the menu, the waiting notices and the status notices say about the memory is read here, from the last status, at the
     // moment they are made: kept apart from the windows so a test can look at the wiring itself.
-    internal IReadOnlyList<TrayMenuItem> MenuItemsNow() =>
-        TrayMenu.ItemsFor(_lastStatus, _lastClip is not null, _leave.Waiting, _updates?.MenuVersion is { } version ? $"Update to {version}..." : null);
+    internal IReadOnlyList<TrayMenuItem> MenuItemsNow() => !_shell.HasWindow
+        ? TrayMenu.WindowlessItemsFor(_lastStatus, _settings.General.StartWithWindows, _settings.ClipSeconds, _leave.Waiting)
+        : TrayMenu.ItemsFor(_lastStatus, _lastClip is not null, _leave.Waiting, _updates?.MenuVersion is { } version ? $"Update to {version}..." : null);
 
     internal NotificationContent FreshNow(NotificationContent waited) =>
         StatusTransitions.FreshFrom(waited, _settings, _hotkeyResults, _updatedTo, _lastStatus);
 
     internal NotificationContent? NoticeContentFor(StatusNotice notice, AudioEngineStatus status) =>
         StatusTransitions.NoticeContent(notice, status, _settings, _hotkeyResults, _updatedTo);
-
-    private TrayCommand AskTrayMenu(nuint wParam)
-    {
-        ReloadSettingsIfChanged();
-
-        // Off screen, nothing shows and nothing takes the focus: a message posted by a test names the command itself.
-        if (_options.Offscreen)
-        {
-            return (TrayCommand)(wParam & 0xFFFF);
-        }
-
-        return _tray.ShowMenu((short)(wParam & 0xFFFF), (short)((wParam >> 16) & 0xFFFF), MenuItemsNow());
-    }
 
     private void OpenClipsFolder()
     {
@@ -1238,7 +1250,18 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         });
     }
 
-    internal void NotificationClicked(NotificationContent? showing) => _going.Click(showing);
+    internal void NotificationClicked(NotificationContent? showing)
+    {
+        // Where the app only tells about a new version, its announcement leads to the release page, not to a window.
+        if (showing?.Kind == NotificationKind.UpdateReady && _updates?.ReleasePageToOpen is { } page)
+        {
+            _journal.Write("update: opening the release page");
+            OpenOffLoop(page);
+            return;
+        }
+
+        _going.Click(showing);
+    }
 
     private void OpenLastClipFolder()
     {
@@ -1407,6 +1430,14 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     // A second launch: the user is looking for the app, and the icon may be hidden.
     private void OnInstanceMessage(InstanceMessage message)
     {
+        // Only the Linux channel carries it: hindsound --save, bound to a key where the desktop has no global shortcuts.
+        if (message == InstanceMessage.Save)
+        {
+            _journal.Write("a second launch asks to save a clip");
+            OnHotkey(HotkeyAction.SaveDefault);
+            return;
+        }
+
         if (message != InstanceMessage.Show)
         {
             return;
@@ -1971,9 +2002,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     /// <summary>Says in the log which updater this run has, and runs its launch step. True when Setup started: the app leaves at once.</summary>
     private bool StartUpdates()
     {
-        _updateWhy = UpdateWiring.Why(_updaterMayRun, _options, ExeFolder);
+        _updateWhy = UpdateWiring.Why(_updaterMayRun, _options, ExeFolder, UpdateWiring.Channel);
         _updates = UpdateWiring.Create(_updaterMayRun, _options, ExeFolder, this, DateTimeOffset.Now);
-        _journal.Write($"updates: active {_updateWhy == UpdateWiring.Installed} ({_updateWhy})");
+        _journal.Write($"updates: active {UpdateWiring.IsActive(_updateWhy)} ({_updateWhy})");
         LaunchReport report;
         try
         {
@@ -2113,9 +2144,11 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     // One path in a game and out of it: the announcement waits for the desktop, as a clip does.
     void IUpdateHost.Announce(UpdateVersion version, UpdateMode mode)
     {
-        var content = mode == UpdateMode.Auto
-            ? NotificationStates.UpdateReady(version.ToString(), Accent)
-            : NotificationStates.UpdateAvailable(version.ToString(), Accent);
+        var content = _updates?.Channel.AnnouncesOnly == true
+            ? ReleaseNotice.Content(version, Accent)
+            : mode == UpdateMode.Auto
+                ? NotificationStates.UpdateReady(version.ToString(), Accent)
+                : NotificationStates.UpdateAvailable(version.ToString(), Accent);
         _pending.AddUpdate(content, NowMs);
         ArmPendingPoll();
         ShowNextPendingOnDesktop();

@@ -1,0 +1,6 @@
+#!/bin/sh
+# The entry point of the AppImage. The runtime sets APPDIR to where the image is mounted or extracted; without it (the
+# AppDir run by hand), the folder of this script. libmp3lame.so.0 is next to the program in usr/bin; LD_LIBRARY_PATH is
+# left alone, so that the programs the app starts (xdg-open, the file manager) do not load the copy of the package.
+here="${APPDIR:-$(dirname "$(readlink -f "$0")")}"
+exec "$here/usr/bin/hindsound" "$@"

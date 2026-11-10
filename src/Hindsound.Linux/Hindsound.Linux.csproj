@@ -1,0 +1,64 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The Linux app, without a window: capture through the sound server, the icon through StatusNotifierItem, notifications
+    and the rest through D-Bus. It builds on any system, so its pure logic is tested on Windows too; what touches Linux is
+    marked [SupportedOSPlatform("linux")]. LinuxPlatform.cs says which file fills which part.
+    Published by the CI with:
+      dotnet publish src/Hindsound.Linux/Hindsound.Linux.csproj -c Release -r linux-x64 -self-contained
+        -p:PublishSingleFile=true -p:PublishTrimmed=true
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>hindsound</AssemblyName>
+    <RootNamespace>Hindsound</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- Every format the app writes is invariant, and a self-contained build then needs no ICU on the user's system. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- A Windows-only call stops the build. A Linux-only one is fine where the calling code is marked for Linux too. -->
+    <WarningsAsErrors>$(WarningsAsErrors);CA1416</WarningsAsErrors>
+    <!-- The same runtime settings as the Windows exe (Properties/PublishProfiles/win-x64.pubxml of the Hindsound project). -->
+    <TrimMode>full</TrimMode>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <TieredPGO>false</TieredPGO>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+    <EventSourceSupport>false</EventSourceSupport>
+    <DebuggerSupport>false</DebuggerSupport>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Hindsound.Linux.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- MIT, no reflection, trimmable. -->
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.95.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Hindsound.Core\Hindsound.Core.csproj" />
+  </ItemGroup>
+
+  <!--
+    Hindsound.Core references NAudio.Lame, whose package copies its two Windows DLLs next to every program that uses it.
+    They are no use on Linux: the MP3 encoder there is libmp3lame.so.0 (Export). Left out of the build and of the publish.
+  -->
+  <Target Name="LeaveOutWindowsLame" AfterTargets="ResolveAssemblyReferences;AssignTargetPaths">
+    <ItemGroup>
+      <None Remove="@(None)" Condition="'%(Filename)%(Extension)' == 'libmp3lame.32.dll' Or '%(Filename)%(Extension)' == 'libmp3lame.64.dll'" />
+      <ContentWithTargetPath Remove="@(ContentWithTargetPath)" Condition="'%(Filename)%(Extension)' == 'libmp3lame.32.dll' Or '%(Filename)%(Extension)' == 'libmp3lame.64.dll'" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="LeaveOutWindowsLameFromPublish" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Filename)%(Extension)' == 'libmp3lame.32.dll' Or '%(Filename)%(Extension)' == 'libmp3lame.64.dll'" />
+    </ItemGroup>
+  </Target>
+
+</Project>

@@ -23,9 +23,9 @@ public class PlatformValuesTests
     [Fact]
     public void The_tray_menu_reads_the_codes_the_icon_receives()
     {
-        Assert.Equal((uint)Native.WM_CONTEXTMENU, TrayMenu.ContextMenuCode);
-        Assert.Equal((uint)Native.NIN_SELECT, TrayMenu.SelectCode);
-        Assert.Equal((uint)Native.NIN_KEYSELECT, TrayMenu.KeySelectCode);
+        Assert.Equal((uint)Native.WM_CONTEXTMENU, TrayMessages.ContextMenuCode);
+        Assert.Equal((uint)Native.NIN_SELECT, TrayMessages.SelectCode);
+        Assert.Equal((uint)Native.NIN_KEYSELECT, TrayMessages.KeySelectCode);
     }
 
     [Fact]

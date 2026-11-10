@@ -98,14 +98,21 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
     /// <summary>The pause between two reads of a locked state.json. The tests make it zero.</summary>
     public TimeSpan StateRetryPause { get; init; } = TimeSpan.FromMilliseconds(200);
 
-    public UpdateVersion? MenuVersion => _stateKnown
-        ? UpdatePanel.MenuVersion(host.Mode, installed, Parse(_state.HighestSeen), host.Skipped, _manifest?.Version, UpdateFiles.DownloadedVersion(_state, folder))
+    /// <summary>The manifest this platform reads, and whether it installs or only tells.</summary>
+    public UpdateChannel Channel { get; init; } = UpdateChannel.WindowsSetup;
+
+    // The mode of the settings, as this platform can honour it: the same everywhere the app installs.
+    private UpdateMode EffectiveMode => UpdateDecider.EffectiveMode(Channel.Delivery, host.Mode);
+
+    /// <summary>The version of "Update to X..." in the menu of the icon. None where the platform only tells: there is nothing to confirm.</summary>
+    public UpdateVersion? MenuVersion => _stateKnown && !Channel.AnnouncesOnly
+        ?UpdatePanel.MenuVersion(EffectiveMode, installed, Parse(_state.HighestSeen), host.Skipped, _manifest?.Version, UpdateFiles.DownloadedVersion(_state, folder))
         : null;
 
     public UpdatePanelView View => UpdatePanel.Compute(new UpdatePanelFacts
     {
         Installed = installed,
-        Mode = host.Mode,
+        Mode = EffectiveMode,
         Now = host.Now,
         StateKnown = _stateKnown,
         LastCheck = _state.LastCheck,
@@ -147,7 +154,7 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
         }
 
         var pending = Parse(_state.Pending?.Version);
-        var willRetry = host.Mode == UpdateMode.Auto && pending is { } version && _state.AttemptsFor(version) < UpdateDecider.MaxAttemptsPerVersion;
+        var willRetry = EffectiveMode == UpdateMode.Auto && pending is { } version && _state.AttemptsFor(version) < UpdateDecider.MaxAttemptsPerVersion;
         return new LaunchReport(false, plan.Outcome, plan.Outcome == LaunchOutcome.Updated ? installed : null, willRetry);
     }
 
@@ -177,13 +184,13 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
         {
             // A waiting announcement says what its mode does: "Installs when Hindsound closes" only holds in Auto. Taken
             // back, the next step announces again in the new words, or not at all in Off.
-            if (_announcing is { } waiting && _announcingMode != host.Mode && Parse(_state.AnnouncedVersion) != waiting)
+            if (_announcing is { } waiting && _announcingMode != EffectiveMode && Parse(_state.AnnouncedVersion) != waiting)
             {
                 host.Withdraw();
                 _announcing = null;
             }
 
-            if (host.Mode == UpdateMode.Off)
+            if (EffectiveMode == UpdateMode.Off)
             {
                 _timerGeneration++;
 
@@ -289,6 +296,12 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
         Save("announced");
     }
 
+    /// <summary>
+    /// The page a click on the announcement opens, where the platform only tells: built from the parsed version, never taken
+    /// from the manifest. Null where the platform installs, and before any announcement.
+    /// </summary>
+    public string? ReleasePageToOpen => Channel.AnnouncesOnly && _announcing is { } version ? UpdateUrlPolicy.ReleasePage(version) : null;
+
     /// <summary>The app leaves. Nothing waits for a pass: its thread is a background one, and its piece goes at the next launch.</summary>
     public void Stop()
     {
@@ -350,7 +363,7 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
     private UpdateSituation Situation(UpdateEvent trigger, UpdateSurface surface) => new()
     {
         Event = trigger,
-        Mode = host.Mode,
+        Mode = EffectiveMode,
         Now = host.Now,
         AppStartedAt = startedAt,
         LastCheck = _state.LastCheck,
@@ -367,6 +380,7 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
         // Never Pending alone: a Setup an antivirus took away would pass for downloaded for ever, and fail at every Quit.
         Downloaded = UpdateFiles.DownloadedVersion(_state, folder),
         AttemptsByVersion = _state.AttemptsByVersion,
+        Delivery = Channel.Delivery,
     };
 
     // The timer cannot be cancelled: a new generation makes every older one do nothing when it fires.
@@ -392,7 +406,7 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
     private void ArmTimer()
     {
         var now = host.Now;
-        if (UpdateDecider.NextCheckAt(host.Mode, startedAt, _state.LastCheck, now) is not { } due)
+        if (UpdateDecider.NextCheckAt(EffectiveMode, startedAt, _state.LastCheck, now) is not { } due)
         {
             // Off: no timer at all, and the one armed before does nothing.
             _timerGeneration++;
@@ -461,7 +475,7 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
         }
 
         _announcing = version;
-        _announcingMode = host.Mode;
+        _announcingMode = EffectiveMode;
         host.Announce(version, _announcingMode);
     }
 
@@ -546,7 +560,7 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
     private void StartCheck(bool manual)
     {
         BeginPass(UpdatePassKind.Check, null, manual);
-        host.RunPass(() => UpdateDownloader.Check(transport, ShouldStop), CheckDone);
+        host.RunPass(() => UpdateDownloader.Check(transport, Channel, ShouldStop), CheckDone);
     }
 
     private void StartDownload(bool manual)
@@ -708,7 +722,7 @@ internal sealed class UpdateFlow(UpdateStateStore store, string folder, UpdateVe
             return false;
         }
 
-        if (host.Mode != UpdateMode.Off)
+        if (EffectiveMode != UpdateMode.Off)
         {
             // Back on before the pass ended: decide again soon, as a switch back on with no pass running does.
             host.Journal($"update {what}: stopped by a switch to Off");

@@ -1,0 +1,7 @@
+# These files are read on Linux: a CR at the end of a line breaks a shell script and a desktop entry, whatever the
+# line-ending setting of the clone they come from.
+*.sh text eol=lf
+AppRun text eol=lf
+*.desktop text eol=lf
+*.txt text eol=lf
+*.png binary

@@ -40,7 +40,7 @@ internal sealed class UpdateManifestFile
 [JsonSerializable(typeof(UpdateManifestFile))]
 internal sealed partial class UpdateManifestJson : JsonSerializerContext;
 
-/// <summary>Reads hindsound-update-win-x64.json, and refuses everything that is not exact.</summary>
+/// <summary>Reads a manifest (hindsound-update-win-x64.json, hindsound-update-linux-x64.json), and refuses everything that is not exact.</summary>
 internal static class UpdateManifestReader
 {
     public const int MaxManifestBytes = 16 * 1024;
@@ -52,7 +52,13 @@ internal static class UpdateManifestReader
     private const string Product = "Hindsound";
     private const int Sha256HexLength = 64;
 
-    public static ManifestStatus Read(ReadOnlySpan<byte> json, out UpdateManifest? manifest)
+    public static ManifestStatus Read(ReadOnlySpan<byte> json, out UpdateManifest? manifest) => Read(json, UpdateDelivery.Setup, out manifest);
+
+    /// <summary>
+    /// For <see cref="UpdateDelivery.AnnounceOnly"/>, the url must be exactly the page of the version's release, and the
+    /// hash and size are not read: nothing is downloaded. The manifest then carries an empty hash and a size of zero.
+    /// </summary>
+    public static ManifestStatus Read(ReadOnlySpan<byte> json, UpdateDelivery delivery, out UpdateManifest? manifest)
     {
         manifest = null;
         if (json.Length > MaxManifestBytes)
@@ -83,6 +89,22 @@ internal static class UpdateManifestReader
         if (!UpdateVersion.TryParse(file.Version, out var version))
         {
             return ManifestStatus.BadVersion;
+        }
+
+        if (delivery == UpdateDelivery.AnnounceOnly)
+        {
+            if (!UpdateUrlPolicy.IsReleasePage(file.Url, version))
+            {
+                return ManifestStatus.BadUrl;
+            }
+
+            if (file.Published is null)
+            {
+                return ManifestStatus.BadPublished;
+            }
+
+            manifest = new UpdateManifest(version, file.Url!, string.Empty, 0, file.Published.Value);
+            return ManifestStatus.Valid;
         }
 
         if (!UpdateUrlPolicy.IsReleaseAsset(file.Url, version))

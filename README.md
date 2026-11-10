@@ -24,7 +24,8 @@ paste into a Discord message.
 </p>
 
 **Status:** early development. The Setup is on the [Releases page](https://github.com/quelquun667/hindsound/releases), and you can also [build it from source](#build-from-source).
-It has been tried on one Windows 11 PC, and some things are [not tried yet](#not-tried-yet).
+It has been tried on one Windows 11 PC, and some things are [not tried yet](#not-tried-yet). A first Linux version, with no
+window, is [on its way](#linux).
 
 ## Features
 
@@ -131,6 +132,63 @@ Apps, find Hindsound, and uninstall it.
 **Built from source.** There is no uninstaller. Turn off `Start with Windows`, quit Hindsound, and delete the folder. Your
 settings and collections stay in `%AppData%\Hindsound`, and your log and rescued clips in `%LOCALAPPDATA%\Hindsound`: delete those too if
 you want nothing left.
+
+### Linux
+
+A first Linux version, for 64-bit Ubuntu 22.04 and later, is on its way. It has no window. From the start it captures the
+sound of the whole PC, and the microphone if your settings name one. It saves a clip on its hotkey, on `hindsound --save`
+or from the menu of its icon, says so with a notification, and copies the clip when the desktop allows it.
+
+**Download.** Until a release carries it, take it from the CI: open a recent run of the
+[CI workflow](https://github.com/quelquun667/hindsound/actions/workflows/ci.yml) on `main`, and download the
+`hindsound-linux-x64` artifact (GitHub asks you to sign in). It holds the same program twice; take one:
+
+- `hindsound-<version>-linux-x64.AppImage`, one file. The zip of the artifact drops its executable bit, so give it back.
+  Give it a name that stays before the first run, as the shortcut below and `Start with the session` point to it:
+
+  ```sh
+  mkdir -p ~/Applications
+  mv hindsound-*-linux-x64.AppImage ~/Applications/Hindsound.AppImage
+  chmod +x ~/Applications/Hindsound.AppImage
+  ~/Applications/Hindsound.AppImage
+  ```
+
+- `hindsound-<version>-linux-x64.tar.gz`, a folder to unpack. Its `README.txt` says how to install it in `~/.local`, or
+  run it from where it is:
+
+  ```sh
+  tar -xzf hindsound-*-linux-x64.tar.gz
+  ./hindsound-*-linux-x64/hindsound
+  ```
+
+`SHA256SUMS` in the artifact has the checksums of both.
+
+**Save from a key.** On X11, and on Wayland where the desktop offers global shortcuts (GNOME 48 and later, so Ubuntu
+26.04, and KDE), Hindsound uses its hotkey. Ubuntu 24.04 on Wayland has no such shortcuts: open Settings > Keyboard >
+View and Customize Shortcuts > Custom Shortcuts, add one, and set its command to the full path of the program followed by
+`--save`, for example `/home/you/Applications/Hindsound.AppImage --save`.
+
+**The icon** sits next to the clock, through StatusNotifierItem. On GNOME it needs the AppIndicator extension, which
+Ubuntu has already. Its menu saves a clip, pauses or resumes, opens the folder of the clips, turns `Start with the
+session` on or off, and quits.
+
+**Settings** are in `~/.config/Hindsound/settings.json`, the same file as on Windows (see [Settings](#settings)). There
+is no settings window yet: edit it by hand while Hindsound is not running.
+
+**Updates.** When a new version is out, a notification says so, with the link to its release. Nothing installs itself:
+replace the file.
+
+**Not there yet:** the window (settings, `Now`, `Library`), listening to a clip, recording one application, and any
+processor other than x64.
+
+**Build it.** With the .NET 10 SDK, on Linux or Windows:
+
+```sh
+dotnet publish src/Hindsound.Linux/Hindsound.Linux.csproj -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -p:PublishTrimmed=true
+```
+
+For MP3 the program uses `libmp3lame.so.0`, which the packages put next to it. The CI builds that library with
+`tools/release/build-lame-linux.sh`, then makes the AppImage and the tar.gz with `packaging/linux/build-packages.sh`.
 
 ## First run
 
@@ -364,9 +422,22 @@ Hindsound has only run on one Windows 11 PC so far. These have not been tried fo
 - Windows 10
 - the windows of the Setup and its uninstaller, and the uninstaller deleting or keeping `library.json`
 
+The [Linux version](#linux) has not run on a real desktop yet. The CI builds both packages and starts each once, with no
+sound server, no desktop and no FUSE, to write a test MP3. Not tried for real:
+
+- capturing a real PC and a real microphone, through PipeWire or PulseAudio
+- the hotkey through the shortcut portal (GNOME 48 and later, KDE) and on X11
+- `hindsound --save` bound to a key in the Settings of Ubuntu 24.04
+- the notification of a clip and its `Show in folder`, and the notice of a new version
+- copying a clip, then pasting it into Discord or a file manager
+- the icon and its menu, on GNOME with AppIndicator and on KDE
+- `Start with the session`
+- the AppImage mounted through FUSE on a PC without libfuse2, and the tar.gz installed in `~/.local`
+- Ubuntu 22.04, 24.04 and 26.04, and any other distribution
+
 ## Roadmap
 
-- Mac and Linux versions, with no date yet
+- A Linux version with a window, after the [first one](#linux), and a Mac version, with no date yet
 
 ## License
 

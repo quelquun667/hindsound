@@ -306,7 +306,9 @@ public sealed class AppShellWiringTests : IDisposable
 
         public bool Disposed { get; private set; }
 
-        public Action<uint, nuint>? Message { get; set; }
+        public Action<TrayGesture>? Gesture { get; set; }
+
+        public Action<TrayCommand>? Chosen { get; set; }
 
         public Action? Lost { get; set; }
 
@@ -322,7 +324,9 @@ public sealed class AppShellWiringTests : IDisposable
 
         public bool Update(TrayState state, uint accent, string tip) => true;
 
-        public TrayCommand ShowMenu(int x, int y, IReadOnlyList<TrayMenuItem> items) => TrayCommand.None;
+        public void ShowMenu(IReadOnlyList<TrayMenuItem> items)
+        {
+        }
 
         public void Dispose() => Disposed = true;
     }

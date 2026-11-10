@@ -32,19 +32,21 @@ jobs:
       - name: Build
         run: dotnet build Hindsound.slnx -c Release
 
-      # A hosted runner has no audio device, hence the filter. It is also a shared machine: the tests that
-      # measure allocations or hold a real-time pace can be sensitive to its load. Rerun before suspecting
-      # the code, and look at the test that failed if it fails twice.
+      # A hosted runner has no audio device, hence the filter; the tests that need Linux itself run in the job below.
+      # It is also a shared machine: the tests that measure allocations or hold a real-time pace can be sensitive to its
+      # load. Rerun before suspecting the code, and look at the test that failed if it fails twice.
       - name: Test
-        run: dotnet test Hindsound.slnx -c Release --no-build --filter "Category!=Device"
+        run: dotnet test Hindsound.slnx -c Release --no-build --filter "Category!=Device&Category!=Linux"
 
       - name: Test the release scripts
         run: ./tools/release/test-release-scripts.ps1
 
   # Hindsound.Core calls no Windows API: its own tests run on Linux as well, so that nothing of Windows creeps into it.
+  # The Linux app is built and tested here too, inside a session bus of its own (dbus-run-session) with a sound server
+  # whose default output is a null sink: the tests marked Category=Linux run only here.
   core-on-linux:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -56,5 +58,104 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Test the portable code
-        run: dotnet test tests/Hindsound.Core.Tests/Hindsound.Core.Tests.csproj -c Release --filter "Category!=Device"
+      # libx11-6: the keysym table of the shortcuts is checked against libX11's own names (no X server is needed for it).
+      - name: Install a sound server and a session bus
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends dbus pulseaudio pulseaudio-utils libx11-6
+
+      # audio steps
+      # The capture loads libpulse.so.0 by that name (src/Hindsound.Linux/Audio/PulseNative.cs); pulseaudio-utils brings
+      # it, with the paplay and pactl the capture tests play their tone with.
+      - name: Check the sound library and tools of the capture tests
+        run: |
+          ldconfig -p | grep -F 'libpulse.so.0'
+          command -v paplay pactl
+
+      # lame steps
+      # LAME 3.100 from the archive the Windows DLL is built from (same SHA-256), for the MP3 tests of the Linux app: they
+      # encode a tone with the library and decode it with the lame command built here, and look for the pitch.
+      - name: Build LAME for Linux
+        run: |
+          sudo apt-get install -y --no-install-recommends build-essential curl file binutils
+          ./tools/release/build-lame-linux.sh "$RUNNER_TEMP/lame-work" "$RUNNER_TEMP/lame-linux"
+          echo "HINDSOUND_LAME_DIR=$RUNNER_TEMP/lame-linux" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: |
+          dotnet build tests/Hindsound.Core.Tests/Hindsound.Core.Tests.csproj -c Release
+          dotnet build tests/Hindsound.Linux.Tests/Hindsound.Linux.Tests.csproj -c Release
+
+      - name: Test the portable code and the Linux app
+        run: |
+          dbus-run-session -- bash -euo pipefail -c '
+            pulseaudio --daemonize=yes --exit-idle-time=-1 --log-target=stderr
+            for attempt in $(seq 1 20); do pactl info > /dev/null 2>&1 && break; sleep 0.5; done
+            pactl load-module module-null-sink sink_name=hindsound_null
+            pactl set-default-sink hindsound_null
+            dotnet test tests/Hindsound.Core.Tests/Hindsound.Core.Tests.csproj -c Release --no-build --filter "Category!=Device"
+            dotnet test tests/Hindsound.Linux.Tests/Hindsound.Linux.Tests.csproj -c Release --no-build --filter "Category!=Device"
+          '
+
+  # The Linux app, published as the users get it: one self-contained, trimmed file, with its MP3 encoder, made into an
+  # AppImage and a tar.gz. Built on the oldest Ubuntu the runners offer, so that it runs on the newer ones; both packages
+  # are started once (--prove-mp3) and kept as an artifact of the run.
+  linux-package:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 10.0.x
+
+      # Until a release builds them, the packages carry the version of the latest release in the changelog.
+      - name: Read the version
+        run: |
+          version=$(grep -m 1 -oP '^## \[\K[0-9]+\.[0-9]+\.[0-9]+(?=\])' CHANGELOG.md)
+          echo "HINDSOUND_VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Publish the Linux app
+        run: >-
+          dotnet publish src/Hindsound.Linux/Hindsound.Linux.csproj -c Release -r linux-x64 --self-contained
+          -p:PublishSingleFile=true -p:PublishTrimmed=true -p:Version=${{ env.HINDSOUND_VERSION }}
+          -p:PublishDir=${{ runner.temp }}/hindsound-linux-x64/
+
+      # The same LAME 3.100 as the Windows build, compiled here; it leaves libmp3lame.so.0 (and the lame command of the
+      # tests, which is not shipped) in its second folder.
+      - name: Build the MP3 encoder
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential curl file binutils
+          bash tools/release/build-lame-linux.sh "${{ runner.temp }}/lame-work" "${{ runner.temp }}/lame"
+
+      - name: Install the checker of desktop entries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends desktop-file-utils
+
+      - name: Make the AppImage and the tar.gz
+        run: >-
+          bash packaging/linux/build-packages.sh "${{ runner.temp }}/hindsound-linux-x64" "${{ runner.temp }}/lame/libmp3lame.so.0"
+          "$HINDSOUND_VERSION" "${{ runner.temp }}/packages"
+
+      - name: Check the packages
+        run: bash packaging/linux/check-packages.sh "${{ runner.temp }}/packages" "$HINDSOUND_VERSION"
+
+      # The packages ship libmp3lame.so.0 under the LGPL: its source goes with them, the archive the encoder was built from,
+      # which build-lame-linux.sh verified against the SHA-256 of the notices.
+      - name: Add the LAME source
+        run: cp -- "${{ runner.temp }}/lame-work/lame-3.100.tar.gz" "${{ runner.temp }}/packages/"
+
+      # A zip of the artifact drops the executable bit: the README says to give it back to the AppImage.
+      - name: Keep the packages
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hindsound-linux-x64
+          path: ${{ runner.temp }}/packages/
+          if-no-files-found: error

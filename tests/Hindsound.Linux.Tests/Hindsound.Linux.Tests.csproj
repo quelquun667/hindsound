@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The tests of the Linux app. Those of its pure logic run everywhere, Windows included. Those that reach Linux itself
+    (the sound server, the session bus, a library of the system) carry [Trait("Category", "Linux")] and
+    [SupportedOSPlatform("linux")]: the Windows job leaves them out, and the Linux job of the CI runs them in a session bus
+    of its own, with a sound server whose default output is a null sink.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>Hindsound.Linux.Tests</RootNamespace>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <!-- A Windows-only call stops the build; a Linux-only one needs a test marked for Linux. -->
+    <WarningsAsErrors>$(WarningsAsErrors);CA1416</WarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Hindsound.Core\Hindsound.Core.csproj" />
+    <ProjectReference Include="..\..\src\Hindsound.Linux\Hindsound.Linux.csproj" />
+  </ItemGroup>
+
+</Project>
