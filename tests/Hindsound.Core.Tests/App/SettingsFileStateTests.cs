@@ -7,8 +7,8 @@ namespace Hindsound.Tests.App;
 public class StartupSwitchTests
 {
     private const string Exe = @"C:\Apps\Hindsound.exe";
-    private const string Command = "\"" + Exe + "\"";
 
+    /// <summary>The entry as a model: the program it starts, or null when there is none.</summary>
     private sealed class FakeKey : IRunKey
     {
         public string? Value { get; set; }
@@ -19,9 +19,13 @@ public class StartupSwitchTests
 
         public int Writes { get; private set; }
 
-        public string? GetValue(string name) => RefusesReads ? throw new UnauthorizedAccessException() : Value;
+        public RunEntry State(string? program) =>
+            RefusesReads ? throw new UnauthorizedAccessException()
+            : Value is null ? RunEntry.None
+            : string.Equals(Value, program, StringComparison.OrdinalIgnoreCase) ? RunEntry.ThisProgram
+            : RunEntry.OtherProgram;
 
-        public void SetValue(string name, string value)
+        public void Enable(string program)
         {
             Writes++;
             if (RefusesWrites)
@@ -29,10 +33,10 @@ public class StartupSwitchTests
                 throw new UnauthorizedAccessException();
             }
 
-            Value = value;
+            Value = program;
         }
 
-        public void DeleteValue(string name)
+        public void Disable()
         {
             Writes++;
             if (RefusesWrites)
@@ -52,14 +56,14 @@ public class StartupSwitchTests
 
         Assert.True(StartupSwitch.Apply(general, key, Exe));
 
-        Assert.Equal(Command, key.Value);
+        Assert.Equal(Exe, key.Value);
         Assert.True(general.StartWithWindows);
     }
 
     [Fact]
     public void Off_removes_the_entry()
     {
-        var key = new FakeKey { Value = Command };
+        var key = new FakeKey { Value = Exe };
         var general = new GeneralSettings { StartWithWindows = false };
 
         Assert.True(StartupSwitch.Apply(general, key, Exe));
@@ -92,7 +96,7 @@ public class StartupSwitchTests
     {
         var general = new GeneralSettings { StartWithWindows = false };
 
-        Assert.False(StartupSwitch.Apply(general, new FakeKey { RefusesWrites = true, Value = Command }, Exe));
+        Assert.False(StartupSwitch.Apply(general, new FakeKey { RefusesWrites = true, Value = Exe }, Exe));
 
         Assert.True(general.StartWithWindows);
     }

@@ -9,7 +9,7 @@ namespace Hindsound.Input;
 /// lands in that thread's own message queue, read by a GetMessage loop. Register and Unregister must run on that same
 /// thread, so requests are queued, announced with a WM_APP thread message, and the caller waits for the result.
 /// </summary>
-internal sealed class Win32HotkeyNative : IHotkeyNative
+internal sealed class Win32HotkeyNative : IHotkeyRegistrar
 {
     private const uint WmHotkey = 0x0312;
     private const uint WmApp = 0x8000;

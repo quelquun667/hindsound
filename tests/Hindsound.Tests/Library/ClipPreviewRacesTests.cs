@@ -28,7 +28,7 @@ public sealed class ClipPreviewRacesTests
         private readonly HashSet<int> _threads = [];
         private int _open;
 
-        public int Mode { get; set; } = ClipPreview.ModePlaying;
+        public PreviewTrackState Mode { get; set; } = PreviewTrackState.Playing;
 
         public int MostOpen { get; private set; }
 
@@ -54,7 +54,15 @@ public sealed class ClipPreviewRacesTests
             }
         }
 
-        public int Send(string command)
+        public int Open(string path, string track) => Record($"open {path} as {track}");
+
+        public int Play(string track) => Record("play " + track);
+
+        public int Stop(string track) => Record("stop " + track);
+
+        public int Close(string track) => Record("close " + track);
+
+        private int Record(string command)
         {
             lock (_gate)
             {
@@ -73,7 +81,7 @@ public sealed class ClipPreviewRacesTests
             return 0;
         }
 
-        public int ModeOf(string alias, out int mode)
+        public int StateOf(string alias, out PreviewTrackState mode)
         {
             mode = Mode;
             return 0;
@@ -161,7 +169,7 @@ public sealed class ClipPreviewRacesTests
         var player = new Player();
         var heard = new Listener();
         using var preview = new ClipPreview(player, heard.Add, null, FastClock());
-        player.Mode = ClipPreview.ModeStopped;
+        player.Mode = PreviewTrackState.Stopped;
         var once = 0;
 
         // The thread of A has decided there is nothing more to take and is on its way out: this Play must not be left to it.
@@ -169,7 +177,7 @@ public sealed class ClipPreviewRacesTests
         {
             if (Interlocked.Exchange(ref once, 1) == 0)
             {
-                player.Mode = ClipPreview.ModePlaying;
+                player.Mode = PreviewTrackState.Playing;
                 preview.Play(Line(@"C:\clips\b.mp3"));
             }
         };
@@ -186,7 +194,7 @@ public sealed class ClipPreviewRacesTests
         var player = new Player();
         var heard = new Listener();
         using var preview = new ClipPreview(player, heard.Add, null, FastClock());
-        player.Mode = ClipPreview.ModeStopped;
+        player.Mode = PreviewTrackState.Stopped;
         Thread? first = null;
         var once = 0;
 
@@ -195,7 +203,7 @@ public sealed class ClipPreviewRacesTests
             if (Interlocked.Exchange(ref once, 1) == 0)
             {
                 first = Thread.CurrentThread;
-                player.Mode = ClipPreview.ModePlaying;
+                player.Mode = PreviewTrackState.Playing;
                 preview.Play(Line(@"C:\clips\b.mp3"));
             }
         };
@@ -227,12 +235,12 @@ public sealed class ClipPreviewRacesTests
         while (watch.Elapsed < TimeSpan.FromSeconds(2) && plays < 5000)
         {
             plays++;
-            player.Mode = ClipPreview.ModePlaying;
+            player.Mode = PreviewTrackState.Playing;
             preview.Play(Line(@"C:\clips\a.mp3"));
             Assert.True(SpinWait.SpinUntil(() => heard.States.Count(s => s == PreviewState.Playing) >= plays, Patience), $"play {plays} never played");
 
             // The end, then the next Play as soon as it is told: it lands as the thread decides whether to go on.
-            player.Mode = ClipPreview.ModeStopped;
+            player.Mode = PreviewTrackState.Stopped;
             Assert.True(SpinWait.SpinUntil(() => heard.States.Count(s => s == PreviewState.Ended) >= plays, Patience), $"play {plays} never ended");
         }
 

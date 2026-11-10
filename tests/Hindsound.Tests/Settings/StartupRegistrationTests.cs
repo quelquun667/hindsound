@@ -4,7 +4,7 @@ namespace Hindsound.Tests.Settings;
 
 public class StartupRegistrationTests
 {
-    private sealed class FakeRunKey : IRunKey
+    private sealed class FakeRunKey : IRunKeyValues
     {
         public Dictionary<string, string> Values { get; } = [];
 
@@ -31,7 +31,7 @@ public class StartupRegistrationTests
     public void Enable_WritesTheQuotedExePath()
     {
         var key = new FakeRunKey();
-        var startup = new StartupRegistration(key, Exe);
+        var startup = new StartupRegistration(new RegistryRunKey(key), Exe);
 
         Assert.True(startup.Enable());
 
@@ -44,7 +44,7 @@ public class StartupRegistrationTests
     {
         var key = new FakeRunKey();
         key.Values["Other"] = "x";
-        var startup = new StartupRegistration(key, Exe);
+        var startup = new StartupRegistration(new RegistryRunKey(key), Exe);
         startup.Enable();
 
         Assert.True(startup.Disable());
@@ -56,7 +56,7 @@ public class StartupRegistrationTests
     [Fact]
     public void Disable_WhenNothingIsRegistered_Succeeds()
     {
-        Assert.True(new StartupRegistration(new FakeRunKey(), Exe).Disable());
+        Assert.True(new StartupRegistration(new RegistryRunKey(new FakeRunKey()), Exe).Disable());
     }
 
     [Fact]
@@ -64,7 +64,7 @@ public class StartupRegistrationTests
     {
         var key = new FakeRunKey();
         key.Values["Hindsound"] = "\"D:\\Old\\Hindsound.exe\"";
-        var startup = new StartupRegistration(key, Exe);
+        var startup = new StartupRegistration(new RegistryRunKey(key), Exe);
 
         Assert.False(startup.IsEnabled());
         Assert.True(startup.Apply(true));
@@ -75,7 +75,7 @@ public class StartupRegistrationTests
     public void Apply_FollowsTheSetting()
     {
         var key = new FakeRunKey();
-        var startup = new StartupRegistration(key, Exe);
+        var startup = new StartupRegistration(new RegistryRunKey(key), Exe);
 
         startup.Apply(true);
         Assert.True(startup.IsEnabled());
@@ -86,7 +86,7 @@ public class StartupRegistrationTests
     [Fact]
     public void RegistryRefusal_BecomesFalse()
     {
-        var startup = new StartupRegistration(new FakeRunKey { Throw = true }, Exe);
+        var startup = new StartupRegistration(new RegistryRunKey(new FakeRunKey { Throw = true }), Exe);
 
         Assert.False(startup.Enable());
         Assert.False(startup.Disable());
@@ -96,7 +96,7 @@ public class StartupRegistrationTests
     public void WithoutAnExePath_NothingIsWritten()
     {
         var key = new FakeRunKey();
-        var startup = new StartupRegistration(key, "   ");
+        var startup = new StartupRegistration(new RegistryRunKey(key), "   ");
 
         Assert.False(startup.Enable());
         Assert.False(startup.IsEnabled());
@@ -106,8 +106,10 @@ public class StartupRegistrationTests
     [Fact]
     public void DefaultPath_IsTheCurrentProcess()
     {
-        var startup = new StartupRegistration(new FakeRunKey());
+        var key = new FakeRunKey();
+        var startup = new StartupRegistration(new RegistryRunKey(key));
 
-        Assert.Equal($"\"{Environment.ProcessPath}\"", startup.Command);
+        Assert.True(startup.Enable());
+        Assert.Equal($"\"{Environment.ProcessPath}\"", key.Values["Hindsound"]);
     }
 }

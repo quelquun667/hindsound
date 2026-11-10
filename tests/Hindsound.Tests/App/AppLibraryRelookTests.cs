@@ -97,7 +97,7 @@ public sealed class AppLibraryRelookTests : IDisposable
         app.CreateWindow(Section.Now);
         try
         {
-            var window = app.WindowNow!;
+            var window = (SettingsWindow)app.WindowNow!;
             var listed = _choicesListed;
 
             WindowNative.SendMessageW(window.Hwnd, WindowNative.WM_ACTIVATE, WaActive, 0);

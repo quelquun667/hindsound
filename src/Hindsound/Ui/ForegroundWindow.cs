@@ -46,6 +46,9 @@ internal static unsafe class ForegroundWindow
     public static ScreenInfo ActiveScreen() =>
         ScreenOf(Native.MonitorFromWindow(Native.GetForegroundWindow(), Native.MONITOR_DEFAULTTOPRIMARY));
 
+    /// <summary>The main screen.</summary>
+    public static ScreenInfo PrimaryScreen() => ScreenOf(Native.MonitorFromPoint(default, Native.MONITOR_DEFAULTTOPRIMARY));
+
     /// <summary>The screen under the mouse.</summary>
     public static ScreenInfo CursorScreen()
     {

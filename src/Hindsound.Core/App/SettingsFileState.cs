@@ -65,7 +65,7 @@ internal static class StartupSwitch
         try
         {
             // A setting that is off and was never on needs no write.
-            if ((!wanted && key.GetValue(StartupRegistration.DefaultValueName) is null) || registration.Apply(wanted))
+            if ((!wanted && !registration.HasEntry()) || registration.Apply(wanted))
             {
                 return true;
             }

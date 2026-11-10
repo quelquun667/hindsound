@@ -11,7 +11,7 @@ namespace Hindsound.App;
 
 /// <summary>
 /// The wiring: the message loop, the tray icon, the shortcuts, the engine and the clip path. Everything here runs on the
-/// thread of the message loop, unless it says otherwise, and every other thread comes back through <see cref="UiLoop.Post"/>.
+/// thread of the message loop, unless it says otherwise, and every other thread comes back through <see cref="IAppLoop.Post"/>.
 /// </summary>
 internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost, IUpdatesPanel, INowPanel
 {
@@ -48,11 +48,18 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     private readonly SettingsStore _store;
     private readonly ClipSaver _saver;
 
-    private UiLoop _loop = null!;
-    private TrayIcon _tray = null!;
-    private Notification _notification = null!;
+    private readonly IAppShell _shell;
+
+    // What a second launch tells this one. Null for a run built without one, which hears no second launch.
+    private readonly IInstanceChannel? _instance;
+    private IAppLoop _loop = null!;
+    private ITrayIcon _tray = null!;
+    private INotificationView _notification = null!;
+    private ISessionEnd? _sessionEnd;
+    private IClipboardFiles _clipboard = null!;
     private ClipPipeline _pipeline = null!;
     private HotkeyManager? _hotkeys;
+    private readonly Func<IHotkeyNative> _hotkeyLayer;
     private volatile AudioEngine? _engine;
 
     private AppSettings _settings = new();
@@ -65,7 +72,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     private readonly NoticeRetry _noticeRetry = new();
     private bool _startTouchesRunKey;
     private AudioEngineOptions? _engineOptions;
-    private SettingsWindow? _window;
+    private ISettingsWindow? _window;
     private WindowLibrary? _library;
     private string? _probeLibraryFolder;
     private readonly WindowGoing _going;
@@ -109,10 +116,15 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
 
     /// <param name="updaterMayRun">The raw command line was empty, or held only what Setup passes: see <see cref="AppOptions.UpdaterMayRun"/>.</param>
-    /// <param name="desktop">The desktop of the platform: the screens, the quiet state, the sound, the opener, the meter. By default, Windows's.</param>
-    public HindsoundApp(AppOptions options, Journal journal, bool updaterMayRun = false, DesktopParts? desktop = null)
+    /// <param name="desktop">The desktop of the platform: the screens, the quiet state, the sound, the opener, the meter. By default, the platform layer's.</param>
+    /// <param name="shell">The loop, the notification, the icon, the window and the rest of what the app shows. By default, the platform layer's.</param>
+    /// <param name="hotkeyLayer">Makes the layer the shortcuts go through. By default, <see cref="AppOptions.NewHotkeyLayer"/>.</param>
+    public HindsoundApp(AppOptions options, Journal journal, bool updaterMayRun = false, DesktopParts? desktop = null, IAppShell? shell = null, IInstanceChannel? instance = null, Func<IHotkeyNative>? hotkeyLayer = null)
     {
-        _desktop = desktop ?? WindowsPlatform.Desktop();
+        _hotkeyLayer = hotkeyLayer ?? options.NewHotkeyLayer;
+        _desktop = desktop ?? PlatformDefaults.Make(PlatformDefaults.Desktop, "the desktop");
+        _shell = shell ?? PlatformDefaults.Make(PlatformDefaults.Shell, "the shell of the app");
+        _instance = instance;
         _options = options;
         _journal = journal;
         _updaterMayRun = updaterMayRun;
@@ -179,19 +191,23 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
             return;
         }
 
-        _loop = new UiLoop();
-        _notification = new Notification { Clicked = () => NotificationClicked(_notification.Showing), Finished = OnNotificationFinished };
+        _loop = _shell.NewLoop();
+        _notification = _shell.NewNotification(_loop, _options.Offscreen);
+        _notification.Clicked = () => NotificationClicked(_notification.Showing);
+        _notification.Finished = OnNotificationFinished;
+        _clipboard = _shell.Clipboard(_loop);
         _pipeline = NewPipeline(_loop.Post, _loop.After);
 
-        _tray = new TrayIcon(_loop.Hwnd, UiLoop.TrayCallbackMessage);
-        _loop.TrayMessage = OnTrayMessage;
-        _loop.TaskbarCreated = () => NoteTray(_tray.Add(_trayState, Accent, _trayTip));
+        _tray = _shell.NewTray(_loop);
+        _tray.Message = OnTrayMessage;
+        _tray.Lost = () => NoteTray(_tray.Add(_trayState, Accent, _trayTip));
         _loop.ScaleMayHaveChanged = OnScaleMayHaveChanged;
-        _loop.SessionEnding = OnSessionEnding;
-        _loop.SessionEndAsked = OnSessionEndAsked;
-        _loop.SessionKept = TakeBackSessionEndReason;
+        _sessionEnd = _shell.SessionEnd(_loop);
+        _sessionEnd.Ending = OnSessionEnding;
+        _sessionEnd.Asked = OnSessionEndAsked;
+        _sessionEnd.Kept = TakeBackSessionEndReason;
         _loop.CloseAsked = AskToLeave;
-        _loop.ShowAsked = OnShowAsked;
+        _instance?.Listen(_loop, OnInstanceMessage);
         NoteTray(_tray.Add(_trayState, Accent, _trayTip));
 
         _canShowNotices = true;
@@ -480,10 +496,13 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     {
         try
         {
-            _hotkeys = new HotkeyManager(_options.NewHotkeyLayer());
+            _hotkeys = new HotkeyManager(_hotkeyLayer());
 
             // The hotkey thread only asks for a turn on the loop.
             _hotkeys.Pressed += action => _loop.Post(() => OnHotkey(action));
+
+            // The system answered later, or changed a key itself: what the notices and the statuses say follows.
+            _hotkeys.ResultsChanged += () => _loop.Post(RefreshHotkeys);
             ApplyHotkeys();
         }
         catch (Exception ex)
@@ -502,6 +521,18 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         }
 
         NoteHotkeys(_hotkeys?.Apply(_settings.Hotkeys) ?? HotkeyManager.WithoutManager(_settings.Hotkeys));
+    }
+
+    // Not once the manager is gone: it is released on the way out, and a late change must not read it.
+    private void RefreshHotkeys()
+    {
+        if (_hotkeys is null)
+        {
+            return;
+        }
+
+        NoteHotkeys(_hotkeys.Refresh());
+        _window?.Screen.SetHotkeyResults(_hotkeyResults);
     }
 
     /// <summary>Journals what each shortcut came to. Internal for a test that builds the app and never runs it.</summary>
@@ -671,7 +702,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
     // ---------------------------------------------------------------- the clip path
 
-    private TrayClick? ClickStandingIn => TrayClick.StandingIn(Native.GetForegroundWindow() == _loop.Hwnd, _lastMenuClick);
+    private TrayClick? ClickStandingIn => TrayClick.StandingIn(_loop.InFront(), _lastMenuClick);
 
     private void SaveClip(TimeSpan requested)
     {
@@ -788,7 +819,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     }
 
     private void CopyClip(ClipResult result, Action<bool> done) =>
-        SettingsMapping.CopyToClipboard(_options, () => ClipboardFiles.TrySet(_loop.Hwnd, result.Paths), _loop.After, done);
+        SettingsMapping.CopyToClipboard(_options, () => _clipboard.TrySet(result.Paths), _loop.After, done);
 
     private void FinishClip(ClipOutcome outcome, ClipResult result, bool copied)
     {
@@ -892,7 +923,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     }
 
     // Also read on the update pass's thread: nothing here may send a message to the loop and wait, as reading a window title would.
-    private unsafe (UserNotificationState State, bool Covers) Surface()
+    private (UserNotificationState State, bool Covers) Surface()
     {
         if (_options.SelfTestGameSeconds is not null)
         {
@@ -971,24 +1002,16 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
     private void PresentNow(NotificationContent content, bool clickThrough, ScreenInfo? clicked = null)
     {
-        var screen = clicked ?? ClickStandingIn?.Screen ?? _desktop.Screens.ActiveScreen();
+        // A system that does not say where the active window is gets the main screen.
+        var screen = clicked ?? ClickStandingIn?.Screen ?? _desktop.Screens.ActiveScreen() ?? _desktop.Screens.PrimaryScreen();
         var covers = _desktop.Screens.ForegroundCovers(screen);
-        var area = NotificationPlacement.AreaOn(screen, covers);
+        var area = NotificationSpot.AreaOn(screen, covers);
         var dpi = screen.Dpi;
         _journal.Write($"notification area: {area.Left},{area.Top},{area.Right},{area.Bottom} at {dpi} dpi, foreground covers the screen {covers}{(_options.Offscreen ? ", drawn off screen instead" : string.Empty)}");
-        if (_options.Offscreen)
-        {
-            var right = Native.GetSystemMetrics(Native.SM_XVIRTUALSCREEN) - 4000;
-            var top = Native.GetSystemMetrics(Native.SM_YVIRTUALSCREEN) - 4000;
-            area = new Native.RECT { Left = right - 1920, Top = top, Right = right, Bottom = top + 1080 };
-            dpi = 96;
-            clickThrough = true;
-        }
-
         _journal.Write($"notification {content.Kind}: {content.Title} / {content.Body}");
         _cpuBeforeNotification = _desktop.Meter.CpuMilliseconds();
         var leftEdge = string.Equals(_settings.General.NotificationPosition, "left", StringComparison.OrdinalIgnoreCase);
-        _notification.Present(content, new NotificationPlacement(area, dpi, clickThrough, leftEdge), Accent);
+        _notification.Present(content, new NotificationSpot(area, dpi, clickThrough, leftEdge), Accent);
         _notices.Shown(content);
         _captureOnReminder.Shown(content.Kind);
 
@@ -1121,7 +1144,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     private void OnTrayMenu(nuint wParam)
     {
         var (click, command) = TrayMenu.ReadThenShow(
-            () => new TrayClick(_desktop.Screens.Foreground().AppName, _desktop.Screens.CursorScreen(), NowMs),
+            () => new TrayClick(_desktop.Screens.Foreground().AppName, PointerScreen(), NowMs),
             () => AskTrayMenu(wParam));
         _lastMenuClick = click;
         _journal.Write($"tray menu: {command}, app name known {click.AppName is not null}, screen of the click {click.Screen.Monitor.Left},{click.Screen.Monitor.Top},{click.Screen.Monitor.Right},{click.Screen.Monitor.Bottom}");
@@ -1270,19 +1293,19 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
             new LibraryStore(_store.Path, _journal.Write),
             LibraryFolders,
             work => (PostInstead ?? _loop.Post)(work),
-            _options.Offscreen ? new OffscreenFolderShell(_journal.Write) : new ExplorerFolderShell(),
+            _options.Offscreen ? new OffscreenFolderShell(_journal.Write) : _shell.NewFolderShell(),
             File.Exists,
-            paths => ClipboardFiles.TrySet(_loop.Hwnd, paths),
+            paths => _clipboard.TrySet(paths),
             (attempt, done) => SettingsMapping.CopyToClipboard(_options, attempt, (ms, then) => _loop.After(ms, then), done),
             _journal.Write,
             Directory.Exists,
             () => _pipeline?.OldestPressUtc,
-            PreviewPlayerInstead ?? (() => new MciPreviewPlayer()),
+            PreviewPlayerInstead ?? _shell.NewPreviewPlayer,
             _options.Offscreen || _options.SettingsProbe ? OnlySilence : null);
         screen.SetLibrary(_library);
     }
 
-    /// <summary>For a test: what plays a clip in place of MCI.</summary>
+    /// <summary>For a test: what plays a clip in place of the platform's player.</summary>
     internal Func<IPreviewPlayer>? PreviewPlayerInstead { get; set; }
 
     /// <summary>
@@ -1321,7 +1344,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     }
 
     /// <summary>The window that is open, if any.</summary>
-    internal SettingsWindow? WindowNow => _window;
+    internal ISettingsWindow? WindowNow => _window;
 
     /// <summary>Whether a window holds a Library page right now.</summary>
     internal bool HasLibrary => _library is not null;
@@ -1337,6 +1360,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         _library = null;
     }
 
+    // A system that does not say where the pointer is gets the main screen.
+    private ScreenInfo PointerScreen() => _desktop.Screens.CursorScreen() ?? _desktop.Screens.PrimaryScreen();
+
     /// <summary>Only one at a time, and only while it is open: closing destroys it, and the memory goes back.</summary>
     /// <param name="target">The view to land on. <see cref="Section.FirstRun"/> opens the first-launch card.</param>
     internal void CreateWindow(Section target)
@@ -1344,8 +1370,15 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         var firstRun = target == Section.FirstRun;
 
         // The screen the user is looking at, whatever the active window is: a game on the first one, a click on the second.
-        var screen = _desktop.Screens.CursorScreen();
-        var window = new SettingsWindow(_settings, this, ReadMicPeak, firstRun, _options.Offscreen, screen, OnSettingsClosed);
+        var screen = PointerScreen();
+        if (_shell.NewSettingsWindow(new SettingsWindowRequest(_settings, this, ReadMicPeak, firstRun, _options.Offscreen, screen, OnSettingsClosed)) is not { } window)
+        {
+            // A system where the app has no window: the folder of the clips is what there is to show.
+            _journal.Write($"settings window: none on this system, {target} not opened, the clips folder instead");
+            OpenClipsFolder();
+            return;
+        }
+
         _window = window;
 
         WireScreen(window.Screen);
@@ -1372,8 +1405,13 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     }
 
     // A second launch: the user is looking for the app, and the icon may be hidden.
-    private void OnShowAsked()
+    private void OnInstanceMessage(InstanceMessage message)
     {
+        if (message != InstanceMessage.Show)
+        {
+            return;
+        }
+
         _journal.Write("a second launch asks to see the app");
         ReloadSettingsIfChanged();
         Go(WindowGesture.OpenApp);
@@ -1382,9 +1420,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     // Listing devices touches audio objects, which belong off the loop's thread. It opens nothing: no microphone starts.
     private void LoadChoices() => _choices.Start(() =>
     {
-        var outputs = WasapiCaptureSourceFactory.ListDevices(AudioFlow.System).Select(d => new AudioDeviceChoice(d.Id, d.Name)).ToList();
-        var mics = WasapiCaptureSourceFactory.ListDevices(AudioFlow.Mic).Select(d => new AudioDeviceChoice(d.Id, d.Name)).ToList();
-        var apps = WasapiCaptureSourceFactory.ListApps().Select(a => new AudioAppChoice(a.ExeName, a.Name)).ToList();
+        var outputs = _shell.AudioChoices.Devices(AudioFlow.System).Select(d => new AudioDeviceChoice(d.Id, d.Name)).ToList();
+        var mics = _shell.AudioChoices.Devices(AudioFlow.Mic).Select(d => new AudioDeviceChoice(d.Id, d.Name)).ToList();
+        var apps = _shell.AudioChoices.Apps().Select(a => new AudioAppChoice(a.ExeName, a.Name)).ToList();
         _journal.Write($"choices listed: {outputs.Count} outputs, {mics.Count} mics, {apps.Count} apps");
         return new AudioChoices(outputs, mics, apps);
     });
@@ -1495,27 +1533,33 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     // --settings-probe: opens the window off screen, sends it real messages, and writes what it measures. Never takes the focus.
     private void RunSettingsProbe()
     {
-        var gdi = WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0);
-        var user = WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1);
+        var gdi = _shell.Probe.DrawingObjects();
+        var user = _shell.Probe.WindowObjects();
         _journal.Write($"probe: before opening, {_desktop.Meter.Memory()}, GDI objects {gdi}, USER objects {user}");
 
         // The steps below walk the settings from their first page.
         OpenWindow(Section.Hotkeys);
-        var window = _window!;
-        var hwnd = window.Hwnd;
+        if (_window is not { } window)
+        {
+            // A system with no window has nothing to walk below: every step needs one.
+            _journal.Write("probe: no settings window on this system, the window steps are skipped");
+            _loop.Quit();
+            return;
+        }
+
         var seen = new List<string>();
 
-        void Key(nint target, uint vk) => Native.PostMessageW(target, WindowNative.WM_KEYDOWN, vk, 0);
+        void Key(uint vk) => _shell.Probe.Key(window, vk);
 
         var steps = new List<Action>();
-        steps.AddRange(Enumerable.Repeat<Action>(() => Key(hwnd, Vk.Down), 4));
-        steps.Add(() => Key(hwnd, Vk.Up));
+        steps.AddRange(Enumerable.Repeat<Action>(() => Key(Vk.Down), 4));
+        steps.Add(() => Key(Vk.Up));
         steps.Add(() =>
         {
             // Not by posted keys: the window reads the modifiers from the real keyboard, and the PC may be in use.
             if (window.Screen.TabTo(ProbeTextField))
             {
-                WindowNative.SetWindowTextW(window.EditHwnd, "probe {date}");
+                _shell.Probe.TypeInTextField(window, "probe {date}");
             }
             else
             {
@@ -1525,17 +1569,17 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         });
         steps.Add(() => seen.Add("template=" + _settings.Export.FileNameTemplate));
         steps.Add(() => window.ProbePicture(Path.ChangeExtension(_journal.Path, ".export.png")));
-        steps.Add(() => Key(window.EditHwnd, Vk.Tab));
-        steps.Add(() => window.ProbeDpiChange(144));
-        steps.Add(() => seen.Add("client at 144 dpi=" + window.ClientSizeText()));
-        steps.Add(() => seen.Add("icons at 144 dpi=" + window.IconWidths()));
-        steps.Add(() => window.ProbeDpiChange(96));
-        steps.Add(() => seen.Add("client at 96 dpi=" + window.ClientSizeText()));
-        steps.Add(() => seen.Add("icons at 96 dpi=" + window.IconWidths()));
+        steps.Add(() => _shell.Probe.KeyInTextField(window, Vk.Tab));
+        steps.Add(() => _shell.Probe.ScaleChange(window, 144));
+        steps.Add(() => seen.Add("client at 144 dpi=" + _shell.Probe.ClientSize(window)));
+        steps.Add(() => seen.Add("icons at 144 dpi=" + _shell.Probe.IconWidths(window)));
+        steps.Add(() => _shell.Probe.ScaleChange(window, 96));
+        steps.Add(() => seen.Add("client at 96 dpi=" + _shell.Probe.ClientSize(window)));
+        steps.Add(() => seen.Add("icons at 96 dpi=" + _shell.Probe.IconWidths(window)));
         steps.Add(() => window.Screen.ShowSection(Section.Hotkeys));
         steps.Add(() => window.ProbePicture(Path.ChangeExtension(_journal.Path, ".hotkeys.png")));
         var at = 0;
-        WeakReference<SettingsWindow>? windowRef = null;
+        WeakReference<ISettingsWindow>? windowRef = null;
         _loop.After(ProbeStepMs, Next);
 
         void Next()
@@ -1549,7 +1593,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
             }
 
             _journal.Write($"probe: reached {string.Join(" -> ", seen)}");
-            _journal.Write($"probe: open, {_desktop.Meter.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, {_desktop.Meter.CpuMilliseconds():F0} ms of CPU so far");
+            _journal.Write($"probe: open, {_desktop.Meter.Memory()}, GDI objects {_shell.Probe.DrawingObjects()}, {_desktop.Meter.CpuMilliseconds():F0} ms of CPU so far");
 
             // The wave of the Now page is made only once the page runs: the measure after closing has to follow a window that had one.
             window.Screen.ShowSection(Section.Now);
@@ -1558,7 +1602,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
         void CloseOnNow()
         {
-            _journal.Write($"probe: {ProbeNowMs} ms on Now, {_desktop.Meter.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
+            _journal.Write($"probe: {ProbeNowMs} ms on Now, {_desktop.Meter.Memory()}, GDI objects {_shell.Probe.DrawingObjects()}, USER objects {_shell.Probe.WindowObjects()}");
 
             ProbeLibrary(window, () =>
             {
@@ -1567,7 +1611,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
                 window.Close();
 
                 // These steps wait on the timers from here on: holding the window would keep it in the measures after closing.
-                windowRef = new WeakReference<SettingsWindow>(window);
+                windowRef = new WeakReference<ISettingsWindow>(window);
                 window = null!;
                 _loop.After(ProbeAfterCloseMs, AfterClosing);
             });
@@ -1575,7 +1619,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
         void AfterClosing()
         {
-            _journal.Write($"probe: 10 s after closing, {_desktop.Meter.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
+            _journal.Write($"probe: 10 s after closing, {_desktop.Meter.Memory()}, GDI objects {_shell.Probe.DrawingObjects()}, USER objects {_shell.Probe.WindowObjects()}");
 
             // After the measures, which are of the app as it is: nothing is collected before them.
             GC.Collect();
@@ -1619,8 +1663,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
                 }
                 else
                 {
-                    _journal.Write($"probe: after the menu and {ProbeNowOpenings} openings on Now of {ProbeNowMs} ms each, {_desktop.Meter.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
-                    _journal.Write($"probe: folder dialog usable {FolderPicker.SelfCheck()}");
+                    _journal.Write($"probe: after the menu and {ProbeNowOpenings} openings on Now of {ProbeNowMs} ms each, {_desktop.Meter.Memory()}, GDI objects {_shell.Probe.DrawingObjects()}, USER objects {_shell.Probe.WindowObjects()}");
+                    _journal.Write($"probe: folder dialog usable {_shell.Probe.FolderDialogUsable()}");
                     RemoveProbeClips();
                     _loop.Quit();
                 }
@@ -1629,7 +1673,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     }
 
     // The Library page, on clips the probe makes for itself in a folder of its own: a run never reads or adds to a real one.
-    private void ProbeLibrary(SettingsWindow window, Action done)
+    private void ProbeLibrary(ISettingsWindow window, Action done)
     {
         var folder = LibraryProbeFiles.FolderFor(_options.SettingsPath);
         if (folder is null)
@@ -1641,7 +1685,6 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
         _probeLibraryFolder = folder;
         LibraryFoldersInstead = OnlyFolder(folder);
-        var hwnd = window.Hwnd;
         var renamed = Path.Combine(folder, "probe-renamed.wav");
         var openedMs = 0L;
         _ = Task.Run(() =>
@@ -1657,7 +1700,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
             }
         });
 
-        void Key(uint vk) => Native.PostMessageW(hwnd, WindowNative.WM_KEYDOWN, vk, 0);
+        void Key(uint vk) => _shell.Probe.Key(window, vk);
 
         void Fail(string why)
         {
@@ -1697,7 +1740,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
         void Measure()
         {
-            _journal.Write($"probe: Library, {_library?.Lines?.Lines.Count} lines, {_library?.Lines?.LeftOut} left out, names and lengths read in {NowMs - openedMs} ms (of files this probe wrote a moment before: not the time of a folder that was already there), {_desktop.Meter.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
+            _journal.Write($"probe: Library, {_library?.Lines?.Lines.Count} lines, {_library?.Lines?.LeftOut} left out, names and lengths read in {NowMs - openedMs} ms (of files this probe wrote a moment before: not the time of a folder that was already there), {_desktop.Meter.Memory()}, GDI objects {_shell.Probe.DrawingObjects()}, USER objects {_shell.Probe.WindowObjects()}");
             if (!window.Screen.TabTo(SettingsScreen.ClipListId))
             {
                 Fail("the focus never reached the list");
@@ -1716,7 +1759,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
             // What the Explorer does while the window is in the background, then the window coming back to the front.
             File.Move(LibraryProbeFiles.PathOf(folder, 0), renamed);
-            Native.PostMessageW(hwnd, WindowNative.WM_ACTIVATE, 1, 0);
+            _shell.Probe.Activate(window);
             Wait(
                 () => _library is { IsWorking: false, Lines: { } lines } && lines.Lines.Any(line => line.Main.Path == renamed),
                 Show,
@@ -1923,7 +1966,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
     // ---------------------------------------------------------------- updates
 
-    private static string? ExeFolder => Environment.ProcessPath is { } path ? Path.GetDirectoryName(path) : null;
+    private static string? ExeFolder => PlatformDefaults.ResolveLaunchPath() is { } path ? Path.GetDirectoryName(path) : null;
 
     /// <summary>Says in the log which updater this run has, and runs its launch step. True when Setup started: the app leaves at once.</summary>
     private bool StartUpdates()
@@ -2288,7 +2331,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         // First, and it cannot throw: from here no Setup at the end of a session, and a running download stops.
         if (_sessionEndBlock.Asked(ClipsInProgress))
         {
-            var given = Native.ShutdownBlockReasonCreate(_loop.Hwnd, SessionEndBlock.Reason) != 0;
+            var given = _sessionEnd!.Block(SessionEndBlock.Reason);
             _journal.Write($"the session may end, with clips being written: reason given {given}");
         }
     }
@@ -2297,7 +2340,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     {
         if (_sessionEndBlock.Over())
         {
-            var taken = Native.ShutdownBlockReasonDestroy(_loop.Hwnd) != 0;
+            var taken = _sessionEnd!.Unblock();
             _journal.Write($"the reason to wait at the end of the session is gone: {taken}");
         }
     }

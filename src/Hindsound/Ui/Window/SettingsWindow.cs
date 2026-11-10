@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
+using Hindsound.App;
 using Hindsound.Input;
 using Hindsound.Settings;
 
@@ -68,7 +69,7 @@ internal static unsafe partial class WindowNative
 /// The window itself: a native frame in dark mode around one bitmap, and one child EDIT that moves to whichever text
 /// field has the focus. It lives only while it is open: closing destroys it, with its bitmap, its fonts and its timer.
 /// </summary>
-internal sealed unsafe class SettingsWindow : IWindowHost, IDisposable
+internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
 {
     private const string ClassName = "HindsoundSettings";
     private const uint Style = WindowNative.WS_OVERLAPPED | WindowNative.WS_CAPTION | WindowNative.WS_SYSMENU | WindowNative.WS_MINIMIZEBOX | WindowNative.WS_CLIPCHILDREN;

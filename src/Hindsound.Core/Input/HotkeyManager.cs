@@ -3,9 +3,8 @@ using Hindsound.Settings;
 namespace Hindsound.Input;
 
 /// <summary>
-/// Owns every global shortcut. No window and no UI framework: a dedicated background thread registers them with
-/// RegisterHotKey (MOD_NOREPEAT) and reads WM_HOTKEY from its own message queue.
-/// Apply, Suspend and Resume are meant to be called from one thread at a time (the UI thread).
+/// Owns every global shortcut: reads them from the settings, binds them as one batch through the platform's layer, and says
+/// for each one what came of it. Apply, Suspend and Resume are meant to be called from one thread at a time (the UI thread).
 /// </summary>
 public sealed class HotkeyManager : IDisposable
 {
@@ -13,12 +12,9 @@ public sealed class HotkeyManager : IDisposable
 
     private readonly IHotkeyNative _native;
     private readonly Dictionary<HotkeyAction, string?> _wanted = [];
-    private readonly Dictionary<HotkeyAction, (int Id, HotkeyGesture Gesture)> _active = [];
-    private readonly Dictionary<int, HotkeyAction> _byId = [];
-    private readonly object _idLock = new();
-    private int _nextId = 1;
     private bool _suspended;
     private bool _disposed;
+    private int _syncThread;
 
     /// <summary>Real manager: the platform's own shortcuts, which start their thread.</summary>
     public HotkeyManager()
@@ -30,7 +26,14 @@ public sealed class HotkeyManager : IDisposable
     public HotkeyManager(IHotkeyNative native)
     {
         _native = native;
-        _native.HotkeyPressed += OnNativePressed;
+        _native.Pressed += OnNativePressed;
+        _native.BindingsChanged += OnNativeChanged;
+    }
+
+    /// <summary>Manager over a layer that grabs one combination at a time, made into a batch by <see cref="KeyByKeyHotkeys"/>.</summary>
+    public HotkeyManager(IHotkeyRegistrar registrar)
+        : this(new KeyByKeyHotkeys(registrar))
+    {
     }
 
     /// <summary>
@@ -38,6 +41,14 @@ public sealed class HotkeyManager : IDisposable
     /// the handler must switch back to its own UI thread (for example Dispatcher.BeginInvoke) before touching any UI.
     /// </summary>
     public event Action<HotkeyAction>? Pressed;
+
+    /// <summary>
+    /// Raised when the system changed the bound keys on its own, or answered a batch it had left pending (the user accepted a
+    /// dialog): <see cref="Refresh"/> gives the new results. It may be raised on the layer's own thread, so the handler must
+    /// switch back to the UI thread before calling <see cref="Refresh"/>. A change that one of our own calls caused is not
+    /// raised: that call returns its results itself.
+    /// </summary>
+    public event Action? ResultsChanged;
 
     /// <summary>What the shortcuts come to when the manager could not even be created: every one that is set does not work.</summary>
     public static IReadOnlyList<HotkeyResult> WithoutManager(HotkeySettings settings) => Actions.Select(action => Without(action, Gesture(settings, action))).ToList();
@@ -76,10 +87,7 @@ public sealed class HotkeyManager : IDisposable
     {
         ThrowIfDisposed();
         _suspended = true;
-        foreach (var action in _active.Keys.ToList())
-        {
-            Release(action);
-        }
+        ReleaseAll();
     }
 
     /// <summary>Registers the shortcuts again after <see cref="Suspend"/>.</summary>
@@ -91,13 +99,23 @@ public sealed class HotkeyManager : IDisposable
     }
 
     /// <summary>
-    /// Handles a pressed shortcut id; returns true if it is one of ours. <see cref="Pressed"/> is raised on the calling
-    /// thread, each subscriber on its own: one that throws is logged and does not stop the next, and nothing
-    /// propagates to the caller.
+    /// What the shortcuts come to now, from what the layer says without binding anything again: the same results as
+    /// <see cref="Apply"/>, for the wanted shortcuts as they are in the system.
+    /// </summary>
+    public IReadOnlyList<HotkeyResult> Refresh()
+    {
+        ThrowIfDisposed();
+        return Sync(bind: false);
+    }
+
+    /// <summary>
+    /// Handles a pressed shortcut id of a key-by-key layer; returns true if it is one of ours. <see cref="Pressed"/> is raised
+    /// on the calling thread, each subscriber on its own: one that throws is logged and does not stop the next, and nothing
+    /// propagates to the caller. A layer without ids has nothing to resolve: false.
     /// </summary>
     public bool Dispatch(int id)
     {
-        if (!TryGetAction(id, out var action))
+        if (_native is not KeyByKeyHotkeys keys || !keys.TryGetAction(id, out var action))
         {
             return false;
         }
@@ -106,22 +124,19 @@ public sealed class HotkeyManager : IDisposable
         return true;
     }
 
-    private bool TryGetAction(int id, out HotkeyAction action)
-    {
-        lock (_idLock)
-        {
-            return _byId.TryGetValue(id, out action);
-        }
-    }
+    // The handlers run on the thread pool, so that a slow one never keeps the layer's thread from reading the next press.
+    private void OnNativePressed(HotkeyAction action) =>
+        ThreadPool.QueueUserWorkItem(static state => state.Manager.RaisePressed(state.Action), (Manager: this, Action: action), preferLocal: false);
 
-    // The id is resolved here, on the hotkey thread, while it is still known; the handlers run on the thread pool so
-    // that a slow one never keeps the message loop from reading the next press.
-    private void OnNativePressed(int id)
+    private void OnNativeChanged()
     {
-        if (TryGetAction(id, out var action))
+        // Raised inside our own Bind, on this thread: the call that is running returns the results.
+        if (Volatile.Read(ref _syncThread) == Environment.CurrentManagedThreadId)
         {
-            ThreadPool.QueueUserWorkItem(static state => state.Manager.RaisePressed(state.Action), (Manager: this, Action: action), preferLocal: false);
+            return;
         }
+
+        ResultsChanged?.Invoke();
     }
 
     private void RaisePressed(HotkeyAction action)
@@ -153,34 +168,30 @@ public sealed class HotkeyManager : IDisposable
         }
 
         _disposed = true;
-        foreach (var action in _active.Keys.ToList())
-        {
-            Release(action);
-        }
-
-        _native.HotkeyPressed -= OnNativePressed;
+        ReleaseAll();
+        _native.Pressed -= OnNativePressed;
+        _native.BindingsChanged -= OnNativeChanged;
         _native.Dispose();
     }
 
     private sealed record Wish(HotkeyAction Action, HotkeyGesture Gesture, string Text);
 
     /// <summary>
-    /// Brings the registered shortcuts to the wanted ones without ever losing one that works:
-    /// removed and invalid ones are settled first; a shortcut that appears twice in the settings is flagged (the one
-    /// already in place keeps it); then the changes are tried again as long as one succeeds, because a shortcut freed
-    /// by one action can be what another one waits for (shifting keys); last, a ring of actions that hold each
-    /// other's wanted keys (swapping two keys) is exchanged in one step, and put back if any of them fails.
+    /// Brings the bound shortcuts to the wanted ones without ever losing one that works: removed and invalid ones are settled
+    /// first; a shortcut that appears twice in the settings is flagged (the one already in place keeps it); the rest goes to the
+    /// layer as one batch, and what it answers for each action becomes that action's state.
     /// </summary>
-    private List<HotkeyResult> Sync()
+    private List<HotkeyResult> Sync(bool bind = true)
     {
         var results = new Dictionary<HotkeyAction, HotkeyResult>();
+        var requests = new List<HotkeyRequest>();
         var wishes = new List<Wish>();
         foreach (var action in Actions)
         {
             _wanted.TryGetValue(action, out var text);
             if (string.IsNullOrWhiteSpace(text))
             {
-                Release(action);
+                requests.Add(new HotkeyRequest(action, null));
                 results[action] = new HotkeyResult(action, null, HotkeyStatus.NotSet, null);
             }
             else if (!HotkeyGesture.TryParse(text, out var gesture))
@@ -199,76 +210,29 @@ public sealed class HotkeyManager : IDisposable
         }
 
         wishes = FlagDuplicates(wishes, results);
+        requests.AddRange(wishes.Select(w => new HotkeyRequest(w.Action, w.Gesture)));
 
-        var pending = new List<Wish>();
+        // A refresh binds nothing: it reads again what the layer holds for the wanted shortcuts.
+        var answers = bind
+            ? BindBatch(requests).ToDictionary(b => b.Action)
+            : wishes.ToDictionary(w => w.Action, w => _native.Current(w.Action));
         foreach (var wish in wishes)
         {
-            if (_active.TryGetValue(wish.Action, out var current) && current.Gesture == wish.Gesture)
+            var answer = answers[wish.Action];
+            results[wish.Action] = answer.State switch
             {
-                results[wish.Action] = new HotkeyResult(wish.Action, wish.Text, HotkeyStatus.Registered, null);
-            }
-            else
-            {
-                pending.Add(wish);
-            }
-        }
+                // The key the system really gave, in its own words when it has them, as it may not be the one proposed.
+                HotkeyBindingState.Bound => new HotkeyResult(wish.Action, answer.KeyText ?? answer.Key?.ToString() ?? wish.Text, HotkeyStatus.Registered, null),
+                HotkeyBindingState.Refused => new HotkeyResult(wish.Action, wish.Text, HotkeyStatus.InUse, HotkeyResult.InUseMessage),
 
-        var timedOut = false;
-        bool progress;
-        do
-        {
-            progress = false;
-            foreach (var wish in pending.ToList())
-            {
-                var outcome = TryBind(wish.Action, wish.Gesture);
-                if (outcome == HotkeyRegistration.Refused)
-                {
-                    continue;
-                }
-
-                pending.Remove(wish);
-                progress = true;
-                results[wish.Action] = outcome == HotkeyRegistration.Registered
-                    ? new HotkeyResult(wish.Action, wish.Text, HotkeyStatus.Registered, null)
-                    : Unavailable(wish);
-                timedOut |= outcome == HotkeyRegistration.TimedOut;
-            }
-        }
-        while (progress && pending.Count > 0 && !timedOut);
-
-        if (timedOut)
-        {
-            // The hotkey thread is stuck: do not wait for it again once per remaining action.
-            foreach (var wish in pending)
-            {
-                results[wish.Action] = Unavailable(wish);
-            }
-
-            pending.Clear();
-        }
-        else
-        {
-            var ring = FindRing(pending);
-            if (ring.Count > 1 && TryExchange(ring))
-            {
-                foreach (var wish in ring)
-                {
-                    pending.Remove(wish);
-                    results[wish.Action] = new HotkeyResult(wish.Action, wish.Text, HotkeyStatus.Registered, null);
-                }
-            }
-        }
-
-        foreach (var wish in pending)
-        {
-            results[wish.Action] = new HotkeyResult(wish.Action, wish.Text, HotkeyStatus.InUse, HotkeyResult.InUseMessage);
+                // Set, not in force yet, and no error to show while the system asks the user.
+                HotkeyBindingState.Pending => new HotkeyResult(wish.Action, wish.Text, HotkeyStatus.Suspended, null),
+                _ => new HotkeyResult(wish.Action, wish.Text, HotkeyStatus.Unavailable, HotkeyResult.UnavailableMessage),
+            };
         }
 
         return Actions.Select(a => results[a]).ToList();
     }
-
-    private static HotkeyResult Unavailable(Wish wish) =>
-        new(wish.Action, wish.Text, HotkeyStatus.Unavailable, HotkeyResult.UnavailableMessage);
 
     /// <summary>
     /// Two actions asking for the same combination cannot both have it. The one that holds it already keeps it,
@@ -281,8 +245,7 @@ public sealed class HotkeyManager : IDisposable
         foreach (var group in wishes.GroupBy(w => w.Gesture))
         {
             var members = group.ToList();
-            var winner = members.FirstOrDefault(w => _active.TryGetValue(w.Action, out var current) && current.Gesture == w.Gesture)
-                ?? members[0];
+            var winner = members.FirstOrDefault(w => _native.BoundKey(w.Action) == w.Gesture) ?? members[0];
             kept.Add(winner);
             foreach (var loser in members.Where(w => w != winner))
             {
@@ -293,102 +256,26 @@ public sealed class HotkeyManager : IDisposable
         return kept.OrderBy(w => w.Action).ToList();
     }
 
-    /// <summary>
-    /// The actions that wait for each other: each wants a combination another one of them holds right now, so no
-    /// order of single changes can satisfy them. Anything that waits on something outside (another app) is left out.
-    /// </summary>
-    private List<Wish> FindRing(List<Wish> pending)
+    private void ReleaseAll()
     {
-        var ring = pending.ToList();
-        bool removed;
-        do
+        var bound = Actions.Where(a => _native.BoundKey(a) is not null).Select(a => new HotkeyRequest(a, null)).ToList();
+        if (bound.Count > 0)
         {
-            removed = ring.RemoveAll(w => !ring.Any(o => o != w && _active.TryGetValue(o.Action, out var held) && held.Gesture == w.Gesture)) > 0;
+            BindBatch(bound);
         }
-        while (removed);
-
-        return ring;
     }
 
-    /// <summary>
-    /// Releases every action of the ring, registers the wanted combinations, and if any one is refused puts every
-    /// previous registration back, so the exchange is all or nothing.
-    /// </summary>
-    private bool TryExchange(List<Wish> ring)
+    // The layer may raise its change event inside Bind, on this thread; OnNativeChanged tells it from a later one.
+    private IReadOnlyList<HotkeyBinding> BindBatch(IReadOnlyList<HotkeyRequest> requests)
     {
-        var previous = ring.ToDictionary(w => w.Action, w => _active[w.Action].Gesture);
-        foreach (var wish in ring)
+        Volatile.Write(ref _syncThread, Environment.CurrentManagedThreadId);
+        try
         {
-            Release(wish.Action);
+            return _native.Bind(requests);
         }
-
-        var bound = new List<HotkeyAction>();
-        var ok = true;
-        foreach (var wish in ring)
+        finally
         {
-            if (TryBind(wish.Action, wish.Gesture) != HotkeyRegistration.Registered)
-            {
-                ok = false;
-                break;
-            }
-
-            bound.Add(wish.Action);
-        }
-
-        if (ok)
-        {
-            return true;
-        }
-
-        foreach (var action in bound)
-        {
-            Release(action);
-        }
-
-        foreach (var wish in ring)
-        {
-            TryBind(wish.Action, previous[wish.Action]);
-        }
-
-        return false;
-    }
-
-    /// <summary>Registers a combination for the action; the action's old one is released only once the new one is in place.</summary>
-    private HotkeyRegistration TryBind(HotkeyAction action, HotkeyGesture gesture)
-    {
-        var id = _nextId++;
-        // The id must be known before registering: a press can arrive on the hotkey thread right after.
-        lock (_idLock)
-        {
-            _byId[id] = action;
-        }
-
-        var outcome = _native.TryRegister(id, gesture.Modifiers, gesture.VirtualKey);
-        if (outcome != HotkeyRegistration.Registered)
-        {
-            lock (_idLock)
-            {
-                _byId.Remove(id);
-            }
-
-            // A timeout is not another app holding the combination, and the native layer left nothing registered.
-            return outcome;
-        }
-
-        Release(action);
-        _active[action] = (id, gesture);
-        return HotkeyRegistration.Registered;
-    }
-
-    private void Release(HotkeyAction action)
-    {
-        if (_active.Remove(action, out var entry))
-        {
-            _native.Unregister(entry.Id);
-            lock (_idLock)
-            {
-                _byId.Remove(entry.Id);
-            }
+            Volatile.Write(ref _syncThread, 0);
         }
     }
 

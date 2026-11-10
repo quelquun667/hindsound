@@ -4,6 +4,7 @@ using Hindsound.Ui.Window;
 namespace Hindsound.Tests.Ui;
 
 /// <summary>Real messages to a hidden window of this test process. Nothing shows and nothing takes the focus.</summary>
+[Collection("UiLoop")]
 public class UiLoopTests
 {
     private const nuint CloseApp = 1;

@@ -27,8 +27,12 @@ internal static class WindowsPlatform
             PlatformDefaults.DeviceWatcher = () => new DeviceWatcher();
             PlatformDefaults.ProcessSnapshot = () => new ToolHelpProcessSnapshot();
             PlatformDefaults.RunKey = () => new RegistryRunKey();
-            PlatformDefaults.Hotkeys = () => new Win32HotkeyNative();
+            PlatformDefaults.LaunchPath = () => Environment.ProcessPath;
+            // RegisterHotKey grabs one combination at a time; the batch the app binds through is made of it.
+            PlatformDefaults.Hotkeys = () => new KeyByKeyHotkeys(new Win32HotkeyNative());
             PlatformDefaults.UpdateNetwork = () => new WinHttpTransport();
+            PlatformDefaults.Desktop = Desktop;
+            PlatformDefaults.Shell = () => new WindowsShell();
             _installed = true;
         }
     }
@@ -38,6 +42,7 @@ internal static class WindowsPlatform
         new(new WindowsScreens(), new WindowsQuietState(), new WindowsConfirmSound(), new ShellFileOpener(), new WindowsProcessMeter());
 }
 
+/// <summary>Windows always answers both screens: a window or a pointer off every screen still has the nearest or main one.</summary>
 /// <param name="active">Where the active window is; the real reading of the desktop when null. Given by the tests only.</param>
 /// <param name="cursor">Where the cursor is; the real reading of the desktop when null. Given by the tests only.</param>
 internal sealed class WindowsScreens(Func<ScreenInfo>? active = null, Func<ScreenInfo>? cursor = null) : IScreens
@@ -51,9 +56,11 @@ internal sealed class WindowsScreens(Func<ScreenInfo>? active = null, Func<Scree
 
     public bool ForegroundCovers(ScreenInfo screen) => ForegroundWindow.CoversScreen(screen);
 
-    public ScreenInfo ActiveScreen() => _active();
+    public ScreenInfo? ActiveScreen() => _active();
 
-    public ScreenInfo CursorScreen() => _cursor();
+    public ScreenInfo? CursorScreen() => _cursor();
+
+    public ScreenInfo PrimaryScreen() => ForegroundWindow.PrimaryScreen();
 }
 
 internal sealed unsafe class WindowsQuietState : IQuietState

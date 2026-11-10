@@ -19,10 +19,10 @@ public sealed class ClipPreviewTests
     {
         private readonly object _gate = new();
         private readonly List<string> _commands = [];
-        private readonly Dictionary<string, int> _modes = [];
+        private readonly Dictionary<string, PreviewTrackState> _modes = [];
         private int _threadOfLastCall;
 
-        public int DefaultMode { get; set; } = ClipPreview.ModePlaying;
+        public PreviewTrackState DefaultMode { get; set; } = PreviewTrackState.Playing;
 
         public Func<string, int>? OnSend { get; set; }
 
@@ -49,7 +49,7 @@ public sealed class ClipPreviewTests
             }
         }
 
-        public void SetMode(string alias, int mode)
+        public void SetMode(string alias, PreviewTrackState mode)
         {
             lock (_gate)
             {
@@ -57,7 +57,7 @@ public sealed class ClipPreviewTests
             }
         }
 
-        public void SetAllModes(int mode)
+        public void SetAllModes(PreviewTrackState mode)
         {
             lock (_gate)
             {
@@ -72,7 +72,15 @@ public sealed class ClipPreviewTests
             return open[(open.LastIndexOf(' ') + 1)..];
         }
 
-        public int Send(string command)
+        public int Open(string path, string track) => Record($"open {path} as {track}");
+
+        public int Play(string track) => Record("play " + track);
+
+        public int Stop(string track) => Record("stop " + track);
+
+        public int Close(string track) => Record("close " + track);
+
+        private int Record(string command)
         {
             Note();
             lock (_gate)
@@ -83,7 +91,7 @@ public sealed class ClipPreviewTests
             return OnSend?.Invoke(command) ?? 0;
         }
 
-        public int ModeOf(string alias, out int mode)
+        public int StateOf(string alias, out PreviewTrackState mode)
         {
             Note();
             lock (_gate)
@@ -187,7 +195,7 @@ public sealed class ClipPreviewTests
         Assert.Equal(PreviewState.Stopped, preview.Current.State);
         preview.Play(clip);
         heard.WaitForCount(PreviewState.Playing);
-        player.SetAllModes(ClipPreview.ModeStopped);
+        player.SetAllModes(PreviewTrackState.Stopped);
         heard.WaitForCount(PreviewState.Ended);
         AssertThreadGone(preview);
 
@@ -195,13 +203,13 @@ public sealed class ClipPreviewTests
         Assert.All(heard.Changes, change => Assert.Same(clip, change.Clip));
         Assert.Equal(new PreviewChange(PreviewState.Ended, clip), preview.Current);
         var alias = player.AliasOfOpen(0);
-        Assert.Equal([$"open \"C:\\clips\\a.mp3\" type mpegvideo alias {alias}", $"play {alias}", $"close {alias}"], player.Commands);
+        Assert.Equal([$"open C:\\clips\\a.mp3 as {alias}", $"play {alias}", $"close {alias}"], player.Commands);
     }
 
     [Fact]
     public void The_end_is_told_once_nothing_is_left_open()
     {
-        var player = new FakePlayer { DefaultMode = ClipPreview.ModePlaying };
+        var player = new FakePlayer { DefaultMode = PreviewTrackState.Playing };
         var commandsAtEnd = new List<string>();
         var heard = new Listener();
         using var preview = new ClipPreview(player, change =>
@@ -217,7 +225,7 @@ public sealed class ClipPreviewTests
 
         preview.Play(Line(@"C:\clips\a.mp3"));
         heard.WaitForCount(PreviewState.Playing);
-        player.SetAllModes(ClipPreview.ModeStopped);
+        player.SetAllModes(PreviewTrackState.Stopped);
         heard.WaitForCount(PreviewState.Ended);
 
         Assert.StartsWith("close ", commandsAtEnd[^1], StringComparison.Ordinal);
@@ -474,8 +482,8 @@ public sealed class ClipPreviewTests
         var mic = player.AliasOfOpen(1);
         Assert.Equal(
             [
-                $"open \"C:\\clips\\a_system.mp3\" type mpegvideo alias {system}",
-                $"open \"C:\\clips\\a_mic.mp3\" type mpegvideo alias {mic}",
+                $"open C:\\clips\\a_system.mp3 as {system}",
+                $"open C:\\clips\\a_mic.mp3 as {mic}",
                 $"play {system}",
                 $"play {mic}",
             ],
@@ -494,12 +502,12 @@ public sealed class ClipPreviewTests
         preview.Play(Line(@"C:\clips\a_system.mp3", @"C:\clips\a_mic.mp3"));
         heard.WaitForCount(PreviewState.Playing);
         Assert.True(SpinWait.SpinUntil(() => player.Waits >= 2, Patience));
-        player.SetMode(player.AliasOfOpen(0), ClipPreview.ModeStopped);
+        player.SetMode(player.AliasOfOpen(0), PreviewTrackState.Stopped);
         var waits = player.Waits;
         Assert.True(SpinWait.SpinUntil(() => player.Waits >= waits + 5, Patience));
 
         Assert.DoesNotContain(PreviewState.Ended, heard.States);
-        player.SetMode(player.AliasOfOpen(1), ClipPreview.ModeStopped);
+        player.SetMode(player.AliasOfOpen(1), PreviewTrackState.Stopped);
         heard.WaitForCount(PreviewState.Ended);
         AssertThreadGone(preview);
     }
@@ -524,7 +532,7 @@ public sealed class ClipPreviewTests
     public void A_stopped_track_just_after_the_start_is_not_its_end_until_the_grace_is_over()
     {
         long now = 0;
-        var player = new FakePlayer { DefaultMode = ClipPreview.ModeStopped };
+        var player = new FakePlayer { DefaultMode = PreviewTrackState.Stopped };
         var heard = new Listener();
         using var preview = new ClipPreview(player, heard.Add, null, () => Interlocked.Read(ref now));
 
@@ -551,7 +559,7 @@ public sealed class ClipPreviewTests
         preview.Play(Line(@"C:\clips\a.mp3"));
         heard.WaitForCount(PreviewState.Playing);
         Assert.True(SpinWait.SpinUntil(() => player.Waits >= 2, Patience));
-        player.SetAllModes(ClipPreview.ModeStopped);
+        player.SetAllModes(PreviewTrackState.Stopped);
 
         heard.WaitForCount(PreviewState.Ended);
     }
@@ -559,7 +567,7 @@ public sealed class ClipPreviewTests
     [Fact]
     public void Any_other_mode_keeps_waiting()
     {
-        const int NotReady = 524;
+        const PreviewTrackState NotReady = PreviewTrackState.Other;
         var player = new FakePlayer { DefaultMode = NotReady };
         var heard = new Listener();
         long now = 0;
@@ -648,7 +656,7 @@ public sealed class ClipPreviewTests
         preview.Play(Line(@"C:\clips\a_system.mp3", @"C:\clips\a_mic.mp3"));
         heard.WaitForCount(PreviewState.Playing);
         Assert.Null(preview.StartGapMs);
-        player.SetAllModes(ClipPreview.ModeStopped);
+        player.SetAllModes(PreviewTrackState.Stopped);
         heard.WaitForCount(PreviewState.Ended);
         AssertThreadGone(preview);
 
@@ -687,7 +695,7 @@ public sealed class ClipPreviewTests
         preview.Play(Line(@"C:\clips\a_system.mp3", @"C:\clips\a_mic.mp3"));
         heard.WaitForCount(PreviewState.Playing);
         Assert.True(SpinWait.SpinUntil(() => player.Waits >= 3, Patience));
-        player.SetAllModes(ClipPreview.ModeStopped);
+        player.SetAllModes(PreviewTrackState.Stopped);
         heard.WaitForCount(PreviewState.Ended);
 
         Assert.DoesNotContain(PreviewState.Error, heard.States);
@@ -791,7 +799,7 @@ public sealed class ClipPreviewTests
 
         preview.Play(Line(@"C:\clips\a.mp3"));
         heard.WaitForCount(PreviewState.Playing);
-        player.SetAllModes(ClipPreview.ModeStopped);
+        player.SetAllModes(PreviewTrackState.Stopped);
         heard.WaitForCount(PreviewState.Ended);
         AssertThreadGone(preview);
 
@@ -857,7 +865,7 @@ public sealed class ClipPreviewTests
         preview.Play(Line(@"\\?\C:\clips\a b.mp3"));
         heard.WaitForCount(PreviewState.Playing);
 
-        Assert.StartsWith("open \"C:\\clips\\a b.mp3\" type mpegvideo alias ", player.Commands[0], StringComparison.Ordinal);
+        Assert.StartsWith("open C:\\clips\\a b.mp3 as ", player.Commands[0], StringComparison.Ordinal);
     }
 
     [Fact]

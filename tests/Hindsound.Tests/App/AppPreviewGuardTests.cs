@@ -194,15 +194,23 @@ public sealed class AppPreviewGuardTests : IDisposable
 
         public IReadOnlyList<string> Commands => [.. _commands];
 
-        public int Send(string command)
+        public int Open(string path, string track) => Record($"open {path} as {track}");
+
+        public int Play(string track) => Record("play " + track);
+
+        public int Stop(string track) => Record("stop " + track);
+
+        public int Close(string track) => Record("close " + track);
+
+        private int Record(string command)
         {
             _commands.Enqueue(command);
             return 0;
         }
 
-        public int ModeOf(string alias, out int mode)
+        public int StateOf(string alias, out PreviewTrackState mode)
         {
-            mode = ClipPreview.ModePlaying;
+            mode = PreviewTrackState.Playing;
             return 0;
         }
 

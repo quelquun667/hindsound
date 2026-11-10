@@ -11,6 +11,7 @@ namespace Hindsound.Tests.App;
 /// The entry point installs the Windows layer, and the app asks the desktop parts it is given: nothing else fails if either
 /// is left out, because the test assembly installs the layer itself and every other test hands its own fakes.
 /// </summary>
+[Collection("UiLoop")]
 public class PlatformWiringTests
 {
     private const BindingFlags Hidden = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public;
@@ -44,6 +45,7 @@ public class PlatformWiringTests
         Assert.NotNull(PlatformDefaults.DeviceWatcher);
         Assert.NotNull(PlatformDefaults.ProcessSnapshot);
         Assert.NotNull(PlatformDefaults.RunKey);
+        Assert.NotNull(PlatformDefaults.LaunchPath);
         Assert.NotNull(PlatformDefaults.Hotkeys);
         Assert.NotNull(PlatformDefaults.UpdateNetwork);
     }
@@ -67,16 +69,22 @@ public class PlatformWiringTests
             return coversScreen(screen);
         }
 
-        public ScreenInfo ActiveScreen()
+        public ScreenInfo? ActiveScreen()
         {
             Asked.Add("active");
             return Active;
         }
 
-        public ScreenInfo CursorScreen()
+        public ScreenInfo? CursorScreen()
         {
             Asked.Add("cursor");
             return Cursor;
+        }
+
+        public ScreenInfo PrimaryScreen()
+        {
+            Asked.Add("primary");
+            return Active;
         }
     }
 

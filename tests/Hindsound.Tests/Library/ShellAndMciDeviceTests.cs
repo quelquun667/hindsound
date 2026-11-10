@@ -140,7 +140,9 @@ public sealed class ShellAndMciDeviceTests : IDisposable
             try
             {
                 Assert.Equal(0, player.ModeOf(Alias, out var mode));
-                Assert.Equal(ClipPreview.ModeStopped, mode);
+                Assert.Equal(MciPreviewPlayer.ModeStopped, mode);
+                Assert.Equal(0, player.StateOf(Alias, out var state));
+                Assert.Equal(PreviewTrackState.Stopped, state);
             }
             finally
             {

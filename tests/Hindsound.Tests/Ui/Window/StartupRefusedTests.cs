@@ -11,11 +11,11 @@ public sealed class StartupRefusedTests
 {
     private sealed class RefusingKey : IRunKey
     {
-        public string? GetValue(string name) => null;
+        public RunEntry State(string? program) => RunEntry.None;
 
-        public void SetValue(string name, string value) => throw new UnauthorizedAccessException();
+        public void Enable(string program) => throw new UnauthorizedAccessException();
 
-        public void DeleteValue(string name) => throw new UnauthorizedAccessException();
+        public void Disable() => throw new UnauthorizedAccessException();
     }
 
     private sealed class RefusingBackend(AppSettings settings, FakeHost host) : ISettingsBackend

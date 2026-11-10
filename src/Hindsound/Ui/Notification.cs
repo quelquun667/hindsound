@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Hindsound.App;
 
 namespace Hindsound.Ui;
 
@@ -7,7 +8,7 @@ namespace Hindsound.Ui;
 /// The notification: one layered window, created on first use, replaced in place, never activated. It grows out of the
 /// screen edge and shows part of the bitmap, so nothing crosses onto a neighbouring screen.
 /// </summary>
-internal sealed unsafe class Notification : IDisposable
+internal sealed unsafe class Notification : INotificationView
 {
     private const string ClassName = "HindsoundNotification";
     private const int EnterMs = 140, BarsMs = 200, HoldEndMs = EnterMs + 2600, TotalMs = HoldEndMs + 180;
@@ -31,6 +32,12 @@ internal sealed unsafe class Notification : IDisposable
 
     /// <summary>What is shown now, or null.</summary>
     public NotificationContent? Showing { get; private set; }
+
+    /// <summary>Drawn where no screen is, for a test or a probe: see <see cref="NotificationPlacement.For"/>.</summary>
+    public bool Offscreen { get; init; }
+
+    void INotificationView.Present(NotificationContent content, NotificationSpot spot, uint accent) =>
+        Present(content, NotificationPlacement.For(spot, Offscreen), accent);
 
     public void Present(NotificationContent content, NotificationPlacement placement, uint accent)
     {

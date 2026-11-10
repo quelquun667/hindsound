@@ -14,7 +14,7 @@ public class PortableBoundaryTests
     private static readonly string[] WindowsTypes =
     [
         "Hindsound.Ui.Native", "Hindsound.Ui.FontSpec", "Hindsound.Ui.FontFaces", "Hindsound.Ui.GdiFonts", "Hindsound.Ui.TextEngine",
-        "Hindsound.Ui.TextPainter", "Hindsound.Ui.TrayPresence", "Hindsound.Ui.TrayAddRetry", "Hindsound.Ui.TrayIcon", "Hindsound.Ui.UiLoop",
+        "Hindsound.Ui.TextPainter", "Hindsound.Ui.TrayPresence", "Hindsound.Ui.TrayIcon", "Hindsound.Ui.UiLoop",
         "Hindsound.Ui.Notification", "Hindsound.Ui.NotificationBitmap", "Hindsound.Ui.ClipboardFiles", "Hindsound.Ui.ConfirmSound",
         "Hindsound.Ui.ForegroundWindow", "Hindsound.Ui.ExplorerFolderShell", "Hindsound.Ui.NotificationPlacement",
         "Hindsound.Ui.Window.GdiCanvas", "Hindsound.Ui.Window.PngFile", "Hindsound.Ui.Window.WindowNative", "Hindsound.Ui.Window.SettingsWindow",
@@ -24,9 +24,11 @@ public class PortableBoundaryTests
         "Hindsound.Settings.RegistryRunKey",
         "Hindsound.Updates.WinHttpTransport",
         "Hindsound.Library.MciPreviewPlayer",
-        "Hindsound.App.HindsoundApp", "Hindsound.App.Program", "Hindsound.App.WindowLibrary", "Hindsound.App.NotificationDump",
+        "Hindsound.App.Program", "Hindsound.App.NotificationDump",
         "Hindsound.App.WindowsPlatform", "Hindsound.App.WindowsScreens", "Hindsound.App.WindowsQuietState", "Hindsound.App.WindowsConfirmSound",
-        "Hindsound.App.ShellFileOpener", "Hindsound.App.WindowsProcessMeter",
+        "Hindsound.App.ShellFileOpener", "Hindsound.App.WindowsProcessMeter", "Hindsound.App.WindowsShell", "Hindsound.App.WindowsSessionEnd",
+        "Hindsound.App.WindowsClipboard", "Hindsound.App.WasapiAudioChoices", "Hindsound.App.WindowsSettingsProbe",
+        "Hindsound.App.WindowsInstanceChannel", "Hindsound.Settings.IRunKeyValues",
     ];
 
     private static readonly Assembly Core = typeof(PlatformDefaults).Assembly;

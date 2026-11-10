@@ -13,6 +13,7 @@ public class PathSitesTests
     private static readonly Dictionary<string, (int Count, string Compares)> Allowed = new()
     {
         ["App/FullscreenPolicy.cs"] = (1, "a setting value"),
+        ["App/HindsoundApp.cs"] = (3, "executable names, a setting value, and the canary of the probe in the lines of the log"),
         ["App/SettingsMapping.cs"] = (3, "setting values, and the default folder on Windows only"),
         ["Audio/AudioEngine.cs"] = (4, "executable names and device ids"),
         ["Audio/ProcessSnapshot.cs"] = (2, "executable names"),
@@ -26,7 +27,6 @@ public class PathSitesTests
         ["Library/LibraryStore.cs"] = (1, "the name of a collection"),
         ["Library/PathRules.cs"] = (2, "the definition of the comparer of paths"),
         ["Settings/AppSettings.cs"] = (2, "option values and the microphone id"),
-        ["Settings/StartupRegistration.cs"] = (1, "a value of the Run key of Windows"),
         ["Ui/Window/SettingsEditor.cs"] = (6, "gestures, device ids and tags of a template"),
         ["Ui/Window/WaveView.cs"] = (2, "executable names"),
         ["Ui/Window/Widgets.cs"] = (1, "option values"),

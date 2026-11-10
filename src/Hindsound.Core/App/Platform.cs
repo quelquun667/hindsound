@@ -27,6 +27,22 @@ internal static class PlatformDefaults
     /// <summary>The transport of a real update check, over the network.</summary>
     public static Func<IUpdateTransport>? UpdateNetwork { get; set; }
 
+    /// <summary>The desktop as the app reads it: the screens, the quiet state, the sound, the opener, the meter.</summary>
+    public static Func<DesktopParts>? Desktop { get; set; }
+
+    /// <summary>The loop, the notification, the icon, the window and the rest the running app shows itself through.</summary>
+    public static Func<IAppShell>? Shell { get; set; }
+
+    /// <summary>
+    /// The path a person launches the app by, when that is not the running executable: an AppImage runs from a temporary mount
+    /// that changes on every launch, and the file to start again (and to replace on an update) is the image itself.
+    /// Null, or a platform that gives none, means the running executable.
+    /// </summary>
+    public static Func<string?>? LaunchPath { get; set; }
+
+    /// <summary>The program a startup entry starts, and the folder an update replaces files in.</summary>
+    public static string? ResolveLaunchPath() => LaunchPath?.Invoke() is { Length: > 0 } path ? path : Environment.ProcessPath;
+
     /// <summary>A new one from <paramref name="make"/>. Without a platform layer there is nothing to fall back on.</summary>
     public static T Make<T>(Func<T>? make, string what) =>
         make is null ? throw new InvalidOperationException($"No platform layer gives {what}.") : make();
@@ -44,11 +60,14 @@ internal interface IScreens
     /// <summary>Whether the active window covers <paramref name="screen"/>, which need not be the one it is on.</summary>
     bool ForegroundCovers(ScreenInfo screen);
 
-    /// <summary>The screen of the active window.</summary>
-    ScreenInfo ActiveScreen();
+    /// <summary>The screen of the active window; null when the system does not say (Wayland keeps it to itself).</summary>
+    ScreenInfo? ActiveScreen();
 
-    /// <summary>The screen under the mouse pointer.</summary>
-    ScreenInfo CursorScreen();
+    /// <summary>The screen under the mouse pointer; null when the system does not say.</summary>
+    ScreenInfo? CursorScreen();
+
+    /// <summary>The main screen, always known: what the app falls back on when the other two are not.</summary>
+    ScreenInfo PrimaryScreen();
 }
 
 /// <summary>What the system says about the user's availability: presentation, full-screen game, quiet hours.</summary>

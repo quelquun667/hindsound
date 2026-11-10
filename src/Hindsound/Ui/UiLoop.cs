@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
+using Hindsound.App;
 
 namespace Hindsound.Ui;
 
@@ -7,7 +8,7 @@ namespace Hindsound.Ui;
 /// The message loop and its one hidden top-level window. Top-level, not message-only: only those receive the
 /// TaskbarCreated broadcast (Explorer restarted, the tray icon must come back) and the end of the Windows session.
 /// </summary>
-internal sealed unsafe class UiLoop : IDisposable
+internal sealed unsafe class UiLoop : IAppLoop
 {
     public const uint TrayCallbackMessage = Native.WM_APP + 3;
 
@@ -121,6 +122,9 @@ internal sealed unsafe class UiLoop : IDisposable
 
     /// <summary>Ends <see cref="Run"/>. Call it on the loop's thread.</summary>
     public void Quit() => Native.PostQuitMessage(0);
+
+    /// <summary>Whether the active window is this one, as it is while the menu of the tray icon is open.</summary>
+    public bool InFront() => Native.GetForegroundWindow() == Hwnd;
 
     public void Run()
     {

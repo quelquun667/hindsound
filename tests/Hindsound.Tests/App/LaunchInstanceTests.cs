@@ -25,4 +25,21 @@ public class LaunchInstanceTests
         var app = lines.FindIndex(line => line.Contains("new HindsoundApp(", StringComparison.Ordinal));
         Assert.True(app > take, "the instance is taken before the app is built");
     }
+
+    [Fact]
+    public void Main_hands_the_instance_it_took_to_the_app_so_that_a_second_launch_can_wake_it()
+    {
+        var folder = new DirectoryInfo(AppContext.BaseDirectory);
+        while (folder is not null && !File.Exists(Path.Combine(folder.FullName, "src", "Hindsound", "App", "Program.cs")))
+        {
+            folder = folder.Parent;
+        }
+
+        Assert.NotNull(folder);
+
+        var lines = File.ReadAllLines(Path.Combine(folder.FullName, "src", "Hindsound", "App", "Program.cs")).Select(line => line.Trim()).ToList();
+        var app = lines.Where(line => line.Contains("new HindsoundApp(", StringComparison.Ordinal)).ToList();
+        Assert.Single(app);
+        Assert.Contains("instance: instance", app[0], StringComparison.Ordinal);
+    }
 }

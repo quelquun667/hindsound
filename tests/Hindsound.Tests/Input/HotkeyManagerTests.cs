@@ -5,7 +5,7 @@ namespace Hindsound.Tests.Input;
 
 public class HotkeyManagerTests
 {
-    private sealed class FakeNative : IHotkeyNative
+    private sealed class FakeNative : IHotkeyRegistrar
     {
         public HashSet<string> Refused { get; } = [];
 

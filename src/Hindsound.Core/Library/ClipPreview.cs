@@ -17,14 +17,33 @@ public enum PreviewState
 /// <summary>What the preview is doing, and for which line of the library.</summary>
 internal readonly record struct PreviewChange(PreviewState State, ClipGroup? Clip);
 
-/// <summary>What MCI is to the preview, so that a test plays no sound. All of it is called on one thread, the one of the preview.</summary>
+/// <summary>Where an open track of the preview stands, as the player reads it.</summary>
+internal enum PreviewTrackState
+{
+    /// <summary>Anything else: opening, paused, seeking.</summary>
+    Other,
+    Stopped,
+    Playing,
+}
+
+/// <summary>
+/// What plays the files of the preview, so that a test plays no sound. Each track is a file opened under a name the preview
+/// picks. Every verb answers 0, or the player's own error code. All of it is called on one thread, the one of the preview.
+/// </summary>
 internal interface IPreviewPlayer
 {
-    /// <summary>One MCI command string. Answers 0, or the MCI error.</summary>
-    int Send(string command);
+    /// <summary>Opens the file at <paramref name="path"/> as the track <paramref name="track"/>, without starting it.</summary>
+    int Open(string path, string track);
 
-    /// <summary>The state of an open alias, one of the <c>MCI_MODE_</c> numbers. Answers 0, or the MCI error.</summary>
-    int ModeOf(string alias, out int mode);
+    int Play(string track);
+
+    int Stop(string track);
+
+    /// <summary>Stops the track if it plays, and lets go of its file.</summary>
+    int Close(string track);
+
+    /// <summary>Where the open track stands.</summary>
+    int StateOf(string track, out PreviewTrackState state);
 
     /// <summary>Waits for <paramref name="wake"/> or the end of the delay, and answers what Windows sends the thread meanwhile.</summary>
     void Wait(WaitHandle wake, int milliseconds);
@@ -32,10 +51,10 @@ internal interface IPreviewPlayer
 
 /// <summary>
 /// Plays a line of the library, without copying the file. The thread lives only while something plays: with nothing playing
-/// there is no thread, no timer and no handle. A file name can hold a first name, so the log gets MCI codes and the type of
+/// there is no thread, no timer and no handle. A file name can hold a first name, so the log gets error codes and the type of
 /// an error, never a path or a message.
 /// </summary>
-/// <param name="player">MCI, or a fake.</param>
+/// <param name="player">The platform's player, or a fake.</param>
 /// <param name="changed">
 /// Told of every state, in order, on the thread of the preview. A state published before <see cref="Dispose"/> can still be
 /// on its way in while Dispose runs, or after it has returned: Dispose never waits for the listener. What a listener passes on
@@ -47,9 +66,6 @@ internal sealed class ClipPreview(IPreviewPlayer player, Action<PreviewChange> c
 {
     public const string CantPlayText = "Can't play this file";
     public const string CanEndUpInClipText = "Playback can end up in your next clip on this setup.";
-
-    internal const int ModeStopped = 525;
-    internal const int ModePlaying = 526;
 
     /// <summary>How often the end is looked for. It only decides how late the state says it, not when the sound ends.</summary>
     internal const int PollMs = 250;
@@ -341,7 +357,7 @@ internal sealed class ClipPreview(IPreviewPlayer player, Action<PreviewChange> c
     private void Open(ClipFile file, List<Track> tracks)
     {
         var alias = "hindsound_preview_" + Interlocked.Increment(ref s_lastAlias);
-        var code = player.Send($"open \"{ClipFolders.Key(file.Path)}\" type mpegvideo alias {alias}");
+        var code = player.Open(ClipFolders.Key(file.Path), alias);
         if (code == 0)
         {
             tracks.Add(new Track(alias));
@@ -349,7 +365,7 @@ internal sealed class ClipPreview(IPreviewPlayer player, Action<PreviewChange> c
         else
         {
             // A line whose other track opens still plays: one of the two can have been deleted on its own.
-            journal?.Invoke($"preview: a track can't be opened (MCI error {code})");
+            journal?.Invoke($"preview: a track can't be opened (error {code})");
         }
     }
 
@@ -359,7 +375,7 @@ internal sealed class ClipPreview(IPreviewPlayer player, Action<PreviewChange> c
         var started = 0;
         foreach (var track in tracks)
         {
-            var code = player.Send("play " + track.Alias);
+            var code = player.Play(track.Alias);
             if (code == 0)
             {
                 started++;
@@ -367,7 +383,7 @@ internal sealed class ClipPreview(IPreviewPlayer player, Action<PreviewChange> c
             else
             {
                 track.Fail();
-                journal?.Invoke($"preview: a track can't be started (MCI error {code})");
+                journal?.Invoke($"preview: a track can't be started (error {code})");
             }
         }
 
@@ -421,17 +437,17 @@ internal sealed class ClipPreview(IPreviewPlayer player, Action<PreviewChange> c
 
     private void Look(Track track, long elapsedMs)
     {
-        var code = player.ModeOf(track.Alias, out var mode);
+        var code = player.StateOf(track.Alias, out var state);
         if (code != 0)
         {
             track.Fail();
-            journal?.Invoke($"preview: a track can't be followed (MCI error {code})");
+            journal?.Invoke($"preview: a track can't be followed (error {code})");
         }
-        else if (mode == ModePlaying)
+        else if (state == PreviewTrackState.Playing)
         {
             track.SeenPlaying = true;
         }
-        else if (mode == ModeStopped && (track.SeenPlaying || elapsedMs >= StartGraceMs))
+        else if (state == PreviewTrackState.Stopped && (track.SeenPlaying || elapsedMs >= StartGraceMs))
         {
             track.Finished = true;
         }
@@ -443,10 +459,10 @@ internal sealed class ClipPreview(IPreviewPlayer player, Action<PreviewChange> c
         {
             try
             {
-                var code = player.Send("close " + track.Alias);
+                var code = player.Close(track.Alias);
                 if (code != 0)
                 {
-                    journal?.Invoke($"preview: a track can't be closed (MCI error {code})");
+                    journal?.Invoke($"preview: a track can't be closed (error {code})");
                 }
             }
             catch (Exception ex)

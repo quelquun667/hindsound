@@ -7,9 +7,13 @@ namespace Hindsound.Library;
 /// <summary>
 /// MCI itself. The <c>mpegvideo</c> type goes through DirectShow, which reads MP3 and WAV alike and plays on the default output.
 /// The mode is read as a number: the words of <c>status mode</c> come from a string table of Windows, which can be translated.
+/// Each verb of the preview is one MCI command string, and a track is an MCI alias.
 /// </summary>
 internal sealed unsafe partial class MciPreviewPlayer : IPreviewPlayer
 {
+    internal const int ModeStopped = 525;
+    internal const int ModePlaying = 526;
+
     private const int InvalidDeviceName = 263;
 
     private const uint MCI_STATUS = 0x0814;
@@ -23,7 +27,54 @@ internal sealed unsafe partial class MciPreviewPlayer : IPreviewPlayer
     // Enough for what a graph posts itself, and a thread that never stops being posted to still looks at its wake event.
     private const int MostMessagesPerWait = 64;
 
-    public int Send(string command) => (int)mciSendStringW(command, null, 0, 0);
+    /// <summary>Reads the mode of an alias as a number; answers 0, or the MCI error.</summary>
+    internal delegate int ModeReader(string alias, out int mode);
+
+    private readonly Func<string, int> _send;
+    private readonly ModeReader _readMode;
+
+    public MciPreviewPlayer()
+        : this(null)
+    {
+    }
+
+    /// <param name="send">Where the command strings go; MCI itself when null. A test hands its own, to read them.</param>
+    /// <param name="readMode">Where the mode of a track is read; MCI itself when null.</param>
+    internal MciPreviewPlayer(Func<string, int>? send, ModeReader? readMode = null)
+    {
+        _send = send ?? SendToMci;
+        _readMode = readMode ?? ModeOf;
+    }
+
+    /// <summary>One MCI command string. Answers 0, or the MCI error.</summary>
+    public int Send(string command) => _send(command);
+
+    public int Open(string path, string track) => Send($"open \"{path}\" type mpegvideo alias {track}");
+
+    public int Play(string track) => Send("play " + track);
+
+    public int Stop(string track) => Send("stop " + track);
+
+    public int Close(string track) => Send("close " + track);
+
+    public int StateOf(string track, out PreviewTrackState state)
+    {
+        var code = _readMode(track, out var mode);
+        state = StateOfMode(mode);
+        return code;
+    }
+
+    /// <summary>The state of one of the <c>MCI_MODE_</c> numbers.</summary>
+    internal static PreviewTrackState StateOfMode(int mode) => mode switch
+    {
+        ModePlaying => PreviewTrackState.Playing,
+        ModeStopped => PreviewTrackState.Stopped,
+        _ => PreviewTrackState.Other,
+    };
+
+    private static int SendToMci(string command) => (int)mciSendStringW(command, null, 0, 0);
+
+    /// <summary>The state of an open alias, one of the <c>MCI_MODE_</c> numbers. Answers 0, or the MCI error.</summary>
 
     public int ModeOf(string alias, out int mode)
     {

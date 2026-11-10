@@ -199,7 +199,7 @@ internal sealed class FakeBackend(ScreenRig rig) : ISettingsBackend
 }
 
 /// <summary>Like RegisterHotKey: a combination already held, or held by "another app", is refused.</summary>
-internal sealed class FakeHotkeys : IHotkeyNative
+internal sealed class FakeHotkeys : IHotkeyRegistrar
 {
     public HashSet<(uint Mods, uint Key)> OtherApps { get; } = [];
 

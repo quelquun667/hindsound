@@ -21,7 +21,7 @@ public class NoHotkeysTests
         using var real = AppOptions.Parse([]).NewHotkeyLayer();
 
         Assert.IsType<UnregisteredHotkeys>(none);
-        Assert.IsType<Win32HotkeyNative>(real);
+        Assert.IsType<Win32HotkeyNative>(Assert.IsType<KeyByKeyHotkeys>(real).Registrar);
     }
 
     [Fact]
