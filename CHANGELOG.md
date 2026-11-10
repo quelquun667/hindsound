@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-10
+
 ### Added
 
 - `Play` in `Library` plays the chosen clip on your default output, and turns into `Stop` while it plays. A double click on a line plays it too.
