@@ -99,6 +99,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
     // The updater. Null for a test run, a copy that was not installed, or a launch with any option but --update-failed.
     private readonly bool _updaterMayRun;
+    private readonly DesktopParts _desktop;
     private UpdateFlow? _updates;
     private string _updateWhy = UpdateWiring.TestRun;
     private bool _quitChosen;
@@ -108,8 +109,10 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
 
     /// <param name="updaterMayRun">The raw command line was empty, or held only what Setup passes: see <see cref="AppOptions.UpdaterMayRun"/>.</param>
-    public HindsoundApp(AppOptions options, Journal journal, bool updaterMayRun = false)
+    /// <param name="desktop">The desktop of the platform: the screens, the quiet state, the sound, the opener, the meter. By default, Windows's.</param>
+    public HindsoundApp(AppOptions options, Journal journal, bool updaterMayRun = false, DesktopParts? desktop = null)
     {
+        _desktop = desktop ?? WindowsPlatform.Desktop();
         _options = options;
         _journal = journal;
         _updaterMayRun = updaterMayRun;
@@ -159,7 +162,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     {
         UiErrors.Handler = ex => _journal.Write("error: " + ex);
         LoadSettings();
-        _journal.Write($"{StartedLine} {_store.Path} ({_store.LastStatus}), {Journal.Memory()}");
+        _journal.Write($"{StartedLine} {_store.Path} ({_store.LastStatus}), {_desktop.Meter.Memory()}");
         if (_options.NoClipboard)
         {
             _journal.Write("clipboard: never touched in this run (--no-clipboard), whatever the settings say");
@@ -200,7 +203,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         }
 
         StartHotkeys();
-        _journal.Write($"ready, before the capture: {Journal.Memory()}");
+        _journal.Write($"ready, before the capture: {_desktop.Meter.Memory()}");
         StartEngine();
 
         // Only when there was no settings file: the file now exists, so this happens once.
@@ -581,7 +584,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
         // The window may have changed something while the engine was starting.
         ApplyEngineOptions();
-        _journal.Write($"capture started: {status.Activity}, system {status.SystemDeviceName ?? "(none)"}, mic capturing {status.MicCapturing}, own sounds excluded {status.OwnSoundsExcluded}, {Journal.Memory()}");
+        _journal.Write($"capture started: {status.Activity}, system {status.SystemDeviceName ?? "(none)"}, mic capturing {status.MicCapturing}, own sounds excluded {status.OwnSoundsExcluded}, {_desktop.Meter.Memory()}");
         if (_options.SelfTestSave)
         {
             _loop.After((int)(_options.SelfTestDelaySeconds * 1000), RunSelfTestPress);
@@ -673,7 +676,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     private void SaveClip(TimeSpan requested)
     {
         var click = ClickStandingIn;
-        SaveClip(requested, click is { } standing ? standing.AppName : ForegroundWindow.Read().AppName, click?.Screen);
+        SaveClip(requested, click is { } standing ? standing.AppName : _desktop.Screens.Foreground().AppName, click?.Screen);
     }
 
     private void SaveClip(TimeSpan requested, string? appName, ScreenInfo? screen) =>
@@ -768,7 +771,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         // What is true until the copy has been tried: the clip is in its folder.
         _lastClipNotice = NotificationStates.ForClip(result, _lastRequested, copyWanted: false, copied: false, Accent);
         _window?.Screen.SetLastClip(LastClipShown());
-        _journal.Write($"clip saved: {string.Join(", ", result.Paths)}, {result.Duration.TotalSeconds:F2} s of {outcome.Request.Requested.TotalSeconds:F0} s, {result.SizeBytes} bytes, silent {result.IsSilent}, rescued {result.Rescued}, fell back to WAV {result.FellBackToWav}, {Journal.Memory()}");
+        _journal.Write($"clip saved: {string.Join(", ", result.Paths)}, {result.Duration.TotalSeconds:F2} s of {outcome.Request.Requested.TotalSeconds:F0} s, {result.SizeBytes} bytes, silent {result.IsSilent}, rescued {result.Rescued}, fell back to WAV {result.FellBackToWav}, {_desktop.Meter.Memory()}");
         if (outcome.Request.CopyWanted)
         {
             _copying++;
@@ -853,7 +856,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         _journal.Write($"presentation: state {state}, covers screen {covers}: {decision}");
         if (decision.PlaySound)
         {
-            _journal.Write($"confirmation sound started: {ConfirmSound.Play()}");
+            _journal.Write($"confirmation sound started: {_desktop.Sound.Play()}");
         }
 
         if (decision.ShowOverlay)
@@ -896,9 +899,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
             return NowMs < _pretendGameUntilMs ? (UserNotificationState.RunningD3dFullScreen, true) : (UserNotificationState.AcceptsNotifications, false);
         }
 
-        int raw;
-        var state = Native.SHQueryUserNotificationState(&raw) == 0 ? (UserNotificationState)raw : UserNotificationState.Unknown;
-        return (state, ForegroundWindow.ForegroundCovers());
+        var state = _desktop.Quiet.Read();
+        return (state, _desktop.Screens.ForegroundCovers());
     }
 
     private void Present(NotificationContent content, bool clickThrough, ScreenInfo? screen = null)
@@ -969,8 +971,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
     private void PresentNow(NotificationContent content, bool clickThrough, ScreenInfo? clicked = null)
     {
-        var screen = clicked ?? ClickStandingIn?.Screen ?? ForegroundWindow.ActiveScreen();
-        var covers = ForegroundWindow.CoversScreen(screen);
+        var screen = clicked ?? ClickStandingIn?.Screen ?? _desktop.Screens.ActiveScreen();
+        var covers = _desktop.Screens.ForegroundCovers(screen);
         var area = NotificationPlacement.AreaOn(screen, covers);
         var dpi = screen.Dpi;
         _journal.Write($"notification area: {area.Left},{area.Top},{area.Right},{area.Bottom} at {dpi} dpi, foreground covers the screen {covers}{(_options.Offscreen ? ", drawn off screen instead" : string.Empty)}");
@@ -984,7 +986,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         }
 
         _journal.Write($"notification {content.Kind}: {content.Title} / {content.Body}");
-        _cpuBeforeNotification = Journal.CpuMilliseconds();
+        _cpuBeforeNotification = _desktop.Meter.CpuMilliseconds();
         var leftEdge = string.Equals(_settings.General.NotificationPosition, "left", StringComparison.OrdinalIgnoreCase);
         _notification.Present(content, new NotificationPlacement(area, dpi, clickThrough, leftEdge), Accent);
         _notices.Shown(content);
@@ -1005,7 +1007,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     {
         if (_options.SelfTestSave)
         {
-            _journal.Write($"notification left the screen: {Journal.CpuMilliseconds() - _cpuBeforeNotification:F0} ms of process CPU while it was up (capture included), {Journal.Memory()}");
+            _journal.Write($"notification left the screen: {_desktop.Meter.CpuMilliseconds() - _cpuBeforeNotification:F0} ms of process CPU while it was up (capture included), {_desktop.Meter.Memory()}");
         }
 
         _notices.Finished();
@@ -1119,7 +1121,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     private void OnTrayMenu(nuint wParam)
     {
         var (click, command) = TrayMenu.ReadThenShow(
-            () => new TrayClick(ForegroundWindow.Read().AppName, ForegroundWindow.CursorScreen(), NowMs),
+            () => new TrayClick(_desktop.Screens.Foreground().AppName, _desktop.Screens.CursorScreen(), NowMs),
             () => AskTrayMenu(wParam));
         _lastMenuClick = click;
         _journal.Write($"tray menu: {command}, app name known {click.AppName is not null}, screen of the click {click.Screen.Monitor.Left},{click.Screen.Monitor.Top},{click.Screen.Monitor.Right},{click.Screen.Monitor.Bottom}");
@@ -1342,7 +1344,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         var firstRun = target == Section.FirstRun;
 
         // The screen the user is looking at, whatever the active window is: a game on the first one, a click on the second.
-        var screen = ForegroundWindow.CursorScreen();
+        var screen = _desktop.Screens.CursorScreen();
         var window = new SettingsWindow(_settings, this, ReadMicPeak, firstRun, _options.Offscreen, screen, OnSettingsClosed);
         _window = window;
 
@@ -1362,7 +1364,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         // On the way back: a click activates the window first, so a file edited by hand meanwhile is read before that
         // click changes anything; and an app started while the window was in the background gets offered.
         window.Activated = OnWindowActivated;
-        _journal.Write($"settings window opened on {target}, first launch {firstRun}, on the screen of the cursor {screen.Monitor.Left},{screen.Monitor.Top},{screen.Monitor.Right},{screen.Monitor.Bottom}{(_options.Offscreen ? " (drawn off screen instead)" : string.Empty)}, {Journal.Memory()}");
+        _journal.Write($"settings window opened on {target}, first launch {firstRun}, on the screen of the cursor {screen.Monitor.Left},{screen.Monitor.Top},{screen.Monitor.Right},{screen.Monitor.Bottom}{(_options.Offscreen ? " (drawn off screen instead)" : string.Empty)}, {_desktop.Meter.Memory()}");
         if (_options.Offscreen && firstRun)
         {
             _loop.After(ProbeStepMs, () => _window?.ProbePicture(Path.ChangeExtension(_journal.Path, ".firstrun.png")));
@@ -1399,7 +1401,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         // A restart only ever follows a card the user is looking at.
         _updates?.CardClosed();
         _saveThenUpdate.Stop();
-        _journal.Write("settings window closed, " + Journal.Memory());
+        _journal.Write("settings window closed, " + _desktop.Meter.Memory());
 
         // The window's objects are small and many: a full collection a moment later gives them back.
         (AfterInstead ?? _loop.After)(SnapshotReleaseDelayMs, ReleaseWindowMemory);
@@ -1495,7 +1497,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     {
         var gdi = WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0);
         var user = WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1);
-        _journal.Write($"probe: before opening, {Journal.Memory()}, GDI objects {gdi}, USER objects {user}");
+        _journal.Write($"probe: before opening, {_desktop.Meter.Memory()}, GDI objects {gdi}, USER objects {user}");
 
         // The steps below walk the settings from their first page.
         OpenWindow(Section.Hotkeys);
@@ -1547,7 +1549,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
             }
 
             _journal.Write($"probe: reached {string.Join(" -> ", seen)}");
-            _journal.Write($"probe: open, {Journal.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, {Journal.CpuMilliseconds():F0} ms of CPU so far");
+            _journal.Write($"probe: open, {_desktop.Meter.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, {_desktop.Meter.CpuMilliseconds():F0} ms of CPU so far");
 
             // The wave of the Now page is made only once the page runs: the measure after closing has to follow a window that had one.
             window.Screen.ShowSection(Section.Now);
@@ -1556,7 +1558,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
         void CloseOnNow()
         {
-            _journal.Write($"probe: {ProbeNowMs} ms on Now, {Journal.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
+            _journal.Write($"probe: {ProbeNowMs} ms on Now, {_desktop.Meter.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
 
             ProbeLibrary(window, () =>
             {
@@ -1573,7 +1575,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
         void AfterClosing()
         {
-            _journal.Write($"probe: 10 s after closing, {Journal.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
+            _journal.Write($"probe: 10 s after closing, {_desktop.Meter.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
 
             // After the measures, which are of the app as it is: nothing is collected before them.
             GC.Collect();
@@ -1617,7 +1619,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
                 }
                 else
                 {
-                    _journal.Write($"probe: after the menu and {ProbeNowOpenings} openings on Now of {ProbeNowMs} ms each, {Journal.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
+                    _journal.Write($"probe: after the menu and {ProbeNowOpenings} openings on Now of {ProbeNowMs} ms each, {_desktop.Meter.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
                     _journal.Write($"probe: folder dialog usable {FolderPicker.SelfCheck()}");
                     RemoveProbeClips();
                     _loop.Quit();
@@ -1695,7 +1697,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
         void Measure()
         {
-            _journal.Write($"probe: Library, {_library?.Lines?.Lines.Count} lines, {_library?.Lines?.LeftOut} left out, names and lengths read in {NowMs - openedMs} ms (of files this probe wrote a moment before: not the time of a folder that was already there), {Journal.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
+            _journal.Write($"probe: Library, {_library?.Lines?.Lines.Count} lines, {_library?.Lines?.LeftOut} left out, names and lengths read in {NowMs - openedMs} ms (of files this probe wrote a moment before: not the time of a folder that was already there), {_desktop.Meter.Memory()}, GDI objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 0)}, USER objects {WindowNative.GetGuiResources(Native.GetCurrentProcess(), 1)}");
             if (!window.Screen.TabTo(SettingsScreen.ClipListId))
             {
                 Fail("the focus never reached the list");
@@ -1849,14 +1851,14 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
         void PlayToTheEnd()
         {
-            _journal.Write($"probe: preview, played then stopped, its thread gone, {Journal.Memory()}");
+            _journal.Write($"probe: preview, played then stopped, its thread gone, {_desktop.Meter.Memory()}");
             var from = NowMs;
             Key(Vk.Enter);
             Wait(
                 () => PreviewIs(PreviewState.Ended, null) && _library?.Preview?.WaitForEnd(0) == true,
                 () =>
                 {
-                    _journal.Write($"probe: preview, played to its end in {NowMs - from} ms for {ProbeSilenceMs} ms of silence, its thread gone, {Journal.Memory()}");
+                    _journal.Write($"probe: preview, played to its end in {NowMs - from} ms for {ProbeSilenceMs} ms of silence, its thread gone, {_desktop.Meter.Memory()}");
                     done();
                 },
                 "the silence never came to its end");
@@ -1906,8 +1908,6 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
     private void OpenWithShell(string target)
     {
-        const int largestShellError = 32;
-
         // Off screen nothing is ever shown, a folder least of all.
         if (_options.Offscreen)
         {
@@ -1915,10 +1915,9 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
             return;
         }
 
-        var result = Native.ShellExecuteW(0, null, target, null, null, Native.SW_SHOWNORMAL);
-        if (result <= largestShellError)
+        if (_desktop.Opener.Open(target) is { } error)
         {
-            _journal.Write($"could not open {target}: shell error {result}");
+            _journal.Write($"could not open {target}: {error}");
         }
     }
 
@@ -2025,14 +2024,14 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     // --selftest-update-check: the only run that reaches GitHub, for one GET of the manifest, with the memory around it.
     private void RunUpdateCheckSelfTest()
     {
-        _journal.Write($"update check selftest: before, {Journal.Memory()}, handles {HandleCount()}");
+        _journal.Write($"update check selftest: before, {_desktop.Meter.Memory()}, handles {HandleCount()}");
         _ = UpdatePass.Run(UpdateWiring.SelfTestCheck).ContinueWith(
             t => _loop.Post(() =>
             {
                 _journal.Write(t.IsCompletedSuccessfully
                     ? $"update check: {t.Result.Status} {t.Result.Transport.Status} {t.Result.Transport.Detail}"
                     : $"update check: failed with {t.Exception?.GetBaseException()}");
-                _journal.Write($"update check selftest: after, {Journal.Memory()}, handles {HandleCount()}");
+                _journal.Write($"update check selftest: after, {_desktop.Meter.Memory()}, handles {HandleCount()}");
                 AskToLeave();
             }),
             TaskScheduler.Default);
@@ -2150,7 +2149,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     // The same way in as a key press: from another thread, through the loop's queue.
     private void RunSelfTestPress()
     {
-        _journal.Write("selftest: press, " + Journal.Memory());
+        _journal.Write("selftest: press, " + _desktop.Meter.Memory());
         _ = Task.Run(() => _loop.Post(() => OnHotkey(HotkeyAction.SaveDefault)));
     }
 
@@ -2164,7 +2163,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         // An exe whose MP3 quietly became WAV is the failure this test exists to catch.
         var ok = outcome.Result is { } result && !result.Rescued && !result.FellBackToWav && (!outcome.Request.CopyWanted || copied);
         _exitCode = ok ? 0 : 1;
-        _journal.Write($"selftest: {(ok ? "PASS" : "FAIL")}, format asked {outcome.Request.Options.Format}, {Journal.Memory()}");
+        _journal.Write($"selftest: {(ok ? "PASS" : "FAIL")}, format asked {outcome.Request.Options.Format}, {_desktop.Meter.Memory()}");
 
         if (_options.SelfTestClipGone && outcome.Result is { } written)
         {
@@ -2345,7 +2344,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
             }
         }, "engine");
         Guard(() => _loop?.Dispose(), "window");
-        _journal.Write($"left, {Journal.Memory()}, {Journal.CpuMilliseconds():F0} ms of CPU in all");
+        _journal.Write($"left, {_desktop.Meter.Memory()}, {_desktop.Meter.CpuMilliseconds():F0} ms of CPU in all");
     }
 
     private void Guard(Action step, string what)

@@ -1,16 +1,5 @@
 namespace Hindsound.Ui;
 
-/// <summary>A screen, in physical pixels.</summary>
-/// <param name="Monitor">All of it.</param>
-/// <param name="Work">What the taskbar leaves.</param>
-/// <param name="Dpi">Its own DPI.</param>
-internal readonly record struct ScreenInfo(Native.RECT Monitor, Native.RECT Work, uint Dpi);
-
-/// <summary>What the active window looks like from outside.</summary>
-/// <param name="AppName">Its title, for <c>{app}</c>. Null if it has none, or if it says nothing about what the user was doing.</param>
-/// <param name="CoversMonitor">It covers its whole screen, and is not the desktop itself.</param>
-internal readonly record struct ForegroundInfo(string? AppName, bool CoversMonitor);
-
 /// <summary>
 /// Only reads the window manager: GetForegroundWindow, GetWindowText and the window's rectangle. No handle to the game's
 /// process, no hook, nothing injected.
@@ -87,7 +76,7 @@ internal static unsafe class ForegroundWindow
         className is "Progman" or "WorkerW" or "Shell_TrayWnd" or "Shell_SecondaryTrayWnd";
 
     /// <summary>At least the monitor's rectangle. A maximized window stops at the taskbar, so it does not count.</summary>
-    public static bool RectCovers(Native.RECT window, Native.RECT monitor) =>
+    public static bool RectCovers(ScreenRect window, ScreenRect monitor) =>
         window.Left <= monitor.Left && window.Top <= monitor.Top && window.Right >= monitor.Right && window.Bottom >= monitor.Bottom;
 
     private static string TitleOf(nint hwnd)
@@ -114,7 +103,7 @@ internal static unsafe class ForegroundWindow
         return Native.GetMonitorInfoW(monitor, &info) != 0 && Covers(hwnd, info.Monitor);
     }
 
-    private static bool Covers(nint hwnd, Native.RECT monitor)
+    private static bool Covers(nint hwnd, ScreenRect monitor)
     {
         if (IsDesktopClass(ClassOf(hwnd)))
         {

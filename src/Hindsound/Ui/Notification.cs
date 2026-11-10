@@ -3,27 +3,6 @@ using System.Runtime.InteropServices;
 
 namespace Hindsound.Ui;
 
-/// <summary>Where a notification goes.</summary>
-/// <param name="Area">The rectangle it sticks to, in physical pixels: see <see cref="AreaOn"/>.</param>
-/// <param name="Dpi">The DPI of that monitor.</param>
-/// <param name="ClickThrough">Clicks pass through to whatever is below: the active window covers the screen.</param>
-/// <param name="LeftEdge">Stuck to the left edge of the screen instead of the right one.</param>
-internal readonly record struct NotificationPlacement(Native.RECT Area, uint Dpi, bool ClickThrough, bool LeftEdge)
-{
-    /// <summary>The top of the tab: 30 % down the area.</summary>
-    public int Top => Area.Top + (int)Math.Round(Area.Height * 0.30);
-
-    /// <summary>
-    /// The work area, or a taskbar on that side would cover the tab. Over a full-screen window there is no taskbar to
-    /// avoid, and the tab sticks to the edge of the screen itself.
-    /// </summary>
-    public static Native.RECT AreaOn(ScreenInfo screen, bool foregroundCoversScreen) =>
-        foregroundCoversScreen ? screen.Monitor : screen.Work;
-
-    /// <summary>The left of the part of the tab that shows, from the edge it comes out of.</summary>
-    public int LeftWhenShowing(int visible) => LeftEdge ? Area.Left : Area.Right - visible;
-}
-
 /// <summary>
 /// The notification: one layered window, created on first use, replaced in place, never activated. It grows out of the
 /// screen edge and shows part of the bitmap, so nothing crosses onto a neighbouring screen.
@@ -257,24 +236,6 @@ internal sealed unsafe class Notification : IDisposable
         {
             UiErrors.Report(ex);
             return 0;
-        }
-    }
-}
-
-/// <summary>Where exceptions caught at the window procedures go.</summary>
-internal static class UiErrors
-{
-    public static Action<Exception>? Handler { get; set; }
-
-    public static void Report(Exception ex)
-    {
-        try
-        {
-            Handler?.Invoke(ex);
-        }
-        catch (Exception)
-        {
-            // Nothing left to tell.
         }
     }
 }

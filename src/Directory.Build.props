@@ -1,0 +1,8 @@
+<Project>
+
+  <!-- Hindsound.Core references NAudio.Lame, and Hindsound pulls a file out of the same package (Hindsound.csproj): one version for both. -->
+  <PropertyGroup>
+    <LameVersion>2.1.0</LameVersion>
+  </PropertyGroup>
+
+</Project>

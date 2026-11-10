@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 using Hindsound.Audio;
-using NAudio.CoreAudioApi;
 using NAudio.MediaFoundation;
 using NAudio.Wave;
 
@@ -140,7 +139,7 @@ public class ResamplerGuardTests
         {
             var stamp = start + (long)Math.Round(at * 1e7 / rate);
             clock.Ticks = stamp + (long)Math.Round(packet * 1e7 / rate);
-            pipeline.OnPacket(MemoryMarshal.AsBytes(input.AsSpan(at, packet)), AudioClientBufferFlags.None, 0, stamp);
+            pipeline.OnPacket(MemoryMarshal.AsBytes(input.AsSpan(at, packet)), PacketFlags.None, 0, stamp);
         }
 
         var around = (int)(At * 48000) - 500;
@@ -354,7 +353,7 @@ public class DriftCorrectionTests(Xunit.Abstractions.ITestOutputHelper output)
 
             var stamp = start + (long)Math.Round(delivered * 1e7 / actual);
             clock.Ticks = start + (long)Math.Round((delivered + packet.Length) * 1e7 / actual);
-            pipeline.OnPacket(MemoryMarshal.AsBytes(packet.AsSpan()), AudioClientBufferFlags.None, 0, stamp);
+            pipeline.OnPacket(MemoryMarshal.AsBytes(packet.AsSpan()), PacketFlags.None, 0, stamp);
             delivered += packet.Length;
         }
 

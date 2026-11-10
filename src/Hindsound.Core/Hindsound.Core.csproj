@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The code that calls no Windows API: capture timeline, export, library, settings, updates and the widgets of the window.
+    The Windows layer (Win32, GDI, WASAPI, the registry) is in the Hindsound project, which hands it in at start through
+    App/Platform.cs. Plain net10.0, so that this library also builds for Linux.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>Hindsound</RootNamespace>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- The library of the published exe: marked trimmable, the trimmer names the line of a trim warning in it, instead of one warning for the whole assembly. -->
+    <IsTrimmable>true</IsTrimmable>
+    <!-- A call that only Windows supports stops the build here, instead of failing at run time on Linux. -->
+    <WarningsAsErrors>$(WarningsAsErrors);CA1416</WarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Hindsound" />
+    <InternalsVisibleTo Include="Hindsound.Tests" />
+    <InternalsVisibleTo Include="Hindsound.Core.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- NAudio.Core only: NAudio.Wasapi is the Windows capture, used by the Hindsound project alone. -->
+    <PackageReference Include="NAudio.Core" Version="3.3.0" />
+    <PackageReference Include="NAudio.Lame" Version="$(LameVersion)" />
+  </ItemGroup>
+
+</Project>

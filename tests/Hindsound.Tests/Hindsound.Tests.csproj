@@ -12,11 +12,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Exact copies of the pixel grids of the logo: the design files stay out of the repository. -->
-    <None Include="Ui\TrayGrids\*.txt" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-
-  <ItemGroup>
     <!-- The tests run on pool threads, and each pool thread that calls user32 holds a USER object of the process until it ends. An
          idle pool thread ends by itself after 20 s: in 2 full runs out of 10, one or two ended during the 200 drawings of the text
          leak test, and its count of USER objects fell by as many. Kept alive, the pool threads leave that count to the code under test. -->
@@ -37,6 +32,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Helpers shared with Hindsound.Core.Tests, which holds them: they declare no test, so nothing runs twice. -->
+    <Compile Include="..\Hindsound.Core.Tests\CoreScan.cs" Link="Shared\CoreScan.cs" />
+    <Compile Include="..\Hindsound.Core.Tests\Export\TestSupport.cs" Link="Shared\TestSupport.cs" />
+    <Compile Include="..\Hindsound.Core.Tests\Updates\FakeTransport.cs" Link="Shared\FakeTransport.cs" />
+    <Compile Include="..\Hindsound.Core.Tests\Updates\TempFolder.cs" Link="Shared\TempFolder.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Hindsound.Core\Hindsound.Core.csproj" />
     <ProjectReference Include="..\..\src\Hindsound\Hindsound.csproj" />
   </ItemGroup>
 

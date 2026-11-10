@@ -39,6 +39,7 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        WindowsPlatform.Install();
         var options = AppOptions.Parse(args);
         var journal = new Journal(Journal.PathFor(options.SettingsPath));
         Ui.TextEngine.Log = journal.Write;
@@ -92,7 +93,7 @@ internal static class Program
         try
         {
             // The raw command line, not the options read from it: a typo in a test's options must not look like a real launch.
-            var code = new HindsoundApp(options, journal, AppOptions.UpdaterMayRun(args)).Run();
+            var code = new HindsoundApp(options, journal, AppOptions.UpdaterMayRun(args), WindowsPlatform.Desktop()).Run();
 
             // A capture thread stuck in the driver must not keep the process alive with the icon gone.
             Environment.Exit(code);

@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Hindsound.Audio;
-using NAudio.CoreAudioApi;
 using NAudio.Wave;
 
 namespace Hindsound.Tests.Audio;
@@ -21,7 +20,7 @@ internal sealed class TrackedSource(CaptureRequest request, TrackingFactory owne
 
     public string? DeviceName => "device name";
 
-    public event CaptureDataAvailableHandler? PacketAvailable;
+    public event CapturePacketHandler? PacketAvailable;
 
     public event Action<Exception?>? Stopped;
 
@@ -48,7 +47,7 @@ internal sealed class TrackedSource(CaptureRequest request, TrackingFactory owne
 
     public void Deliver(ReadOnlySpan<float> samples, long stamp)
     {
-        PacketAvailable?.Invoke(MemoryMarshal.AsBytes(samples), AudioClientBufferFlags.None, 0, stamp);
+        PacketAvailable?.Invoke(MemoryMarshal.AsBytes(samples), PacketFlags.None, 0, stamp);
     }
 
     public void Die(Exception exception) => Stopped?.Invoke(exception);

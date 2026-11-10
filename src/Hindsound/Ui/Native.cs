@@ -46,6 +46,11 @@ internal static unsafe partial class Native
         public int Left, Top, Right, Bottom;
         public readonly int Width => Right - Left;
         public readonly int Height => Bottom - Top;
+
+        /// <summary>The same rectangle, for the code that does not depend on Windows.</summary>
+        public static implicit operator ScreenRect(RECT rect) => new(rect.Left, rect.Top, rect.Right, rect.Bottom);
+
+        public static RECT From(ScreenRect rect) => new() { Left = rect.Left, Top = rect.Top, Right = rect.Right, Bottom = rect.Bottom };
     }
 
     [StructLayout(LayoutKind.Sequential)]

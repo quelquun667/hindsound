@@ -95,7 +95,8 @@ the next Windows session, through the Run value if the user has it.
 To check that a release has none of it, save the preprocessed script: add `#expr SaveToFile("<file>")` at the end of a copy
 of `Hindsound.iss` in this folder, and compile it with `ISCC /O-`. `--settings` must not appear in it.
 
-The app of a trial comes from a scratch copy of `src/Hindsound/` where `App/Program.cs` differs in two places. First,
+The app of a trial comes from a scratch copy of `src/` (`Hindsound/` references `Hindsound.Core/` next to it) where
+`Hindsound/App/Program.cs` differs in two places. First,
 `MutexNameFor` is made to return `@"Local\HindsoundTrial.SingleInstance"` whatever the options say: since 08/11/2026 any
 run with `--settings`, which every start of a trial has, gets a hashed name of its own and never looks at `MutexName`, so
 changing that constant has no effect. Second, `options = options.SettingsPath is null ? options with { SettingsPath = @"<TrialRoot>\settings.json" } : options;`

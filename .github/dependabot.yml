@@ -12,7 +12,9 @@ updates:
   - package-ecosystem: nuget
     directories:
       - /src/Hindsound
+      - /src/Hindsound.Core
       - /tests/Hindsound.Tests
+      - /tests/Hindsound.Core.Tests
     schedule:
       interval: weekly
     groups:

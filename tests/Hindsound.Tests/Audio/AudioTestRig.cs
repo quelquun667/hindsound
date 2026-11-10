@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 using Hindsound.Audio;
-using NAudio.CoreAudioApi;
 using NAudio.Wave;
 
 namespace Hindsound.Tests.Audio;
@@ -28,7 +27,7 @@ internal sealed class FakeSource(AudioFlow flow, CaptureRequest request, string 
 
     public bool Disposed { get; private set; }
 
-    public event CaptureDataAvailableHandler? PacketAvailable;
+    public event CapturePacketHandler? PacketAvailable;
 
     public event Action<Exception?>? Stopped;
 
@@ -38,14 +37,14 @@ internal sealed class FakeSource(AudioFlow flow, CaptureRequest request, string 
 
     public void Dispose() => Disposed = true;
 
-    public void Deliver(ReadOnlySpan<float> samples, long qpc, AudioClientBufferFlags flags = AudioClientBufferFlags.None)
+    public void Deliver(ReadOnlySpan<float> samples, long qpc, PacketFlags flags = PacketFlags.None)
     {
         PacketAvailable?.Invoke(MemoryMarshal.AsBytes(samples), flags, 0, qpc);
     }
 
     public void DeliverBytes(ReadOnlySpan<byte> data, long qpc)
     {
-        PacketAvailable?.Invoke(data, AudioClientBufferFlags.None, 0, qpc);
+        PacketAvailable?.Invoke(data, PacketFlags.None, 0, qpc);
     }
 
     public void Die(Exception exception) => Stopped?.Invoke(exception);

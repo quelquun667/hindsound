@@ -6,37 +6,11 @@ namespace Hindsound.Ui;
 /// <summary>Puts files on the clipboard as CF_HDROP, what Explorer and Discord paste. No OLE, no framework.</summary>
 internal static unsafe class ClipboardFiles
 {
-    public const int Attempts = 5;
-    public const int DelayMs = 50;
-
     private const int DropFilesHeaderBytes = 20;
 
-    /// <summary>
-    /// Tries, and tries again through <paramref name="after"/> while another app holds the clipboard, then reports.
-    /// The waiting goes through the message loop, which stays free in between.
-    /// </summary>
-    public static void CopyWithRetries(Func<bool> attempt, Action<int, Action> after, Action<bool> done, int attempts = Attempts, int delayMs = DelayMs)
-    {
-        var left = attempts;
-        Step();
-
-        void Step()
-        {
-            left--;
-            if (attempt())
-            {
-                done(true);
-            }
-            else if (left <= 0)
-            {
-                done(false);
-            }
-            else
-            {
-                after(delayMs, Step);
-            }
-        }
-    }
+    /// <summary>The waiting, which does not depend on Windows: see <see cref="ClipboardRetries"/>.</summary>
+    public static void CopyWithRetries(Func<bool> attempt, Action<int, Action> after, Action<bool> done, int attempts = ClipboardRetries.Attempts, int delayMs = ClipboardRetries.DelayMs) =>
+        ClipboardRetries.CopyWithRetries(attempt, after, done, attempts, delayMs);
 
     /// <summary>One attempt. Run it on the thread of the message loop.</summary>
     public static bool TrySet(nint owner, IReadOnlyList<string> paths)

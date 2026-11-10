@@ -81,7 +81,8 @@ dotnet publish src/Hindsound/Hindsound.csproj -p:PublishProfile=win-x64
 The result is in `src\Hindsound\bin\publish\win-x64\`. Start `Hindsound.exe` from there, and keep `libmp3lame.64.dll` next
 to it: that file is the MP3 encoder.
 
-If you want to work on the code, it is in `src/Hindsound`, and the tests are in `tests/Hindsound.Tests`:
+If you want to work on the code, the part that calls no Windows API is in `src/Hindsound.Core`, the Windows layer and the
+exe are in `src/Hindsound`, and their tests are in `tests/Hindsound.Core.Tests` and `tests/Hindsound.Tests`:
 
 ```bash
 dotnet test Hindsound.slnx --filter "Category!=Device"

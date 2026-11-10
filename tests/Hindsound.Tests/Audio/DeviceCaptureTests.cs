@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using Hindsound.Audio;
-using NAudio.CoreAudioApi;
 using Xunit.Abstractions;
 
 namespace Hindsound.Tests.Audio;
@@ -27,8 +26,8 @@ public class DeviceCaptureTests(ITestOutputHelper output)
 
         using var source = await factory.OpenAsync(new CaptureRequest(AudioFlow.System, device!, excludeOwnProcess));
         var lock_ = new object();
-        var stamps = new List<(long Stamp, long Now, int Bytes, AudioClientBufferFlags Flags)>();
-        source.PacketAvailable += (ReadOnlySpan<byte> data, AudioClientBufferFlags flags, long position, long qpc) =>
+        var stamps = new List<(long Stamp, long Now, int Bytes, PacketFlags Flags)>();
+        source.PacketAvailable += (ReadOnlySpan<byte> data, PacketFlags flags, long position, long qpc) =>
         {
             var now = NowTicks();
             lock (lock_)

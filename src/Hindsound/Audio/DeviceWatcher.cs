@@ -2,15 +2,6 @@ using NAudio.CoreAudioApi;
 
 namespace Hindsound.Audio;
 
-/// <summary>Says that the audio devices may have changed, without saying how: the listener checks what it needs.</summary>
-public interface IDeviceWatcher : IDisposable
-{
-    /// <summary>Raised on a thread pool thread.</summary>
-    event Action DevicesChanged;
-
-    void Start();
-}
-
 /// <summary>
 /// Listens for device changes. Windows calls back on its own thread while holding an internal lock, and says
 /// nothing there may touch the audio stack, so this only arms a timer. Windows also sends several notifications

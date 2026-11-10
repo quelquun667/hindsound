@@ -1,4 +1,6 @@
 <Solution>
+  <Project Path="tests/Hindsound.Core.Tests/Hindsound.Core.Tests.csproj" />
   <Project Path="tests/Hindsound.Tests/Hindsound.Tests.csproj" />
+  <Project Path="src/Hindsound.Core/Hindsound.Core.csproj" />
   <Project Path="src/Hindsound/Hindsound.csproj" />
 </Solution>

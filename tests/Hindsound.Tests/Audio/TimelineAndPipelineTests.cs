@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 using Hindsound.Audio;
-using NAudio.CoreAudioApi;
 using NAudio.Wave;
 
 namespace Hindsound.Tests.Audio;
@@ -114,16 +113,16 @@ public class CapturePipelineTests
         var stamp = _clock.Ticks + 1_000_000; // 100 ms in.
         _clock.Advance(0.5); // The callback only ran 500 ms in.
 
-        pipeline.OnPacket(AsBytes(new float[960]), AudioClientBufferFlags.None, 0, stamp);
+        pipeline.OnPacket(AsBytes(new float[960]), PacketFlags.None, 0, stamp);
 
         Assert.Equal(4800 + 480, track.EndFrame);
     }
 
     [Theory]
-    [InlineData(AudioClientBufferFlags.TimestampError, 1_000_000_000L + 5_000_000)]
-    [InlineData(AudioClientBufferFlags.None, 0L)]
-    [InlineData(AudioClientBufferFlags.None, 999_999_999_999L)]
-    public void Without_a_usable_stamp_the_packet_ends_now(AudioClientBufferFlags flags, long stamp)
+    [InlineData(PacketFlags.TimestampError, 1_000_000_000L + 5_000_000)]
+    [InlineData(PacketFlags.None, 0L)]
+    [InlineData(PacketFlags.None, 999_999_999_999L)]
+    public void Without_a_usable_stamp_the_packet_ends_now(PacketFlags flags, long stamp)
     {
         var track = new SourceTrack(2, 48000, 0);
         var pipeline = StereoPipeline(track);
@@ -141,8 +140,8 @@ public class CapturePipelineTests
         var pipeline = new CapturePipeline(WaveFormat.CreateIeeeFloatWaveFormat(48000, 1), track, _timeline);
         var loud = Enumerable.Repeat(0.5f, 480).ToArray();
 
-        pipeline.OnPacket(AsBytes(loud), AudioClientBufferFlags.None, 0, _clock.Ticks);
-        pipeline.OnPacket(AsBytes(loud), AudioClientBufferFlags.Silent, 0, _clock.Ticks + 100_000);
+        pipeline.OnPacket(AsBytes(loud), PacketFlags.None, 0, _clock.Ticks);
+        pipeline.OnPacket(AsBytes(loud), PacketFlags.Silent, 0, _clock.Ticks + 100_000);
 
         var stored = new float[960];
         track.CopyFrames(0, stored);
@@ -158,8 +157,8 @@ public class CapturePipelineTests
         var pipeline = new CapturePipeline(WaveFormat.CreateIeeeFloatWaveFormat(48000, 1), track, _timeline);
         var packet = new float[480];
 
-        pipeline.OnPacket(AsBytes(packet), AudioClientBufferFlags.None, 0, _clock.Ticks);
-        pipeline.OnPacket(AsBytes(packet), AudioClientBufferFlags.DataDiscontinuity, 0, _clock.Ticks + 100_000 + 2000);
+        pipeline.OnPacket(AsBytes(packet), PacketFlags.None, 0, _clock.Ticks);
+        pipeline.OnPacket(AsBytes(packet), PacketFlags.DataDiscontinuity, 0, _clock.Ticks + 100_000 + 2000);
 
         // 2000 ticks are 9.6 frames, within drift range: only the flag makes it exact.
         Assert.Equal(480 + 9 + 480, track.EndFrame);
@@ -173,7 +172,7 @@ public class CapturePipelineTests
         var count = AudioFormatConverter.MaxInputFrames * 2 + 100;
         var packet = Enumerable.Range(0, count).Select(frame => Ramp.Value(frame)).ToArray();
 
-        pipeline.OnPacket(AsBytes(packet), AudioClientBufferFlags.None, 0, _clock.Ticks);
+        pipeline.OnPacket(AsBytes(packet), PacketFlags.None, 0, _clock.Ticks);
 
         var stored = new float[count];
         Assert.Equal(count, track.CopyFrames(0, stored));
@@ -190,7 +189,7 @@ public class CapturePipelineTests
         var pipeline = StereoPipeline(track);
         _timeline.Freeze();
 
-        pipeline.OnPacket(AsBytes(new float[960]), AudioClientBufferFlags.None, 0, _clock.Ticks);
+        pipeline.OnPacket(AsBytes(new float[960]), PacketFlags.None, 0, _clock.Ticks);
 
         Assert.Equal(0, track.EndFrame);
     }
@@ -208,7 +207,7 @@ public class CapturePipelineTests
         {
             var stamp = start + (long)(i * 100_020.0 * 1.0);
             _clock.Ticks = stamp + 100_000;
-            pipeline.OnPacket(AsBytes(packet), AudioClientBufferFlags.None, 0, stamp);
+            pipeline.OnPacket(AsBytes(packet), PacketFlags.None, 0, stamp);
         }
 
         var error = track.EndFrame - _timeline.NowFrames;
@@ -231,7 +230,7 @@ public class CapturePipelineTests
 
         void Deliver(int index)
         {
-            var flags = index % 7 == 0 ? AudioClientBufferFlags.Silent : AudioClientBufferFlags.None;
+            var flags = index % 7 == 0 ? PacketFlags.Silent : PacketFlags.None;
             pipeline.OnPacket(MemoryMarshal.AsBytes(packet.AsSpan()), flags, 0, _clock.Ticks + index * 100_000L);
         }
 

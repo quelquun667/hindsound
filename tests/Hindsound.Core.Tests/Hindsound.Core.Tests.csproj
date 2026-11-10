@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The tests of Hindsound.Core alone: they reach no Windows API, so the CI also runs them on Linux. The others are in Hindsound.Tests. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- The allocation tests count the bytes a thread allocates. With background GC, that count jumped in 5 full runs out of 31, for threads that allocated nothing; without it, in none of 30. The published app runs without it too. -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <!-- These tests run on Linux in CI: a call that only Windows supports stops the build here. Such tests go to Hindsound.Tests. -->
+    <WarningsAsErrors>$(WarningsAsErrors);CA1416</WarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Exact copies of the pixel grids of the logo: the design files stay out of the repository. -->
+    <None Include="Ui\TrayGrids\*.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Hindsound.Core\Hindsound.Core.csproj" />
+  </ItemGroup>
+
+</Project>

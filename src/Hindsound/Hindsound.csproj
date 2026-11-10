@@ -3,7 +3,7 @@
   <!--
     No interface framework: Win32 and GDI by P/Invoke (src/Hindsound/Ui). Measured on 06/11/2026: 14 MB exe and 16 MB of RAM,
     against 133 MB and 81 to 96 MB with WPF. The publish settings live in Properties/PublishProfiles/win-x64.pubxml,
-    so Hindsound.Tests keeps building this project as an ordinary one.
+    so Hindsound.Tests keeps building this project as an ordinary one. The code that calls no Windows API is in Hindsound.Core.
   -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -15,7 +15,6 @@
     <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
     <StartupObject>Hindsound.App.Program</StartupObject>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-    <LameVersion>2.1.0</LameVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -26,6 +25,20 @@
     <PackageReference Include="NAudio.Wasapi" Version="3.3.0" />
     <PackageReference Include="NAudio.Lame" Version="$(LameVersion)" />
   </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Hindsound.Core\Hindsound.Core.csproj" />
+  </ItemGroup>
+
+  <!--
+    Hindsound.Core references NAudio.Lame too, and its output brings the package's libmp3lame.32.dll into the publish list
+    on another path than the None items removed below: a trimmed publish leaves it out there as well.
+  -->
+  <Target Name="LeaveOutLame32WhenTrimmed" AfterTargets="ComputeResolvedFilesToPublishList" Condition="'$(PublishTrimmed)' == 'true'">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Filename)%(Extension)' == 'libmp3lame.32.dll'" />
+    </ItemGroup>
+  </Target>
 
   <!--
     NAudio.Lame keeps its P/Invoke layer, LameDLLWrap, as an embedded resource and loads it at run time through
