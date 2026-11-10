@@ -44,12 +44,10 @@ internal sealed record NotificationRequest(
     /// <summary>Most servers never show the label of the default action; some read it out.</summary>
     public const string DefaultLabel = "Open";
 
-    /// <summary>The urgency levels of the specification: 0 low, 1 normal, 2 critical.</summary>
-    public const byte LowUrgency = 0;
-
     /// <summary>
-    /// A clip's notification: GNOME and Plasma show a low one only in their list, with no banner, and the clip is what the user
-    /// pressed the key for.
+    /// The urgency of every notification of the app (the levels of the specification are 0 low, 1 normal, 2 critical). GNOME and
+    /// Plasma show a low one only in their list, with no banner, so a failed save, a lost microphone or a new version would go
+    /// unseen; Windows shows all of them, and so does this.
     /// </summary>
     public const byte NormalUrgency = 1;
 
@@ -80,7 +78,7 @@ internal sealed record NotificationRequest(
             content.Title,
             markup ? Escape(body) : body,
             actions,
-            content.ClipPath is null ? LowUrgency : NormalUrgency,
+            NormalUrgency,
             SuppressSound: true,
             DBusNames.AppId,
             ServerTimeout);

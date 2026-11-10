@@ -6,8 +6,8 @@ using Tmds.DBus.Protocol;
 namespace Hindsound.Linux.Desktop;
 
 /// <summary>
-/// The notification, through org.freedesktop.Notifications: silent, replaced in place, of normal urgency with the action
-/// "Show in folder" when it is about a clip, of low urgency otherwise. The server draws it where it likes, so the spot the app chose is not used.
+/// The notification, through org.freedesktop.Notifications: silent, replaced in place, of normal urgency, with the action
+/// "Show in folder" when it is about a clip. The server draws it where it likes, so the spot the app chose is not used.
 /// The server keeps a notification in its list long after it left the screen, so the app counts it gone after
 /// <see cref="HoldMs"/>, or sooner when the server says it closed: the notices of the app never wait on that list.
 /// </summary>

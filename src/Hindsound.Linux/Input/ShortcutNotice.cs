@@ -1,5 +1,6 @@
 using System.Runtime.Versioning;
 using Hindsound.Linux.DBus;
+using Hindsound.Linux.Desktop;
 using Tmds.DBus.Protocol;
 
 namespace Hindsound.Linux.Input;
@@ -31,22 +32,5 @@ internal static class ShortcutNotice
         });
     }
 
-    private static void Write(ref MessageWriter writer)
-    {
-        writer.WriteString("Hindsound");
-        writer.WriteUInt32(0);
-        writer.WriteString("");
-        writer.WriteString("Hindsound");
-        writer.WriteString(HotkeyChoice.NoShortcutText);
-        writer.WriteArray(Array.Empty<string>());
-        var hints = writer.WriteDictionaryStart();
-        writer.WriteDictionaryEntryStart();
-        writer.WriteString("suppress-sound");
-        writer.WriteVariantBool(true);
-        writer.WriteDictionaryEntryStart();
-        writer.WriteString("desktop-entry");
-        writer.WriteVariantString(DBusNames.AppId);
-        writer.WriteDictionaryEnd(hints);
-        writer.WriteInt32(-1);
-    }
+    private static void Write(ref MessageWriter writer) => FreedesktopNotification.Write(ref writer, ShortcutNoticeRequest.Build());
 }
