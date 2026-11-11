@@ -83,7 +83,7 @@ public sealed partial class RuntimeSourceFetchTests
         var script = Read(ScriptPath);
 
         Assert.Contains(
-            "for needed in LICENSE src/runtime/runtime.c patches/libfuse/mount.c.diff; do\n  if ! printf '%s\\n' \"$listing\" | grep -qxF -- \"$prefix$needed\"; then\n    echo \"$runtime_name has no $prefix$needed. Nothing was copied.\" >&2\n    exit 1\n  fi\ndone\n",
+            "for needed in LICENSE src/runtime/runtime.c patches/libfuse/mount.c.diff; do\n  if ! grep -qxF -- \"$prefix$needed\" <<< \"$listing\"; then\n    echo \"$runtime_name has no $prefix$needed. Nothing was copied.\" >&2\n    exit 1\n  fi\ndone\n",
             script,
             StringComparison.Ordinal);
         Assert.True(

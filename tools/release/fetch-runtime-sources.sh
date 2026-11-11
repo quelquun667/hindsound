@@ -81,8 +81,9 @@ runtime="$work/$runtime_name"
 rm -f "$runtime"
 git -C "$repository" archive --format=tar.gz --prefix="$prefix" --output="$runtime" "$RUNTIME_COMMIT"
 listing="$(tar -tzf "$runtime")"
+# A here-string, not a pipe: with pipefail, grep -q leaving early could fail the writer of a pipe and turn a match into a miss.
 for needed in LICENSE src/runtime/runtime.c patches/libfuse/mount.c.diff; do
-  if ! printf '%s\n' "$listing" | grep -qxF -- "$prefix$needed"; then
+  if ! grep -qxF -- "$prefix$needed" <<< "$listing"; then
     echo "$runtime_name has no $prefix$needed. Nothing was copied." >&2
     exit 1
   fi
