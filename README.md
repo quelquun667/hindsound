@@ -190,6 +190,10 @@ notification of a clip shows the clip in its folder.
 `SHA256SUMS`, next to them, has their checksums: run `sha256sum --check --ignore-missing SHA256SUMS` in the folder where
 you downloaded them.
 
+`fuse-3.15.0.tar.xz` and `type2-runtime-20251108-source.tar.gz`, also next to them in the release and in the artifact, are
+the source of libfuse and of the runtime at the head of the AppImage, offered under the LGPL-2.1 of libfuse: Hindsound
+does not need them to run.
+
 **In the list of applications.** On its first launch from the AppImage or from the unpacked folder, Hindsound adds itself
 to the list of applications: it writes `~/.local/share/applications/io.github.quelquun667.Hindsound.desktop`, which starts
 the file you launched, and its icon in `~/.local/share/icons/hicolor/<size>/apps/`. The shortcut portal knows an app only

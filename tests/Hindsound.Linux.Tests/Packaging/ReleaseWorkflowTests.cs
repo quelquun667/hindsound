@@ -22,6 +22,8 @@ public sealed partial class ReleaseWorkflowTests
         "hindsound-update-win-x64-portable.json",
         "hindsound-update-linux-x64.json",
         "lame-3.100.tar.gz",
+        "fuse-3.15.0.tar.xz",
+        "type2-runtime-20251108-source.tar.gz",
         "SHA256SUMS",
     ];
 

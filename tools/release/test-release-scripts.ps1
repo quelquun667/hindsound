@@ -347,7 +347,7 @@ try {
     & $writeNotes -Version '1.2.3' -ChangelogFile $changelogPart -OutFile $releaseNotes
     $releaseNotesText = [IO.File]::ReadAllText($releaseNotes)
     Report 'the notes start with the changelog' ($releaseNotesText.StartsWith("### Added`n`n- Something new.`n`n## Downloads`n"))
-    foreach ($name in 'Hindsound-1.2.3-Setup.exe', 'Hindsound-1.2.3-win-x64-portable.zip', 'hindsound-1.2.3-linux-x64.AppImage', 'hindsound-1.2.3-linux-x64.tar.gz', 'hindsound-update-win-x64.json', 'hindsound-update-win-x64-portable.json', 'hindsound-update-linux-x64.json', 'lame-3.100.tar.gz', 'SHA256SUMS') {
+    foreach ($name in 'Hindsound-1.2.3-Setup.exe', 'Hindsound-1.2.3-win-x64-portable.zip', 'hindsound-1.2.3-linux-x64.AppImage', 'hindsound-1.2.3-linux-x64.tar.gz', 'hindsound-update-win-x64.json', 'hindsound-update-win-x64-portable.json', 'hindsound-update-linux-x64.json', 'lame-3.100.tar.gz', 'fuse-3.15.0.tar.xz', 'type2-runtime-20251108-source.tar.gz', 'SHA256SUMS') {
         Report "the notes say whom $name is for" ($releaseNotesText -cmatch "(?m)^\| [^\n]*``$([regex]::Escape($name))``[^\n]*\| [^|\n]+\. \|$")
     }
     Report 'the notes have no BOM and no carriage return' (([IO.File]::ReadAllBytes($releaseNotes)[0] -eq [byte][char]'#') -and -not $releaseNotesText.Contains("`r"))
@@ -383,6 +383,8 @@ try {
         [IO.File]::WriteAllText((Join-Path $linux 'hindsound-1.2.3-linux-x64.tar.gz'), 'fake archive')
         Write-Sums $linux @('hindsound-1.2.3-linux-x64.AppImage', 'hindsound-1.2.3-linux-x64.tar.gz')
         [IO.File]::WriteAllText((Join-Path $linux 'lame-3.100.tar.gz'), 'fake source')
+        [IO.File]::WriteAllText((Join-Path $linux 'fuse-3.15.0.tar.xz'), 'fake libfuse source')
+        [IO.File]::WriteAllBytes((Join-Path $linux 'type2-runtime-20251108-source.tar.gz'), [byte[]](0x1F, 0x8B, 0x08, 0x00, 1, 2, 3))
         $root
     }
     function Invoke-Assemble([string]$Root) {
@@ -395,10 +397,11 @@ try {
     }
     $releaseFiles = New-ReleaseFiles
     $fakeLameSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $releaseFiles 'lame-3.100.tar.gz')).Hash.ToLowerInvariant()
+    $fakeFuseSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $releaseFiles 'fuse-3.15.0.tar.xz')).Hash.ToLowerInvariant()
     function Test-ReleaseFiles([string]$Folder, [string]$Expected = '') {
-        & $checkFiles -Folder $Folder -Version '1.2.3' -Repository 'owner/name' -LameSha256 $fakeLameSha256 -Expected $Expected
+        & $checkFiles -Folder $Folder -Version '1.2.3' -Repository 'owner/name' -LameSha256 $fakeLameSha256 -FuseSha256 $fakeFuseSha256 -Expected $Expected
     }
-    $allNames = @('Hindsound-1.2.3-Setup.exe', 'Hindsound-1.2.3-win-x64-portable.zip', 'SHA256SUMS', 'hindsound-1.2.3-linux-x64.AppImage', 'hindsound-1.2.3-linux-x64.tar.gz', 'hindsound-update-linux-x64.json', 'hindsound-update-win-x64-portable.json', 'hindsound-update-win-x64.json', 'lame-3.100.tar.gz')
+    $allNames = @('Hindsound-1.2.3-Setup.exe', 'Hindsound-1.2.3-win-x64-portable.zip', 'SHA256SUMS', 'fuse-3.15.0.tar.xz', 'hindsound-1.2.3-linux-x64.AppImage', 'hindsound-1.2.3-linux-x64.tar.gz', 'hindsound-update-linux-x64.json', 'hindsound-update-win-x64-portable.json', 'hindsound-update-win-x64.json', 'lame-3.100.tar.gz', 'type2-runtime-20251108-source.tar.gz')
     Assert-Equal 'the release gathers the files of both jobs, the announce manifests and SHA256SUMS' ($allNames -join ' ') ((Get-OrdinalNames $releaseFiles) -join ' ')
     Assert-Accepted 'the files of the release pass' { Test-ReleaseFiles $releaseFiles }
     $sumsBytes = [IO.File]::ReadAllBytes((Join-Path $releaseFiles 'SHA256SUMS'))
@@ -421,6 +424,11 @@ try {
     $jobFiles = New-JobFiles
     Remove-Item -LiteralPath (Join-Path $jobFiles 'linux\SHA256SUMS')
     Assert-Refused 'Linux packages without their SHA256SUMS refused' { Invoke-Assemble $jobFiles } 'The Linux files are'
+    foreach ($runtimeSource in 'fuse-3.15.0.tar.xz', 'type2-runtime-20251108-source.tar.gz') {
+        $jobFiles = New-JobFiles
+        Remove-Item -LiteralPath (Join-Path $jobFiles "linux\$runtimeSource")
+        Assert-Refused "Linux packages without $runtimeSource refused" { Invoke-Assemble $jobFiles } 'The Linux files are'
+    }
     $jobFiles = New-JobFiles
     New-Item -ItemType Directory -Path (Join-Path $jobFiles 'release') | Out-Null
     [IO.File]::WriteAllText((Join-Path $jobFiles 'release\left.txt'), 'left by an earlier run')
@@ -437,6 +445,16 @@ try {
     $releaseFiles = New-ReleaseFiles
     Remove-Item -LiteralPath (Join-Path $releaseFiles 'hindsound-1.2.3-linux-x64.AppImage')
     Assert-Refused 'a release without the AppImage refused' { Test-ReleaseFiles $releaseFiles } 'expected'
+    foreach ($runtimeSource in 'fuse-3.15.0.tar.xz', 'type2-runtime-20251108-source.tar.gz') {
+        $releaseFiles = New-ReleaseFiles
+        Remove-Item -LiteralPath (Join-Path $releaseFiles $runtimeSource)
+        Assert-Refused "a release without $runtimeSource refused" { Test-ReleaseFiles $releaseFiles } 'expected'
+    }
+    # Without -FuseSha256, the SHA-256 pinned in fetch-runtime-sources.sh: the fake archive does not have it.
+    $releaseFiles = New-ReleaseFiles
+    Assert-Refused 'a libfuse source other than the pinned one refused' { & $checkFiles -Folder $releaseFiles -Version '1.2.3' -Repository 'owner/name' -LameSha256 $fakeLameSha256 } 'fuse-3.15.0.tar.xz on the release has the SHA-256'
+    [IO.File]::WriteAllText((Join-Path $releaseFiles 'type2-runtime-20251108-source.tar.gz'), 'not an archive')
+    Assert-Refused 'a runtime source that is not a gzip archive refused' { Test-ReleaseFiles $releaseFiles } 'is not a gzip archive'
     $releaseFiles = New-ReleaseFiles '1.2.4'
     Assert-Refused 'a manifest of another version refused' { Test-ReleaseFiles $releaseFiles } 'the version 1.2.4'
     $releaseFiles = New-ReleaseFiles '1.2.3' 'other/name'
@@ -896,7 +914,7 @@ try {
     $filesStepOrder = @(
         'Check out', 'Set up .NET', 'Build the tests', 'Publish the app', 'Build LAME', 'Replace the DLL in the published folder', 'Prove the encoding with the compiled DLL', 'Build the Setup', 'Check the Setup',
         'Write the update manifest', 'Make the portable zip', 'Add the LAME source', 'Keep the Windows files',
-        'Check out', 'Set up .NET', 'Publish the Linux app', 'Build the MP3 encoder', 'Install the checker of desktop entries', 'Make the AppImage and the tar.gz', 'Check the packages', 'Add the LAME source', 'Keep the packages',
+        'Check out', 'Set up .NET', 'Publish the Linux app', 'Build the MP3 encoder', 'Install the checker of desktop entries', 'Make the AppImage and the tar.gz', 'Check the packages', 'Add the LAME source', 'Add the source of the AppImage runtime', 'Keep the packages',
         'Check out', 'Take the Windows files', 'Take the Linux files', 'Gather the files of the release', 'Check the files of the release', 'Keep the files of the release'
     )
     $filesSteps = @($files | ForEach-Object { if ($_ -match '^\s+- name: (.+)$') { $Matches[1] } })
@@ -914,13 +932,14 @@ try {
     Report 'the release attaches the Setup, the manifest and the LAME source' ($releaseText -cmatch 'gh release upload [^\n]*Setup\.exe[^\n]*hindsound-update-win-x64\.json[^\n]*lame-3\.100\.tar\.gz')
     $uploadLine = @($release | Where-Object { $_ -cmatch 'gh release upload ' })
     Assert-Equal 'the release uploads in one command' 1 $uploadLine.Count
-    foreach ($name in 'Hindsound-$env:VERSION-Setup.exe', 'Hindsound-$env:VERSION-win-x64-portable.zip', 'hindsound-$env:VERSION-linux-x64.AppImage', 'hindsound-$env:VERSION-linux-x64.tar.gz', 'hindsound-update-win-x64.json', 'hindsound-update-win-x64-portable.json', 'hindsound-update-linux-x64.json', 'lame-3.100.tar.gz', 'SHA256SUMS') {
+    foreach ($name in 'Hindsound-$env:VERSION-Setup.exe', 'Hindsound-$env:VERSION-win-x64-portable.zip', 'hindsound-$env:VERSION-linux-x64.AppImage', 'hindsound-$env:VERSION-linux-x64.tar.gz', 'hindsound-update-win-x64.json', 'hindsound-update-win-x64-portable.json', 'hindsound-update-linux-x64.json', 'lame-3.100.tar.gz', 'fuse-3.15.0.tar.xz', 'type2-runtime-20251108-source.tar.gz', 'SHA256SUMS') {
         Report "the release attaches $name" ($uploadLine[0].Contains("`"`$env:RUNNER_TEMP/out/$name`""))
     }
     Report 'the release downloads its files back and checks them against those sent, before publishing' ($releaseText -cmatch '--clobber\n\s+if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}\n\s+gh release download \$env:TAG --dir "\$env:RUNNER_TEMP/verify"\n\s+if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}\n\s+\./tools/release/check-release-files\.ps1 -Folder "\$env:RUNNER_TEMP/verify" -Version \$env:VERSION -Repository \$env:GITHUB_REPOSITORY -Expected "\$env:RUNNER_TEMP/out"\n\n\s+# A rerun')
     Report 'the release publishes only after the check of the files downloaded back' ($releaseText.IndexOf('-Folder "$env:RUNNER_TEMP/verify"') -gt 0 -and $releaseText.IndexOf('-Folder "$env:RUNNER_TEMP/verify"') -lt $releaseText.IndexOf('--draft=false') -and ([regex]::Matches($releaseText, '--draft=false')).Count -eq 1)
     Report 'the release sends the files the release-files workflow checked' ($releaseText -cmatch '- name: Take the files of the release\n\s+uses: actions/download-artifact@[0-9a-f]{40} # v[0-9.]+\n\s+with:\n\s+name: release-files\n\s+path: \$\{\{ runner\.temp \}\}/out\n' -and $filesText -cmatch '\n\s+name: release-files\n\s+path: \$\{\{ runner\.temp \}\}/release/\n')
     Report 'the release does not give check-release-files its LAME hash' (-not ($releaseText -match '-LameSha256') -and -not ($filesText -match '-LameSha256'))
+    Report 'the release does not give check-release-files its libfuse hash' (-not ($releaseText -match '-FuseSha256') -and -not ($filesText -match '-FuseSha256'))
     Report 'get-iscc verifies its package before extracting it' ([IO.File]::ReadAllText((Join-Path $PSScriptRoot 'get-iscc.ps1')) -cmatch 'if \(\$actual -ne \$packageSha256\) \{\s+throw [^\n]+\n\}\s+\$content = ')
     Assert-Equal 'the token goes to the three steps of the release' 3 ([regex]::Matches($releaseText, 'GH_TOKEN:')).Count
     $firstToken = @($release | Select-String 'GH_TOKEN:')[0].LineNumber

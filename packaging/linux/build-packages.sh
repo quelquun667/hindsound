@@ -78,7 +78,7 @@ lay_out() {
     install -m 644 -- "$repo/LICENSE" "$doc/LICENSE"
     install -m 644 -- "$repo/THIRD-PARTY-NOTICES.md" "$doc/THIRD-PARTY-NOTICES.md"
     install -m 644 -- "$repo"/licenses/*.txt "$doc/licenses/"
-    # The texts of the AppImage runtime: kept apart in the repository so the Windows Setup and zip leave them out.
+    # The texts only the Linux packages carry (the AppImage runtime, Tmds.DBus.Protocol): kept apart in the repository so the Windows Setup and zip leave them out.
     install -m 644 -- "$repo"/licenses/linux/*.txt "$doc/licenses/linux/"
 }
 

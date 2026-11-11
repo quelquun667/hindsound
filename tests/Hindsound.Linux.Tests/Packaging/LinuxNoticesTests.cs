@@ -59,7 +59,7 @@ public sealed partial class LinuxNoticesTests
     public void The_Tmds_DBus_licence_is_the_upstream_COPYING_unchanged()
     {
         // A Windows clone may have turned its line ends into CRLF; git hashes the text with LF.
-        var read = File.ReadAllBytes(Path.Combine(Root, "licenses", "Tmds.DBus.Protocol-COPYING.txt"));
+        var read = File.ReadAllBytes(Path.Combine(Root, "licenses", "linux", "Tmds.DBus.Protocol-COPYING.txt"));
         var bytes = read.Where((value, index) => !(value == '\r' && index + 1 < read.Length && read[index + 1] == '\n')).ToArray();
 
         var header = Encoding.ASCII.GetBytes($"blob {bytes.Length}\0");

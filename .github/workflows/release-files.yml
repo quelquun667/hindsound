@@ -133,6 +133,11 @@ jobs:
       - name: Add the LAME source
         run: cp -- "$RUNNER_TEMP/lame-work/lame-3.100.tar.gz" "$RUNNER_TEMP/packages/"
 
+      # The runtime at the head of the AppImage is statically linked with libfuse, under the LGPL-2.1: the source of both
+      # goes with the AppImage, fuse-3.15.0.tar.xz and the runtime at its tag, each checked against the pins of the script.
+      - name: Add the source of the AppImage runtime
+        run: bash tools/release/fetch-runtime-sources.sh "$RUNNER_TEMP/runtime-sources-work" "$RUNNER_TEMP/packages"
+
       # A zip of the artifact drops the executable bit: the README says to give it back to the AppImage.
       - name: Keep the packages
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

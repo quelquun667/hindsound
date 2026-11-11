@@ -3,8 +3,9 @@ using System.Text.RegularExpressions;
 namespace Hindsound.Linux.Tests.Packaging;
 
 /// <summary>
-/// check-packages.sh names each text of the AppImage runtime it expects in both packages. Its list must be the whole of
-/// licenses/linux/: a text left out of it would no longer be checked, and build-packages.sh could stop shipping it unseen.
+/// check-packages.sh names each text of licenses/linux/ it expects in both packages: those of the AppImage runtime, and that
+/// of Tmds.DBus.Protocol, which only the Linux app references. Its list must be the whole of licenses/linux/: a text left
+/// out of it would no longer be checked, and build-packages.sh could stop shipping it unseen.
 /// </summary>
 public sealed partial class RuntimeLicenceCheckListTests
 {
@@ -19,7 +20,7 @@ public sealed partial class RuntimeLicenceCheckListTests
         var named = loop.Groups[1].Value.Replace("\\\n", " ").Split(' ', StringSplitOptions.RemoveEmptyEntries).Order(StringComparer.Ordinal).ToList();
         var folder = Directory.GetFiles(Path.Combine(root, "licenses", "linux"), "*.txt").Select(path => Path.GetFileName(path)!).Order(StringComparer.Ordinal).ToList();
 
-        Assert.Equal(8, folder.Count);
+        Assert.Equal(9, folder.Count);
         Assert.Equal(folder, named);
         Assert.Contains("has \"$doc/licenses/linux/$licence\"", loop.Value, StringComparison.Ordinal);
     }

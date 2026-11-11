@@ -4,9 +4,11 @@
     SHA256SUMS for all of them.
 .DESCRIPTION
     The Windows folder must hold exactly the Setup, the portable zip, hindsound-update-win-x64.json and lame-3.100.tar.gz.
-    The Linux folder must hold exactly the AppImage, the tar.gz, their SHA256SUMS (which must match them) and
-    lame-3.100.tar.gz, the same bytes as the Windows one. The output folder then holds the files of the release, and only
-    them: those six, hindsound-update-win-x64-portable.json, hindsound-update-linux-x64.json and SHA256SUMS.
+    The Linux folder must hold exactly the AppImage, the tar.gz, their SHA256SUMS (which must match them),
+    lame-3.100.tar.gz, the same bytes as the Windows one, and the source of the AppImage runtime that
+    fetch-runtime-sources.sh verified: fuse-3.15.0.tar.xz and type2-runtime-20251108-source.tar.gz. The output folder then
+    holds the files of the release, and only them: those eight, hindsound-update-win-x64-portable.json,
+    hindsound-update-linux-x64.json and SHA256SUMS.
     check-release-files.ps1 checks the result.
 .PARAMETER Version
     The version, X.Y.Z.
@@ -60,8 +62,10 @@ $out = Get-FullPath $OutFolder
 $lameName = 'lame-3.100.tar.gz'
 $windowsFiles = @("Hindsound-$Version-Setup.exe", "Hindsound-$Version-win-x64-portable.zip", 'hindsound-update-win-x64.json', $lameName)
 $packages = @("hindsound-$Version-linux-x64.AppImage", "hindsound-$Version-linux-x64.tar.gz")
+# The source of libfuse and of the AppImage runtime, under the LGPL-2.1: it goes wherever the AppImage goes.
+$runtimeSources = @('fuse-3.15.0.tar.xz', 'type2-runtime-20251108-source.tar.gz')
 Assert-Holds $windows 'Windows' $windowsFiles
-Assert-Holds $linux 'Linux' ($packages + @('SHA256SUMS', $lameName))
+Assert-Holds $linux 'Linux' ($packages + $runtimeSources + @('SHA256SUMS', $lameName))
 
 # The checksums of build-packages.sh: what the Linux job checked is what arrived here.
 $listed = New-Object 'System.Collections.Generic.Dictionary[string,string]' ([StringComparer]::Ordinal)
@@ -107,7 +111,7 @@ else {
 foreach ($name in $windowsFiles) {
     Copy-Item -LiteralPath (Join-Path $windows $name) -Destination (Join-Path $out $name)
 }
-foreach ($name in $packages) {
+foreach ($name in $packages + $runtimeSources) {
     Copy-Item -LiteralPath (Join-Path $linux $name) -Destination (Join-Path $out $name)
 }
 

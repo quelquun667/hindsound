@@ -39,6 +39,8 @@ $downloads = @"
 | ``hindsound-$Version-linux-x64.tar.gz`` | Linux, 64-bit, where the AppImage does not run: a folder to unpack, with a ``README.txt`` that says how to install it. |
 | ``hindsound-update-win-x64.json``, ``hindsound-update-win-x64-portable.json``, ``hindsound-update-linux-x64.json`` | Read by Hindsound to learn that this version is out. Nothing to download. |
 | ``lame-3.100.tar.gz`` | The source of LAME, the MP3 encoder that every download above carries, under the LGPL. |
+| ``fuse-3.15.0.tar.xz`` | The source of libfuse, which the AppImage carries in its runtime, the program at its head that mounts it: offered next to the AppImage under the LGPL-2.1, unchanged. |
+| ``type2-runtime-20251108-source.tar.gz`` | The source of that AppImage runtime, with the change it makes to libfuse (``patches/libfuse/mount.c.diff``) and its build scripts: offered for the LGPL-2.1 of libfuse. |
 | ``SHA256SUMS`` | The SHA-256 of every file above. On Linux: ``sha256sum --check --ignore-missing SHA256SUMS``. |
 
 Hindsound is not signed: Windows will probably show **Windows protected your PC** for the Setup and for the program of the

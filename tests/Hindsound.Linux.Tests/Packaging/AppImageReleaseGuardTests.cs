@@ -1,46 +1,58 @@
 namespace Hindsound.Linux.Tests.Packaging;
 
 /// <summary>
-/// The AppImage carries the type2 runtime of the AppImage project, and the notices do not record its licence yet, nor
-/// those of the libraries built into it. Until they do, no workflow that publishes a release may attach an AppImage: the
-/// CI keeps building one as an artifact, but a release would hand it out without the texts its licences ask for.
+/// The runtime at the head of the AppImage is statically linked with libfuse, under the LGPL-2.1, and the notices meet
+/// section 6 (d) of that licence by offering the source from the same place as the AppImage. So every workflow that
+/// publishes a release and attaches the AppImage attaches the source of libfuse and of the runtime with it, and the check
+/// of the files of a release refuses one without them: an AppImage never goes out alone.
 /// </summary>
 public sealed class AppImageReleaseGuardTests
 {
     private static readonly string Root = RepositoryRoot();
 
-    private const string NotRecorded = "Not recorded yet";
+    /// <summary>The source of libfuse and of the AppImage runtime, as fetch-runtime-sources.sh names them.</summary>
+    private static readonly string[] RuntimeSources = ["fuse-3.15.0.tar.xz", "type2-runtime-20251108-source.tar.gz"];
 
     [Fact]
-    public void No_release_attaches_an_AppImage_while_the_runtime_licence_is_not_recorded()
+    public void Every_release_that_attaches_the_AppImage_attaches_its_runtime_source()
     {
-        if (!RuntimeLicenceCell().StartsWith(NotRecorded, StringComparison.Ordinal))
-        {
-            return;
-        }
+        var attaching = ReleaseWorkflows()
+            .Where(workflow => workflow.Text.Contains(".AppImage", StringComparison.Ordinal))
+            .ToList();
 
-        var publishing = ReleaseWorkflows();
-        Assert.NotEmpty(publishing);
-        foreach (var (name, text) in publishing)
+        Assert.NotEmpty(attaching);
+        foreach (var (name, text) in attaching)
         {
-            Assert.False(
-                text.Contains("appimage", StringComparison.OrdinalIgnoreCase) || text.Contains("build-packages.sh", StringComparison.Ordinal),
-                name + " publishes a release and names the AppImage, whose runtime licence the notices do not record yet");
+            var uploads = text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n')
+                .Where(line => line.Contains("gh release upload ", StringComparison.Ordinal) || line.Contains("action-gh-release", StringComparison.Ordinal))
+                .ToList();
+            Assert.True(uploads.Count > 0, name + " names the AppImage but uploads nothing with gh release upload");
+            foreach (var upload in uploads.Where(line => line.Contains(".AppImage", StringComparison.Ordinal)))
+            {
+                foreach (var source in RuntimeSources)
+                {
+                    Assert.True(upload.Contains("/" + source + "\"", StringComparison.Ordinal), name + " attaches the AppImage without " + source);
+                }
+            }
+
+            Assert.Contains(uploads, line => line.Contains(".AppImage", StringComparison.Ordinal));
         }
+    }
+
+    [Fact]
+    public void The_check_of_the_files_of_a_release_requires_the_runtime_source()
+    {
+        var check = File.ReadAllText(Path.Combine(Root, "tools", "release", "check-release-files.ps1")).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        Assert.Contains("$fuseName = '" + RuntimeSources[0] + "'\n", check, StringComparison.Ordinal);
+        Assert.Contains("$runtimeSourceName = '" + RuntimeSources[1] + "'\n", check, StringComparison.Ordinal);
+        Assert.Contains("$manifestName, $announceNames[0], $announceNames[1], $lameName, $fuseName, $runtimeSourceName, $sumsName\n)", check, StringComparison.Ordinal);
     }
 
     [Fact]
     public void The_release_workflow_is_one_that_publishes()
     {
         Assert.Contains(ReleaseWorkflows(), workflow => workflow.Name == "release.yml");
-    }
-
-    /// <summary>The licence cell of the runtime's row in the notices.</summary>
-    private static string RuntimeLicenceCell()
-    {
-        var row = File.ReadAllLines(Path.Combine(Root, "THIRD-PARTY-NOTICES.md"))
-            .Single(line => line.StartsWith("| AppImage type2 runtime ", StringComparison.Ordinal));
-        return row.Split('|')[3].Trim();
     }
 
     /// <summary>The workflows that create, edit or upload to a GitHub release.</summary>
