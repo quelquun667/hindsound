@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-12
+
 The first Linux version, and a portable copy for Windows. The copy installed by the Setup works as in 0.5.0, apart from the fix below.
 
 ### Added
