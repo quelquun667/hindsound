@@ -148,7 +148,7 @@ public sealed class HotkeyChooserTests
         await chooser.Decided;
 
         Assert.Equal(1, run.Announced);
-        Assert.Contains("hotkeys: No global shortcut on this desktop. Bind hindsound --save to a key in your keyboard settings.", run.Log);
+        Assert.Contains("hotkeys: " + HotkeyChoice.NoShortcutText, run.Log);
         Assert.False(chooser.Pending);
         Assert.Equal(HotkeyBindingState.Unavailable, chooser.Current(HotkeyAction.SaveDefault).State);
         var answers = chooser.Bind([new HotkeyRequest(HotkeyAction.Save15s, CtrlShiftF10), new HotkeyRequest(HotkeyAction.SaveDefault, null)]);
