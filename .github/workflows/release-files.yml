@@ -134,7 +134,9 @@ jobs:
         run: cp -- "$RUNNER_TEMP/lame-work/lame-3.100.tar.gz" "$RUNNER_TEMP/packages/"
 
       # The runtime at the head of the AppImage is statically linked with libfuse, under the LGPL-2.1: the source of both
-      # goes with the AppImage, fuse-3.15.0.tar.xz and the runtime at its tag, each checked against the pins of the script.
+      # goes with the AppImage, fuse-3.15.0.tar.xz and the runtime at its tag, with the source of every other library linked
+      # into the runtime (squashfuse and the Alpine packages of Zstandard, zlib, mimalloc and musl), each file checked against
+      # the pins of the script.
       - name: Add the source of the AppImage runtime
         run: bash tools/release/fetch-runtime-sources.sh "$RUNNER_TEMP/runtime-sources-work" "$RUNNER_TEMP/packages"
 

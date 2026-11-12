@@ -6,8 +6,9 @@
     The Windows folder must hold exactly the Setup, the portable zip, hindsound-update-win-x64.json and lame-3.100.tar.gz.
     The Linux folder must hold exactly the AppImage, the tar.gz, their SHA256SUMS (which must match them),
     lame-3.100.tar.gz, the same bytes as the Windows one, and the source of the AppImage runtime that
-    fetch-runtime-sources.sh verified: fuse-3.15.0.tar.xz and type2-runtime-20251108-source.tar.gz. The output folder then
-    holds the files of the release, and only them: those eight, hindsound-update-win-x64-portable.json,
+    fetch-runtime-sources.sh verified: fuse-3.15.0.tar.xz, type2-runtime-20251108-source.tar.gz and
+    type2-runtime-20251108-libraries-source.tar.gz. The output folder then holds the files of the release, and only them:
+    those nine, hindsound-update-win-x64-portable.json,
     hindsound-update-linux-x64.json and SHA256SUMS.
     check-release-files.ps1 checks the result.
 .PARAMETER Version
@@ -63,7 +64,7 @@ $lameName = 'lame-3.100.tar.gz'
 $windowsFiles = @("Hindsound-$Version-Setup.exe", "Hindsound-$Version-win-x64-portable.zip", 'hindsound-update-win-x64.json', $lameName)
 $packages = @("hindsound-$Version-linux-x64.AppImage", "hindsound-$Version-linux-x64.tar.gz")
 # The source of libfuse and of the AppImage runtime, under the LGPL-2.1: it goes wherever the AppImage goes.
-$runtimeSources = @('fuse-3.15.0.tar.xz', 'type2-runtime-20251108-source.tar.gz')
+$runtimeSources = @('fuse-3.15.0.tar.xz', 'type2-runtime-20251108-source.tar.gz', 'type2-runtime-20251108-libraries-source.tar.gz')
 Assert-Holds $windows 'Windows' $windowsFiles
 Assert-Holds $linux 'Linux' ($packages + $runtimeSources + @('SHA256SUMS', $lameName))
 

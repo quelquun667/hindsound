@@ -133,7 +133,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh release upload $env:TAG "$env:RUNNER_TEMP/out/Hindsound-$env:VERSION-Setup.exe" "$env:RUNNER_TEMP/out/Hindsound-$env:VERSION-win-x64-portable.zip" "$env:RUNNER_TEMP/out/hindsound-$env:VERSION-linux-x64.AppImage" "$env:RUNNER_TEMP/out/hindsound-$env:VERSION-linux-x64.tar.gz" "$env:RUNNER_TEMP/out/hindsound-update-win-x64.json" "$env:RUNNER_TEMP/out/hindsound-update-win-x64-portable.json" "$env:RUNNER_TEMP/out/hindsound-update-linux-x64.json" "$env:RUNNER_TEMP/out/lame-3.100.tar.gz" "$env:RUNNER_TEMP/out/fuse-3.15.0.tar.xz" "$env:RUNNER_TEMP/out/type2-runtime-20251108-source.tar.gz" "$env:RUNNER_TEMP/out/SHA256SUMS" --clobber
+          gh release upload $env:TAG "$env:RUNNER_TEMP/out/Hindsound-$env:VERSION-Setup.exe" "$env:RUNNER_TEMP/out/Hindsound-$env:VERSION-win-x64-portable.zip" "$env:RUNNER_TEMP/out/hindsound-$env:VERSION-linux-x64.AppImage" "$env:RUNNER_TEMP/out/hindsound-$env:VERSION-linux-x64.tar.gz" "$env:RUNNER_TEMP/out/hindsound-update-win-x64.json" "$env:RUNNER_TEMP/out/hindsound-update-win-x64-portable.json" "$env:RUNNER_TEMP/out/hindsound-update-linux-x64.json" "$env:RUNNER_TEMP/out/lame-3.100.tar.gz" "$env:RUNNER_TEMP/out/fuse-3.15.0.tar.xz" "$env:RUNNER_TEMP/out/type2-runtime-20251108-source.tar.gz" "$env:RUNNER_TEMP/out/type2-runtime-20251108-libraries-source.tar.gz" "$env:RUNNER_TEMP/out/SHA256SUMS" --clobber
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           gh release download $env:TAG --dir "$env:RUNNER_TEMP/verify"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
