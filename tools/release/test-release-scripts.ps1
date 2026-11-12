@@ -367,14 +367,24 @@ try {
         $text = ($Names | ForEach-Object { "$((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $Folder $_)).Hash.ToLowerInvariant())  $_`n" }) -join ''
         [IO.File]::WriteAllText((Join-Path $Folder 'SHA256SUMS'), $text, (New-Object Text.UTF8Encoding $false))
     }
-    # A tar.gz of plain files in the ustar form, from names under 100 characters and their text; -Type gives another entry
-    # type to the last one.
+    # A tar.gz of plain files in the ustar form, from names and their text; -Type gives another entry type to the last one.
+    # A name longer than the 100 bytes of the name field is cut at a slash, its start going to the prefix field at 345, as
+    # tar --format=ustar writes the long paths of the real libraries source.
     function Write-FakeTarGz([string]$Path, [string[]]$Names, [string[]]$Texts, [char]$Type = '0') {
         $tar = New-Object IO.MemoryStream
         for ($i = 0; $i -lt $Names.Count; $i++) {
             $data = [Text.Encoding]::ASCII.GetBytes($Texts[$i])
             $header = New-Object byte[] 512
-            [Text.Encoding]::ASCII.GetBytes($Names[$i]).CopyTo($header, 0)
+            $entryName = $Names[$i]
+            if ($entryName.Length -gt 100) {
+                $cut = $entryName.IndexOf('/', $entryName.Length - 101)
+                if ($cut -lt 1 -or $cut -gt 155) {
+                    throw "No ustar prefix and name hold $entryName."
+                }
+                [Text.Encoding]::ASCII.GetBytes($entryName.Substring(0, $cut)).CopyTo($header, 345)
+                $entryName = $entryName.Substring($cut + 1)
+            }
+            [Text.Encoding]::ASCII.GetBytes($entryName).CopyTo($header, 0)
             [Text.Encoding]::ASCII.GetBytes('0000644').CopyTo($header, 100)
             [Text.Encoding]::ASCII.GetBytes('0000000').CopyTo($header, 108)
             [Text.Encoding]::ASCII.GetBytes('0000000').CopyTo($header, 116)
@@ -409,8 +419,10 @@ try {
     }
     # The fake source of the libraries of the runtime, and the lines that pin it, in the form of LIBRARY_FILES.
     $librariesPrefix = 'type2-runtime-20251108-libraries-source/'
-    $fakeLibraryNames = @('README.txt', 'aports/main/musl/APKBUILD', 'musl-1.2.5.tar.gz')
-    $fakeLibraryTexts = @('fake readme', 'fake recipe', 'fake musl')
+    # The patch has the length of the longest paths of the real source, so its name goes through the prefix field.
+    $fakeLongName = 'aports/main/musl/loongarch64-add-fpu-and-simd-context-to-signal.h.patch'
+    $fakeLibraryNames = @('README.txt', 'aports/main/musl/APKBUILD', $fakeLongName, 'musl-1.2.5.tar.gz')
+    $fakeLibraryTexts = @('fake readme', 'fake recipe', 'fake patch', 'fake musl')
     function Get-TextSha256([string]$Text) {
         $hash = [Security.Cryptography.SHA256]::Create()
         try {
@@ -420,7 +432,7 @@ try {
             $hash.Dispose()
         }
     }
-    $fakeLibraryFiles = "$(Get-TextSha256 'fake musl')  musl-1.2.5.tar.gz`n$(Get-TextSha256 'fake recipe')  aports/main/musl/APKBUILD`n"
+    $fakeLibraryFiles = "$(Get-TextSha256 'fake musl')  musl-1.2.5.tar.gz`n$(Get-TextSha256 'fake recipe')  aports/main/musl/APKBUILD`n$(Get-TextSha256 'fake patch')  $fakeLongName`n"
     function Write-FakeLibrariesSource([string]$Path, [string[]]$Names = $fakeLibraryNames, [string[]]$Texts = $fakeLibraryTexts, [char]$Type = '0') {
         Write-FakeTarGz $Path @($Names | ForEach-Object { $librariesPrefix + $_ }) $Texts $Type
     }
@@ -520,12 +532,13 @@ try {
     [IO.File]::WriteAllText($librariesFile, 'not an archive')
     Assert-Refused 'a libraries source that is not a gzip archive refused' { Test-ReleaseFiles $releaseFiles } 'type2-runtime-20251108-libraries-source.tar.gz on the release is not a gzip archive'
     $librariesCases = @(
-        @{ Name = 'a library file other than its pin refused'; Texts = @('fake readme', 'another recipe', 'fake musl'); Reason = 'holds type2-runtime-20251108-libraries-source/aports/main/musl/APKBUILD with the SHA-256' },
-        @{ Name = 'a libraries source without its README refused'; Names = @('aports/main/musl/APKBUILD', 'musl-1.2.5.tar.gz'); Texts = @('fake recipe', 'fake musl'); Reason = 'expected type2-runtime-20251108-libraries-source/README.txt' },
-        @{ Name = 'a libraries source without a pinned file refused'; Names = @('README.txt', 'musl-1.2.5.tar.gz'); Texts = @('fake readme', 'fake musl'); Reason = 'expected type2-runtime-20251108-libraries-source/README.txt, type2-runtime-20251108-libraries-source/aports/main/musl/APKBUILD' },
-        @{ Name = 'a libraries source with a file more refused'; Names = @('README.txt', 'aports/main/musl/APKBUILD', 'extra.patch', 'musl-1.2.5.tar.gz'); Texts = @('fake readme', 'fake recipe', 'more', 'fake musl'); Reason = 'expected' },
-        @{ Name = 'a libraries source out of order refused'; Names = @('README.txt', 'musl-1.2.5.tar.gz', 'aports/main/musl/APKBUILD'); Texts = @('fake readme', 'fake musl', 'fake recipe'); Reason = 'expected' },
-        @{ Name = 'a libraries source with an entry that is not a plain file refused'; Names = @('README.txt', 'aports/main/musl/APKBUILD', 'musl-1.2.5.tar.gz', 'link'); Texts = @('fake readme', 'fake recipe', 'fake musl', ''); Type = '2'; Reason = 'which is not a plain file' }
+        @{ Name = 'a library file other than its pin refused'; Texts = @('fake readme', 'another recipe', 'fake patch', 'fake musl'); Reason = 'holds type2-runtime-20251108-libraries-source/aports/main/musl/APKBUILD with the SHA-256' },
+        @{ Name = 'a library file with a long name other than its pin refused'; Texts = @('fake readme', 'fake recipe', 'another patch', 'fake musl'); Reason = "holds type2-runtime-20251108-libraries-source/$fakeLongName with the SHA-256" },
+        @{ Name = 'a libraries source without its README refused'; Names = @('aports/main/musl/APKBUILD', $fakeLongName, 'musl-1.2.5.tar.gz'); Texts = @('fake recipe', 'fake patch', 'fake musl'); Reason = 'expected type2-runtime-20251108-libraries-source/README.txt' },
+        @{ Name = 'a libraries source without a pinned file refused'; Names = @('README.txt', $fakeLongName, 'musl-1.2.5.tar.gz'); Texts = @('fake readme', 'fake patch', 'fake musl'); Reason = 'expected type2-runtime-20251108-libraries-source/README.txt, type2-runtime-20251108-libraries-source/aports/main/musl/APKBUILD' },
+        @{ Name = 'a libraries source with a file more refused'; Names = @('README.txt', 'aports/main/musl/APKBUILD', $fakeLongName, 'extra.patch', 'musl-1.2.5.tar.gz'); Texts = @('fake readme', 'fake recipe', 'fake patch', 'more', 'fake musl'); Reason = 'expected' },
+        @{ Name = 'a libraries source out of order refused'; Names = @('README.txt', 'musl-1.2.5.tar.gz', 'aports/main/musl/APKBUILD', $fakeLongName); Texts = @('fake readme', 'fake musl', 'fake recipe', 'fake patch'); Reason = 'expected' },
+        @{ Name = 'a libraries source with an entry that is not a plain file refused'; Names = @('README.txt', 'aports/main/musl/APKBUILD', $fakeLongName, 'musl-1.2.5.tar.gz', 'link'); Texts = @('fake readme', 'fake recipe', 'fake patch', 'fake musl', ''); Type = '2'; Reason = 'which is not a plain file' }
     )
     foreach ($case in $librariesCases) {
         $releaseFiles = New-ReleaseFiles
@@ -540,6 +553,19 @@ try {
     Assert-Refused 'a libraries source cut short refused' { Test-ReleaseFiles $releaseFiles } 'type2-runtime-20251108-libraries-source.tar.gz'
     $fetchText = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'fetch-runtime-sources.sh'))
     Report 'the check reads the files of the libraries source from fetch-runtime-sources.sh' (($fetchText -cmatch '(?ms)^readonly LIBRARY_FILES=''[0-9a-f]{64}  ') -and ([IO.File]::ReadAllText($checkFiles) -cmatch [regex]::Escape("(?ms)^readonly LIBRARY_FILES=''([^'']*)''\r?$")))
+    # Without -FuseSha256 and -LibraryFiles, as the workflows call it, the pins come from the fetch-runtime-sources.sh next to
+    # the check: here a copy of the check beside a script that pins the fake archives, with the line ends of a checkout on
+    # Windows and on Linux.
+    foreach ($lineEnd in "`r`n", "`n") {
+        $lineEndName = if ($lineEnd.Length -eq 2) { 'CRLF' } else { 'LF' }
+        $pinsFolder = Join-Path $temp "pins-$lineEndName"
+        New-Item -ItemType Directory -Path $pinsFolder | Out-Null
+        Copy-Item -LiteralPath $checkFiles -Destination $pinsFolder
+        $fakeFetch = @('#!/usr/bin/env bash', "readonly FUSE_SHA256='$fakeFuseSha256'", 'readonly RUNTIME_TAG=''20251108''', "readonly LIBRARY_FILES='$($fakeLibraryFiles.TrimEnd("`n"))'", 'readonly OTHER_FILES=''''', '') -join "`n"
+        [IO.File]::WriteAllText((Join-Path $pinsFolder 'fetch-runtime-sources.sh'), $fakeFetch.Replace("`n", $lineEnd), (New-Object Text.UTF8Encoding $false))
+        $releaseFiles = New-ReleaseFiles
+        Assert-Accepted "the files of the release pass with the pins read from fetch-runtime-sources.sh in $lineEndName" { & (Join-Path $pinsFolder 'check-release-files.ps1') -Folder $releaseFiles -Version '1.2.3' -Repository 'owner/name' -LameSha256 $fakeLameSha256 }
+    }
     $releaseFiles = New-ReleaseFiles '1.2.4'
     Assert-Refused 'a manifest of another version refused' { Test-ReleaseFiles $releaseFiles } 'the version 1.2.4'
     $releaseFiles = New-ReleaseFiles '1.2.3' 'other/name'
