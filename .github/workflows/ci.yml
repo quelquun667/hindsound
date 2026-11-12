@@ -134,8 +134,9 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
   # A rehearsal of the release, with nothing published: every file a tag would attach (the Setup, the portable zip, the
-  # AppImage, the tar.gz, the manifests, SHA256SUMS and the LAME source), built and checked by the very workflow the tag
-  # runs, and kept as artifacts of the run: hindsound-windows-x64, hindsound-linux-x64 and release-files.
+  # AppImage, the tar.gz, the manifests, SHA256SUMS, the LAME source and the source of libfuse and of the AppImage
+  # runtime), built and checked by the very workflow the tag runs, and kept as artifacts of the run:
+  # hindsound-windows-x64, hindsound-linux-x64 and release-files.
   release-files:
     needs: release-version
     uses: ./.github/workflows/release-files.yml
