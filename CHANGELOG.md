@@ -10,9 +10,9 @@ The first Linux version, and a portable copy for Windows. The copy installed by 
 
 ### Added
 
-- Hindsound for Linux, a first version for x64 PCs, with no window yet. It comes twice in a release: `hindsound-X.Y.Z-linux-x64.AppImage`, one file to run, and `hindsound-X.Y.Z-linux-x64.tar.gz`, a folder to unpack where the AppImage does not run. The README says how to set up each.
+- Hindsound for Linux, a first version for x64 PCs, with no window yet. It comes twice in a release: `hindsound-X.Y.Z-linux-x64.AppImage`, one file to run, and `hindsound-X.Y.Z-linux-x64.tar.gz`, a folder to unpack where the AppImage does not run. The README says how to set up each. It is built for 64-bit Ubuntu 22.04 and later and has not run on a real desktop yet: see `Not tried yet` in the README.
 - On Linux, Hindsound keeps the last minutes of the sound of the PC, and of the microphone if your settings name one, through PulseAudio or PipeWire. It follows a change of the default output or microphone.
-- On Linux, a clip is saved with its hotkey, with `hindsound --save`, or from the menu of its icon. The hotkey goes through the global shortcuts of the desktop (GNOME 48 and later, KDE), which may ask you first, or straight to X11. Where there is neither, a notification says once how to bind `hindsound --save` to a key in the settings of the desktop.
+- On Linux, a clip is saved with its hotkey, with `hindsound --save`, or from the menu of its icon. The hotkey goes through the global shortcuts of the desktop (GNOME 48 and later, KDE), which may ask you first, or straight to X11. Where there is neither, a notification says once which command to bind to a key in the settings of the desktop: the full path of the file you launched, followed by `--save`.
 - On Linux, a saved clip is announced by a notification without sound, with a `Show in folder` button; a click on it shows the clip selected in its folder. The clip is copied as a file when `wl-copy`, `xclip` or `xsel` is installed.
 - On Linux, the icon next to the clock has a menu: `Save clip`, `Pause capture` or `Resume capture`, `Open clips folder`, `Start with the session` and `Quit`. On GNOME the icon needs the AppIndicator extension, which Ubuntu has already; without it, clips are still saved with the hotkey or `hindsound --save`.
 - On its first launch from the AppImage or the unpacked folder, Hindsound adds itself, with its icon, to the list of applications. It never covers an entry installed by a package of the system.
@@ -27,7 +27,7 @@ The first Linux version, and a portable copy for Windows. The copy installed by 
 
 ### Changed
 
-- `THIRD-PARTY-NOTICES.md` lists the components of the Linux packages too, and says for each component whether it is in the Windows build, in the Linux packages, or in both. The licence texts used only on Linux are in `licenses/linux`: the Setup installs the same licence texts as 0.5.0, and the portable zip carries them too.
+- `THIRD-PARTY-NOTICES.md` lists the components of the Linux packages too, and says for each component whether it is in the Windows build, in the Linux packages, or in both. The licence texts used only on Linux are in `licenses/linux`: the Setup installs the same licence texts as 0.5.0, and the portable zip carries those same texts, not the ones in `licenses/linux`.
 
 ### Fixed
 
