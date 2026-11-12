@@ -72,6 +72,15 @@ internal static class BusCalls
             return null;
         }
 
+        return await connection.WatchSignalAsync(bus, signal, read, received).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// As <see cref="WatchSignalAsync{T}(SessionBus, BusSignal, MessageValueReader{T}, Action{T})"/>, on
+    /// <paramref name="connection"/> itself rather than on the one the bus hands out now. Null when the watch could not be put.
+    /// </summary>
+    public static async Task<IDisposable?> WatchSignalAsync<T>(this DBusConnection connection, SessionBus bus, BusSignal signal, MessageValueReader<T> read, Action<T> received)
+    {
         try
         {
             return await connection.AddMatchAsync(
