@@ -18,7 +18,7 @@ public sealed class ShortcutNoticeWiringTests
             source,
             StringComparison.Ordinal);
         Assert.Contains("return bus.CallAsync(Notify, \"susssasa{sv}i\", Write);", source, StringComparison.Ordinal);
-        Assert.Contains("var sent = await SendAsync(bus).ConfigureAwait(false);", source, StringComparison.Ordinal);
+        Assert.Contains("_ = Task.Run(() => HotkeyChoice.ShowNoticeOnceAsync(marker, () => SendAsync(bus), log));", source, StringComparison.Ordinal);
         Assert.Single(source.Split("CallAsync(").Skip(1));
         Assert.Single(source.Split("ShortcutNoticeRequest.Build()").Skip(1));
     }

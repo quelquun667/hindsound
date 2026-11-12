@@ -40,7 +40,8 @@ internal sealed class ConnectionClaim
 
     /// <summary>
     /// As <see cref="WatchOnceAsync{TConnection}(Func{Task{TConnection}}, Func{Task})"/>, for a <paramref name="watch"/> that
-    /// says whether its watches were put: false when it put none, having taken back any it put.
+    /// says whether its watches were put: false when it put none, having taken back any it put. A watch that throws or
+    /// answers false leaves the connection unclaimed, so the next try puts the watches on it.
     /// </summary>
     /// <returns>True when the watches were put.</returns>
     public async Task<bool> WatchOnceAsync<TConnection>(Func<Task<TConnection?>> connect, Func<Task<bool>> watch)
@@ -51,6 +52,32 @@ internal sealed class ConnectionClaim
             return false;
         }
 
-        return await watch().ConfigureAwait(false);
+        // A connection left claimed after a failed put would never be watched: every later try would see it claimed.
+        var put = false;
+        try
+        {
+            put = await watch().ConfigureAwait(false);
+        }
+        finally
+        {
+            if (!put)
+            {
+                Release(connection);
+            }
+        }
+
+        return put;
+    }
+
+    /// <summary>Gives <paramref name="connection"/> back to the next claim, unless another one was claimed since.</summary>
+    private void Release(object connection)
+    {
+        lock (_gate)
+        {
+            if (ReferenceEquals(_claimed, connection))
+            {
+                _claimed = null;
+            }
+        }
     }
 }

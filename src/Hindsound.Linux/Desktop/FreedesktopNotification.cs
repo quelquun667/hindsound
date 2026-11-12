@@ -72,6 +72,9 @@ internal sealed class FreedesktopNotification : INotificationView
     /// <summary>The id the server gave the last notification, for a test; 0 before any.</summary>
     internal uint LastId => Volatile.Read(ref _lastId);
 
+    /// <summary>For a test: stands between each watch put on the bus and the view, so that a put can be made to fail.</summary>
+    internal Func<BusSignal, Task<IDisposable?>, Task<IDisposable?>> PutWatch { get; init; } = static (_, watch) => watch;
+
     public void Present(NotificationContent content, NotificationSpot spot, uint accent)
     {
         if (_disposed)
@@ -93,9 +96,15 @@ internal sealed class FreedesktopNotification : INotificationView
 
         if (!_watching)
         {
+            // A new connection after a lost one has no watch: it is put back from there.
             _watching = true;
-            _ = Task.Run(() => WatchAsync(bus));
+            bus.Connected += connection => { _ = WatchOnceAsync(bus); };
         }
+
+        // Each notice tries the watches again, so one put that failed is made good by the next notice at the latest. The
+        // first connection may come through both paths, when this asks for it: only the first to claim it watches, or each
+        // signal would arrive twice.
+        _ = Task.Run(() => WatchOnceAsync(bus));
 
         _chain = _chain.ContinueWith(_ => SendAsync(content, shown, bus), TaskScheduler.Default).Unwrap();
         _loop.After(_holdMs, () => FinishIfStill(shown));
@@ -173,39 +182,51 @@ internal sealed class FreedesktopNotification : INotificationView
         return answer is { Ok: true, Value: { } capabilities } && capabilities.Contains(BodyMarkup);
     }
 
-    private async Task WatchAsync(SessionBus bus)
+    private async Task WatchOnceAsync(SessionBus bus)
     {
-        // A new connection after a lost one has no watch: it is put back from there. The first one may come through both
-        // paths, when this asks for it: only the first to claim it watches, or each signal would arrive twice.
-        bus.Connected += connection => { _ = WatchOnceAsync(bus); };
-        await WatchOnceAsync(bus).ConfigureAwait(false);
+        try
+        {
+            await _watchedOn.WatchOnceAsync(bus.ConnectionAsync, () => PutWatchesAsync(bus)).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _log("notification: watching the clicks failed: " + ex.GetType().Name);
+        }
     }
 
-    private Task WatchOnceAsync(SessionBus bus) => _watchedOn.WatchOnceAsync(bus.ConnectionAsync, () => PutWatchesAsync(bus));
-
-    private async Task PutWatchesAsync(SessionBus bus)
+    private async Task<bool> PutWatchesAsync(SessionBus bus)
     {
-        var action = await bus.WatchSignalAsync(ActionInvoked, ReadIdAndKey, pair => _loop.Post(() => OnAction(pair.Id, pair.Key))).ConfigureAwait(false);
-        var closed = await bus.WatchSignalAsync(NotificationClosed, ReadIdAndReason, pair => _loop.Post(() => OnClosed(pair.Id))).ConfigureAwait(false);
+        var action = await PutWatch(ActionInvoked, bus.WatchSignalAsync(ActionInvoked, ReadIdAndKey, pair => _loop.Post(() => OnAction(pair.Id, pair.Key)))).ConfigureAwait(false);
+        var closed = await PutWatch(NotificationClosed, bus.WatchSignalAsync(NotificationClosed, ReadIdAndReason, pair => _loop.Post(() => OnClosed(pair.Id)))).ConfigureAwait(false);
         lock (_watchGate)
         {
-            foreach (var watch in new[] { action, closed })
-            {
-                if (watch is null)
-                {
-                    continue;
-                }
-
-                if (_disposed)
-                {
-                    watch.Dispose();
-                }
-                else
-                {
-                    _watches.Add(watch);
-                }
-            }
+            return KeepWatches([action, closed], _watches, _disposed);
         }
+    }
+
+    /// <summary>
+    /// Keeps in <paramref name="kept"/> the watches just put on one connection, all of them or none: when one could not be
+    /// put, the others are taken back, so the next try puts them all again and none twice. None once the view is disposed.
+    /// </summary>
+    /// <returns>False when the watches are not up and the next try must put them.</returns>
+    internal static bool KeepWatches(IReadOnlyList<IDisposable?> put, List<IDisposable> kept, bool disposed)
+    {
+        if (disposed || put.Any(watch => watch is null))
+        {
+            foreach (var watch in put)
+            {
+                watch?.Dispose();
+            }
+
+            return disposed;
+        }
+
+        foreach (var watch in put)
+        {
+            kept.Add(watch!);
+        }
+
+        return true;
     }
 
     private static (uint Id, string Key) ReadIdAndKey(Message message, object? state)

@@ -65,7 +65,7 @@ internal static class HotkeyChoice
     /// <returns>True when the notice went out.</returns>
     public static async Task<bool> ShowNoticeOnceAsync(string? markerPath, Func<Task<BusAnswer<bool>>> send, Action<string> log)
     {
-        if (!ClaimNotice(markerPath, log))
+        if (markerPath is not null && File.Exists(markerPath))
         {
             return false;
         }
@@ -77,6 +77,7 @@ internal static class HotkeyChoice
             return false;
         }
 
+        ClaimNotice(markerPath, log);
         return true;
     }
 
