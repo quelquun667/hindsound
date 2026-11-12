@@ -32,21 +32,37 @@ public class HotkeyNativeTests
         Assert.False(ran);
     }
 
+    private const int MaxTries = 20;
+
+    // The caller gives up after Short. On a busy machine the hotkey thread can come to the request even later: the request is
+    // then abandoned before it starts, the case of the test above, and never runs. Only that setup is tried again; the
+    // checks run once, on the first try whose request started.
     [Fact]
     public async Task A_request_abandoned_while_it_runs_is_undone_when_it_ends()
     {
-        using var native = new Win32HotkeyNative(Short);
-        using var gate = new ManualResetEventSlim();
-        using var started = new ManualResetEventSlim();
-        using var undone = new ManualResetEventSlim();
-        var caller = Task.Run(() => native.Invoke(() => { started.Set(); gate.Wait(); return true; }, undo: undone.Set));
-        Assert.True(started.Wait(TimeSpan.FromSeconds(5)));
+        for (var attempt = 0; attempt < MaxTries; attempt++)
+        {
+            using var native = new Win32HotkeyNative(Short);
+            using var gate = new ManualResetEventSlim();
+            using var started = new ManualResetEventSlim();
+            using var undone = new ManualResetEventSlim();
+            var caller = Task.Run(() => native.Invoke(() => { started.Set(); gate.Wait(); return true; }, undo: undone.Set));
+            var outcome = await caller;
+            if (!started.Wait(TimeSpan.FromSeconds(1)))
+            {
+                gate.Set();
+                continue;
+            }
 
-        Assert.Equal(HotkeyRegistration.TimedOut, await caller);
-        Assert.False(undone.IsSet); // still running
-        gate.Set();
+            Assert.Equal(HotkeyRegistration.TimedOut, outcome);
+            Assert.False(undone.IsSet); // still running
+            gate.Set();
 
-        Assert.True(undone.Wait(TimeSpan.FromSeconds(5)));
+            Assert.True(undone.Wait(TimeSpan.FromSeconds(5)));
+            return;
+        }
+
+        Assert.Fail($"The hotkey thread never started a request before its caller gave up, in {MaxTries} tries.");
     }
 
     [Fact]
