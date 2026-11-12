@@ -29,7 +29,7 @@ The AppImage is a single file. Its first part is the type2 runtime of the AppIma
 - It comes from the release 20251108 of [AppImage/type2-runtime](https://github.com/AppImage/type2-runtime), whose tag points to the commit `dd6cebedcbddde9c82f89b011e8e1d40b6e43868`. The upstream workflow built it in the run <https://github.com/AppImage/type2-runtime/actions/runs/20037536435>, the build log the release names, and published it on 2025-12-08.
 - [packaging/linux/build-packages.sh](packaging/linux/build-packages.sh) downloads `runtime-x86_64` from that release, checks its SHA-256, `2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d`, before using it, and hands it unchanged to `appimagetool` with `--runtime-file`.
 - The file with that SHA-256 was downloaded and read on 2026-11-10. Its version string is `https://github.com/AppImage/type2-runtime/commit/dd6cebe`, the commit of the tag, and it holds the version strings `squashfuse 0.5.2`, `3.15.0` (libfuse), `1.5.6` (Zstandard) and `inflate 1.3.1` (zlib).
-- The runtime is under the MIT licence of its repository: [licenses/AppImage-type2-runtime-LICENSE.txt](licenses/linux/AppImage-type2-runtime-LICENSE.txt).
+- The runtime is under the MIT licence of its repository: [licenses/linux/AppImage-type2-runtime-LICENSE.txt](licenses/linux/AppImage-type2-runtime-LICENSE.txt).
 - The runtime's own code is one source file, `src/runtime/runtime.c` at the tag `20251108` (the other files of `src/runtime/` are its `Makefile`, `data_sections.ld` and `version`). That file carries its own notice, with copyright holders the `LICENSE` does not name: see below.
 
 The copyright lines of the header of `src/runtime/runtime.c` at the tag `20251108` read:
@@ -143,7 +143,7 @@ The Linux build (the AppImage and the tar.gz the CI makes) ships LAME as `libmp3
 - Hindsound looks for it first in the folder of the program, then asks the system for `libmp3lame.so.0`. To use your own build, put it in that folder under that name (in the tar.gz; an AppImage is read-only), or remove the shipped one so that the system's copy is used.
 - Both packages carry this document and [licenses/](licenses).
 - The CI artifact that holds the packages (`hindsound-linux-x64`) also holds that `lame-3.100.tar.gz`, unchanged, the archive the library of those packages was built from.
-- Nothing of it has run yet on a Linux machine: the CI is the first place it will.
+- What has run: the CI builds it, then [packaging/linux/check-packages.sh](packaging/linux/check-packages.sh) starts the program of each package with `--prove-mp3`, which writes an MP3 through the `libmp3lame.so.0` of that package, and the dynamic loader (`LD_DEBUG=libs`) shows that file was the one loaded. Both packages passed it on 2026-11-11, on an `ubuntu-22.04` runner of GitHub, in the CI run 42931513159. It has not run on a Linux desktop yet.
 
 ### The decoder inside the DLL
 
