@@ -802,6 +802,11 @@ try {
     Assert-FolderRefused 'other notices refused' { [IO.File]::WriteAllText((Join-Path $args[0] 'THIRD-PARTY-NOTICES.md'), 'other') } 'differs'
     Assert-FolderRefused 'a licence file missing refused' { Remove-Item -LiteralPath (Join-Path $args[0] 'licenses\b.txt') } 'has no*b.txt'
     Assert-FolderRefused 'another licence file refused' { [IO.File]::WriteAllText((Join-Path $args[0] 'licenses\a.txt'), 'other') } 'differs'
+    Assert-FolderRefused 'an extra licence file refused' { [IO.File]::WriteAllText((Join-Path $args[0] 'licenses\c.txt'), 'extra') } 'more in licenses*c.txt'
+    Assert-FolderRefused 'a folder of the Linux licences refused' {
+        New-Item -ItemType Directory -Path (Join-Path $args[0] 'licenses\linux') | Out-Null
+        [IO.File]::WriteAllText((Join-Path $args[0] 'licenses\linux\a.txt'), 'linux')
+    } 'more in licenses*linux'
 
     # What --prove-mp3 of the installed exe leaves, on fake files.
     $mp3Number = 0
