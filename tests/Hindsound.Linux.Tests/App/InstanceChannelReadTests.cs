@@ -45,6 +45,22 @@ public sealed class InstanceChannelReadTests : IDisposable
     }
 
     [Fact]
+    public void The_answer_keeps_a_time_of_its_own_past_the_read_time()
+    {
+        var log = new List<string>();
+        using var first = LinuxInstanceChannel.Take(Place(), log.Add);
+        using var second = LinuxInstanceChannel.Take(Place(), log.Add);
+        first.BeforeAnswer = () => Task.Delay(LinuxInstanceChannel.ReadTimeoutMs + 1000);
+
+        var telling = Task.Run(() => second.Tell(InstanceMessage.Show));
+        var received = Receive(first);
+
+        Assert.Equal(InstanceMessage.Show, received);
+        Assert.Equal(true, Answer(telling));
+        Assert.Empty(log);
+    }
+
+    [Fact]
     public void A_connection_held_in_its_read_does_not_hold_the_next_launch()
     {
         var log = new List<string>();

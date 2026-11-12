@@ -13,9 +13,13 @@ internal sealed class LinuxInstanceChannel : IInstanceChannel
 {
     private const int ExchangeTimeoutMs = 2000;
 
-    // A second launch waits for the answer well past the time the running one gives a launch that says nothing: the running
-    // one reads the line only once it accepts the connection, which comes late when its threads do, or behind a launch ahead
-    // in the queue that said nothing.
+    // The time an accepted connection has to bring its line. A launch sends its line as soon as it connects, so the time
+    // runs out for one that says nothing, or for a read that starts late, as when the threads of the app come late: it is
+    // long for the second, and each connection is read on its own, so the first holds nobody behind it.
+    internal const int ReadTimeoutMs = 6000;
+
+    // A second launch waits for the answer well past the read time the running one gives a connection: the running one reads
+    // the line only once it accepts the connection, which comes late when its threads do.
     private const int AnswerTimeoutMs = 10_000;
     private const int Backlog = 8;
 
@@ -24,8 +28,9 @@ internal sealed class LinuxInstanceChannel : IInstanceChannel
     private readonly FileStream? _lock;
     private readonly Socket? _listener;
     private readonly CancellationTokenSource _stop = new();
+    private readonly object _posting = new();
     private int _listening;
-    private int _disposed;
+    private bool _disposed;
 
     private LinuxInstanceChannel(Action<string> log, InstancePlace? place, bool first, FileStream? held, Socket? listener)
     {
@@ -136,9 +141,15 @@ internal sealed class LinuxInstanceChannel : IInstanceChannel
 
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) == 1)
+        // Taken with the posting of a line, so that no line is posted once this returns.
+        lock (_posting)
         {
-            return;
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
         }
 
         _stop.Cancel();
@@ -194,9 +205,25 @@ internal sealed class LinuxInstanceChannel : IInstanceChannel
                 return;
             }
 
-            using (client)
+            // Not awaited: it runs here until its read waits, then the next connection is accepted.
+            _ = ServeAsync(client, loop, received, token);
+        }
+    }
+
+    // One connection, on its own: a launch that says nothing, or whose read waits, holds no launch behind it.
+    private async Task ServeAsync(Socket client, IAppLoop loop, Action<InstanceMessage> received, CancellationToken token)
+    {
+        using (client)
+        {
+            if (await ReadAsync(client, token).ConfigureAwait(false) is not { } message)
             {
-                if (await ReadAsync(client, token).ConfigureAwait(false) is { } message)
+                return;
+            }
+
+            lock (_posting)
+            {
+                // The channel is closed as the app goes away: what a launch asked then is not run.
+                if (!_disposed)
                 {
                     loop.Post(() => received(message));
                 }
@@ -204,11 +231,11 @@ internal sealed class LinuxInstanceChannel : IInstanceChannel
         }
     }
 
-    // One line at most, within the timeout: a launch that says nothing must not hold the next one back.
+    // One line at most, within the read time: a launch that says nothing must not keep its connection.
     private async Task<InstanceMessage?> ReadAsync(Socket client, CancellationToken token)
     {
         using var reading = CancellationTokenSource.CreateLinkedTokenSource(token);
-        reading.CancelAfter(ExchangeTimeoutMs);
+        reading.CancelAfter(ReadTimeoutMs);
         var buffer = new byte[InstanceWire.MaxLength];
         var read = 0;
         try
