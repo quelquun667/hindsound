@@ -6,8 +6,8 @@ using Tmds.DBus.Protocol;
 namespace Hindsound.Linux.Input;
 
 /// <summary>
-/// Tells the user, at the first launch only, that the desktop has no global shortcut and how to save from the keyboard
-/// anyway: a silent notification through org.freedesktop.Notifications.Notify.
+/// Tells the user, once, that the desktop has no global shortcut and how to save from the keyboard anyway: a silent
+/// notification through org.freedesktop.Notifications.Notify, sent again at each launch until it went out.
 /// </summary>
 [SupportedOSPlatform("linux")]
 internal static class ShortcutNotice
