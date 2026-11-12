@@ -18,7 +18,7 @@ internal static class HotkeyChoice
     /// <summary>Logged, and shown once, when no layer can grab a key.</summary>
     public const string NoShortcutText = "No global shortcut on this desktop. Bind hindsound --save to a key in your keyboard settings.";
 
-    /// <summary>The marker that says the notice was shown, so it is shown at the first launch only.</summary>
+    /// <summary>The marker that says the notice went out, so it is not shown again.</summary>
     public const string NoticeMarkerName = "no-global-shortcut-notice";
 
     /// <summary>Whether the session is Wayland: its socket is named, or the session says so.</summary>
