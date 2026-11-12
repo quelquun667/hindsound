@@ -39,11 +39,14 @@ public sealed class InstanceChannelLeftSocketTests : IDisposable
         var received = Receive(first);
 
         Assert.Equal(InstanceMessage.Show, received);
-        Assert.Equal(true, telling.Wait(15_000) ? telling.Result : null);
+        Assert.Equal(true, Answer(telling));
         Assert.Empty(log);
     }
 
     private InstancePlace Place() => new(_folder, true, Path.Combine(_folder, "i.sock"), Path.Combine(_folder, "i.lock"));
+
+    // What the second launch was told: null when it neither gave up nor got an answer in time.
+    private static bool? Answer(Task<bool> telling) => telling.Wait(15_000) ? telling.Result : null;
 
     // Runs the loop until a message arrives, or fails past the guard.
     private static InstanceMessage? Receive(LinuxInstanceChannel first)
