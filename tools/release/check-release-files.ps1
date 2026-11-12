@@ -43,8 +43,8 @@ param(
     [Parameter(Mandatory = $true)][string]$Repository,
     [string]$Expected = '',
     [string]$LameSha256 = 'ddfe36cab873794038ae2c1210557ad34857a4b6bdc515785d1da9e175b1da1e',
-    [string]$FuseSha256 = '',
-    [string]$LibraryFiles = ''
+    [string]$LibraryFiles = '',
+    [string]$FuseSha256 = ''
 )
 
 $ErrorActionPreference = 'Stop'
