@@ -9,6 +9,7 @@ namespace Hindsound.Linux.Tests.App;
 /// A launch that connects and says nothing holds the running instance for its read time only: the launch queued behind it
 /// is still read and answered well within the time a second launch waits for its answer.
 /// </summary>
+[Collection(InstanceChannelCollection.Name)]
 public sealed class InstanceChannelSilentLaunchTests : IDisposable
 {
     private readonly string _folder = Path.Combine(Path.GetTempPath(), "hs-" + Guid.NewGuid().ToString("N")[..8]);

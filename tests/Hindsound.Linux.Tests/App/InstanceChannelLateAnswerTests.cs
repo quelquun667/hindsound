@@ -7,6 +7,7 @@ namespace Hindsound.Linux.Tests.App;
 /// A running instance that answers late, as on a busy machine where its threads come late: a second launch whose message
 /// arrived is still told so, and does not write that the running one could not be told.
 /// </summary>
+[Collection(InstanceChannelCollection.Name)]
 public sealed class InstanceChannelLateAnswerTests : IDisposable
 {
     // Longer than the time the running instance gives a launch that says nothing.

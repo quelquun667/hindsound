@@ -8,6 +8,7 @@ namespace Hindsound.Linux.Tests.App;
 /// The single instance of Linux: where its socket goes, what travels on it, and the channel itself. Unix sockets and an
 /// exclusive lock file exist on Windows too, so the channel runs here as well, in a folder of the test's own.
 /// </summary>
+[Collection(InstanceChannelCollection.Name)]
 public sealed class InstanceChannelTests : IDisposable
 {
     private readonly string _folder = Path.Combine(Path.GetTempPath(), "hs-" + Guid.NewGuid().ToString("N")[..8]);

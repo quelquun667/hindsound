@@ -7,6 +7,7 @@ namespace Hindsound.Linux.Tests.App;
 /// A file left where the socket goes, as a dead instance leaves it: the next instance takes its place and says nothing about
 /// it, and a second launch reaches it.
 /// </summary>
+[Collection(InstanceChannelCollection.Name)]
 public sealed class InstanceChannelLeftSocketTests : IDisposable
 {
     private readonly string _folder = Path.Combine(Path.GetTempPath(), "hs-" + Guid.NewGuid().ToString("N")[..8]);

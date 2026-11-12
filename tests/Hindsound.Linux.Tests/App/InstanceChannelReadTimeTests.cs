@@ -8,6 +8,7 @@ namespace Hindsound.Linux.Tests.App;
 /// Each connection is read on its own, so the read time is all that lets go of a launch that connects and says nothing:
 /// once it is over, the running instance closes that connection and runs nothing for it.
 /// </summary>
+[Collection(InstanceChannelCollection.Name)]
 public sealed class InstanceChannelReadTimeTests : IDisposable
 {
     private readonly string _folder = Path.Combine(Path.GetTempPath(), "hs-" + Guid.NewGuid().ToString("N")[..8]);

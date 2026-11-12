@@ -8,6 +8,7 @@ namespace Hindsound.Linux.Tests.App;
 /// How the running instance reads the launches that connect to it: a read that starts late still gets the line that came,
 /// a connection held in its read holds nobody behind it, and nothing a launch asked is run once the channel is closed.
 /// </summary>
+[Collection(InstanceChannelCollection.Name)]
 public sealed class InstanceChannelReadTests : IDisposable
 {
     // Longer than the 2 s the running instance used to give a connection to send its line.
