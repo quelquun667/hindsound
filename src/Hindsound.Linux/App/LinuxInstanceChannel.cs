@@ -38,6 +38,12 @@ internal sealed class LinuxInstanceChannel : IInstanceChannel
 
     public bool First { get; }
 
+    /// <summary>
+    /// For a test: stands between the acceptance of a connection, once its read time runs, and the read itself, so that the
+    /// read can be made late.
+    /// </summary>
+    internal Func<Task> BeforeRead { get; set; } = static () => Task.CompletedTask;
+
     /// <summary>For a test: stands between a whole line read and its answer, so that the answer can be made late.</summary>
     internal Func<Task> BeforeAnswer { get; set; } = static () => Task.CompletedTask;
 
@@ -207,6 +213,7 @@ internal sealed class LinuxInstanceChannel : IInstanceChannel
         var read = 0;
         try
         {
+            await BeforeRead().ConfigureAwait(false);
             while (read < buffer.Length && !InstanceWire.Complete(buffer.AsSpan(0, read)))
             {
                 var got = await client.ReceiveAsync(buffer.AsMemory(read), SocketFlags.None, reading.Token).ConfigureAwait(false);
