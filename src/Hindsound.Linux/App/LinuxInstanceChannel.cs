@@ -12,6 +12,11 @@ namespace Hindsound.Linux.App;
 internal sealed class LinuxInstanceChannel : IInstanceChannel
 {
     private const int ExchangeTimeoutMs = 2000;
+
+    // A second launch waits for the answer well past the time the running one gives a launch that says nothing: the running
+    // one reads the line only once it accepts the connection, which comes late when its threads do, or behind a launch ahead
+    // in the queue that said nothing.
+    private const int AnswerTimeoutMs = 10_000;
     private const int Backlog = 8;
 
     private readonly Action<string> _log;
@@ -32,6 +37,9 @@ internal sealed class LinuxInstanceChannel : IInstanceChannel
     }
 
     public bool First { get; }
+
+    /// <summary>For a test: stands between a whole line read and its answer, so that the answer can be made late.</summary>
+    internal Func<Task> BeforeAnswer { get; set; } = static () => Task.CompletedTask;
 
     /// <summary>Holds the name for <paramref name="options"/> for as long as the channel lives.</summary>
     public static LinuxInstanceChannel Take(AppOptions options, Action<string> log)
@@ -90,7 +98,7 @@ internal sealed class LinuxInstanceChannel : IInstanceChannel
         {
             using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
             socket.SendTimeout = ExchangeTimeoutMs;
-            socket.ReceiveTimeout = ExchangeTimeoutMs;
+            socket.ReceiveTimeout = AnswerTimeoutMs;
             socket.Connect(new UnixDomainSocketEndPoint(_place.Socket));
             socket.Send(InstanceWire.Encode(message));
             var answer = new byte[InstanceWire.Ack.Length];
@@ -193,15 +201,15 @@ internal sealed class LinuxInstanceChannel : IInstanceChannel
     // One line at most, within the timeout: a launch that says nothing must not hold the next one back.
     private async Task<InstanceMessage?> ReadAsync(Socket client, CancellationToken token)
     {
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
-        timeout.CancelAfter(ExchangeTimeoutMs);
+        using var reading = CancellationTokenSource.CreateLinkedTokenSource(token);
+        reading.CancelAfter(ExchangeTimeoutMs);
         var buffer = new byte[InstanceWire.MaxLength];
         var read = 0;
         try
         {
             while (read < buffer.Length && !InstanceWire.Complete(buffer.AsSpan(0, read)))
             {
-                var got = await client.ReceiveAsync(buffer.AsMemory(read), SocketFlags.None, timeout.Token).ConfigureAwait(false);
+                var got = await client.ReceiveAsync(buffer.AsMemory(read), SocketFlags.None, reading.Token).ConfigureAwait(false);
                 if (got == 0)
                 {
                     break;
@@ -209,20 +217,37 @@ internal sealed class LinuxInstanceChannel : IInstanceChannel
 
                 read += got;
             }
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or SocketException or ObjectDisposedException)
+        {
+            // The loop ends as soon as the line is whole, so a read that failed left none.
+            return InstanceWire.Decode(buffer.AsSpan(0, read));
+        }
 
-            if (InstanceWire.Decode(buffer.AsSpan(0, read)) is not { } message)
-            {
-                _log("single instance: a launch sent something unknown");
-                return null;
-            }
+        if (InstanceWire.Decode(buffer.AsSpan(0, read)) is not { } message)
+        {
+            _log("single instance: a launch sent something unknown");
+            return null;
+        }
 
-            await client.SendAsync(InstanceWire.Ack, SocketFlags.None, timeout.Token).ConfigureAwait(false);
-            return message;
+        await AnswerAsync(client, token).ConfigureAwait(false);
+        return message;
+    }
+
+    // The answer has a time of its own: the time of the read may be spent by now, however fast the line came, when the
+    // threads of the app come late.
+    private async Task AnswerAsync(Socket client, CancellationToken token)
+    {
+        try
+        {
+            await BeforeAnswer().ConfigureAwait(false);
+            using var answering = CancellationTokenSource.CreateLinkedTokenSource(token);
+            answering.CancelAfter(ExchangeTimeoutMs);
+            await client.SendAsync(InstanceWire.Ack, SocketFlags.None, answering.Token).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is OperationCanceledException or SocketException or ObjectDisposedException)
         {
             // The line came whole, and only the answer was lost: the launch still asked.
-            return InstanceWire.Decode(buffer.AsSpan(0, read));
         }
     }
 
