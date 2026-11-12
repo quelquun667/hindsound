@@ -24,6 +24,7 @@ public sealed partial class ReleaseWorkflowTests
         "lame-3.100.tar.gz",
         "fuse-3.15.0.tar.xz",
         "type2-runtime-20251108-source.tar.gz",
+        "type2-runtime-20251108-libraries-source.tar.gz",
         "SHA256SUMS",
     ];
 

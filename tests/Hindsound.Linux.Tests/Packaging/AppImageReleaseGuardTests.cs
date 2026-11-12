@@ -10,8 +10,12 @@ public sealed class AppImageReleaseGuardTests
 {
     private static readonly string Root = RepositoryRoot();
 
-    /// <summary>The source of libfuse and of the AppImage runtime, as fetch-runtime-sources.sh names them.</summary>
-    private static readonly string[] RuntimeSources = ["fuse-3.15.0.tar.xz", "type2-runtime-20251108-source.tar.gz"];
+    /// <summary>
+    /// The source of libfuse, of the AppImage runtime and of the other libraries linked into it, as
+    /// fetch-runtime-sources.sh names them.
+    /// </summary>
+    private static readonly string[] RuntimeSources =
+        ["fuse-3.15.0.tar.xz", "type2-runtime-20251108-source.tar.gz", "type2-runtime-20251108-libraries-source.tar.gz"];
 
     [Fact]
     public void Every_release_that_attaches_the_AppImage_attaches_its_runtime_source()
@@ -46,7 +50,8 @@ public sealed class AppImageReleaseGuardTests
 
         Assert.Contains("$fuseName = '" + RuntimeSources[0] + "'\n", check, StringComparison.Ordinal);
         Assert.Contains("$runtimeSourceName = '" + RuntimeSources[1] + "'\n", check, StringComparison.Ordinal);
-        Assert.Contains("$manifestName, $announceNames[0], $announceNames[1], $lameName, $fuseName, $runtimeSourceName, $sumsName\n)", check, StringComparison.Ordinal);
+        Assert.Contains("$librariesSourceName = '" + RuntimeSources[2] + "'\n", check, StringComparison.Ordinal);
+        Assert.Contains("$manifestName, $announceNames[0], $announceNames[1], $lameName, $fuseName, $runtimeSourceName, $librariesSourceName,\n    $sumsName\n)", check, StringComparison.Ordinal);
     }
 
     [Fact]

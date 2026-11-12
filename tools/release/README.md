@@ -67,17 +67,17 @@ never published.
 | files, windows: Check the Setup | `check-setup.ps1`: silent installation in a temporary folder of the runner; exe at the file version of the tag, DLL with the hash of the compiled one, `LICENSE`, `THIRD-PARTY-NOTICES.md` and `licenses\*.txt` identical to the repo; the installed exe draws its notifications (`--dump-notifications`), exit code 0 and BMP files; the installed exe writes one second of sine as an MP3 through the path of a clip (`--prove-mp3`), exit code 0, one MP3 and no WAV; silent uninstallation. |
 | files, windows: Write the update manifest | `write-manifest.ps1`: `hindsound-update-win-x64.json`, read by the installed app. |
 | files, windows: Make the portable zip | `build-portable-zip.ps1`, from the folder the Setup was built from: the files the Setup installs, plus `packaging/windows/portable.txt` and `README.txt`, in one folder named like the zip. The zip is read back, entry by entry. |
-| files, linux | On ubuntu-22.04: the Linux app published, `build-lame-linux.sh`, then `packaging/linux/build-packages.sh` and `check-packages.sh`, which start both packages once (`--prove-mp3`). Then the verified `lame-3.100.tar.gz`, and `fetch-runtime-sources.sh` for the source of the AppImage runtime, go into the artifact next to them. |
+| files, linux | On ubuntu-22.04: the Linux app published, `build-lame-linux.sh`, then `packaging/linux/build-packages.sh` and `check-packages.sh`, which start both packages once (`--prove-mp3`). Then the verified `lame-3.100.tar.gz`, and `fetch-runtime-sources.sh` for the source of the AppImage runtime and of the libraries linked into it, go into the artifact next to them. |
 | files, assemble | `assemble-release.ps1`: the files of both jobs, the same LAME source from both, the source of the AppImage runtime from the Linux job, `write-announce-manifest.ps1` for `hindsound-update-win-x64-portable.json` and `hindsound-update-linux-x64.json` (the page of the release, nothing to download), and one `SHA256SUMS` for every file. Then `check-release-files.ps1`, and the artifact `release-files`. |
 | release: Check the files of the release | `check-release-files.ps1` on the artifact, before anything goes up. |
 | release: Create the draft release | A draft, with the notes. |
-| release: Attach the files | The eleven files, each named. Then they are downloaded back, and `check-release-files.ps1` wants exactly these eleven, the manifests right, `SHA256SUMS` right, the SHA-256 of the LAME source, the SHA-256 of `fuse-3.15.0.tar.xz` that `fetch-runtime-sources.sh` pins, and each file with the size and SHA-256 of the one sent. |
+| release: Attach the files | The twelve files, each named. Then they are downloaded back, and `check-release-files.ps1` wants exactly these twelve, the manifests right, `SHA256SUMS` right, the SHA-256 of the LAME source, the SHA-256 of `fuse-3.15.0.tar.xz` that `fetch-runtime-sources.sh` pins, in `type2-runtime-20251108-libraries-source.tar.gz` exactly the files of `LIBRARY_FILES` in that script, each with its SHA-256 there, and each file with the size and SHA-256 of the one sent. |
 | release: Publish the release | `check-remote-tag.ps1`: the tag on GitHub must still point at the commit built. Then the draft goes public, marked as the latest release (`--latest`): the app reads that one, and sees the new version from then on. |
 
 The files of a release: `Hindsound-X.Y.Z-Setup.exe`, `Hindsound-X.Y.Z-win-x64-portable.zip`,
 `hindsound-X.Y.Z-linux-x64.AppImage`, `hindsound-X.Y.Z-linux-x64.tar.gz`, `hindsound-update-win-x64.json`,
 `hindsound-update-win-x64-portable.json`, `hindsound-update-linux-x64.json`, `lame-3.100.tar.gz`, `fuse-3.15.0.tar.xz`,
-`type2-runtime-20251108-source.tar.gz` and `SHA256SUMS`.
+`type2-runtime-20251108-source.tar.gz`, `type2-runtime-20251108-libraries-source.tar.gz` and `SHA256SUMS`.
 
 `ci.yml` calls `release-files.yml` too, on every pull request and push to `main`, with the version of the latest release in
 `CHANGELOG.md`: the same files are built and checked, and kept as the artifacts `hindsound-windows-x64`,
@@ -97,9 +97,17 @@ library the AppImage and the tar.gz ship; that job puts the verified `lame-3.100
 libfuse it is statically linked with (see "libfuse and the LGPL-2.1" in `THIRD-PARTY-NOTICES.md`): `fuse-3.15.0.tar.xz`,
 downloaded and refused unless it has the pinned SHA-256, and `type2-runtime-20251108-source.tar.gz`, made by `git archive`
 from the one commit of the tag `20251108`, fetched and refused unless `git rev-parse` reads that commit, and refused unless
-it holds `LICENSE`, `src/runtime/runtime.c` and `patches/libfuse/mount.c.diff`. Its pins are the only copy:
-`check-release-files.ps1` reads the SHA-256 of libfuse from it. The `linux` job of `release-files.yml` runs it into its
-artifact, so every release and every run of the CI hands out these two files with the AppImage.
+it holds `LICENSE`, `src/runtime/runtime.c` and `patches/libfuse/mount.c.diff`. The third file,
+`type2-runtime-20251108-libraries-source.tar.gz`, holds the source of the other libraries the runtime's `Makefile` links:
+`squashfuse-0.5.2.tar.gz`, refused unless it has the SHA-256 of `install-dependencies.sh`; for each Alpine 3.21 package
+(`main/musl`, `main/zstd`, `main/zlib`, `community/mimalloc2`), its upstream archive, refused unless it has the SHA-512
+of its `APKBUILD`, and its folder of aports at a pinned commit, each file refused unless it has its pinned SHA-256, the
+`APKBUILD` refused unless it has the pinned version and release and its `sha512sums` name exactly the files of the folder;
+and a `README.txt` it writes. The archive is the same bytes for the same files: names sorted, the date of the runtime's
+commit, owner 0, mode 0644, `gzip -n`. A run on Windows under Git Bash on 2026-11-12 wrote it twice with the same SHA-256.
+Its pins are the only copy: `check-release-files.ps1` reads the SHA-256 of libfuse and `LIBRARY_FILES` from it. The
+`linux` job of `release-files.yml` runs it into its
+artifact, so every release and every run of the CI hands out these three files with the AppImage.
 
 ## The version jump
 
