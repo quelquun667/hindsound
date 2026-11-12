@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+The first Linux version, and a portable copy for Windows. The copy installed by the Setup works as in 0.5.0, apart from the fix below.
+
+### Added
+
+- Hindsound for Linux, a first version for x64 PCs, with no window yet. It comes twice in a release: `hindsound-X.Y.Z-linux-x64.AppImage`, one file to run, and `hindsound-X.Y.Z-linux-x64.tar.gz`, a folder to unpack where the AppImage does not run. The README says how to set up each.
+- On Linux, Hindsound keeps the last minutes of the sound of the PC, and of the microphone if your settings name one, through PulseAudio or PipeWire. It follows a change of the default output or microphone.
+- On Linux, a clip is saved with its hotkey, with `hindsound --save`, or from the menu of its icon. The hotkey goes through the global shortcuts of the desktop (GNOME 48 and later, KDE), which may ask you first, or straight to X11. Where there is neither, a notification says once how to bind `hindsound --save` to a key in the settings of the desktop.
+- On Linux, a saved clip is announced by a notification without sound, with a `Show in folder` button; a click on it shows the clip selected in its folder. The clip is copied as a file when `wl-copy`, `xclip` or `xsel` is installed.
+- On Linux, the icon next to the clock has a menu: `Save clip`, `Pause capture` or `Resume capture`, `Open clips folder`, `Start with the session` and `Quit`. On GNOME the icon needs the AppIndicator extension, which Ubuntu has already; without it, clips are still saved with the hotkey or `hindsound --save`.
+- On its first launch from the AppImage or the unpacked folder, Hindsound adds itself, with its icon, to the list of applications. It never covers an entry installed by a package of the system.
+- On Linux, the settings are in `~/.config/Hindsound/settings.json`, the same file as on Windows: edit it while Hindsound is not running. Clips go to `~/Music/Hindsound` unless the settings name another folder.
+- On Linux, when a new version is out, a notification says so, and a click on it opens the page of the release. Nothing downloads or installs by itself: replace the file.
+- Not on Linux yet: the window (settings, `Now`, `Library`), listening to a clip, recording one application, and processors other than x64.
+- A portable copy for Windows, `Hindsound-X.Y.Z-win-x64-portable.zip`: unzip it and start `Hindsound.exe`, nothing is installed. `portable.txt`, next to `Hindsound.exe`, is what makes the copy portable. Its settings are in `%AppData%\Hindsound`, as for the Setup.
+- The portable copy never updates itself. When a new version is out, a notification says so, and a click on it opens the page of the release. In `General`, `When a version is out` offers `Ask me` and `Off`, and `Download` opens the same page. To update, replace the files of its folder with those of the new zip.
+- Every release carries `SHA256SUMS`, the SHA-256 of each of its files. On Linux, `sha256sum --check --ignore-missing SHA256SUMS` checks those you downloaded.
+- Every release also carries `fuse-3.15.0.tar.xz` and `type2-runtime-20251108-source.tar.gz`: the source of libfuse and of the runtime at the head of the AppImage, which holds libfuse, offered under the LGPL-2.1. Hindsound does not need them to run.
+- The release notes name each file of the release and whom it is for.
+
+### Changed
+
+- `THIRD-PARTY-NOTICES.md` lists the components of the Linux packages too, and says for each component whether it is in the Windows build, in the Linux packages, or in both. The licence texts used only on Linux are in `licenses/linux`: the Setup installs the same licence texts as 0.5.0, and the portable zip carries them too.
+
+### Fixed
+
+- On Windows as on Linux: when a folder of your account does not exist yet, such as a deleted Music folder, your clips, settings, log and the other files of the app no longer go to a folder relative to wherever Hindsound was started. Hindsound uses the full path, and creates the folder when it first writes there.
+
 ## [0.5.0] - 2026-11-10
 
 ### Added
