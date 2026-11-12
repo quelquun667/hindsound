@@ -1,3 +1,4 @@
+using Hindsound.Linux.App;
 using Hindsound.Linux.DBus;
 
 namespace Hindsound.Linux.Input;
@@ -15,8 +16,34 @@ internal enum HotkeyLayer
 /// <summary>The choice of a shortcut layer and what the app says when there is none. Pure logic.</summary>
 internal static class HotkeyChoice
 {
-    /// <summary>Logged, and shown once, when no layer can grab a key.</summary>
-    public const string NoShortcutText = "No global shortcut on this desktop. Bind hindsound --save to a key in your keyboard settings.";
+    /// <summary>
+    /// Logged, and shown once, when no layer can grab a key. It names the file this copy was launched by: the AppImage puts
+    /// nothing on the PATH, so a bare <c>hindsound --save</c> bound to a key would find no program.
+    /// </summary>
+    public static string NoShortcutText { get; } = NoShortcutTextFor(LaunchPaths.Current());
+
+    /// <summary>The notice when the program path cannot be written as a command a person can copy.</summary>
+    public const string NoShortcutGenericText =
+        "No global shortcut on this desktop. In your keyboard settings, bind the full path of the Hindsound program followed by --save to a key.";
+
+    /// <summary>
+    /// The notice for <paramref name="program"/>, the file launched (<see cref="LaunchPaths"/>). An absolute path is written
+    /// as the command to bind, between double quotes when it holds a space or another character a command line splits on:
+    /// the custom shortcuts of GNOME and the Exec key of a desktop entry both read double quotes. A path holding a character
+    /// that would need an escape inside them, that the markup of a notification reads (&amp;, &lt;, &gt;), or a % that the
+    /// Exec key reads as a field code, gets the generic text instead, which is right for any path.
+    /// </summary>
+    public static string NoShortcutTextFor(string? program)
+    {
+        if (string.IsNullOrEmpty(program) || !program.StartsWith('/')
+            || program.Any(c => c < ' ' || c == 0x7f || "&<>%\"$`\\".Contains(c)))
+        {
+            return NoShortcutGenericText;
+        }
+
+        var command = program.All(c => char.IsAsciiLetterOrDigit(c) || "/._+,:=@-".Contains(c)) ? program : "\"" + program + "\"";
+        return "No global shortcut on this desktop. In your keyboard settings, bind this command to a key: " + command + " --save";
+    }
 
     /// <summary>The marker that says the notice was shown, so it is shown at the first launch only.</summary>
     public const string NoticeMarkerName = "no-global-shortcut-notice";
