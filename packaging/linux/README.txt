@@ -31,8 +31,8 @@ Save a clip from a key
 On X11, and on Wayland where the desktop offers global shortcuts (GNOME 48 and later, KDE), Hindsound uses the hotkey
 of its settings.
 
-Elsewhere, Ubuntu 24.04 on Wayland included: open Settings > Keyboard > Keyboard Shortcuts > Custom Shortcuts, add one, and set its
-command to the full path of the program followed by --save, for example:
+Elsewhere, Ubuntu 24.04 on Wayland included: open Settings > Keyboard > View and Customize Shortcuts > Custom Shortcuts,
+add one, and set its command to the full path of the program followed by --save, for example:
 
     /home/you/.local/bin/hindsound --save
 

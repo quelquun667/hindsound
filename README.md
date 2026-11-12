@@ -25,7 +25,7 @@ paste into a Discord message.
 
 **Status:** early development. The Setup is on the [Releases page](https://github.com/quelquun667/hindsound/releases), and you can also [build it from source](#build-from-source).
 It has been tried on one Windows 11 PC, and some things are [not tried yet](#not-tried-yet). A first Linux version, with no
-window, is [on its way](#linux).
+window, comes with the releases after 0.5.0: see [Linux](#linux).
 
 ## Features
 
@@ -159,10 +159,10 @@ want nothing left.
 
 ### Linux
 
-A first Linux version, for 64-bit Ubuntu 22.04 and later, is on its way. It has no window. From the start it captures the
-sound of the whole PC, and the microphone if your settings name one. It saves a clip on its hotkey, on `hindsound --save`
-or from the menu of its icon, says so with a notification, and copies the clip when the desktop allows it. A click on the
-notification of a clip shows the clip in its folder.
+A first Linux version, for 64-bit Ubuntu 22.04 and later, comes with the releases after 0.5.0. It has no window. From the
+start it captures the sound of the whole PC, and the microphone if your settings name one. It saves a clip on its hotkey,
+on `hindsound --save` or from the menu of its icon, says so with a notification, and copies the clip when the desktop
+allows it. A click on the notification of a clip shows the clip in its folder.
 
 **Download.** From the [latest release](https://github.com/quelquun667/hindsound/releases/latest), from the release after
 0.5.0 on. Between releases, the CI builds the same files on every change: open a recent run of the
