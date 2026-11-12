@@ -22,7 +22,7 @@ The first Linux version, and a portable copy for Windows. The copy installed by 
 - A portable copy for Windows, `Hindsound-X.Y.Z-win-x64-portable.zip`: unzip it and start `Hindsound.exe`, nothing is installed. `portable.txt`, next to `Hindsound.exe`, is what makes the copy portable. Its settings are in `%AppData%\Hindsound`, as for the Setup.
 - The portable copy never updates itself. When a new version is out, a notification says so, and a click on it opens the page of the release. In `General`, `When a version is out` offers `Ask me` and `Off`, and `Download` opens the same page. To update, replace the files of its folder with those of the new zip.
 - Every release carries `SHA256SUMS`, the SHA-256 of each of its files. On Linux, `sha256sum --check --ignore-missing SHA256SUMS` checks those you downloaded.
-- Every release also carries `fuse-3.15.0.tar.xz`, `type2-runtime-20251108-source.tar.gz` and `type2-runtime-20251108-libraries-source.tar.gz`: the source of libfuse, of the runtime at the head of the AppImage, which holds libfuse, and of the other libraries linked into that runtime, offered under the LGPL-2.1. Hindsound does not need them to run.
+- Every release also carries `fuse-3.15.0.tar.xz`, `type2-runtime-20251108-source.tar.gz` and `type2-runtime-20251108-libraries-source.tar.gz`: the source of libfuse, of the runtime at the head of the AppImage, which holds libfuse, and of the other libraries linked into that runtime, offered for the LGPL-2.1 of libfuse. Hindsound does not need them to run.
 - The release notes name each file of the release and whom it is for.
 
 ### Changed
