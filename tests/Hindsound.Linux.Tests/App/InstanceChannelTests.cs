@@ -170,10 +170,15 @@ public sealed class InstanceChannelTests : IDisposable
     {
         File.WriteAllText(Place().Socket, "left over");
 
-        using var first = LinuxInstanceChannel.Take(Place(), _ => { });
+        var log = new List<string>();
+        using var first = LinuxInstanceChannel.Take(Place(), log.Add);
         using var second = LinuxInstanceChannel.Take(Place(), _ => { });
 
         Assert.True(first.First);
+
+        // The file left behind must give way to the socket: a failed bind says so here, before the exchange, which tells
+        // that failure apart from a line read too late.
+        Assert.DoesNotContain(log, line => line.StartsWith("single instance: no socket", StringComparison.Ordinal));
         Assert.Equal(InstanceMessage.Show, Receive(first, () => second.Tell(InstanceMessage.Show), out _));
     }
 
