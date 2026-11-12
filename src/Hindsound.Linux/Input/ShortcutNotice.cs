@@ -16,19 +16,8 @@ internal static class ShortcutNotice
 
     public static void ShowOnce(SessionBus bus, Action<string> log)
     {
-        if (!HotkeyChoice.ClaimNotice(HotkeyChoice.NoticeMarkerPath(Environment.GetEnvironmentVariable), log))
-        {
-            return;
-        }
-
-        _ = Task.Run(async () =>
-        {
-            var sent = await SendAsync(bus).ConfigureAwait(false);
-            if (!sent.Ok)
-            {
-                log("hotkeys: the notice could not be shown: " + sent.Error);
-            }
-        });
+        var marker = HotkeyChoice.NoticeMarkerPath(Environment.GetEnvironmentVariable);
+        _ = Task.Run(() => HotkeyChoice.ShowNoticeOnceAsync(marker, () => SendAsync(bus), log));
     }
 
     /// <summary>Sends the notice itself, apart from <see cref="ShowOnce"/> so that a test can read back what a server receives.</summary>

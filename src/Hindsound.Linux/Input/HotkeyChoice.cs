@@ -1,3 +1,5 @@
+using Hindsound.Linux.DBus;
+
 namespace Hindsound.Linux.Input;
 
 /// <summary>Which layer grabs the global shortcuts.</summary>
@@ -56,8 +58,31 @@ internal static class HotkeyChoice
     }
 
     /// <summary>
-    /// Claims the notice: true the first time, when the marker did not exist yet (it is written then). A marker that
-    /// cannot be written is logged, and the notice still goes out: better twice than never.
+    /// Shows the notice unless its marker says it was shown already. <paramref name="send"/> puts it up, and the marker is
+    /// written only once it is up: a notice that did not go out is logged and tried again at the next launch. Without a home
+    /// (<paramref name="markerPath"/> null), nothing remembers it and it goes out at every launch.
+    /// </summary>
+    /// <returns>True when the notice went out.</returns>
+    public static async Task<bool> ShowNoticeOnceAsync(string? markerPath, Func<Task<BusAnswer<bool>>> send, Action<string> log)
+    {
+        if (!ClaimNotice(markerPath, log))
+        {
+            return false;
+        }
+
+        var sent = await send().ConfigureAwait(false);
+        if (!sent.Ok)
+        {
+            log("hotkeys: the notice could not be shown: " + sent.Error);
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Writes the marker that says the notice was shown: true when it did not exist yet. A marker that cannot be written
+    /// is logged, and true is still returned: the notice then shows again at a later launch, better twice than never.
     /// </summary>
     public static bool ClaimNotice(string? markerPath, Action<string> log)
     {

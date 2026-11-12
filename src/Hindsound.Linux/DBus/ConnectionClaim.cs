@@ -30,7 +30,20 @@ internal sealed class ConnectionClaim
     /// path a part takes to its watches goes through here, so the claim cannot be left out of one of them.
     /// </summary>
     /// <returns>True when the watches were put.</returns>
-    public async Task<bool> WatchOnceAsync<TConnection>(Func<Task<TConnection?>> connect, Func<Task> watch)
+    public Task<bool> WatchOnceAsync<TConnection>(Func<Task<TConnection?>> connect, Func<Task> watch)
+        where TConnection : class =>
+        WatchOnceAsync(connect, async () =>
+        {
+            await watch().ConfigureAwait(false);
+            return true;
+        });
+
+    /// <summary>
+    /// As <see cref="WatchOnceAsync{TConnection}(Func{Task{TConnection}}, Func{Task})"/>, for a <paramref name="watch"/> that
+    /// says whether its watches were put: false when it put none, having taken back any it put.
+    /// </summary>
+    /// <returns>True when the watches were put.</returns>
+    public async Task<bool> WatchOnceAsync<TConnection>(Func<Task<TConnection?>> connect, Func<Task<bool>> watch)
         where TConnection : class
     {
         if (await connect().ConfigureAwait(false) is not { } connection || !TryClaim(connection))
@@ -38,7 +51,6 @@ internal sealed class ConnectionClaim
             return false;
         }
 
-        await watch().ConfigureAwait(false);
-        return true;
+        return await watch().ConfigureAwait(false);
     }
 }
