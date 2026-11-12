@@ -45,7 +45,7 @@ internal static class HotkeyChoice
         return "No global shortcut on this desktop. In your keyboard settings, bind this command to a key: " + command + " --save";
     }
 
-    /// <summary>The marker that says the notice was shown, so it is shown at the first launch only.</summary>
+    /// <summary>The marker that says the notice went out, so it is not shown again.</summary>
     public const string NoticeMarkerName = "no-global-shortcut-notice";
 
     /// <summary>Whether the session is Wayland: its socket is named, or the session says so.</summary>

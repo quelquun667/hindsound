@@ -85,6 +85,15 @@ function Assert-InstalledFolder([string]$Folder) {
     foreach ($licence in $expectedLicences) {
         Assert-SameFile (Join-Path $Folder "licenses\$($licence.Name)") $licence.FullName
     }
+    # The Setup takes the top of licenses only: the texts of the Linux packages, or anything else, are not for this copy.
+    $expectedNames = @($expectedLicences | ForEach-Object Name)
+    $installedLicences = (Get-Item -LiteralPath (Join-Path $Folder 'licenses')).FullName.TrimEnd('\')
+    $extra = @(Get-ChildItem -LiteralPath $installedLicences -Recurse -Force |
+        ForEach-Object { $_.FullName.Substring($installedLicences.Length + 1) } |
+        Where-Object { $expectedNames -notcontains $_ })
+    if ($extra.Count -gt 0) {
+        throw "The installed folder has more in licenses than the repository's licenses\*.txt: $($extra -join ', ')."
+    }
     Write-Output "Licences: LICENSE, THIRD-PARTY-NOTICES.md and $($expectedLicences.Count) in licenses, as in the repository."
 }
 

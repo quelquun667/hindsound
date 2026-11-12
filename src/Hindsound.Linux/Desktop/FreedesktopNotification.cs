@@ -182,26 +182,64 @@ internal sealed class FreedesktopNotification : INotificationView
         return answer is { Ok: true, Value: { } capabilities } && capabilities.Contains(BodyMarkup);
     }
 
-    private async Task WatchOnceAsync(SessionBus bus)
+    private Task WatchOnceAsync(SessionBus bus) =>
+        LogWatchFailureAsync(() => _watchedOn.WatchOnceAsync(bus.ConnectionAsync, connection => PutWatchesAsync(bus, connection)), _log);
+
+    /// <summary>Runs <paramref name="watching"/> and writes to the log a failure it throws: nothing waits on the watches.</summary>
+    internal static async Task LogWatchFailureAsync(Func<Task> watching, Action<string> log)
     {
         try
         {
-            await _watchedOn.WatchOnceAsync(bus.ConnectionAsync, () => PutWatchesAsync(bus)).ConfigureAwait(false);
+            await watching().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            _log("notification: watching the clicks failed: " + ex.GetType().Name);
+            log("notification: watching the clicks failed: " + ex.GetType().Name);
         }
     }
 
-    private async Task<bool> PutWatchesAsync(SessionBus bus)
+    // On the connection claimed, not on the one the bus hands out now: when the claimed one was lost in between, the new
+    // one is claimed and watched from SessionBus.Connected, and each of its signals would arrive twice.
+    private Task<bool> PutWatchesAsync(SessionBus bus, DBusConnection connection) =>
+        PutAllAsync(
+            [
+                () => PutWatch(ActionInvoked, connection.WatchSignalAsync(bus, ActionInvoked, ReadIdAndKey, pair => _loop.Post(() => OnAction(pair.Id, pair.Key)))),
+                () => PutWatch(NotificationClosed, connection.WatchSignalAsync(bus, NotificationClosed, ReadIdAndReason, pair => _loop.Post(() => OnClosed(pair.Id)))),
+            ],
+            put =>
+            {
+                lock (_watchGate)
+                {
+                    return KeepWatches(put, _watches, _disposed);
+                }
+            });
+
+    /// <summary>
+    /// Puts each watch in turn, then hands them all to <paramref name="keep"/>. A put that throws counts as one that could not
+    /// be put: the watches already put are taken back before the exception goes on, so the next try puts them all again and
+    /// none twice.
+    /// </summary>
+    internal static async Task<bool> PutAllAsync(IReadOnlyList<Func<Task<IDisposable?>>> puts, Func<IReadOnlyList<IDisposable?>, bool> keep)
     {
-        var action = await PutWatch(ActionInvoked, bus.WatchSignalAsync(ActionInvoked, ReadIdAndKey, pair => _loop.Post(() => OnAction(pair.Id, pair.Key)))).ConfigureAwait(false);
-        var closed = await PutWatch(NotificationClosed, bus.WatchSignalAsync(NotificationClosed, ReadIdAndReason, pair => _loop.Post(() => OnClosed(pair.Id)))).ConfigureAwait(false);
-        lock (_watchGate)
+        var put = new List<IDisposable?>(puts.Count);
+        try
         {
-            return KeepWatches([action, closed], _watches, _disposed);
+            foreach (var next in puts)
+            {
+                put.Add(await next().ConfigureAwait(false));
+            }
         }
+        catch
+        {
+            foreach (var taken in put)
+            {
+                taken?.Dispose();
+            }
+
+            throw;
+        }
+
+        return keep(put);
     }
 
     /// <summary>

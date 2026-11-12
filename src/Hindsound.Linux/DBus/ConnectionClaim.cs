@@ -44,7 +44,16 @@ internal sealed class ConnectionClaim
     /// answers false leaves the connection unclaimed, so the next try puts the watches on it.
     /// </summary>
     /// <returns>True when the watches were put.</returns>
-    public async Task<bool> WatchOnceAsync<TConnection>(Func<Task<TConnection?>> connect, Func<Task<bool>> watch)
+    public Task<bool> WatchOnceAsync<TConnection>(Func<Task<TConnection?>> connect, Func<Task<bool>> watch)
+        where TConnection : class =>
+        WatchOnceAsync(connect, _ => watch());
+
+    /// <summary>
+    /// As <see cref="WatchOnceAsync{TConnection}(Func{Task{TConnection}}, Func{Task{bool}})"/>, with the connection claimed
+    /// handed to <paramref name="watch"/>: the watches go on it, and not on whatever connection the bus has by then.
+    /// </summary>
+    /// <returns>True when the watches were put.</returns>
+    public async Task<bool> WatchOnceAsync<TConnection>(Func<Task<TConnection?>> connect, Func<TConnection, Task<bool>> watch)
         where TConnection : class
     {
         if (await connect().ConfigureAwait(false) is not { } connection || !TryClaim(connection))
@@ -56,7 +65,7 @@ internal sealed class ConnectionClaim
         var put = false;
         try
         {
-            put = await watch().ConfigureAwait(false);
+            put = await watch(connection).ConfigureAwait(false);
         }
         finally
         {
