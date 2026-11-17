@@ -34,6 +34,17 @@ public sealed class LibraryAction
     /// <summary>Puts a damaged file aside and starts with no collections. Refused on a file that is not damaged.</summary>
     public static LibraryAction StartOver() => new(null, (store, _, _, _) => store.StartOver());
 
+    /// <summary>
+    /// Work on the files of a clip: renaming them, sending them to the Recycle Bin. It runs off the loop, after the fresh look,
+    /// on the clip as that look found it and with that look. The work keeps what it did for its own answer: the outcome it gives
+    /// here only goes with the reading, which shows the index as the work left it.
+    /// </summary>
+    internal static LibraryAction OnClipFiles(ClipGroup line, Func<LibraryStore, ClipGroup, ClipScan, DateTime, LibraryOutcome> work)
+    {
+        ArgumentNullException.ThrowIfNull(work);
+        return new(PathOf(line), (store, clip, scan, now) => new LibraryChange(work(store, clip, scan, now), store.Read()));
+    }
+
     private static string PathOf(ClipGroup line)
     {
         ArgumentNullException.ThrowIfNull(line);
@@ -506,5 +517,126 @@ public sealed class LibraryReads
     private readonly record struct KnownLength(long Size, DateTime WrittenUtc, TimeSpan Length)
     {
         public bool IsOf(in ClipFile file) => Size == file.Size && WrittenUtc == file.WrittenUtc;
+    }
+}
+
+/// <summary>
+/// What renaming a clip and sending it to the Recycle Bin do to its files, once a fresh look has found it. Off the loop. Never
+/// deletes a file, never throws, and tells the log a type and a code, never a path: a file name can hold a first name.
+/// </summary>
+internal static class ClipFileWork
+{
+    /// <summary>
+    /// Gives every file of the clip its new name, or none: when one can't move, those already moved go back. The rule of names is
+    /// asked again against the disk first, since the dialog only knew the listing. Then the labels of the index follow.
+    /// </summary>
+    /// <param name="clip">The clip, as the fresh look found it.</param>
+    /// <param name="name">The new name, without suffix or extension.</param>
+    /// <param name="exists">Whether a file is at this path.</param>
+    /// <param name="move">Moves a file, and throws when it can't.</param>
+    /// <param name="moveLabels">Moves the labels of the clip to the new paths, in the order of its files.</param>
+    /// <param name="journal">The log.</param>
+    public static ClipRenameOutcome Rename(
+        ClipGroup clip,
+        string name,
+        Func<string, bool> exists,
+        Action<string, string> move,
+        Func<IReadOnlyList<string>, LibraryOutcome> moveLabels,
+        Action<string>? journal)
+    {
+        if (clip.Files.Count == 0)
+        {
+            return ClipRenameOutcome.Gone;
+        }
+
+        if (ClipNames.Refusal(clip, name, exists) is { } refusal)
+        {
+            return refusal;
+        }
+
+        var targets = ClipNames.TargetPaths(clip, name);
+        var moved = 0;
+        try
+        {
+            for (; moved < targets.Count; moved++)
+            {
+                // The same name, letter for letter: nothing to ask of the system.
+                if (!string.Equals(clip.Files[moved].Path, targets[moved], StringComparison.Ordinal))
+                {
+                    move(clip.Files[moved].Path, targets[moved]);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            journal?.Invoke($"clip rename: not renamed ({ClipFolders.Describe(ex)})");
+            PutBack(clip, targets, moved, move, journal);
+            return ClipRenameOutcome.Failed;
+        }
+
+        var labels = moveLabels(targets);
+        if (labels != LibraryOutcome.Done)
+        {
+            // The files have their new names all the same: the user asked for that, and a star left behind is no reason to undo it.
+            journal?.Invoke($"clip rename: the labels did not follow ({labels})");
+        }
+
+        return ClipRenameOutcome.Done;
+    }
+
+    /// <summary>
+    /// Sends every file of the clip to the Recycle Bin in one call, so that the system sees them all before it moves any. The index
+    /// is left as it is: its entries outlive their files, and a clip brought back from the bin finds its labels again.
+    /// </summary>
+    public static ClipDeleteOutcome Delete(ClipGroup clip, IRecycleBin bin, Action<string>? journal)
+    {
+        if (clip.Files.Count == 0)
+        {
+            return ClipDeleteOutcome.Gone;
+        }
+
+        RecycleOutcome outcome;
+        try
+        {
+            outcome = bin.Recycle([.. clip.Files.Select(file => file.Path)]);
+        }
+        catch (Exception ex)
+        {
+            journal?.Invoke($"clip delete: failed ({ClipFolders.Describe(ex)})");
+            return ClipDeleteOutcome.Failed;
+        }
+
+        switch (outcome)
+        {
+            case RecycleOutcome.Recycled:
+                return ClipDeleteOutcome.Recycled;
+            case RecycleOutcome.CannotRecycle:
+                journal?.Invoke("clip delete: the Recycle Bin can't take it, the files stay");
+                return ClipDeleteOutcome.CannotRecycle;
+            default:
+                journal?.Invoke($"clip delete: failed ({outcome})");
+                return ClipDeleteOutcome.Failed;
+        }
+    }
+
+    // The files already moved go back, the last one first. One that can't is said in the log: the next reading shows where it is.
+    private static void PutBack(ClipGroup clip, IReadOnlyList<string> targets, int moved, Action<string, string> move, Action<string>? journal)
+    {
+        for (var i = moved - 1; i >= 0; i--)
+        {
+            if (string.Equals(clip.Files[i].Path, targets[i], StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            try
+            {
+                move(targets[i], clip.Files[i].Path);
+            }
+            catch (Exception ex)
+            {
+                journal?.Invoke($"clip rename: a file kept its new name, it could not go back ({ClipFolders.Describe(ex)})");
+            }
+        }
     }
 }

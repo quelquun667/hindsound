@@ -1,3 +1,4 @@
+using System.IO;
 using Hindsound.Library;
 using Hindsound.Ui;
 using Hindsound.Ui.Window;
@@ -102,6 +103,50 @@ internal sealed class WindowLibrary : ILibraryPanel
 
     public void StartOver() => Act(LibraryAction.StartOver, _screen.CollectionBoxAnswered);
 
+    public void Rename(ClipGroup line, string name)
+    {
+        var playing = StopIfPlaying(line);
+        ClipRenameOutcome? renamed = null;
+        Act(
+            () => LibraryAction.OnClipFiles(line, (store, clip, scan, now) =>
+            {
+                LetGo(playing);
+                renamed = ClipFileWork.Rename(clip, name, File.Exists, (from, to) => File.Move(from, to), to => store.MoveLabels(clip, to, scan, now), _journal);
+                return LibraryOutcome.Done;
+            }),
+            outcome => ThenLook(() =>
+            {
+                var told = renamed ?? (outcome == LibraryOutcome.ClipGone ? ClipRenameOutcome.Gone : ClipRenameOutcome.Failed);
+                _screen.ClipRenameAnswered(line, told);
+                RenameAnswered?.Invoke(line, told);
+            }));
+    }
+
+    public void Delete(ClipGroup line)
+    {
+        var playing = StopIfPlaying(line);
+        ClipDeleteOutcome? deleted = null;
+        Act(
+            () => LibraryAction.OnClipFiles(line, (_, clip, _, _) =>
+            {
+                LetGo(playing);
+                deleted = ClipFileWork.Delete(clip, _recycleBin, _journal);
+                return LibraryOutcome.Done;
+            }),
+            outcome => ThenLook(() =>
+            {
+                var told = deleted ?? (outcome == LibraryOutcome.ClipGone ? ClipDeleteOutcome.Gone : ClipDeleteOutcome.Failed);
+                _screen.ClipDeleteAnswered(line, told);
+                DeleteAnswered?.Invoke(line, told);
+            }));
+    }
+
+    /// <summary>Told of each answer to <see cref="Rename"/> after the screen, on the loop. For a test.</summary>
+    internal Action<ClipGroup, ClipRenameOutcome>? RenameAnswered { get; set; }
+
+    /// <summary>Told of each answer to <see cref="Delete"/> after the screen, on the loop. For a test.</summary>
+    internal Action<ClipGroup, ClipDeleteOutcome>? DeleteAnswered { get; set; }
+
     public ClipLines? Lines { get; private set; }
 
     /// <summary>A look is under way, or the durations of the last one are still being read.</summary>
@@ -152,6 +197,44 @@ internal sealed class WindowLibrary : ILibraryPanel
     }
 
     public void StopPlaying() => _preview?.Stop();
+
+    /// <summary>How long a renaming or a deletion waits, off the loop, for the preview to let go of the file.</summary>
+    internal const int LetGoMs = 2000;
+
+    /// <summary>
+    /// MCI keeps open the file it plays, and an open file can be neither renamed nor sent to the bin: what plays of this clip stops,
+    /// on the loop, before the action is asked for. The preview that was stopped, for the action to wait on, or null.
+    /// </summary>
+    private ClipPreview? StopIfPlaying(ClipGroup line)
+    {
+        if (_closed || _preview is not { } preview || line.Files.Count == 0
+            || preview.Current.Clip is not { Files.Count: > 0 } playing
+            || !string.Equals(playing.Main.Path, line.Main.Path, PathRules.Comparison))
+        {
+            return null;
+        }
+
+        preview.Stop();
+        return preview;
+    }
+
+    // Off the loop: the thread of the preview closes the file as it leaves. Past the wait the action goes on, and a file still
+    // held makes it fail, which the answer says.
+    private void LetGo(ClipPreview? preview)
+    {
+        if (preview is not null && !preview.WaitForEnd(LetGoMs))
+        {
+            _journal("clip files: the preview still held the file");
+        }
+    }
+
+    /// <summary>The answer, then a new reading: the files have a new name or have gone. The sentence of the answer stays through it.</summary>
+    private void ThenLook(Action answer)
+    {
+        answer();
+        _screen.KeepSentenceThroughNextReading();
+        ReadAgain();
+    }
 
     /// <summary>The preview of this window, for a test. Null until the first Play.</summary>
     internal ClipPreview? Preview => _preview;
