@@ -85,6 +85,30 @@ public class EditorSelectionTests
         Assert.True(selection.TooLongForSoundboard);
     }
 
+    [Theory]
+    [InlineData(1_000, "1.0 s")]
+    [InlineData(5_200, "5.2 s")]
+    [InlineData(5_201, "5.21 s")]
+    [InlineData(5_249, "5.25 s")]
+    [InlineData(5_250, "5.25 s")]
+    [InlineData(5_251, "5.3 s")]
+    public void The_time_kept_reads_to_the_tenth_and_never_as_the_limit_once_over_it(long ms, string text)
+    {
+        Assert.Equal(text, EditorSelection.KeptText(ms));
+    }
+
+    [Fact]
+    public void A_selection_too_long_for_the_soundboard_never_reads_as_its_limit_or_under()
+    {
+        var selection = Of(30);
+        for (var ms = 5_100L; ms <= 5_400; ms++)
+        {
+            selection.Move(EditorEnd.End, ms);
+            var shown = double.Parse(EditorSelection.KeptText(selection.KeptMs).TrimEnd('s', ' '), System.Globalization.CultureInfo.InvariantCulture);
+            Assert.True(!selection.TooLongForSoundboard || shown > 5.2, $"{selection.KeptMs} ms reads {shown}");
+        }
+    }
+
     [Fact]
     public void A_hundred_nudges_land_on_the_whole_tenth()
     {
