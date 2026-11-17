@@ -53,8 +53,10 @@ internal sealed class MediaFoundationClipDecoder : IClipDecoder
 /// Every frame is placed by the time of its sample. The first sample after a start or a seek is the exception: Media
 /// Foundation's mp3 decoder drops its first 528 frames but keeps the time of its start and gives it a duration that matches
 /// what is left (seen on Windows 11, 17/11/2026), so it is held until the next one comes and placed to end where that one
-/// begins. The frames of the file sit on that timeline from <see cref="_origin"/> to
-/// <see cref="_end"/>: for an mp3 with a LAME tag, past the tag frame (decoded as silence), the encoder delay and the
+/// begins. Alone before the end, it ends where the stream ends. In an mp3 every sample starts and ends on a packet of the
+/// file (<see cref="_packet"/> frames), and its time is put back on that grid: after a seek at 44.1 kHz, Media Foundation
+/// gives times about 3 frames short of it (seen on Windows 11, 18/11/2026). The frames of the file sit on that timeline
+/// from <see cref="_origin"/> to <see cref="_end"/>: for an mp3 with a LAME tag, past the tag frame (decoded as silence), the encoder delay and the
 /// decoder delay, and short of the padding, so a clip comes back with its own length and its own first frame.
 /// </remarks>
 internal sealed unsafe class MediaFoundationStream : IDecodedStream
@@ -76,6 +78,10 @@ internal sealed unsafe class MediaFoundationStream : IDecodedStream
     private readonly int _nativeChannels;
     private readonly int _nativeRate;
     private readonly long _origin, _end;
+
+    /// <summary>The frames of one packet of an mp3 whose tag was read, or 0: then a time is taken as it comes.</summary>
+    private readonly int _packet;
+
     private readonly float[] _mixed;
     private readonly float[] _resampled;
 
@@ -115,6 +121,9 @@ internal sealed unsafe class MediaFoundationStream : IDecodedStream
         Channels = nativeChannels == 1 ? 1 : 2;
         _origin = gapless?.FirstFrame ?? 0;
         _end = gapless is { } known ? known.FirstFrame + known.Frames : long.MaxValue;
+
+        // MPEG-1 (32 to 48 kHz) has 1152 frames to a packet, MPEG-2 and 2.5 (below) 576.
+        _packet = gapless is null ? 0 : nativeRate >= 32_000 ? 1152 : 576;
         Duration = gapless is { } exact ? TimeSpan.FromTicks(exact.Frames * TicksPerSecond / nativeRate) : duration;
         _keepFrom = _origin;
         _mixed = new float[ChunkFrames * Channels];
@@ -275,7 +284,14 @@ internal sealed unsafe class MediaFoundationStream : IDecodedStream
         // The last read may bring both a sample and the end, or the end with no sample.
         if ((flags & MF_SOURCE_READERF_ENDOFSTREAM) != 0)
         {
-            if (_holding && _heldFrames > 0) Place(_held.AsSpan(0, _heldFrames * _nativeChannels), FrameAt(_heldTime));
+            if (_holding && _heldFrames > 0)
+            {
+                // No next sample to tell where it ends: on the first packet boundary past its frames, where the file ends.
+                var end = FrameAt(_heldTime) + _heldFrames;
+                if (_packet > 0) end = (end + _packet - 1) / _packet * _packet;
+                Place(_held.AsSpan(0, _heldFrames * _nativeChannels), end - _heldFrames);
+            }
+
             _holding = false;
             Flush();
             _ended = true;
@@ -331,8 +347,14 @@ internal sealed unsafe class MediaFoundationStream : IDecodedStream
         }
     }
 
-    // A time of Media Foundation as a frame of the file's timeline. An unknown time (-1) means right after the last frame.
-    private long FrameAt(long time) => time < 0 ? _nextFrame : (long)Math.Round((double)time * _nativeRate / TicksPerSecond);
+    // A time of Media Foundation as a frame of the file's timeline, on the nearest packet in an mp3. An unknown time (-1)
+    // means right after the last frame.
+    private long FrameAt(long time)
+    {
+        if (time < 0) return _nextFrame;
+        var frame = (long)Math.Round((double)time * _nativeRate / TicksPerSecond);
+        return _packet > 0 ? (long)Math.Round((double)frame / _packet) * _packet : frame;
+    }
 
     // Hands on the frames of one sample that fall between the first frame to keep and the end of the file.
     private void Place(ReadOnlySpan<float> native, long first)
