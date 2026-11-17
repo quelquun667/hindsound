@@ -16,7 +16,7 @@ internal sealed partial class SettingsScreen
     public const string EditorTooBig = "Too big for the soundboard: 512 KB max. Nothing was saved.";
     public const string EditorSourceGone = "The clip is no longer there. Nothing was saved.";
     public const string EditorFailed = "Can't save the edit. The original is as it was.";
-    public const string EditorCantPlay = "Can't play the selection.";
+    public const string EditorCantPlay = "Can't play the selection.", EditorSaving = "Saving...";
 
     private const float EditorRowTop = EditorWave.Top + EditorWave.Height + 24, EditorVolumePitch = 30;
     private static readonly long EditorClockBase = Stopwatch.GetTimestamp();
@@ -186,31 +186,39 @@ internal sealed partial class SettingsScreen
         Refresh();
     }
 
-    /// <summary>The answer to <see cref="IEditorPanel.Save"/>, on the loop.</summary>
+    /// <summary>
+    /// The answer to <see cref="IEditorPanel.Save"/>, on the loop. A save the user started is never lost in silence: when the editor
+    /// was closed in the meantime, a failure is said on the line of the Library, and a soundboard copy still goes to Discord.
+    /// </summary>
     public void EditorSaved(EditSaveResult result)
     {
         var mode = _savingMode;
+        var wasOpen = _editing is not null;
         _editSaving = false;
         if (result.Outcome != EditSaveOutcome.Saved)
         {
-            if (_editing is not null)
+            var problem = result.Outcome switch
             {
-                _editorProblem = result.Outcome switch
-                {
-                    EditSaveOutcome.CannotRecycle => EditorCantRecycle,
-                    EditSaveOutcome.TooBig => EditorTooBig,
-                    EditSaveOutcome.SourceGone => EditorSourceGone,
-                    _ => EditorFailed,
-                };
-                Refresh();
+                EditSaveOutcome.CannotRecycle => EditorCantRecycle,
+                EditSaveOutcome.TooBig => EditorTooBig,
+                EditSaveOutcome.SourceGone => EditorSourceGone,
+                _ => EditorFailed,
+            };
+            if (wasOpen)
+            {
+                _editorProblem = problem;
+            }
+            else
+            {
+                SayOnLine(ChosenClip?.Main.Path, problem);
             }
 
+            Refresh();
             return;
         }
 
         var path = result.Paths.Count > 0 ? result.Paths[0] : null;
-        var wasOpen = _editing is not null;
-        var forDiscord = wasOpen && mode == EditorMode.Soundboard && path is not null;
+        var forDiscord = mode == EditorMode.Soundboard && path is not null;
         if (forDiscord)
         {
             _editorPanel?.HandToDiscord(path!);
@@ -232,11 +240,10 @@ internal sealed partial class SettingsScreen
 
         // The panel sends a new reading after this answer: the copy is chosen as soon as it brings it.
         SelectClip(path);
-        if (forDiscord)
+        var notice = forDiscord ? Soundboard.UploadHint : null;
+        if (notice is not null)
         {
-            _lineNotice = (path, Soundboard.UploadHint);
-            _noticeKeptOnce = true;
-            _noticeUnseen = Section != Section.Library;
+            SayOnLine(path, notice);
             if (string.Equals(ChosenClip?.Main.Path, path, PathRules.Comparison))
             {
                 Refresh();
@@ -344,7 +351,12 @@ internal sealed partial class SettingsScreen
 
         if (vk == Vk.Escape && modifiers == 0)
         {
-            CloseEditor();
+            // A save the user started goes to its end: closing now would hide what it does.
+            if (!_editSaving)
+            {
+                CloseEditor();
+            }
+
             return true;
         }
 
@@ -408,7 +420,8 @@ internal sealed partial class SettingsScreen
         _editSaving = true;
         _savingMode = request.Mode;
         _editorProblem = null;
-        _focusId = EditorCancelId;
+        // Cancel and Save are grey until the answer: the focus waits on Play.
+        _focusId = EditorPlayId;
         panel.Save(request, save);
         Refresh();
     }
@@ -672,6 +685,7 @@ internal sealed partial class SettingsScreen
     {
         var top = WindowHeight - FootHeight;
         var problem = _editorProblem;
+        var saving = _editSaving;
         Chrome(new Painted((c, _) =>
         {
             c.FillRect(new Box(0, top, WindowWidth, FootHeight), Theme.Panel);
@@ -682,7 +696,7 @@ internal sealed partial class SettingsScreen
             }
             else
             {
-                c.TextMid(EditorNothingChanges, Face.Body, 13, FootMargin, top + FootHeight / 2, Theme.Muted);
+                c.TextMid(saving ? EditorSaving : EditorNothingChanges, Face.Body, 13, FootMargin, top + FootHeight / 2, Theme.Muted);
             }
         }));
 
@@ -692,6 +706,7 @@ internal sealed partial class SettingsScreen
         var cancel = new Button("Cancel", CloseEditor)
         {
             Id = EditorCancelId,
+            Enabled = !_editSaving,
             Bounds = new Box(WindowWidth - FootMargin - saveWidth - FootButtonGap - cancelWidth, buttonTop, cancelWidth, FootButtonHeight),
         };
         var save = new Button("Save", EditorSaveClicked)

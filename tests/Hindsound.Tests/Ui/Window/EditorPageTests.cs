@@ -420,6 +420,55 @@ public sealed class EditorPageTests : IDisposable
         Assert.True(((Button)Screen.WidgetById(SettingsScreen.EditorSaveId)!).Enabled);
     }
 
+    [Fact]
+    public void While_the_save_runs_Escape_Cancel_and_Save_do_nothing_and_the_foot_says_so()
+    {
+        Open(EditorMode.Soundboard);
+        Click(SettingsScreen.EditorSaveId);
+        Assert.Contains(SettingsScreen.EditorSaving, Painted());
+        Assert.False(((Button)Screen.WidgetById(SettingsScreen.EditorCancelId)!).Enabled);
+        Assert.False(((Button)Screen.WidgetById(SettingsScreen.EditorSaveId)!).Enabled);
+
+        _rig.Press(Vk.Escape);
+        Click(SettingsScreen.EditorCancelId);
+        Assert.True(Screen.EditorOpen);
+        Assert.Equal(0, _panel.Closes);
+        Assert.Equal(SettingsScreen.EditorPlayId, Screen.FocusId);
+
+        Screen.EditorSaved(new EditSaveResult(EditSaveOutcome.Saved, [@"C:\Clips\clip0002.mp3"]));
+        Assert.Equal([@"C:\Clips\clip0002.mp3"], _panel.Discord);
+        Assert.False(Screen.EditorOpen);
+    }
+
+    [Fact]
+    public void A_soundboard_copy_written_after_the_editor_closed_still_goes_to_Discord()
+    {
+        Open(EditorMode.Soundboard);
+        Click(SettingsScreen.EditorSaveId);
+        Screen.SetEditor(_panel);
+        Assert.False(Screen.EditorOpen);
+
+        Screen.EditorSaved(new EditSaveResult(EditSaveOutcome.Saved, [@"C:\Clips\clip0002.mp3"]));
+        Assert.Equal([@"C:\Clips\clip0002.mp3"], _panel.Discord);
+        Assert.Contains(Soundboard.UploadHint, Painted());
+    }
+
+    [Theory]
+    [InlineData(EditSaveOutcome.CannotRecycle, SettingsScreen.EditorCantRecycle)]
+    [InlineData(EditSaveOutcome.Failed, SettingsScreen.EditorFailed)]
+    public void A_save_that_fails_after_the_editor_closed_is_said_on_the_line_of_the_Library(EditSaveOutcome outcome, string text)
+    {
+        Open();
+        Click(SettingsScreen.EditorSaveId);
+        Click(EditorSaveDialogState.ReplaceId);
+        Screen.SetEditor(_panel);
+
+        Screen.EditorSaved(new EditSaveResult(outcome, []));
+        Assert.False(Screen.EditorOpen);
+        Assert.Contains(text, string.Join(" ", Painted()));
+        Assert.Empty(_panel.Discord);
+    }
+
     [Theory]
     [InlineData(EditorLoadOutcome.Gone)]
     [InlineData(EditorLoadOutcome.Unreadable)]
