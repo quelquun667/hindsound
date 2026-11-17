@@ -275,7 +275,7 @@ Good to know:
 
 - **File names** look like `Hindsound_general - Discord_2026-11-06_21-14-03.mp3`. The app part is the title of the active
   window when you pressed the hotkey, cleaned and cut at 40 characters, so it can be longer than the name of the app. It is
-  `Unknown` if there is none.
+  `Unknown` if there is none. With `Record` set to one application, it is the name of that application, as the list shows it.
 - **A short start:** if Hindsound started 12 seconds ago, you get those 12 seconds: `Clip saved (0:12 of 0:30)`.
 - **In exclusive fullscreen,** you hear a short sound instead of seeing the notification, because a window over the game
   could throw it out of fullscreen. The notification shows when you are back on the desktop, within 30 seconds for a normal
@@ -314,7 +314,7 @@ listed), and of the rescue folder. A folder you filled with music shows that mus
   played by another program was in it. When it records a chosen output, or on a Windows too old to leave its sound out, `Playback can end up in your
   next clip on this setup.` shows next to the menu while a clip plays, in place of `Rename` and `Delete`, which come back when it
   stops. A microphone that hears your speakers can't be seen from here, so nothing says it.
-- **Your files:** `Library` never moves, renames or deletes a file. To do that, use the Explorer: the list follows.
+- **Your files:** `Library` renames or deletes a file only when you ask, from the menu of its clip (right-click, or the `...` button): `Delete` moves it to the Recycle Bin and never deletes it for good. Files you move or rename in the Explorer are followed by the list too.
 - **Long lists:** it shows the 2,000 most recent clips, and says so at the end of the list. A clip with a star or in a collection
   is listed too, however old, as long as the collections file can be read.
 - **Favorites:** each line has a star. Click the star of a line to star that clip, without choosing it, or press `F` with the list focused to star the chosen clip. Do it again to take the star off.
@@ -430,7 +430,7 @@ The `Capture on` notification at each launch reminds you, not the people in the 
 ## Your game
 
 Hindsound does not touch your game. It injects nothing, sets no hook, and opens no handle to the game. The `{app}` part of a
-file name comes only from the title of the active window. With `Record` set to one application, Hindsound looks for it in a
+file name comes from the title of the active window, or from the name of the application you chose in `Record`. With `Record` set to one application, Hindsound looks for it in a
 list of processes that Windows gives, every 3 seconds, and takes its sound through the audio API of Windows.
 
 This is not a promise about any anti-cheat: it has not been tried against one, and no anti-cheat publisher guarantees it.
