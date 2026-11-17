@@ -190,10 +190,13 @@ internal sealed class ClipEditFiles(IClipDecoder decoder, IRecycleBin recycleBin
             return new EditSaveResult(EditSaveOutcome.Saved, originals);
         }
 
-        return new EditSaveResult(EditSaveOutcome.Failed, Rescue(clip, originals, temps, stuck));
+        return new EditSaveResult(EditSaveOutcome.SavedAside, Rescue(clip, originals, temps, stuck));
     }
 
-    /// <summary>The edits that could not take the name of their original take a name of their own, as a copy would.</summary>
+    /// <summary>
+    /// The edits that could not take the name of their original take a name of their own, as a copy would. One that can't is
+    /// removed rather than left hidden under <see cref="TempExtension"/>: the original can still come back from the Recycle Bin.
+    /// </summary>
     private List<string> Rescue(ClipGroup clip, string[] originals, List<string> temps, List<int> stuck)
     {
         var paths = new List<string>(originals.Length);
@@ -204,7 +207,8 @@ internal sealed class ClipEditFiles(IClipDecoder decoder, IRecycleBin recycleBin
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            journal($"editor: edit left aside ({ClipFolders.Describe(ex)})");
+            journal($"editor: edit not kept, no name of its own ({ClipFolders.Describe(ex)})");
+            DeleteOurs(stuck.Select(i => temps[i]));
             return [.. Enumerable.Range(0, originals.Length).Where(i => !stuck.Contains(i)).Select(i => originals[i])];
         }
 
@@ -225,8 +229,8 @@ internal sealed class ClipEditFiles(IClipDecoder decoder, IRecycleBin recycleBin
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                journal($"editor: edit left aside ({ClipFolders.Describe(ex)})");
-                DeleteOurs([reserved[i]]);
+                journal($"editor: edit not kept, no name of its own ({ClipFolders.Describe(ex)})");
+                DeleteOurs([reserved[i], temps[i]]);
             }
         }
 

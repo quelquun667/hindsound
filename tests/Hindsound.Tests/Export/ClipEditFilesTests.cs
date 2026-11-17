@@ -121,13 +121,30 @@ public sealed class ClipEditFilesTests : IDisposable
 
         var result = Files(bin).Save(Group(original), Cut(0, 0.5, 0), new EditSave(EditSaveChoice.Replace, null), Export, CancellationToken.None);
 
-        Assert.Equal(EditSaveOutcome.Failed, result.Outcome);
+        Assert.Equal(EditSaveOutcome.SavedAside, result.Outcome);
         Assert.Equal([Path.Combine(_folder.Path, "dogs (cut).wav")], result.Paths);
         Assert.Equal(Rate / 2, WavFrames(result.Paths[0]));
         Assert.Equal([1, 2, 3, 4], File.ReadAllBytes(original));
         Assert.Equal(["dogs (cut).wav", "dogs.wav"], _folder.Names());
         Assert.Empty(_index.Moved);
         Assert.NotEmpty(_journal);
+        Assert.DoesNotContain(_journal, line => line.Contains(_folder.Path, StringComparison.OrdinalIgnoreCase) || line.Contains("dogs", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void An_edit_that_can_take_neither_its_name_nor_one_of_its_own_is_never_left_hidden()
+    {
+        // The bin says the original went, but it is still there; and the name of its own is a folder, which no file can take.
+        var original = _folder.Clip("dogs.wav", _decoder, Tone(Rate, 1, 0.1f), 1);
+        Directory.CreateDirectory(Path.Combine(_folder.Path, "dogs (cut).wav"));
+
+        var result = Files(new FakeBin(RecycleOutcome.Recycled)).Save(Group(original), Cut(0, 0.5, 0), new EditSave(EditSaveChoice.Replace, null), Export, CancellationToken.None);
+
+        Assert.Equal(EditSaveOutcome.SavedAside, result.Outcome);
+        Assert.Empty(result.Paths);
+        Assert.Equal(["dogs.wav"], _folder.Names());
+        Assert.Equal([1, 2, 3, 4], File.ReadAllBytes(original));
+        Assert.Contains(_journal, line => line.StartsWith("editor: edit not kept", StringComparison.Ordinal));
         Assert.DoesNotContain(_journal, line => line.Contains(_folder.Path, StringComparison.OrdinalIgnoreCase) || line.Contains("dogs", StringComparison.OrdinalIgnoreCase));
     }
 
