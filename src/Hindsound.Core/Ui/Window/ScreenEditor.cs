@@ -54,6 +54,9 @@ internal sealed partial class SettingsScreen
     /// <summary>The amber sentence of the foot: the last save or playback that went wrong. Null when all is well.</summary>
     internal string? EditorProblem => _editorProblem;
 
+    /// <summary>The path of the clip chosen in the list, which a save chooses.</summary>
+    internal string? EditorChosenPath => ChosenClip?.Main.Path;
+
     /// <summary>What the play head counts from. A test sets its own.</summary>
     internal Func<TimeSpan> EditorClock { get; set; } = () => Stopwatch.GetElapsedTime(EditorClockBase);
 
