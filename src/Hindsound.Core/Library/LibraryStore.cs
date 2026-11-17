@@ -296,10 +296,131 @@ public sealed class LibraryStore : IClipIndex
         });
 
     /// <inheritdoc/>
-    public LibraryOutcome MoveLabels(ClipGroup from, IReadOnlyList<string> to) => LibraryOutcome.NotWritten;
+    /// <remarks>Known by the names of its files alone. An entry found by its size and date needs the look the action made: see the other overload.</remarks>
+    public LibraryOutcome MoveLabels(ClipGroup from, IReadOnlyList<string> to) => MoveLabels(from, to, AloneIn(from), DateTime.UtcNow);
 
     /// <inheritdoc/>
-    public LibraryOutcome CopyCollections(ClipGroup from, IReadOnlyList<string> to) => LibraryOutcome.NotWritten;
+    public LibraryOutcome CopyCollections(ClipGroup from, IReadOnlyList<string> to) => CopyCollections(from, to, AloneIn(from), DateTime.UtcNow);
+
+    /// <summary>
+    /// The star and the collections of <paramref name="from"/> go to the files at <paramref name="to"/>, file for file, with their
+    /// size and date read again on the disk. The entries are first settled against <paramref name="scan"/>, as for any action: an
+    /// entry that knows the clip by its size and date, under a name it had before, follows it too. Nothing is written when no
+    /// entry holds the clip.
+    /// </summary>
+    /// <param name="from">The clip as the look found it.</param>
+    /// <param name="to">The new path of each of its files, in the order of its files.</param>
+    /// <param name="scan">The look the action made, before the files changed name.</param>
+    /// <param name="nowUtc">The time.</param>
+    internal LibraryOutcome MoveLabels(ClipGroup from, IReadOnlyList<string> to, ClipScan scan, DateTime nowUtc)
+    {
+        if (HasNoFile(from) || to.Count != from.Files.Count)
+        {
+            return LibraryOutcome.NoFile;
+        }
+
+        var moved = false;
+        var change = Change(scan, nowUtc, data =>
+        {
+            var newPaths = NewPaths(from, to);
+            foreach (var file in data.Clips.SelectMany(entry => entry.Files))
+            {
+                if (newPaths.TryGetValue(file.Path, out var path))
+                {
+                    Relocate(file, path);
+                    moved = true;
+                }
+            }
+
+            // Not an outcome told to anyone: only the way to leave the file as it is.
+            return moved ? LibraryOutcome.Done : LibraryOutcome.NoFile;
+        });
+        return moved ? change.Outcome : NothingToWrite(change.Outcome);
+    }
+
+    /// <summary>
+    /// The files at <paramref name="to"/> join every collection of <paramref name="from"/>, never its star: a copy is another clip,
+    /// and the user starred the one they chose. An entry that already names a file of the copy takes the collections; otherwise a
+    /// new entry is made. Nothing is written when the clip is in no collection.
+    /// </summary>
+    internal LibraryOutcome CopyCollections(ClipGroup from, IReadOnlyList<string> to, ClipScan scan, DateTime nowUtc)
+    {
+        if (HasNoFile(from) || to.Count == 0)
+        {
+            return LibraryOutcome.NoFile;
+        }
+
+        var copied = false;
+        var change = Change(scan, nowUtc, data =>
+        {
+            var source = new HashSet<string>(from.Files.Select(file => file.Path), PathRules.Comparer);
+            var ids = data.Clips
+                .Where(entry => entry.Files.Exists(file => source.Contains(file.Path)))
+                .SelectMany(entry => entry.Collections)
+                .Distinct()
+                .ToList();
+            if (ids.Count == 0)
+            {
+                return LibraryOutcome.NoFile;
+            }
+
+            var copy = new HashSet<string>(to, PathRules.Comparer);
+            var entries = data.Clips.FindAll(entry => entry.Files.Exists(file => copy.Contains(file.Path)));
+            if (entries.Count == 0)
+            {
+                var entry = new LibraryClip { Files = [.. to.Select(path => Relocate(new LibraryFile(), path))] };
+                data.Clips.Add(entry);
+                entries.Add(entry);
+            }
+
+            foreach (var entry in entries)
+            {
+                entry.Collections.AddRange(ids.Where(id => !entry.Collections.Contains(id)));
+            }
+
+            copied = true;
+            return LibraryOutcome.Done;
+        });
+        return copied ? change.Outcome : NothingToWrite(change.Outcome);
+    }
+
+    // A look that found this clip and read no folder: the entries of every other clip stay exactly as they are.
+    private static ClipScan AloneIn(ClipGroup clip) => new([clip], []);
+
+    // The file could not be written in its state, or there was nothing to write: the second is no failure.
+    private static LibraryOutcome NothingToWrite(LibraryOutcome outcome) => outcome == LibraryOutcome.NoFile ? LibraryOutcome.Done : outcome;
+
+    private static Dictionary<string, string> NewPaths(ClipGroup from, IReadOnlyList<string> to)
+    {
+        var map = new Dictionary<string, string>(PathRules.Comparer);
+        for (var i = 0; i < from.Files.Count; i++)
+        {
+            map[from.Files[i].Path] = to[i];
+        }
+
+        return map;
+    }
+
+    /// <summary>The file now at <paramref name="path"/>, with the size and date the disk gives. A file that can't be read keeps what it had.</summary>
+    private static LibraryFile Relocate(LibraryFile file, string path)
+    {
+        file.Path = path;
+        try
+        {
+            var info = new FileInfo(path);
+            if (info.Exists)
+            {
+                file.Size = info.Length;
+                file.Written = info.LastWriteTimeUtc;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException or NotSupportedException)
+        {
+            // The name is what matters for the next look; the size and date only help to find the file again after a renaming by hand.
+        }
+
+        return file;
+    }
 
     /// <summary>
     /// The only way past a broken file, and only when the user asks for it: an edit may yet repair the file, and an action
