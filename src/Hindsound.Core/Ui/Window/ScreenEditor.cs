@@ -9,7 +9,7 @@ namespace Hindsound.Ui.Window;
 /// <summary>The editor of a clip: a page in place of the list of the Library, with Cancel and Save in the foot.</summary>
 internal sealed partial class SettingsScreen
 {
-    public const string EditorTitle = "Edit clip", EditorCancelId = "foot.cancel", EditorSaveId = "foot.save";
+    public const string EditorTitle = "Edit clip", EditorSoundboardTitle = "Send to soundboard", EditorCancelId = "foot.cancel", EditorSaveId = "foot.save";
     public const string EditorStartId = "edit.start", EditorEndId = "edit.end", EditorPlayId = "edit.play", EditorVolumePrefix = "edit.vol";
     public const string EditorNothingChanges = "Nothing changes until you save", EditorCantRead = "Can't read this clip", EditorReading = "Reading the clip...";
     public const string EditorCantRecycle = "The Recycle Bin can't take the original. Nothing changed.";
@@ -525,10 +525,11 @@ internal sealed partial class SettingsScreen
     {
         _contentBottom = 0;
         var name = _editing is { } editing ? ClipNames.EditableName(editing.Clip) : "";
+        var title = _editing?.Mode == EditorMode.Soundboard ? EditorSoundboardTitle : EditorTitle;
         Add(new Painted((c, _) =>
         {
-            c.TextMid(EditorTitle, Face.Title, 22, Left, BandHeight + 20, Theme.Text);
-            var x = Left + c.Measure(EditorTitle, Face.Title, 22) + 20;
+            c.TextMid(title, Face.Title, 22, Left, BandHeight + 20, Theme.Text);
+            var x = Left + c.Measure(title, Face.Title, 22) + 20;
             c.TextRight(c.Fit(name, Face.Mono, 13, Right - x), Face.Mono, 13, Right, BandHeight + 22, Theme.Muted);
         }), scrolls: false);
 

@@ -246,6 +246,19 @@ public sealed class EditorPageTests : IDisposable
     }
 
     [Fact]
+    public void The_page_is_titled_after_what_it_was_opened_for()
+    {
+        Open();
+        Assert.Contains(SettingsScreen.EditorTitle, Painted());
+        Assert.DoesNotContain(SettingsScreen.EditorSoundboardTitle, Painted());
+
+        Screen.CloseEditor();
+        Open(EditorMode.Soundboard);
+        Assert.Contains(SettingsScreen.EditorSoundboardTitle, Painted());
+        Assert.DoesNotContain(SettingsScreen.EditorTitle, Painted());
+    }
+
+    [Fact]
     public void The_size_comes_from_the_estimate_of_the_app()
     {
         Open();
