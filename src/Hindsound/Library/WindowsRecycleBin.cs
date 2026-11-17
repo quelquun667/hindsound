@@ -28,10 +28,16 @@ internal sealed class WindowsRecycleBin : IRecycleBin
                 return RecycleOutcome.Recycled;
             }
 
-            // Asked before anything moves. A drive with no bin (a network share, some removable drives) takes nothing.
+            // Asked before anything moves. A file deleted by another hand is gone, not refused.
+            if (paths.Any(path => !File.Exists(path)))
+            {
+                return RecycleOutcome.Gone;
+            }
+
+            // A drive with no bin (a network share, some removable drives) takes nothing.
             foreach (var path in paths)
             {
-                if (!File.Exists(path) || Path.GetPathRoot(Path.GetFullPath(path)) is not { Length: > 0 } root || !RecycleBinNative.HasBin(root))
+                if (Path.GetPathRoot(Path.GetFullPath(path)) is not { Length: > 0 } root || !RecycleBinNative.HasBin(root))
                 {
                     return RecycleOutcome.CannotRecycle;
                 }

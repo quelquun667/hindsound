@@ -117,7 +117,7 @@ public sealed class WindowsRecycleBinTests : IDisposable
         var there = Path.Combine(_root, "there.mp3");
         File.WriteAllBytes(there, [1]);
 
-        Assert.Equal(RecycleOutcome.CannotRecycle, bin.Recycle([there, Path.Combine(_root, "gone.mp3")]));
+        Assert.Equal(RecycleOutcome.Gone, bin.Recycle([there, Path.Combine(_root, "gone.mp3")]));
         Assert.True(File.Exists(there));
         Assert.Empty(_journal);
     }

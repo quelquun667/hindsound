@@ -128,6 +128,20 @@ internal sealed class HalfBin(string binFolder) : IRecycleBin
     }
 }
 
+/// <summary>A Recycle Bin that finds each file deleted by another hand just before it was to take it.</summary>
+internal sealed class GoneBin : IRecycleBin
+{
+    public RecycleOutcome Recycle(IReadOnlyList<string> paths)
+    {
+        foreach (var path in paths)
+        {
+            File.Delete(path);
+        }
+
+        return RecycleOutcome.Gone;
+    }
+}
+
 internal sealed class FakeIndex : IClipIndex
 {
     public List<(ClipGroup From, IReadOnlyList<string> To)> Moved { get; } = [];

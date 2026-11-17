@@ -201,11 +201,16 @@ internal sealed class ClipEditFiles(IClipDecoder decoder, IRecycleBin recycleBin
     }
 
     /// <summary>
-    /// Why no edited file may take the place of an original, for the log, or null if each may: only part of the original went,
-    /// and an edited file next to one that was not would read as one clip out of step.
+    /// Why no edited file may take the place of an original, for the log, or null if each may. Only part of the original went,
+    /// and an edited file next to one that was not would read as one clip out of step; or a file of the original was gone before
+    /// the bin could take it, and what the user deleted is not brought back under its name.
     /// </summary>
-    private static string? Left(RecycleOutcome recycled, string[] originals) =>
-        recycled == RecycleOutcome.Failed && originals.Any(File.Exists) ? "editor: original recycled in part" : null;
+    private static string? Left(RecycleOutcome recycled, string[] originals) => recycled switch
+    {
+        RecycleOutcome.Gone => "editor: original gone before it went to the Recycle Bin",
+        RecycleOutcome.Failed when originals.Any(File.Exists) => "editor: original recycled in part",
+        _ => null,
+    };
 
     /// <summary>
     /// The edits that could not take the name of their original take a name of their own, as a copy would. One that can't is

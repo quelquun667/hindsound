@@ -11,6 +11,9 @@ public enum RecycleOutcome
     /// <summary>The Recycle Bin can't take them (a drive with none, a file too big for it). Seen before anything moved: every file is where it was.</summary>
     CannotRecycle,
 
+    /// <summary>A file was no longer there when the bin was to take it. Seen before anything moved: the others are where they were.</summary>
+    Gone,
+
     /// <summary>Something else went wrong. Any of the files may still be there: look at the disk again before saying more.</summary>
     Failed,
 }

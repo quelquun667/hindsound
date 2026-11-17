@@ -168,6 +168,23 @@ public sealed class ClipEditFilesTests : IDisposable
     }
 
     [Fact]
+    public void A_replacement_whose_original_is_gone_before_the_bin_keeps_the_edit_as_a_clip_of_its_own()
+    {
+        // The user deleted the original while the edit was being written.
+        var original = _folder.Clip("dogs.wav", _decoder, Tone(Rate, 1, 0.1f), 1);
+        var bin = new GoneBin();
+
+        var result = Files(bin).Save(Group(original), Cut(0, 0.5, 0), new EditSave(EditSaveChoice.Replace, null), Export, CancellationToken.None);
+
+        Assert.Equal(EditSaveOutcome.SavedAside, result.Outcome);
+        Assert.Equal([Path.Combine(_folder.Path, "dogs (cut).wav")], result.Paths);
+        Assert.Equal(Rate / 2, WavFrames(result.Paths[0]));
+        Assert.Equal(["dogs (cut).wav"], _folder.Names());
+        Assert.Empty(_index.Moved);
+        Assert.DoesNotContain(_journal, line => line.Contains(_folder.Path, StringComparison.OrdinalIgnoreCase) || line.Contains("dogs", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void A_soundboard_copy_of_a_clip_in_two_files_is_one_mono_mp3_when_both_are_mono()
     {
         var system = _folder.Clip("dogs_system.mp3", _decoder, Tone(3 * Rate, 1, 0.1f), 1);
