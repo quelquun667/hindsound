@@ -171,7 +171,7 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
     }
 
     /// <summary>The live text under the slider, for the value being dragged as much as for the stored one.</summary>
-    public string RamText(int bufferSeconds) => RamEstimate.Format(bufferSeconds, Settings.Audio.MicEnabled) + " of RAM";
+    public string RamText(int bufferSeconds) => RamEstimate.Format(bufferSeconds, Settings.Audio.MicCaptured) + " of RAM";
 
     private static int RoundUpToMinute(int seconds) => (seconds + 59) / 60 * 60;
 
