@@ -111,9 +111,12 @@ public enum EditSaveOutcome
     TooBig,
 
     /// <summary>
-    /// Anything else. The original is as it was, except when the edit could not take its name after the original went to the
-    /// Recycle Bin: the edit then stays under a name of its own, and its path is in <see cref="EditSaveResult.Paths"/>.
+    /// A replacement that could not take the name of the original once the original was in the Recycle Bin. The edit was kept
+    /// as a clip of its own, whose paths are in <see cref="EditSaveResult.Paths"/>; the original can come back from the Recycle Bin.
     /// </summary>
+    SavedAside,
+
+    /// <summary>Anything else. The original is as it was, and nothing of the edit is left on disk.</summary>
     Failed,
 }
 
