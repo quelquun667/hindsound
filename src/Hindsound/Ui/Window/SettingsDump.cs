@@ -497,6 +497,12 @@ internal static unsafe class SettingsDump
             s.UpdateStatus(sampleStatus with { MicEnabled = false, MicCapturing = false });
             Wave(s, Memory(voiceTrack, null));
         });
+        Shot("now-voix-off", (s, _) =>
+        {
+            s.Editor.SetRecordMic(false);
+            s.UpdateStatus(sampleStatus with { MicEnabled = false, MicCapturing = false });
+            Wave(s, Memory(voiceTrack, null));
+        });
         Shot("now-micro-perdu", (s, _) =>
         {
             s.UpdateStatus(sampleStatus with { MicCapturing = false });
@@ -706,6 +712,25 @@ internal static unsafe class SettingsDump
             s.TabTo(SettingsScreen.StartOverId);
             s.Key(Vk.Enter, 0);
         }, focus: true);
+
+        // The clip tools: the menu, the boxes of the Library, and the editor, each over the Library of the sample clips.
+        foreach (var (name, act) in DumpScenesLibrary.Scenes)
+        {
+            Shot(name, (s, _) =>
+            {
+                Chosen(s, SampleLibrary.Labeled(clips));
+                act(s);
+            }, focus: true);
+        }
+
+        foreach (var (name, set) in DumpScenesEditor.Scenes)
+        {
+            Shot(name, (s, _) =>
+            {
+                Chosen(s, SampleLibrary.Labeled(clips));
+                set(s);
+            }, focus: true);
+        }
 
         return FolderPicker.SelfCheck() ? 0 : 3;
     }
