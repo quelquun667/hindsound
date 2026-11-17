@@ -206,6 +206,7 @@ public sealed class ClipActionsTests : IDisposable
 
     [Theory]
     [InlineData(RowX, 400)]
+    [InlineData(RowX, 300)]
     [InlineData(80, 200)]
     [InlineData(300, 98)]
     public void A_right_click_anywhere_but_a_row_does_nothing(float x, float y)
