@@ -45,7 +45,7 @@ public sealed class SettingsWindowTests : IDisposable
     /// <summary>The wheel with the mouse at this point of the window, given on the screen in pixels, as Windows gives it.</summary>
     private void WheelAt(int delta, float x, float y)
     {
-        var scale = WindowNative.GetDpiForWindow(_window.Hwnd) / 96f;
+        var scale = _window.Scale;
         var mouse = new Native.POINT { X = (int)(x * scale), Y = (int)(y * scale) };
         Assert.NotEqual(0, ClientToScreen(_window.Hwnd, ref mouse));
         Send(_window.Hwnd, WindowNative.WM_MOUSEWHEEL, (nuint)(uint)(delta << 16), (nint)(ushort)mouse.X | ((nint)(ushort)mouse.Y << 16));
@@ -133,6 +133,17 @@ public sealed class SettingsWindowTests : IDisposable
         Assert.Equal(0, Screen.Scroll);
 
         WheelAt(-120, ScreenRig.PageX, ScreenRig.PageY);
+        Assert.True(Screen.Scroll > 0);
+    }
+
+    [Fact]
+    public void The_wheel_just_right_of_the_side_bar_scrolls_the_page_at_the_zoom_of_the_window()
+    {
+        Screen.ShowSection(Section.General);
+
+        // At 120% a point 6 design pixels into the page is 7 pixels past the side bar: the DPI alone would put it on the bar.
+        WheelAt(-120, SettingsScreen.NavWidth + 6, ScreenRig.PageY);
+
         Assert.True(Screen.Scroll > 0);
     }
 

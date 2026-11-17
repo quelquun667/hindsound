@@ -165,6 +165,9 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
 
     public nint Hwnd => _hwnd;
 
+    /// <summary>The window size this screen holds, in percent: the one the settings ask for, or the largest that fits.</summary>
+    public int AppliedZoom => _zoom;
+
     public Action Closed { get; }
 
     /// <summary>The window came back to the foreground.</summary>
@@ -369,7 +372,8 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
 
     private static uint ColorRef(uint rgb) => ((rgb & 0xFF) << 16) | (rgb & 0xFF00) | ((rgb >> 16) & 0xFF);
 
-    private float Scale => (float)ScaleAt(_dpi, _zoom);
+    /// <summary>What a design pixel is on the screen now: the DPI, then the zoom.</summary>
+    internal float Scale => (float)ScaleAt(_dpi, _zoom);
 
     // An off-screen window never has the keyboard: its keys were sent to it, and what is held on the real keyboard is not
     // theirs. A thread that never took the focus still gets the state of that keyboard (a test thread read the Alt toggle
@@ -668,6 +672,8 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
 
             case WindowNative.WM_SIZE:
                 Screen.WindowMinimized(wParam == WindowNative.SIZE_MINIMIZED);
+                // A size asked for while the window was minimized waits for its way back.
+                ZoomChanged(_wantedZoom);
                 return Native.DefWindowProcW(hwnd, message, wParam, lParam);
 
             case WindowNative.WM_ACTIVATE:
