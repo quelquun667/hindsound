@@ -104,9 +104,48 @@ internal static class ClipNames
     /// <param name="line">The clip to rename.</param>
     /// <param name="typed">The name as typed, without extension.</param>
     /// <param name="taken">Whether a path is already used by another file. The files of the line itself never count.</param>
-    public static ClipRenameOutcome? Refusal(ClipGroup line, string typed, Func<string, bool> taken) =>
-        // The whole rule comes with the renaming itself.
-        string.IsNullOrWhiteSpace(typed) ? ClipRenameOutcome.Empty : null;
+    public static ClipRenameOutcome? Refusal(ClipGroup line, string typed, Func<string, bool> taken)
+    {
+        // The full path where long paths are not turned on, its closing zero left out; the name of one file on NTFS and exFAT.
+        const int MaxPathLength = 260, MaxFileNameLength = 255;
+
+        // A name of spaces alone is no name. Spaces at the start are kept: Windows takes them as they are.
+        if (string.IsNullOrWhiteSpace(typed))
+        {
+            return ClipRenameOutcome.Empty;
+        }
+
+        if (typed.Any(c => char.IsControl(c) || @"\/:*?""<>|".Contains(c)))
+        {
+            return ClipRenameOutcome.BadCharacters;
+        }
+
+        if (typed[^1] is '.' or ' ')
+        {
+            return ClipRenameOutcome.TrailingDotOrSpace;
+        }
+
+        // A device for Windows: the part before the first dot, spaces at its end dropped, in any case. Not a path, so not compared
+        // by the rule of paths: put in capitals, then compared letter by letter. Superscript one, two and three count as digits.
+        var dot = typed.IndexOf('.', StringComparison.Ordinal);
+        var stem = (dot < 0 ? typed : typed[..dot]).TrimEnd(' ').ToUpperInvariant();
+        if (stem is "CON" or "PRN" or "AUX" or "NUL"
+            || (stem.Length == 4 && (stem.StartsWith("COM", StringComparison.Ordinal) || stem.StartsWith("LPT", StringComparison.Ordinal))
+                && "123456789\u00B9\u00B2\u00B3".Contains(stem[3])))
+        {
+            return ClipRenameOutcome.Reserved;
+        }
+
+        var targets = TargetPaths(line, typed);
+        if (targets.Any(path => path.Length >= MaxPathLength || Path.GetFileName(path).Length > MaxFileNameLength))
+        {
+            return ClipRenameOutcome.TooLong;
+        }
+
+        // The files of the line never stand in their own way, so a change of case alone is a renaming like any other.
+        var own = new HashSet<string>(line.Files.Select(file => file.Path), PathRules.Comparer);
+        return targets.Any(path => !own.Contains(path) && taken(path)) ? ClipRenameOutcome.Taken : null;
+    }
 
     private static string SuffixOf(ClipGroup line, string path)
     {
