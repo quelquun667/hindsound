@@ -71,8 +71,8 @@ internal sealed class WindowEditor(
     private ExportFormat _format = ExportFormat.Mp3;
     private ClipPreview? _preview;
 
-    /// <summary>The bars of one file of the clip. A test, or the shared reading of the editor, puts its own.</summary>
-    internal Func<IDecodedStream, CancellationToken, IReadOnlyList<float>> Peaks { get; init; } = ClipEditRender.Peaks;
+    /// <summary>The bars of one file of the clip. A test puts its own.</summary>
+    internal Func<IDecodedStream, CancellationToken, IReadOnlyList<float>> Peaks { get; init; } = (stream, cancel) => EditPeaks.Compute(stream, EditPeaks.BarCount, cancel);
 
     /// <summary>The disk side, for a test that changes its bounds.</summary>
     internal ClipEditFiles Files
