@@ -20,7 +20,7 @@ public sealed class DumpScenesEditorTests
         rig.Screen.Paint(rig.Canvas);
 
         Assert.True(rig.Screen.EditorOpen);
-        Assert.Contains(SettingsScreen.EditorTitle, rig.Canvas.Drawn);
+        Assert.Contains(name == "edit-soundboard" ? SettingsScreen.EditorSoundboardTitle : SettingsScreen.EditorTitle, rig.Canvas.Drawn);
         Assert.Equal(name == "edit-enregistrer", rig.Screen.EditorDialog is not null);
         Assert.Equal(name == "edit-illisible", rig.Screen.EditorSelection is null);
     }
