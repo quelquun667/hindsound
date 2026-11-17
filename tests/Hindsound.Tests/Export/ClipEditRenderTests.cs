@@ -21,6 +21,17 @@ public sealed class ClipEditRenderTests
     }
 
     [Fact]
+    public void The_volume_is_held_from_minus_12_to_plus_20_dB_and_anything_not_a_number_is_0_dB()
+    {
+        Assert.Equal(10f, ClipEditRender.Gain(20), 0.0001f);
+        Assert.Equal(0.2511886f, ClipEditRender.Gain(-12), 0.0001f);
+        Assert.Equal(ClipEditRender.Gain(20), ClipEditRender.Gain(40));
+        Assert.Equal(ClipEditRender.Gain(-12), ClipEditRender.Gain(-40));
+        Assert.Equal(1f, ClipEditRender.Gain(double.NaN));
+        Assert.Equal(1f, ClipEditRender.Gain(double.PositiveInfinity));
+    }
+
+    [Fact]
     public void The_cut_starts_and_ends_on_the_frame_asked_and_keeps_every_frame_between()
     {
         // Each sample holds its own frame number: the output says which frames it kept.
