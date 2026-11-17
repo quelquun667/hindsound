@@ -185,7 +185,7 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
 
     public bool Listening => _capture.Listening;
 
-    public bool PopupOpen => _popup is not null || _moreList is not null;
+    public bool PopupOpen => _popup is not null || _moreList is not null || _clipMenu is not null;
 
     public bool WantsMeter =>
         (Section == Section.Audio || (Section == Section.FirstRun && _firstRunStep == 1)) && Editor.Settings.Audio.MicEnabled && _status?.MicCapturing == true;
@@ -672,7 +672,7 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
             return FieldKey(field, vk);
         }
 
-        if (Focus is { Enabled: true } widget && widget.OnKey(vk))
+        if (Focus is { Enabled: true } widget && ByKey(widget, vk))
         {
             Reveal();
             return true;
@@ -691,6 +691,20 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
         }
 
         return false;
+    }
+
+    /// <summary>The focused widget has a key: what it opens knows it came from the keyboard.</summary>
+    private bool ByKey(Widget widget, uint vk)
+    {
+        _byKey = true;
+        try
+        {
+            return widget.OnKey(vk);
+        }
+        finally
+        {
+            _byKey = false;
+        }
     }
 
     public void KeyUp(uint vk, uint modifiers)
@@ -899,9 +913,10 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
         CancelCapture();
         KeepSlider();
         _moreList?.Close();
-        if (_popup is not null)
+        if (_popup is not null || _clipMenu is not null)
         {
             _popup = null;
+            _clipMenu = null;
             _host.Invalidate();
         }
     }
@@ -953,6 +968,16 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
             return;
         }
 
+        if (_clipMenu is { } menu)
+        {
+            if (menu.Hover(x, y))
+            {
+                _host.Invalidate();
+            }
+
+            return;
+        }
+
         if (Find(_pressedId) is { } pressed)
         {
             pressed.OnDrag(x, LocalY(pressed, y));
@@ -997,6 +1022,12 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
         {
             more.Press(x, y);
             _host.Invalidate();
+            return;
+        }
+
+        if (_clipMenu is { } menu)
+        {
+            ClipMenuPress(menu, x, y);
             return;
         }
 
@@ -1081,7 +1112,8 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
             return;
         }
 
-        if (_box is not null || !OverPage(x, y))
+        // The rows would move under a menu that acts on one of them.
+        if (_clipMenu is not null || _box is not null || !OverPage(x, y))
         {
             return;
         }
@@ -1350,7 +1382,7 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
     public void Paint(ICanvas c)
     {
         var accent = Editor.AccentRgb;
-        var hover = _popup is null && _moreList is null ? Find(_hoverId) : null;
+        var hover = _popup is null && _moreList is null && _clipMenu is null ? Find(_hoverId) : null;
         var ui = new UiState(accent, Focus, Find(_pressedId), hover, _mouseX, _mouseY, _scroll, ShowFocus && !_capture.Listening, NoNativeEdit ? null : _editId);
         c.SetOrigin(0);
         c.FillRect(new Box(0, 0, WindowWidth, WindowHeight), Theme.Base);
@@ -1386,5 +1418,6 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
 
         _popup?.Paint(c, accent);
         _moreList?.Paint(c, accent);
+        _clipMenu?.Paint(c, accent);
     }
 }

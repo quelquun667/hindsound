@@ -105,7 +105,8 @@ internal interface ILibraryPanel
 /// <summary>The Library page: the clips on disk, and what can be done with the chosen one.</summary>
 internal sealed partial class SettingsScreen
 {
-    public const string ClipMoreId = "foot.more";
+    public const string ClipMoreId = "foot.more", MoreLabel = "...";
+    private const float MoreButtonWidth = 44;
     public const string ClipListId = "lib.list", ClipCopyId = "foot.copy", ClipShowId = "foot.show", ClipPlayId = "foot.play";
     public const string PlayLabel = "Play", StopLabel = "Stop";
     public const string NoClipsTitle = "No clips yet", NoClipsBody = "Save a clip with your shortcut, and it shows up here.";
@@ -252,7 +253,8 @@ internal sealed partial class SettingsScreen
     /// <summary>What the box asked has answered, after the reading it brought. A refused name keeps the box open, with the reason.</summary>
     public void CollectionBoxAnswered(LibraryOutcome outcome)
     {
-        if (_box is not { } box)
+        // The box of a clip is not the one this answers: the box of the collection went with the page.
+        if (_box is not { IsClip: false } box)
         {
             // The box went with the page: the answer is still said on the line.
             Say(outcome);
@@ -436,6 +438,12 @@ internal sealed partial class SettingsScreen
         if (_wantedClip is { } path && _clips.SelectPath(path))
         {
             _wantedClip = null;
+        }
+
+        // The menu of a clip the reading no longer lists has nothing left to act on.
+        if (_clipMenu is { } menu && !_clipRows.Any(row => string.Equals(row.Main.Path, menu.Clip.Main.Path, Library.PathRules.Comparison)))
+        {
+            _clipMenu = null;
         }
     }
 
@@ -689,6 +697,10 @@ internal sealed partial class SettingsScreen
         _lineNotice = null;
         switch (box.Kind)
         {
+            case NameBoxKind.RenameClip:
+            case NameBoxKind.DeleteClip:
+                SendClipBox(panel, box);
+                break;
             case NameBoxKind.Create:
                 panel.CreateCollection(box.Field.Draft);
                 break;
@@ -728,6 +740,11 @@ internal sealed partial class SettingsScreen
     /// <summary>A key while the box or the list of +N is open. Null if the key goes on as anywhere else.</summary>
     private bool? OverlayKey(uint vk, uint modifiers)
     {
+        if (_clipMenu is { } menu)
+        {
+            return ClipMenuKey(menu, vk, modifiers);
+        }
+
         if (_moreList is { } more)
         {
             switch (more.Key(vk))
@@ -774,6 +791,7 @@ internal sealed partial class SettingsScreen
     private void DropLibraryOverlays()
     {
         _box = null;
+        _clipMenu = null;
         if (_moreList is not null)
         {
             _moreList = null;
@@ -799,15 +817,27 @@ internal sealed partial class SettingsScreen
         var chosen = ChosenClip;
         var showWidth = Button.WidthFor(_canvas, ShowInFolderLabel);
         var copyWidth = Button.WidthFor(_canvas, "Copy");
+        var moreWidth = MathF.Max(MoreButtonWidth, Button.WidthFor(_canvas, MoreLabel));
 
         // Stop takes the place and the width of Play, so that nothing moves under the mouse.
         var playWidth = MathF.Max(Button.WidthFor(_canvas, PlayLabel, icon: true), Button.WidthFor(_canvas, StopLabel));
         var playLeft = WindowWidth - FootMargin - playWidth;
         var showLeft = playLeft - FootButtonGap - showWidth;
         var copyLeft = showLeft - FootButtonGap - copyWidth;
+        var moreLeft = copyLeft - FootButtonGap - moreWidth;
         var buttonTop = WindowHeight - FootHeight + (FootHeight - FootButtonHeight) / 2;
         var enabled = chosen is not null && !_goneClips.Contains(chosen.Main.Path);
-        Chrome(new Painted((c, _) => PaintLibraryFoot(c, chosen, copyLeft - FootButtonGap - FootMargin)));
+        Chrome(new Painted((c, _) => PaintLibraryFoot(c, chosen, moreLeft - FootButtonGap - FootMargin)));
+
+        // The menu of the clip, for a keyboard or a mouse that never reaches the list: first of the foot, so that Copy, Show in
+        // folder and Play stay the last three stops.
+        var more = new Box(moreLeft, buttonTop, moreWidth, FootButtonHeight);
+        Chrome(new Button(MoreLabel, () => OpenMenuFromFoot(more))
+        {
+            Id = ClipMoreId,
+            Enabled = enabled,
+            Bounds = more,
+        });
         Chrome(new Button("Copy", () => ClipGesture(p => p.Copy))
         {
             Id = ClipCopyId,
@@ -832,7 +862,15 @@ internal sealed partial class SettingsScreen
 
     private void ClipGesture(Func<ILibraryPanel, Action<ClipGroup>> gesture)
     {
-        if (_library is { } panel && ChosenClip is { } line)
+        if (ChosenClip is { } line)
+        {
+            ClipGestureOn(line, gesture);
+        }
+    }
+
+    private void ClipGestureOn(ClipGroup line, Func<ILibraryPanel, Action<ClipGroup>> gesture)
+    {
+        if (_library is { } panel)
         {
             // What went wrong last time is not true of this attempt.
             _failedClip = null;

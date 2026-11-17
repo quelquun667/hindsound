@@ -10,6 +10,12 @@ internal enum NameBoxKind
 
     /// <summary>A damaged file of collections is put aside for an empty one.</summary>
     StartOver,
+
+    /// <summary>A clip of the list takes a new name: its files, their suffixes and extensions kept.</summary>
+    RenameClip,
+
+    /// <summary>A clip of the list goes to the Recycle Bin, once confirmed.</summary>
+    DeleteClip,
 }
 
 /// <summary>What the box does with a key before the screen does.</summary>
@@ -29,15 +35,23 @@ internal enum NameBoxKey
 }
 
 /// <summary>
-/// The small box of a collection, and all it has to remember, as its widgets are made again at each key: create, rename, or confirm a
-/// deletion. Nothing here reaches the file. It says what is asked, and the answer of the action comes back to <see cref="Answered"/>.
+/// The small box of a collection or of a clip, and all it has to remember, as its widgets are made again at each key: create, rename,
+/// or confirm a deletion. Nothing here reaches the file. It says what is asked, and the answer of the action comes back to
+/// <see cref="Answered"/>, or to <see cref="AnsweredClip"/> for a clip.
 /// </summary>
 internal sealed class NameBoxState
 {
     public const string TakenText = "That name is already used", TooLongText = "40 characters at most";
     public const string StartOverQuestion = "Start over with no collections? Your clips stay.";
 
+    public const string ClipEmptyText = "The name can't be empty", ClipReservedText = "Windows keeps this name for itself";
+    public const string ClipTrailingText = "A name can't end with a dot or a space", ClipTooLongText = "This name is too long";
+    public const string ClipTakenText = "Another clip has this name";
+    public const string CannotRecycleText = "The Recycle Bin can't take this clip. It stays where it is.";
+    public const string TwoFilesText = "This clip is 2 files, the system sound and the microphone. Both files go to the Recycle Bin.";
+
     private readonly Func<IReadOnlyList<LibraryCollection>> _collections;
+    private Func<string, ClipRenameOutcome?> _clipRefusal = _ => null;
 
     /// <param name="kind">What the box is for.</param>
     /// <param name="collectionId">The collection to rename or delete.</param>
@@ -51,12 +65,18 @@ internal sealed class NameBoxState
         Name = name;
         ReturnId = returnId;
         _collections = collections;
-        Field = new FieldState(kind == NameBoxKind.Rename ? name : string.Empty);
+        Field = new FieldState(kind is NameBoxKind.Rename or NameBoxKind.RenameClip ? name : string.Empty);
     }
 
     public NameBoxKind Kind { get; }
 
     public string? CollectionId { get; }
+
+    /// <summary>The clip to rename or delete. Null in the box of a collection.</summary>
+    public ClipGroup? Clip { get; private init; }
+
+    /// <summary>The box is about a clip, not a collection.</summary>
+    public bool IsClip => Kind is NameBoxKind.RenameClip or NameBoxKind.DeleteClip;
 
     public string Name { get; }
 
@@ -68,13 +88,22 @@ internal sealed class NameBoxState
     /// <summary>The action has left and has not answered: a second press would make it twice.</summary>
     public bool Waiting { get; private set; }
 
-    public string Title => Kind == NameBoxKind.Rename ? "Rename collection" : "New collection";
+    public string Title => Kind switch
+    {
+        NameBoxKind.Rename => "Rename collection",
+        NameBoxKind.RenameClip => "Rename clip",
+        _ => "New collection",
+    };
+
+    /// <summary>The words over the field.</summary>
+    public string FieldLabel => Kind == NameBoxKind.RenameClip ? "Clip name" : "Collection name";
 
     public string ConfirmLabel => Kind switch
     {
         NameBoxKind.Create => "Create",
         NameBoxKind.Rename => "Rename",
         NameBoxKind.StartOver => SettingsScreen.StartOverLabel,
+        NameBoxKind.RenameClip => "Rename",
         _ => "Delete",
     };
 
@@ -82,9 +111,10 @@ internal sealed class NameBoxState
     public string EntryId => IsQuestion ? NameBox.CancelId : NameBox.NameId;
 
     /// <summary>A question with no name to type: a deletion or a fresh start.</summary>
-    public bool IsQuestion => Kind is NameBoxKind.Delete or NameBoxKind.StartOver;
+    public bool IsQuestion => Kind is NameBoxKind.Delete or NameBoxKind.StartOver or NameBoxKind.DeleteClip;
 
-    public bool CanConfirm => IsQuestion || LibraryStore.NameRefusal(_collections(), Field.Draft, CollectionId) is null;
+    public bool CanConfirm => IsQuestion
+        || (Kind == NameBoxKind.RenameClip ? _clipRefusal(Field.Draft) is null : LibraryStore.NameRefusal(_collections(), Field.Draft, CollectionId) is null);
 
     public static NameBoxState ForCreate(string returnId, Func<IReadOnlyList<LibraryCollection>> collections) =>
         new(NameBoxKind.Create, null, string.Empty, returnId, collections);
@@ -104,14 +134,51 @@ internal sealed class NameBoxState
     public static NameBoxState ForStartOver(string returnId) =>
         new(NameBoxKind.StartOver, null, string.Empty, returnId, () => []);
 
-    /// <summary>What the field says of the text, at each key. An empty field says nothing: it has done nothing wrong yet.</summary>
-    public FieldCheck Check(string text) => LibraryStore.NameRefusal(_collections(), text, CollectionId) switch
+    /// <summary>The box that renames a clip, its field holding the name as the list shows it, without its extension.</summary>
+    /// <param name="clip">The clip.</param>
+    /// <param name="returnId">The stop that opened the box: the focus goes back there.</param>
+    /// <param name="refusal">Why a name can't be given, asked again at each key: see <see cref="ClipNames.Refusal"/>.</param>
+    public static NameBoxState ForClipRename(ClipGroup clip, string returnId, Func<string, ClipRenameOutcome?> refusal)
+    {
+        var state = new NameBoxState(NameBoxKind.RenameClip, null, ClipNames.EditableName(clip), returnId, () => [])
+        {
+            Clip = clip,
+        };
+        state._clipRefusal = refusal;
+
+        // A name given by hand outside the app may break the rules: the reason is shown at once, as the button is grey.
+        state.Field.Message = state.Check(state.Name).Message;
+        return state;
+    }
+
+    /// <summary>The box that asks before a clip goes to the Recycle Bin. Its name is the one the list shows, with its extension.</summary>
+    public static NameBoxState ForClipDelete(ClipGroup clip, string returnId) =>
+        new(NameBoxKind.DeleteClip, null, ListRow.NameOf(clip), returnId, () => []) { Clip = clip };
+
+    /// <summary>The sentence of a name a clip can't take. Null for an outcome that is no reason of the name.</summary>
+    public static string? ClipRefusalText(ClipRenameOutcome outcome) => outcome switch
+    {
+        ClipRenameOutcome.Empty => ClipEmptyText,
+        ClipRenameOutcome.BadCharacters => SettingsEditor.TemplateCharsError,
+        ClipRenameOutcome.Reserved => ClipReservedText,
+        ClipRenameOutcome.TrailingDotOrSpace => ClipTrailingText,
+        ClipRenameOutcome.TooLong => ClipTooLongText,
+        ClipRenameOutcome.Taken => ClipTakenText,
+        _ => null,
+    };
+
+    /// <summary>What the field says of the text, at each key. An empty collection name says nothing: it has done nothing wrong yet.</summary>
+    public FieldCheck Check(string text) => Kind == NameBoxKind.RenameClip ? CheckClip(text) : LibraryStore.NameRefusal(_collections(), text, CollectionId) switch
     {
         null => FieldCheck.Fine,
         LibraryOutcome.NameTooLong => FieldCheck.Bad(TooLongText),
         LibraryOutcome.NameTaken => FieldCheck.Bad(TakenText),
         _ => new FieldCheck(false, null),
     };
+
+    /// <summary>The name of a clip, at each key. Unlike a collection, an empty name says why: the field was full when the box opened.</summary>
+    private FieldCheck CheckClip(string text) =>
+        _clipRefusal(text) is { } refusal ? FieldCheck.Bad(ClipRefusalText(refusal) ?? ClipEmptyText) : FieldCheck.Fine;
 
     /// <summary>What a key means here, before any widget has it. Tab stays in the box by way of <see cref="NameBox.NextStop"/>.</summary>
     /// <param name="vk">The virtual key.</param>
@@ -172,6 +239,22 @@ internal sealed class NameBoxState
         }
     }
 
+    /// <summary>
+    /// What the renaming of a clip answered. True if the box closes; a name the disk refused keeps it open, with the reason under
+    /// the field.
+    /// </summary>
+    public bool AnsweredClip(ClipRenameOutcome outcome)
+    {
+        Waiting = false;
+        if (ClipRefusalText(outcome) is not { } text)
+        {
+            return true;
+        }
+
+        Field.Message = text;
+        return false;
+    }
+
     /// <summary>Where the focus goes when the box closes: the stop that opened it, unless the collection and its buttons have gone.</summary>
     /// <param name="outcome">What the action answered. Null if the box was cancelled.</param>
     public string FocusAfter(LibraryOutcome? outcome)
@@ -199,7 +282,25 @@ internal static class NameBox
     /// <summary>The name in the question of a deletion. So cut, the sentence never passes two lines, whatever the name and the scale.</summary>
     public const float DeleteNameWidth = 180;
 
-    private const float Inset = 24, ButtonHeight = 34, ButtonFromBottom = 16, ButtonGap = 12, FieldTop = 74, FieldHeight = 32, TextSize = 14, DimOpacity = 0.45f;
+    private const float ExtensionGap = 10, Inset = 24, ButtonHeight = 34, ButtonFromBottom = 16, ButtonGap = 12, FieldTop = 74, FieldHeight = 32, TextSize = 14, DimOpacity = 0.45f;
+
+    /// <summary>The box of a clip: wider, for a file name.</summary>
+    public const float ClipWidth = 440, ClipDeleteHeight = 138, ClipDeleteTwoFilesHeight = 168;
+
+    /// <summary>The name of a clip in the question of a deletion: never more than a line.</summary>
+    public const float ClipNameWidth = 340;
+
+    /// <summary>Where the box of this state lies.</summary>
+    public static Box Frame(NameBoxState state)
+    {
+        if (!state.IsClip)
+        {
+            return Frame(state.Kind);
+        }
+
+        var height = state.Kind == NameBoxKind.RenameClip ? NameHeight : state.Clip!.Files.Count > 1 ? ClipDeleteTwoFilesHeight : ClipDeleteHeight;
+        return new Box((SettingsScreen.WindowWidth - ClipWidth) / 2, (SettingsScreen.WindowHeight - height) / 2, ClipWidth, height);
+    }
 
     public static Box Frame(NameBoxKind kind)
     {
@@ -214,21 +315,39 @@ internal static class NameBox
     /// <param name="cancel">Cancel was pressed.</param>
     public static IReadOnlyList<Widget> Build(ICanvas c, NameBoxState state, Action confirm, Action cancel)
     {
-        var box = Frame(state.Kind);
+        var box = Frame(state);
         var widgets = new List<Widget>(4);
         var isDelete = state.IsQuestion;
+        var inner = box.W - 2 * Inset;
+
+        // The extension of a clip is not part of the name typed: it stands to the right of the field, out of the native box's way.
+        var extension = state.Kind == NameBoxKind.RenameClip ? Path.GetExtension(state.Clip!.Main.Path) : string.Empty;
+        var extensionWidth = extension.Length > 0 ? MathF.Ceiling(c.Measure(extension, Face.Body, TextSize)) + ExtensionGap : 0;
+        var field = new Box(box.X + Inset, box.Y + FieldTop, inner - extensionWidth, FieldHeight);
         widgets.Add(new Painted((canvas, _) =>
         {
             canvas.Dim(DimOpacity);
             canvas.Frame(box, 6, Theme.Panel, Theme.Control);
-            if (isDelete)
+            if (state.Kind == NameBoxKind.DeleteClip)
             {
-                canvas.Wrapped(state.Kind == NameBoxKind.StartOver ? NameBoxState.StartOverQuestion : DeleteQuestion(canvas, state.Name), Face.Body, TextSize, box.X + Inset, box.Y + 22, Width - 2 * Inset, Theme.Text);
+                var used = canvas.Wrapped(ClipDeleteQuestion(canvas, state.Name), Face.Body, TextSize, box.X + Inset, box.Y + 22, inner, Theme.Text);
+                if (state.Clip!.Files.Count > 1)
+                {
+                    canvas.Wrapped(NameBoxState.TwoFilesText, Face.Body, 13, box.X + Inset, box.Y + 22 + used + 6, inner, Theme.Muted);
+                }
+            }
+            else if (isDelete)
+            {
+                canvas.Wrapped(state.Kind == NameBoxKind.StartOver ? NameBoxState.StartOverQuestion : DeleteQuestion(canvas, state.Name), Face.Body, TextSize, box.X + Inset, box.Y + 22, inner, Theme.Text);
             }
             else
             {
                 canvas.TextMid(state.Title, Face.Title, 22, box.X + Inset, box.Y + 30, Theme.Text);
-                canvas.TextMid("Collection name", Face.Body, 13, box.X + Inset, box.Y + 58, Theme.Muted);
+                canvas.TextMid(state.FieldLabel, Face.Body, 13, box.X + Inset, box.Y + 58, Theme.Muted);
+                if (extension.Length > 0)
+                {
+                    canvas.TextRight(extension, Face.Body, TextSize, box.Right - Inset, field.MidY, Theme.Faded);
+                }
             }
         }));
 
@@ -240,7 +359,7 @@ internal static class NameBox
                 Face = Face.Body,
                 Size = TextSize,
                 Enabled = !state.Waiting,
-                Bounds = new Box(box.X + Inset, box.Y + FieldTop, Width - 2 * Inset, FieldHeight),
+                Bounds = field,
             });
         }
 
@@ -293,6 +412,10 @@ internal static class NameBox
 
     public static string DeleteQuestion(ICanvas c, string name) =>
         "Delete collection \"" + c.Fit(name, Face.Body, TextSize, DeleteNameWidth) + "\"? Your clips stay.";
+
+    /// <summary>The question before a clip goes to the Recycle Bin, its name with its extension.</summary>
+    public static string ClipDeleteQuestion(ICanvas c, string name) =>
+        "Move \"" + c.Fit(name, Face.Body, TextSize, ClipNameWidth) + "\" to the Recycle Bin?";
 }
 
 /// <summary>

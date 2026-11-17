@@ -285,6 +285,13 @@ internal sealed class RowList : Widget
         return x >= RowsRight - StarZone && StarPressed is not null && _rowAt(row).Star is not null ? RowListState.None : row;
     }
 
+    /// <summary>The row under this point, the star included: a right click chooses it. None beside the rows or below them.</summary>
+    public int RowAtPoint(float x, float y)
+    {
+        var row = RowUnder(x, y);
+        return row >= 0 && row < _state.Count ? row : RowListState.None;
+    }
+
     private int RowUnder(float x, float y) =>
         x >= Bounds.X && x < RowsRight ? _state.RowAt(y - Bounds.Y) : RowListState.None;
 
