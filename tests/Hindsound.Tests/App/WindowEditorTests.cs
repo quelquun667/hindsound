@@ -33,12 +33,12 @@ public sealed class WindowEditorTests : IDisposable
         _temp.Dispose();
     }
 
-    private WindowEditor Editor()
+    private WindowEditor Editor(IClipDecoder? decoder = null)
     {
         _editor = new WindowEditor(
             _rig.Screen,
             _loop.Enqueue,
-            _decoder,
+            decoder ?? _decoder,
             new FakeBin(RecycleOutcome.CannotRecycle),
             new FakeIndex(),
             () => _export,
@@ -58,9 +58,9 @@ public sealed class WindowEditorTests : IDisposable
     private static EditRequest Selection(double start, double end, int files = 1) =>
         new(EditorMode.Normal, TimeSpan.FromSeconds(start), TimeSpan.FromSeconds(end), [.. Enumerable.Repeat(0.0, files)]);
 
-    private WindowEditor Loaded(ClipGroup clip)
+    private WindowEditor Loaded(ClipGroup clip, IClipDecoder? decoder = null)
     {
-        var editor = Editor();
+        var editor = Editor(decoder);
         editor.Load(clip);
         Assert.True(editor.WaitForWork(10_000));
         PumpAll();
@@ -169,19 +169,70 @@ public sealed class WindowEditorTests : IDisposable
     }
 
     [Fact]
-    public void Nothing_is_written_and_nothing_is_told_once_the_page_is_left()
+    public void A_save_asked_goes_to_its_end_once_the_page_is_left_and_its_answer_is_told()
     {
-        var editor = Loaded(Clip(("dogs.wav", 1)));
+        // The clip is held while it is read for the save, and the page is left right then.
+        var gate = new ManualResetEventSlim(true);
+        var editor = Loaded(Clip(("dogs.wav", 1)), new GatedDecoder(_decoder, gate));
+        gate.Reset();
 
         editor.Save(Selection(0, 0.5), new EditSave(EditSaveChoice.Copy, "dogs (cut)"));
         editor.Close();
+        gate.Set();
         Assert.True(editor.WaitForWork(10_000));
-        PumpAll();
 
-        // Either the save was stopped and left nothing, or it ended before the close and its answer reaches nobody.
-        var names = _clips.Names();
-        Assert.True(names.SequenceEqual(["dogs.wav"]) || names.SequenceEqual(["dogs (cut).wav", "dogs.wav"]), string.Join(", ", names));
+        Assert.Equal(["dogs (cut).wav", "dogs.wav"], _clips.Names());
+        Assert.Single(_loop);
+        PumpAll();
+        Assert.Contains("editor: saved after the page was left", _journal);
         Assert.DoesNotContain(_journal, line => line.Contains(_clips.Path, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Leaving_the_page_while_the_clip_is_read_stops_the_reading_and_tells_nothing()
+    {
+        var gate = new ManualResetEventSlim(false);
+        var editor = Editor(new GatedDecoder(_decoder, gate));
+
+        editor.Load(Clip(("dogs.wav", 1)));
+        editor.Close();
+        gate.Set();
+        Assert.True(editor.WaitForWork(10_000));
+
+        Assert.Empty(_loop);
+    }
+
+    [Fact]
+    public void Leaving_the_page_while_the_wav_of_the_selection_is_written_removes_it_and_opens_nothing()
+    {
+        var gate = new ManualResetEventSlim(true);
+        var editor = Loaded(Clip(("dogs.mp3", 2)), new GatedDecoder(_decoder, gate));
+        gate.Reset();
+
+        editor.Play(Selection(0.2, 0.6));
+        editor.Close();
+        gate.Set();
+        Assert.True(editor.WaitForWork(10_000));
+
+        Assert.Empty(Directory.GetFiles(_temp.Path));
+        Assert.Empty(Opened());
+    }
+
+    [Fact]
+    public void A_stop_while_the_wav_of_the_selection_is_written_removes_it_and_plays_nothing()
+    {
+        var gate = new ManualResetEventSlim(true);
+        var editor = Loaded(Clip(("dogs.mp3", 2)), new GatedDecoder(_decoder, gate));
+        gate.Reset();
+
+        editor.Play(Selection(0.2, 0.6));
+        editor.StopPlaying();
+        gate.Set();
+        Assert.True(editor.WaitForWork(10_000));
+
+        // Never handed to the player: the WAV is gone at once.
+        Assert.Empty(Directory.GetFiles(_temp.Path));
+        Assert.Empty(Opened());
     }
 
     [Fact]
@@ -202,6 +253,16 @@ public sealed class WindowEditorTests : IDisposable
         Assert.Equal((_clips.Path, path), shell.Shown);
         Assert.Contains("soundboard: Discord not opened", _journal);
         Assert.Empty(_loop);
+    }
+
+    /// <summary>Opens a file only once the gate is open: the work of the editor is caught halfway.</summary>
+    private sealed class GatedDecoder(IClipDecoder inner, ManualResetEventSlim gate) : IClipDecoder
+    {
+        public IDecodedStream Open(string path)
+        {
+            Assert.True(gate.Wait(10_000), "the gate never opened");
+            return inner.Open(path);
+        }
     }
 
     /// <summary>Answers as a system without Discord would.</summary>
