@@ -352,15 +352,31 @@ internal sealed class Toggle(Func<bool> on, Action<bool> set) : Widget
     public override void Paint(ICanvas c, UiState ui)
     {
         var box = Bounds;
-        if (on())
+        var knobRight = new Box(box.Right - 19, box.Y + 3, 16, 16);
+        var knobLeft = new Box(box.X + 3, box.Y + 3, 16, 16);
+        if (!Enabled)
+        {
+            // Out of use: the colors of a control that does not answer, on whichever side the knob stands.
+            if (on())
+            {
+                c.FillRound(box, 11, Theme.Line);
+                c.FillRound(knobRight, 8, Theme.Control);
+            }
+            else
+            {
+                c.Frame(box, 11, Theme.Panel, Theme.Line);
+                c.FillRound(knobLeft, 8, Theme.Control);
+            }
+        }
+        else if (on())
         {
             c.FillRound(box, 11, ui.Accent);
-            c.FillRound(new Box(box.Right - 19, box.Y + 3, 16, 16), 8, ui.OnAccent);
+            c.FillRound(knobRight, 8, ui.OnAccent);
         }
         else
         {
             c.Frame(box, 11, Theme.Raised, Theme.Control);
-            c.FillRound(new Box(box.X + 3, box.Y + 3, 16, 16), 8, Theme.Muted);
+            c.FillRound(knobLeft, 8, Theme.Muted);
         }
 
         if (ui.Focused(this))
@@ -490,7 +506,15 @@ internal sealed class TextField(FieldState state, Func<string, FieldCheck> check
     /// <summary>Shown under the field while the value is fine.</summary>
     public string? Help { get; init; }
 
-    public Box TextBox => new(Bounds.X + 8, Bounds.Y + 2, Bounds.W - 16, Bounds.H - 4);
+    /// <summary>Grey text in the frame, at the right of the field, out of the way of what is typed: a file extension, for instance.</summary>
+    public string? Suffix { get; init; }
+
+    /// <summary>The room the suffix takes from the right of the field, with its gap to the text. The caller measures it.</summary>
+    public float SuffixWidth { get; init; }
+
+    private float Room => Suffix is null ? 0 : SuffixWidth;
+
+    public Box TextBox => new(Bounds.X + 8, Bounds.Y + 2, Bounds.W - 16 - Room, Bounds.H - 4);
 
     public override bool CanFocus => Enabled;
 
@@ -541,7 +565,12 @@ internal sealed class TextField(FieldState state, Func<string, FieldCheck> check
         c.Frame(box, 4, Theme.Raised, bad ? Theme.Hot : Theme.Control);
         if (ui.EditingId != Id)
         {
-            c.TextMid(c.Fit(state.Draft, Face, Size, box.W - 16), Face, Size, box.X + 8, box.MidY, Theme.Text);
+            c.TextMid(c.Fit(state.Draft, Face, Size, box.W - 16 - Room), Face, Size, box.X + 8, box.MidY, Theme.Text);
+        }
+
+        if (Suffix is not null)
+        {
+            c.TextRight(Suffix, Face, Size, box.Right - 8, box.MidY, Theme.Faded);
         }
 
         if (ui.Focused(this))

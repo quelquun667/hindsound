@@ -346,9 +346,13 @@ public sealed class ClipActionsTests : IDisposable
         Assert.Contains("Clip name", text);
         Assert.True(Enabled(NameBox.ConfirmId));
 
-        // The extension stands beside the field, where the native box can't cover it.
+        // The extension stands in grey inside the frame of the field, at its right, where the native box can't cover it.
         var frame = NameBox.Frame(box);
-        Assert.True(Screen.WidgetById(NameBox.NameId)!.Bounds.Right + 10 + 4 * 7 <= frame.Right - 24);
+        var field = (TextField)Screen.WidgetById(NameBox.NameId)!;
+        Assert.Equal(frame.Right - 24, field.Bounds.Right);
+        Assert.Equal(".mp3", field.Suffix);
+        Assert.True(field.TextBox.Right + 4 * 7 <= field.Bounds.Right);
+        Assert.Contains(".mp3", text);
     }
 
     [Theory]

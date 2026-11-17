@@ -164,14 +164,5 @@ internal sealed partial class SettingsScreen
         Add(new Painted((c, _) =>
             c.TextRight("Record my voice", Face.Body, 13, box.X - 8, box.MidY, usable ? Theme.Muted : Theme.Faded)));
         Add(new Toggle(() => audio.MicCaptured, Editor.SetRecordMic) { Id = "now.voice", Bounds = box, Enabled = usable });
-        if (!usable)
-        {
-            // The switch has no grey of its own: the same switch, in the colors of a control that is out of use.
-            Add(new Painted((c, _) =>
-            {
-                c.Frame(box, 11, Theme.Panel, Theme.Line);
-                c.FillRound(new Box(box.X + 3, box.Y + 3, 16, 16), 8, Theme.Control);
-            }));
-        }
     }
 }
