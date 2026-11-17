@@ -105,7 +105,9 @@ public sealed class WindowEditorTests : IDisposable
         PumpUntil(() => Opened().Length == 1);
 
         var events = _events.ToArray();
-        Assert.True(Array.IndexOf(events, "stop library") < Array.FindIndex(events, e => e.StartsWith("open ", StringComparison.Ordinal)));
+        var stopped = Array.IndexOf(events, "stop library");
+        Assert.True(stopped >= 0, "the list was never stopped");
+        Assert.True(stopped < Array.FindIndex(events, e => e.StartsWith("open ", StringComparison.Ordinal)), "the list was stopped after the selection opened");
         var wav = Assert.Single(Directory.GetFiles(_temp.Path));
         Assert.Matches(@"^Hindsound-preview-\d+-\d+\.wav$", Path.GetFileName(wav));
         Assert.Contains(Path.GetFileName(wav), Opened()[0], StringComparison.OrdinalIgnoreCase);
