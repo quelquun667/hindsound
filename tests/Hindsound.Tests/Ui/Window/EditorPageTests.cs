@@ -309,6 +309,20 @@ public sealed class EditorPageTests : IDisposable
     }
 
     [Fact]
+    public void Back_from_another_page_the_keys_go_to_the_dialog_again()
+    {
+        Open();
+        Click(SettingsScreen.EditorSaveId);
+        Screen.ShowSection(Section.Now);
+        Screen.ShowSection(Section.Library);
+
+        _rig.Press(Vk.Down);
+        Assert.Equal(Section.Library, Screen.Section);
+        Assert.NotNull(Screen.EditorDialog);
+        Assert.Equal(EditorSaveDialogState.NameId, Screen.FocusId);
+    }
+
+    [Fact]
     public void The_dialog_saves_a_copy_named_after_the_clip_by_default()
     {
         Open();

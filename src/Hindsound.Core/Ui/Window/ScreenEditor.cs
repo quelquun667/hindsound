@@ -309,6 +309,13 @@ internal sealed partial class SettingsScreen
         const uint shift = HotkeyGesture.ModShift;
         if (_saveDialog is not null)
         {
+            // Back from another page, the focus is on the side bar, behind the dialog: the key brings it back into the dialog.
+            if (_focusId is null || !_focusId.StartsWith(EditorSaveDialogState.Prefix, StringComparison.Ordinal))
+            {
+                SetFocus(EditorSaveDialogState.NameId);
+                return true;
+            }
+
             if (vk == Vk.Escape && modifiers == 0)
             {
                 CloseSaveDialog();
