@@ -1,3 +1,4 @@
+using Hindsound.Input;
 using Hindsound.Library;
 using Hindsound.Ui;
 using Hindsound.Ui.Window;
@@ -269,6 +270,22 @@ public sealed class ClipActionsTests : IDisposable
         Screen.Key(Vk.Down, 0);
         Screen.Key(Vk.Down, 0);
         Assert.Equal(ClipMenuItem.Copy, Screen.OpenClipMenu!.Current);
+    }
+
+    [Fact]
+    public void Tab_stays_in_the_menu_and_goes_round_its_lines()
+    {
+        Open();
+        Screen.SelectClip(FakeLibrary.PathOf(1));
+        Assert.True(Screen.TabTo(SettingsScreen.ClipMoreId));
+        Screen.Key(Vk.Enter, 0);
+
+        Screen.Key(Vk.Tab, 0);
+        Assert.Equal(ClipMenuItem.Copy, Screen.OpenClipMenu!.Current);
+        Screen.Key(Vk.Tab, HotkeyGesture.ModShift);
+        Screen.Key(Vk.Tab, HotkeyGesture.ModShift);
+        Assert.Equal(ClipMenuItem.Delete, Screen.OpenClipMenu!.Current);
+        Assert.Equal(SettingsScreen.ClipMoreId, Screen.FocusId);
     }
 
     [Fact]
