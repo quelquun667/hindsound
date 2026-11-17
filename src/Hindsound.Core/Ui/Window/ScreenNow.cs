@@ -151,5 +151,27 @@ internal sealed partial class SettingsScreen
                 (_wave ??= new NowWave()).PaintAll(c, ui.Accent, panel.WaveFacts, Editor.Settings.ClipSeconds, Editor.Settings.BufferSeconds, _status);
             }
         }));
+        BuildVoiceSwitch();
+    }
+
+    // The switch of the voice sits on the line of the title of the Mic lane, at its right. It only closes the microphone: the device
+    // chosen stays. With the microphone off in the Audio page there is nothing to switch, so it is off and grey.
+    private void BuildVoiceSwitch()
+    {
+        var audio = Editor.Settings.Audio;
+        var usable = audio.MicEnabled;
+        var box = NowWave.VoiceSwitch;
+        Add(new Painted((c, _) =>
+            c.TextRight("Record my voice", Face.Body, 13, box.X - 8, box.MidY, usable ? Theme.Muted : Theme.Faded)));
+        Add(new Toggle(() => audio.MicCaptured, Editor.SetRecordMic) { Id = "now.voice", Bounds = box, Enabled = usable });
+        if (!usable)
+        {
+            // The switch has no grey of its own: the same switch, in the colors of a control that is out of use.
+            Add(new Painted((c, _) =>
+            {
+                c.Frame(box, 11, Theme.Panel, Theme.Line);
+                c.FillRound(new Box(box.X + 3, box.Y + 3, 16, 16), 8, Theme.Control);
+            }));
+        }
     }
 }

@@ -50,7 +50,8 @@ internal static class SettingsMapping
     public static (string? SystemDeviceId, string? MicDeviceId, bool MicEnabled) ToDevices(AudioSettings audio)
     {
         var mic = Clean(audio.MicDeviceId);
-        var micEnabled = !string.Equals(mic, AudioSettings.DisabledMic, StringComparison.OrdinalIgnoreCase);
+        // The switch of the voice closes the microphone without touching the device chosen: the id stays in the settings.
+        var micEnabled = audio.RecordMic && !string.Equals(mic, AudioSettings.DisabledMic, StringComparison.OrdinalIgnoreCase);
         return (DeviceId(audio.OutputDeviceId), micEnabled ? DeviceId(mic) : null, micEnabled);
     }
 

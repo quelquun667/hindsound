@@ -67,6 +67,12 @@ internal sealed class NowWave
     /// <summary>All a tick repaints for the bars: the two lanes and the line of the saved part. No words but those inside a lane.</summary>
     public static Box BarsArea { get; } = new(SettingsScreen.Left, SystemTop, SettingsScreen.Width, MicTop + MicHeight + 8 - SystemTop);
 
+    /// <summary>Where the switch of the voice sits: the line of the title of the Mic lane, at its right.</summary>
+    public static Box VoiceSwitch { get; } = new(SettingsScreen.Right - 40, MicTitleY - 12, 40, 22);
+
+    // The switch and its words are widgets of the page: a repaint of the titles must leave them as they are.
+    private static readonly Box VoiceRow = new(SettingsScreen.Right - 200, MicTitleY - 14, 200, 24);
+
     /// <summary>The same with the titles over the lanes, and the line of a change with its words.</summary>
     public static Box WaveArea { get; } = new(SettingsScreen.Left, SystemTitleY - 10, SettingsScreen.Width, MicTop + MicHeight + 8 - (SystemTitleY - 10));
 
@@ -209,7 +215,7 @@ internal sealed class NowWave
     {
         if (titles)
         {
-            c.FillRect(WaveArea, Theme.Base);
+            ClearTitles(c);
         }
 
         var frozen = status?.Activity == CaptureActivity.Paused;
@@ -239,6 +245,14 @@ internal sealed class NowWave
 
         PaintLane(c, MicLane, _micGrid, _micBars, _micLane.HasTrack, WaveMarker.None, look, WaveView.MicLaneText(status, _micLane.HasTrack), fills: false);
         PaintZoneLine(c, accent, frozen);
+    }
+
+    private static void ClearTitles(ICanvas c)
+    {
+        var area = WaveArea;
+        c.FillRect(new Box(area.X, area.Y, area.W, VoiceRow.Y - area.Y), Theme.Base);
+        c.FillRect(new Box(area.X, VoiceRow.Y, VoiceRow.X - area.X, VoiceRow.H), Theme.Base);
+        c.FillRect(new Box(area.X, VoiceRow.Bottom, area.W, area.Bottom - VoiceRow.Bottom), Theme.Base);
     }
 
     // True when the columns had to be worked out again, which is a new picture.
