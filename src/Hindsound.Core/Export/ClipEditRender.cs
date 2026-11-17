@@ -22,7 +22,7 @@ internal static class ClipEditRender
 
     /// <summary>The format of a file of the library, from its extension: a <c>.wav</c> is a WAV, anything else an mp3.</summary>
     public static ExportFormat FormatOf(string path) =>
-        Path.GetExtension(path).Equals(".wav", StringComparison.OrdinalIgnoreCase) ? ExportFormat.Wav : ExportFormat.Mp3;
+        string.Equals(Path.GetExtension(path).ToUpperInvariant(), ".WAV", StringComparison.Ordinal) ? ExportFormat.Wav : ExportFormat.Mp3;
 
     /// <summary>A volume in dB, as a factor. Out of the bounds of the editor, it is held at them; anything not a number is 0 dB.</summary>
     public static float Gain(double db) =>
