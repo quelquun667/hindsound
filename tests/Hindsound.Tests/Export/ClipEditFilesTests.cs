@@ -113,6 +113,25 @@ public sealed class ClipEditFilesTests : IDisposable
     }
 
     [Fact]
+    public void An_edit_that_can_not_take_the_name_of_its_original_is_kept_under_a_name_of_its_own()
+    {
+        // The bin says the original went, but it is still there: the edit can't be moved onto it.
+        var original = _folder.Clip("dogs.wav", _decoder, Tone(Rate, 1, 0.1f), 1);
+        var bin = new FakeBin(RecycleOutcome.Recycled);
+
+        var result = Files(bin).Save(Group(original), Cut(0, 0.5, 0), new EditSave(EditSaveChoice.Replace, null), Export, CancellationToken.None);
+
+        Assert.Equal(EditSaveOutcome.Failed, result.Outcome);
+        Assert.Equal([Path.Combine(_folder.Path, "dogs (cut).wav")], result.Paths);
+        Assert.Equal(Rate / 2, WavFrames(result.Paths[0]));
+        Assert.Equal([1, 2, 3, 4], File.ReadAllBytes(original));
+        Assert.Equal(["dogs (cut).wav", "dogs.wav"], _folder.Names());
+        Assert.Empty(_index.Moved);
+        Assert.NotEmpty(_journal);
+        Assert.DoesNotContain(_journal, line => line.Contains(_folder.Path, StringComparison.OrdinalIgnoreCase) || line.Contains("dogs", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void A_soundboard_copy_of_a_clip_in_two_files_is_one_mono_mp3_when_both_are_mono()
     {
         var system = _folder.Clip("dogs_system.mp3", _decoder, Tone(3 * Rate, 1, 0.1f), 1);

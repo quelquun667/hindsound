@@ -184,6 +184,48 @@ public sealed class WindowEditorTests : IDisposable
         Assert.DoesNotContain(_journal, line => line.Contains(_clips.Path, StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public void A_soundboard_copy_opens_discord_then_shows_the_file_off_the_loop()
+    {
+        var shown = new ManualResetEventSlim();
+        var opened = new ConcurrentQueue<string>();
+        var shell = new NotingShell(shown);
+        _editor = new WindowEditor(
+            _rig.Screen, _loop.Enqueue, _decoder, new FakeBin(RecycleOutcome.CannotRecycle), new FakeIndex(), () => _export, null, null, () => { },
+            new FailingOpener(opened), shell, _temp.Path, _journal.Enqueue);
+        var path = Path.Combine(_clips.Path, "dogs (soundboard).mp3");
+
+        _editor.HandToDiscord(path);
+
+        Assert.True(shown.Wait(10_000));
+        Assert.Equal(["discord://"], opened);
+        Assert.Equal((_clips.Path, path), shell.Shown);
+        Assert.Contains("soundboard: Discord not opened", _journal);
+        Assert.Empty(_loop);
+    }
+
+    /// <summary>Answers as a system without Discord would.</summary>
+    private sealed class FailingOpener(ConcurrentQueue<string> opened) : IFileOpener
+    {
+        public string? Open(string target)
+        {
+            opened.Enqueue(target);
+            return "no application for this protocol";
+        }
+    }
+
+    private sealed class NotingShell(ManualResetEventSlim shown) : IFolderShell
+    {
+        public (string Folder, string File)? Shown { get; private set; }
+
+        public int ShowSelected(string folder, IReadOnlyList<string> files)
+        {
+            Shown = (folder, files.Single());
+            shown.Set();
+            return 0;
+        }
+    }
+
     /// <summary>Plays nothing: every track reads as playing until it is closed, and each verb is noted with the others.</summary>
     private sealed class NotingPlayer(ConcurrentQueue<string> events) : IPreviewPlayer
     {
