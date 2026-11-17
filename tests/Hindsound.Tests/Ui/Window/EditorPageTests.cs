@@ -235,6 +235,16 @@ public sealed class EditorPageTests : IDisposable
         Assert.DoesNotContain(Soundboard.TooLongText, drawn);
     }
 
+    [Theory]
+    [InlineData(59_960, "1:00.0")]
+    [InlineData(119_970, "2:00.0")]
+    [InlineData(59_940, "0:59.9")]
+    [InlineData(3_200, "0:03.2")]
+    public void The_clock_carries_the_rounded_seconds_over_to_the_minute(long ms, string shown)
+    {
+        Assert.Equal(shown, SettingsScreen.EditClock(ms));
+    }
+
     [Fact]
     public void The_size_comes_from_the_estimate_of_the_app()
     {

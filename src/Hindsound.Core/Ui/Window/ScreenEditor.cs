@@ -450,8 +450,12 @@ internal sealed partial class SettingsScreen
 
     // ---------------------------------------------------------------- texts
 
-    internal static string EditClock(long ms) =>
-        string.Create(CultureInfo.InvariantCulture, $"{ms / 60_000}:{ms % 60_000 / 1000.0:00.0}");
+    /// <summary>Minutes, seconds and tenths. The tenths are rounded first, so that 59.96 s carries over to 1:00.0.</summary>
+    internal static string EditClock(long ms)
+    {
+        var tenths = (ms + 50) / 100;
+        return string.Create(CultureInfo.InvariantCulture, $"{tenths / 600}:{tenths % 600 / 10.0:00.0}");
+    }
 
     internal static string KeptText(long ms) => string.Create(CultureInfo.InvariantCulture, $"{ms / 1000.0:0.0} s");
 
