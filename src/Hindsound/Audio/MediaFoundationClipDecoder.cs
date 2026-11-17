@@ -210,9 +210,6 @@ internal sealed unsafe class MediaFoundationStream : IDecodedStream
         }
 
         var from = Math.Max(0, _keepFrom - (long)(SeekMarginSeconds * _nativeRate));
-        var position = new PropVariant64 { Type = VT_I8, Value = from * TicksPerSecond / _nativeRate };
-        Check(SetCurrentPosition(_reader, &position));
-
         _nextFrame = from;
         _holding = true;
         _heldFrames = 0;
@@ -220,6 +217,17 @@ internal sealed unsafe class MediaFoundationStream : IDecodedStream
         _ended = false;
         _framesIn = _framesOut = 0;
         _resampler = NewResampler();
+
+        // Past the end of the file there is nothing to read, which is not an error.
+        var position = new PropVariant64 { Type = VT_I8, Value = from * TicksPerSecond / _nativeRate };
+        var hr = SetCurrentPosition(_reader, &position);
+        if (hr == MF_E_OUT_OF_RANGE || target >= _end)
+        {
+            _ended = true;
+            return;
+        }
+
+        Check(hr);
     }
 
     public int Read(Span<float> interleaved)

@@ -63,6 +63,56 @@ public sealed class MediaFoundationClipDecoderTests : IDisposable
     }
 
     [Fact]
+    public void A_mono_mp3_stays_mono_with_its_own_length()
+    {
+        var path = Path.Combine(_folder, "mono.mp3");
+        Encoders.WriteMp3(path, Sine(Rate, 1), 1, 128);
+
+        using var stream = _decoder.Open(path);
+        var samples = ReadAll(stream);
+
+        Assert.Equal(1, stream.Channels);
+        Assert.Equal(TimeSpan.FromSeconds(Seconds), stream.Duration);
+        Assert.Equal((int)(Seconds * Rate), samples.Length);
+        AssertSine(samples, 1, 0, 480, 0.03);
+    }
+
+    [Fact]
+    public void An_mp3_without_its_tag_is_read_at_the_length_the_decoder_finds()
+    {
+        // The Info frame of LAME cut off (576 bytes at 192 kbps and 48 kHz): nothing says where the sound starts and ends.
+        var tagged = Path.Combine(_folder, "tagged.mp3");
+        Encoders.WriteMp3(tagged, Sine(Rate, 2), 2, 192);
+        var bytes = File.ReadAllBytes(tagged);
+        Assert.Equal(0xFF, bytes[576]);
+        var path = Path.Combine(_folder, "untagged.mp3");
+        File.WriteAllBytes(path, bytes[576..]);
+
+        using var stream = _decoder.Open(path);
+        var samples = ReadAll(stream);
+
+        Assert.Equal(2, stream.Channels);
+        AssertNear(TimeSpan.FromSeconds(Seconds), stream.Duration);
+        AssertNear(TimeSpan.FromSeconds(Seconds), FramesToTime(samples.Length / 2));
+        AssertLevelAndPitch(samples, 2);
+    }
+
+    [Fact]
+    public void A_seek_past_the_end_reads_nothing_and_a_closed_stream_refuses()
+    {
+        var path = Path.Combine(_folder, "short.wav");
+        WriteWav(path, Rate, 2, Sine(Rate, 2));
+
+        var stream = _decoder.Open(path);
+        stream.Seek(TimeSpan.FromSeconds(10));
+        Assert.Equal(0, stream.Read(new float[4096]));
+        stream.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => stream.Read(new float[16]));
+        Assert.Throws<ObjectDisposedException>(() => stream.Seek(TimeSpan.Zero));
+    }
+
+    [Fact]
     public void A_mono_wav_stays_mono()
     {
         var path = Path.Combine(_folder, "mono.wav");

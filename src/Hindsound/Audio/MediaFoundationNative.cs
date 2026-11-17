@@ -20,6 +20,9 @@ internal static unsafe partial class MediaFoundationNative
     public const uint MF_SOURCE_READERF_ERROR = 0x1;
     public const uint MF_SOURCE_READERF_ENDOFSTREAM = 0x2;
 
+    /// <summary>MF_E_OUT_OF_RANGE: a seek past the end.</summary>
+    public const int MF_E_OUT_OF_RANGE = unchecked((int)0xC00D36E5);
+
     public const ushort VT_I8 = 20;
     public const ushort VT_UI8 = 21;
 
