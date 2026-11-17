@@ -171,7 +171,14 @@ internal sealed class ClipEditFiles(IClipDecoder decoder, IRecycleBin recycleBin
 
         // From here the originals may be in the bin: the edit is never thrown away, whatever happens to it.
         var stuck = new List<int>();
-        for (var i = 0; i < originals.Length; i++)
+        var left = Left(recycled, originals);
+        if (left is not null)
+        {
+            journal(left);
+            stuck.AddRange(Enumerable.Range(0, originals.Length));
+        }
+
+        for (var i = 0; i < originals.Length && left is null; i++)
         {
             try
             {
@@ -192,6 +199,13 @@ internal sealed class ClipEditFiles(IClipDecoder decoder, IRecycleBin recycleBin
 
         return new EditSaveResult(EditSaveOutcome.SavedAside, Rescue(clip, originals, temps, stuck));
     }
+
+    /// <summary>
+    /// Why no edited file may take the place of an original, for the log, or null if each may: only part of the original went,
+    /// and an edited file next to one that was not would read as one clip out of step.
+    /// </summary>
+    private static string? Left(RecycleOutcome recycled, string[] originals) =>
+        recycled == RecycleOutcome.Failed && originals.Any(File.Exists) ? "editor: original recycled in part" : null;
 
     /// <summary>
     /// The edits that could not take the name of their original take a name of their own, as a copy would. One that can't is

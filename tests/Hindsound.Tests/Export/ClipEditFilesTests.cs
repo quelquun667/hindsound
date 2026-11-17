@@ -149,6 +149,25 @@ public sealed class ClipEditFilesTests : IDisposable
     }
 
     [Fact]
+    public void A_replacement_whose_original_went_in_part_keeps_the_whole_edit_as_a_clip_of_its_own()
+    {
+        // The bin takes the system track, then fails on the mic track, which stays.
+        var system = _folder.Clip("dogs_system.wav", _decoder, Tone(Rate, 1, 0.1f), 1);
+        var mic = _folder.Clip("dogs_mic.wav", _decoder, Tone(Rate, 1, 0.1f), 1);
+        var bin = new HalfBin(Path.Combine(_folder.Path, "bin"));
+
+        var result = Files(bin).Save(Group(system, mic), Cut(0, 0.5, 0, 0), new EditSave(EditSaveChoice.Replace, null), Export, CancellationToken.None);
+
+        Assert.Equal(EditSaveOutcome.SavedAside, result.Outcome);
+        Assert.Equal([Path.Combine(_folder.Path, "dogs (cut)_system.wav"), Path.Combine(_folder.Path, "dogs (cut)_mic.wav")], result.Paths);
+        Assert.All(result.Paths, path => Assert.Equal(Rate / 2, WavFrames(path)));
+        Assert.Equal(["dogs (cut)_mic.wav", "dogs (cut)_system.wav", "dogs_mic.wav"], _folder.Names());
+        Assert.Equal([1, 2, 3, 4], File.ReadAllBytes(mic));
+        Assert.Empty(_index.Moved);
+        Assert.DoesNotContain(_journal, line => line.Contains(_folder.Path, StringComparison.OrdinalIgnoreCase) || line.Contains("dogs", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void A_soundboard_copy_of_a_clip_in_two_files_is_one_mono_mp3_when_both_are_mono()
     {
         var system = _folder.Clip("dogs_system.mp3", _decoder, Tone(3 * Rate, 1, 0.1f), 1);
