@@ -874,6 +874,8 @@ public sealed class NowWindowTests : IDisposable
 
     public NowWindowTests()
     {
+        // The grid of the wave counts pixels at the scale of the screen alone, which is the window at 100%.
+        _rig.Settings.General.WindowZoom = 100;
         _window = new SettingsWindow(_rig.Settings, _rig.Backend, () => 0f, firstRun: false, offscreen: true, () => { });
         _window.Screen.SetNow(_panel);
     }
