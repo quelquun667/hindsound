@@ -19,6 +19,9 @@ public sealed class WindowZoomTests : IDisposable
     [DllImport("user32.dll")]
     private static extern int GetWindowRect(nint hwnd, out Rect rect);
 
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForSystem();
+
     public void Dispose()
     {
         _window?.Dispose();
@@ -92,6 +95,20 @@ public sealed class WindowZoomTests : IDisposable
         window.ProbeDpiChange(192);
 
         Assert.EndsWith("bitmap 1520x976", window.ClientSizeText());
+    }
+
+    [Fact]
+    public void A_work_area_too_small_for_even_100_percent_puts_the_window_at_its_top_left()
+    {
+        // 600 x 400 cannot hold the 760 x 488 window: centred, its title bar would be above the top of the area.
+        _rig.Settings.General.WindowZoom = 100;
+        var work = new ScreenRect(100, 80, 700, 480);
+        var screen = new ScreenInfo(work, work, GetDpiForSystem());
+        _window = new SettingsWindow(_rig.Settings, _rig.Backend, () => 0f, firstRun: false, offscreen: false, screen, () => { });
+
+        GetWindowRect(_window.Hwnd, out var rect);
+
+        Assert.Equal((100, 80), (rect.Left, rect.Top));
     }
 
     [Fact]

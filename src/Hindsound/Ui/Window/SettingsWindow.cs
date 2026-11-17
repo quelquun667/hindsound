@@ -136,7 +136,8 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
         _zoom = ChooseZoom(area, dpi);
         var size = OuterSize(dpi, _zoom);
         var exStyle = offscreen ? Native.WS_EX_NOACTIVATE | Native.WS_EX_TOOLWINDOW : 0;
-        _hwnd = Native.CreateWindowExW(exStyle, ClassName, "Hindsound", Style, area.Left + (area.Width - size.Cx) / 2, area.Top + (area.Height - size.Cy) / 2, size.Cx, size.Cy, 0, 0, instance, 0);
+        var at = Centered(area, size);
+        _hwnd = Native.CreateWindowExW(exStyle, ClassName, "Hindsound", Style, at.Left, at.Top, size.Cx, size.Cy, 0, 0, instance, 0);
         if (_hwnd == 0)
         {
             throw new InvalidOperationException("CreateWindowEx failed");
@@ -149,7 +150,8 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
             _dpi = real;
             _zoom = ChooseZoom(area, real);
             size = OuterSize(real, _zoom);
-            Native.SetWindowPos(_hwnd, 0, 0, 0, size.Cx, size.Cy, Native.SWP_NOMOVE | WindowNative.SWP_NOZORDER | Native.SWP_NOACTIVATE);
+            at = Centered(area, size);
+            Native.SetWindowPos(_hwnd, 0, at.Left, at.Top, size.Cx, size.Cy, WindowNative.SWP_NOZORDER | Native.SWP_NOACTIVATE);
         }
 
         DarkFrame();
@@ -767,6 +769,10 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
         var top = now.Top + now.Height / 2 - size.Cy / 2;
         Resized(Fit(left, top, size, area), size);
     }
+
+    // Around the middle of the work area, and never above or left of it: when even the smallest window is too big for the screen, its title bar stays in reach.
+    private static (int Left, int Top) Centered(ScreenRect area, Native.SIZE size) =>
+        Fit(area.Left + (area.Width - size.Cx) / 2, area.Top + (area.Height - size.Cy) / 2, size, area);
 
     // Inside the work area, as far as it holds the window.
     private static (int Left, int Top) Fit(int left, int top, Native.SIZE size, ScreenRect area) =>
