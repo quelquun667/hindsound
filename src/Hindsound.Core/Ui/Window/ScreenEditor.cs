@@ -380,7 +380,7 @@ internal sealed partial class SettingsScreen
             return;
         }
 
-        if (dialog.Save() is { } save)
+        if (dialog.Copy() is { } save)
         {
             SendEdit(save);
             return;
@@ -413,12 +413,11 @@ internal sealed partial class SettingsScreen
         Refresh();
     }
 
-    private void PickSaveChoice(EditSaveChoice choice)
+    private void SendReplace()
     {
-        if (_saveDialog is { } dialog)
+        if (_saveDialog is not null)
         {
-            dialog.Choice = choice;
-            Refresh();
+            SendEdit(new EditSave(EditSaveChoice.Replace, null));
         }
     }
 
@@ -710,7 +709,7 @@ internal sealed partial class SettingsScreen
         }));
 
         // The dialog, last of all so that it dims what is under it; the band and the side bar only to be seen.
-        foreach (var widget in EditorSaveDialog.Build(_canvas, dialog, SaveSummary(), PickSaveChoice, SendSaveDialog, CloseSaveDialog))
+        foreach (var widget in EditorSaveDialog.Build(_canvas, dialog, SaveSummary(), SendSaveDialog, SendReplace, CloseSaveDialog))
         {
             Chrome(widget);
         }

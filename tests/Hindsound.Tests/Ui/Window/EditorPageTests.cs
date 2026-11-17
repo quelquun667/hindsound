@@ -314,8 +314,8 @@ public sealed class EditorPageTests : IDisposable
         Open();
         Click(SettingsScreen.EditorSaveId);
         Assert.Contains(EditorSaveDialogState.CopyHelp, Painted());
-        Assert.Contains(EditorSaveDialogState.ReplaceHelp, Painted());
-        Click(EditorSaveDialogState.SaveId);
+        Assert.True(((Button)Screen.WidgetById(EditorSaveDialogState.CopyId)!).Accented);
+        Click(EditorSaveDialogState.CopyId);
 
         var (request, save) = Assert.Single(_panel.Saves);
         Assert.Equal(new EditSave(EditSaveChoice.Copy, Name + " (cut)"), save);
@@ -330,14 +330,31 @@ public sealed class EditorPageTests : IDisposable
         Open();
         Click(SettingsScreen.EditorSaveId);
         Screen.EditChanged("   ");
-        Assert.False(((Button)Screen.WidgetById(EditorSaveDialogState.SaveId)!).Enabled);
+        Assert.False(((Button)Screen.WidgetById(EditorSaveDialogState.CopyId)!).Enabled);
         _rig.Press(Vk.Enter);
         Assert.Empty(_panel.Saves);
         Assert.NotNull(Screen.EditorDialog);
 
         Click(EditorSaveDialogState.ReplaceId);
-        Click(EditorSaveDialogState.SaveId);
         Assert.Equal(new EditSave(EditSaveChoice.Replace, null), Assert.Single(_panel.Saves).Save);
+    }
+
+    [Fact]
+    public void The_dialog_has_the_name_of_the_copy_then_Cancel_Replace_the_original_and_Save_as_a_copy()
+    {
+        Open();
+        Click(SettingsScreen.EditorSaveId);
+        var drawn = Painted();
+        Assert.Contains(EditorSaveDialogState.NameCaption, drawn);
+        Assert.Contains(EditorSaveDialogState.CopyHelp, drawn);
+        var stops = Screen.StopIds().Where(id => id.StartsWith(EditorSaveDialogState.Prefix, StringComparison.Ordinal));
+        Assert.Equal([EditorSaveDialogState.NameId, EditorSaveDialogState.CancelId, EditorSaveDialogState.ReplaceId, EditorSaveDialogState.CopyId], stops);
+        Assert.Contains(EditorSaveDialogState.ReplaceLabel, drawn);
+        Assert.Contains(EditorSaveDialogState.CopyLabel, drawn);
+
+        // Enter in the name saves the copy, as the button in accent does.
+        _rig.Press(Vk.Enter);
+        Assert.Equal(new EditSave(EditSaveChoice.Copy, Name + " (cut)"), Assert.Single(_panel.Saves).Save);
     }
 
     [Fact]
@@ -345,7 +362,7 @@ public sealed class EditorPageTests : IDisposable
     {
         Open();
         Click(SettingsScreen.EditorSaveId);
-        Click(EditorSaveDialogState.SaveId);
+        Click(EditorSaveDialogState.CopyId);
         Screen.EditorSaved(new EditSaveResult(EditSaveOutcome.Saved, [@"C:\Clips\clip0003.mp3"]));
 
         Assert.False(Screen.EditorOpen);
