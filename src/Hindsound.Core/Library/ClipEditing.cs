@@ -110,13 +110,16 @@ public enum EditSaveOutcome
     /// <summary>A soundboard copy would be bigger than <see cref="Soundboard.MaxBytes"/>. Nothing was written.</summary>
     TooBig,
 
-    /// <summary>Anything else. Nothing of the edit is left on disk, and the original is as it was.</summary>
+    /// <summary>
+    /// Anything else. The original is as it was, except when the edit could not take its name after the original went to the
+    /// Recycle Bin: the edit then stays under a name of its own, and its path is in <see cref="EditSaveResult.Paths"/>.
+    /// </summary>
     Failed,
 }
 
 /// <summary>What a save did.</summary>
 /// <param name="Outcome">What happened.</param>
-/// <param name="Paths">The files written, in the order of the files of the clip (one for a soundboard copy). Empty unless saved.</param>
+/// <param name="Paths">The files written, in the order of the files of the clip (one for a soundboard copy). Empty unless saved, or unless a replacement kept its edit under a name of its own.</param>
 internal sealed record EditSaveResult(EditSaveOutcome Outcome, IReadOnlyList<string> Paths);
 
 public enum EditorLoadOutcome
