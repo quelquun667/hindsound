@@ -45,7 +45,7 @@ internal sealed partial class SettingsScreen
     }
 
     /// <summary>The second timer runs: on Now, with the window not minimized, unless time stands still and all is read.</summary>
-    public bool WantsWave => _now is not null && Section == Section.Now && !_minimized && !_waveAsleep;
+    public bool WantsWave => (_now is not null && Section == Section.Now && !_minimized && !_waveAsleep) || EditorWantsTicks;
 
     /// <summary>The picture of the wave, for what wants to look at it. Null until the page has been shown.</summary>
     internal NowWave? Wave => _wave;
@@ -90,6 +90,12 @@ internal sealed partial class SettingsScreen
     /// </summary>
     public void WaveTick()
     {
+        if (EditorWantsTicks)
+        {
+            EditorTick();
+            return;
+        }
+
         if (_now is not { } panel || Section != Section.Now)
         {
             return;

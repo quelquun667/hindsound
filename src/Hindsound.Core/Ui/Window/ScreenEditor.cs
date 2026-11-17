@@ -77,6 +77,14 @@ internal sealed partial class SettingsScreen
     {
     }
 
+    /// <summary>The play head moves: the timer of the wave runs for the editor too, and calls <see cref="EditorTick"/> in place of the Now page.</summary>
+    private bool EditorWantsTicks => false;
+
+    /// <summary>A tick of the timer of the wave while <see cref="EditorWantsTicks"/>.</summary>
+    private void EditorTick()
+    {
+    }
+
     /// <summary>A key while the editor is open, before Tab and the widgets: the arrows with Shift, Escape. Null when this does not want it.</summary>
     private bool? EditorKey(uint vk, uint modifiers) => null;
 
