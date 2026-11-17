@@ -305,8 +305,9 @@ public sealed class LibraryStore : IClipIndex
     /// <summary>
     /// The star and the collections of <paramref name="from"/> go to the files at <paramref name="to"/>, file for file, with their
     /// size and date read again on the disk. The entries are first settled against <paramref name="scan"/>, as for any action: an
-    /// entry that knows the clip by its size and date, under a name it had before, follows it too. Nothing is written when no
-    /// entry holds the clip.
+    /// entry that knows the clip by its size and date, under a name it had before, follows it too. An entry left at one of the
+    /// new paths by a clip now gone (in the Recycle Bin, say) lets that path go first, so that its labels never land on this
+    /// clip. Nothing is written when no entry holds the clip or a new path.
     /// </summary>
     /// <param name="from">The clip as the look found it.</param>
     /// <param name="to">The new path of each of its files, in the order of its files.</param>
@@ -323,6 +324,7 @@ public sealed class LibraryStore : IClipIndex
         var change = Change(scan, nowUtc, data =>
         {
             var newPaths = NewPaths(from, to);
+            moved = LetGo(data, to, newPaths.Keys);
             foreach (var file in data.Clips.SelectMany(entry => entry.Files))
             {
                 if (newPaths.TryGetValue(file.Path, out var path))
@@ -340,8 +342,9 @@ public sealed class LibraryStore : IClipIndex
 
     /// <summary>
     /// The files at <paramref name="to"/> join every collection of <paramref name="from"/>, never its star: a copy is another clip,
-    /// and the user starred the one they chose. An entry that already names a file of the copy takes the collections; otherwise a
-    /// new entry is made. Nothing is written when the clip is in no collection.
+    /// and the user starred the one they chose. An entry left at a path of the copy by a clip now gone lets that path go first, so
+    /// that its labels never land on the copy; then a new entry is made. Nothing is written when the clip is in no collection and
+    /// no entry held a path of the copy.
     /// </summary>
     internal LibraryOutcome CopyCollections(ClipGroup from, IReadOnlyList<string> to, ClipScan scan, DateTime nowUtc)
     {
@@ -354,6 +357,7 @@ public sealed class LibraryStore : IClipIndex
         var change = Change(scan, nowUtc, data =>
         {
             var source = new HashSet<string>(from.Files.Select(file => file.Path), PathRules.Comparer);
+            copied = LetGo(data, to, source);
             var ids = data.Clips
                 .Where(entry => entry.Files.Exists(file => source.Contains(file.Path)))
                 .SelectMany(entry => entry.Collections)
@@ -361,27 +365,38 @@ public sealed class LibraryStore : IClipIndex
                 .ToList();
             if (ids.Count == 0)
             {
-                return LibraryOutcome.NoFile;
+                return copied ? LibraryOutcome.Done : LibraryOutcome.NoFile;
             }
 
-            var copy = new HashSet<string>(to, PathRules.Comparer);
-            var entries = data.Clips.FindAll(entry => entry.Files.Exists(file => copy.Contains(file.Path)));
-            if (entries.Count == 0)
-            {
-                var entry = new LibraryClip { Files = [.. to.Select(path => Relocate(new LibraryFile(), path))] };
-                data.Clips.Add(entry);
-                entries.Add(entry);
-            }
-
-            foreach (var entry in entries)
-            {
-                entry.Collections.AddRange(ids.Where(id => !entry.Collections.Contains(id)));
-            }
-
+            data.Clips.Add(new LibraryClip { Files = [.. to.Select(path => Relocate(new LibraryFile(), path))], Collections = ids });
             copied = true;
             return LibraryOutcome.Done;
         });
         return copied ? change.Outcome : NothingToWrite(change.Outcome);
+    }
+
+    /// <summary>
+    /// Takes every path of <paramref name="to"/> out of the entries that hold it, but for the files of <paramref name="kept"/>,
+    /// and drops an entry left with no file. True if anything changed.
+    /// </summary>
+    private static bool LetGo(LibraryData data, IReadOnlyList<string> to, IEnumerable<string> kept)
+    {
+        var taken = new HashSet<string>(to, PathRules.Comparer);
+        taken.ExceptWith(kept);
+        var emptied = new HashSet<LibraryClip>();
+        var removed = 0;
+        foreach (var entry in data.Clips)
+        {
+            var count = entry.Files.RemoveAll(file => taken.Contains(file.Path));
+            removed += count;
+            if (count > 0 && entry.Files.Count == 0)
+            {
+                emptied.Add(entry);
+            }
+        }
+
+        data.Clips.RemoveAll(emptied.Contains);
+        return removed > 0;
     }
 
     // A look that found this clip and read no folder: the entries of every other clip stay exactly as they are.

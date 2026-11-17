@@ -149,6 +149,45 @@ public sealed class LibraryStoreClipFilesTests : IDisposable
         Assert.True(EntryOf(to[0]).Favorite);
     }
 
+    /// <summary>A starred clip in a collection, then sent away: its entry outlives its file, as it does for a clip in the Recycle Bin.</summary>
+    private string Gone(string name)
+    {
+        var gone = new ClipGroup([Made(name, size: 7)]);
+        Assert.Equal(LibraryOutcome.Done, _store.SetFavorite(gone, true, Scan(gone), Now).Outcome);
+        var id = Collection("Old", gone);
+        File.Delete(gone.Main.Path);
+        return id;
+    }
+
+    [Fact]
+    public void A_clip_renamed_to_the_name_of_a_clip_gone_never_takes_its_labels()
+    {
+        Gone("funny.mp3");
+        var line = new ClipGroup([Made("plain.mp3")]);
+        var to = At("funny.mp3");
+        Move(line, [to]);
+
+        Assert.Equal(LibraryOutcome.Done, _store.MoveLabels(line, [to], Scan(line), Now));
+
+        Assert.DoesNotContain(_store.Read().Data.Clips, entry => entry.Files.Exists(file => string.Equals(file.Path, to, StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void A_copy_named_as_a_clip_gone_gets_the_collections_of_its_clip_alone()
+    {
+        var old = Gone("funny.mp3");
+        var line = new ClipGroup([Made("boss.mp3")]);
+        var raids = Collection("Raids", line);
+        var copy = Made("funny.mp3", size: 9);
+
+        Assert.Equal(LibraryOutcome.Done, _store.CopyCollections(line, [copy.Path], Scan(line), Now));
+
+        var copied = EntryOf(copy.Path);
+        Assert.False(copied.Favorite);
+        Assert.Equal([raids], copied.Collections);
+        Assert.DoesNotContain(_store.Read().Data.Clips, entry => entry.Collections.Contains(old));
+    }
+
     [Fact]
     public void A_copy_joins_the_collections_and_never_gets_the_star()
     {
