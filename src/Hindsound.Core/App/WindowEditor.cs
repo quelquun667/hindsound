@@ -274,15 +274,14 @@ internal sealed class WindowEditor(
             _session++;
             _clip = null;
             _channels = [];
-            CancellationTokenSource old;
             lock (_gate)
             {
-                old = _cancel;
+                // In the lock a written WAV is taken in: from here, one written for this session is removed, never played.
+                _cancel.Cancel();
                 _cancel = new CancellationTokenSource();
                 _previewPlaying = null;
             }
 
-            old.Cancel();
             var preview = _preview;
             _preview = null;
             preview?.Dispose();
