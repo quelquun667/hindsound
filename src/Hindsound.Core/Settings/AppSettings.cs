@@ -124,6 +124,15 @@ public sealed class AudioSettings
 
     public bool MicEnabled => !string.Equals(MicDeviceId, DisabledMic, StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// The switch "Record my voice" of the Now page: off, the microphone is not captured at all, whatever the device. It never
+    /// changes <see cref="MicDeviceId"/>, so turning it back on finds the same device.
+    /// </summary>
+    public bool RecordMic { get; set; } = true;
+
+    /// <summary>Whether the microphone is captured: a device is chosen and the switch is on.</summary>
+    public bool MicCaptured => MicEnabled && RecordMic;
+
     internal void Normalize()
     {
         OutputDeviceId = string.IsNullOrWhiteSpace(OutputDeviceId) ? DefaultDevice : OutputDeviceId;
@@ -218,6 +227,14 @@ public sealed class GeneralSettings
     /// <summary>"whenNoOverlay", "always" or "never".</summary>
     public string ConfirmSound { get; set; } = "whenNoOverlay";
 
+    public const int DefaultWindowZoom = 120;
+
+    /// <summary>The sizes the window can be drawn at, in percent of its layout. A screen too small for one takes the largest that fits.</summary>
+    public static readonly int[] WindowZooms = [100, 120, 140];
+
+    /// <summary>100, 120 or 140: how much bigger than its layout the window is drawn. A file without the key gets the default.</summary>
+    public int WindowZoom { get; set; } = DefaultWindowZoom;
+
     public UpdateSettings Updates { get; set; } = new();
 
     internal void Normalize()
@@ -226,6 +243,7 @@ public sealed class GeneralSettings
         NotificationPosition = AppSettings.OneOf(NotificationPosition, "right", "right", "left");
         FullscreenGames = AppSettings.OneOf(FullscreenGames, "auto", "auto", "soundOnly");
         ConfirmSound = AppSettings.OneOf(ConfirmSound, "whenNoOverlay", "whenNoOverlay", "always", "never");
+        WindowZoom = Array.IndexOf(WindowZooms, WindowZoom) >= 0 ? WindowZoom : DefaultWindowZoom;
         Updates ??= new();
         Updates.Normalize();
     }

@@ -22,6 +22,9 @@ internal enum SettingsChange
     Accent = 128,
     Startup = 256,
     Updates = 512,
+
+    /// <summary>The size of the window: it is drawn again at the new zoom.</summary>
+    WindowSize = 1024,
 }
 
 /// <summary>Whether a typed value can be kept; if not, the sentence shown next to the field.</summary>
@@ -284,6 +287,16 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
         }
     }
 
+    /// <summary>The switch of the Mic lane. Like a change of device, the engine opens or closes the microphone.</summary>
+    public void SetRecordMic(bool on)
+    {
+        if (on != Settings.Audio.RecordMic)
+        {
+            Settings.Audio.RecordMic = on;
+            changed(SettingsChange.Devices);
+        }
+    }
+
     public void SetMode(string mode)
     {
         if (mode != Settings.Audio.Mode)
@@ -499,6 +512,16 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
     public void SetFullscreenGames(string mode) => SetGeneral(Settings.General.FullscreenGames != mode, () => Settings.General.FullscreenGames = mode);
 
     public void SetConfirmSound(string mode) => SetGeneral(Settings.General.ConfirmSound != mode, () => Settings.General.ConfirmSound = mode);
+
+    /// <summary>One of <see cref="GeneralSettings.WindowZooms"/>; any other value is ignored. The window is drawn again at once.</summary>
+    public void SetWindowZoom(int percent)
+    {
+        if (Array.IndexOf(GeneralSettings.WindowZooms, percent) >= 0 && percent != Settings.General.WindowZoom)
+        {
+            Settings.General.WindowZoom = percent;
+            changed(SettingsChange.General | SettingsChange.WindowSize);
+        }
+    }
 
     /// <summary>"auto", "ask" or "off". The updater has to hear of it: it arms or stops its timer.</summary>
     public void SetUpdateMode(string mode)
