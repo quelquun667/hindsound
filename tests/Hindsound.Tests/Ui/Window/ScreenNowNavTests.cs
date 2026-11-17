@@ -92,7 +92,7 @@ public sealed class ScreenNowNavTests : IDisposable
         Screen.SetNow(new FakeNow());
 
         var stops = Screen.StopIds();
-        Assert.Equal(["band.pause", "band.save", "nav", "now.record", "foot.open"], stops);
+        Assert.Equal(["band.pause", "band.save", "nav", "now.record", "now.voice", "foot.open"], stops);
     }
 
     [Fact]

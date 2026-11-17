@@ -25,6 +25,9 @@ internal sealed class ShellRunRig : IDisposable
 
     public HindsoundApp? App { get; private set; }
 
+    /// <summary>The one program the settings record alone, or null for the whole PC. Set before running.</summary>
+    public string? SourceApp { get; set; }
+
     private string LogPath => Path.Combine(_folder, "settings.log");
 
     public void Run(Action<ShellRunRig> whileRunning) => Run(whileRunning, offscreen: true);
@@ -34,7 +37,7 @@ internal sealed class ShellRunRig : IDisposable
     {
         var settings = Path.Combine(_folder, "settings.json");
         File.WriteAllText(settings, $$$"""
-            {"audio":{"micDeviceId":"disabled"},
+            {"audio":{"micDeviceId":"disabled","sourceApp":{{{JsonSerializer.Serialize(SourceApp)}}}},
              "export":{"outputFolder":{{{JsonSerializer.Serialize(Path.Combine(_folder, "clips"))}}},"copyToClipboard":false},
              "general":{"startWithWindows":false,"confirmSound":"never"}}
             """);

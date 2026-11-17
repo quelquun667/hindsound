@@ -98,6 +98,10 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     private int _copying;
     private readonly LatestLoad<AudioChoices> _choices;
 
+    // What the list of programs calls the one recorded alone, read off the loop: listing them touches the audio system.
+    private readonly LatestLoad<SourceAppName> _sourceAppName;
+    private SourceAppName? _sourceAppShown;
+
     private ClipResult? _lastClip;
     private DateTime _lastClipTime;
     private TimeSpan _lastRequested;
@@ -139,9 +143,16 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
             work => _loop.Post(work),
             lists => _window?.Screen.SetChoices(lists.Outputs, lists.Mics, lists.Apps),
             ex => _journal.Write("listing the audio choices: " + ex));
+        _sourceAppName = new LatestLoad<SourceAppName>(
+            work => _loop.Post(work),
+            name => _sourceAppShown = name,
+            ex => _journal.Write("reading the name of the recorded app: " + ex.GetType().Name));
     }
 
     private sealed record AudioChoices(List<AudioDeviceChoice> Outputs, List<AudioDeviceChoice> Mics, List<AudioAppChoice> Apps);
+
+    /// <summary>The name the list of programs gave to one executable, or null when it was not in the list.</summary>
+    private sealed record SourceAppName(string Exe, string? Name);
 
     // The saver falls back to WAV without saying why: the reason is kept here.
     private IAudioFileWriter OpenMp3(string path, int channels, int bitrateKbps)
@@ -462,6 +473,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
         if (!string.Equals(previous.SourceApp, next.SourceApp, StringComparison.OrdinalIgnoreCase))
         {
+            LoadSourceAppName(next.SourceApp);
             Watch(engine.SetSourceAppAsync(next.SourceApp), "changing the recorded app");
         }
 
@@ -586,6 +598,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         var options = SettingsMapping.ToEngineOptions(_settings, _options);
         _engineOptions = options;
         _journal.Write($"engine: buffer {options.BufferDuration}, system {options.SystemDeviceId ?? "(default)"}, app {options.SourceApp ?? "(whole PC)"}, mic enabled {options.MicEnabled}, mic {options.MicDeviceId ?? "(default)"}");
+
+        LoadSourceAppName(options.SourceApp);
 
         // Off this thread: the loop is a single-threaded apartment, and the audio objects belong in the thread pool's.
         _ = Task.Run(async () =>
@@ -713,8 +727,32 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         SaveClip(requested, click is { } standing ? standing.AppName : _desktop.Screens.Foreground().AppName, click?.Screen);
     }
 
-    private void SaveClip(TimeSpan requested, string? appName, ScreenInfo? screen) =>
-        _pipeline.Press(new ClipRequest(requested, SettingsMapping.ToExportOptions(_settings), appName, SettingsMapping.CopyWanted(_settings, _options)) { Screen = screen });
+    // The one door of every clip, the shortcut and the menu alike: with one program recorded alone, {app} is that program.
+    private void SaveClip(TimeSpan requested, string? foregroundName, ScreenInfo? screen) =>
+        _pipeline.Press(new ClipRequest(requested, SettingsMapping.ToExportOptions(_settings), RecordedAppName(foregroundName), SettingsMapping.CopyWanted(_settings, _options)) { Screen = screen });
+
+    internal string? RecordedAppName(string? foregroundName)
+    {
+        var exe = _settings.Audio.SourceApp;
+        var shown = _sourceAppShown is { } known && ClipAppName.SameProgram(known.Exe, exe) ? known.Name : null;
+        return ClipAppName.For(exe, shown, foregroundName);
+    }
+
+    private void LoadSourceAppName(string? exe)
+    {
+        _sourceAppShown = null;
+        if (string.IsNullOrWhiteSpace(exe))
+        {
+            _sourceAppName.Forget();
+            return;
+        }
+
+        _sourceAppName.Start(() =>
+        {
+            var found = _shell.AudioChoices.Apps().FirstOrDefault(a => ClipAppName.SameProgram(a.ExeName, exe));
+            return new SourceAppName(exe, found?.Name);
+        });
+    }
 
     AudioSnapshot IClipBackend.Snapshot(TimeSpan duration) =>
         _engine?.Snapshot(duration) ?? new AudioSnapshot([], []);
@@ -1572,7 +1610,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     private float ReadMicPeak()
     {
         var engine = _engine;
-        if (engine is null || !_settings.Audio.MicEnabled)
+        if (engine is null || !_settings.Audio.MicCaptured)
         {
             return 0;
         }

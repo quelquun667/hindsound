@@ -27,5 +27,5 @@ public static class RamEstimate
     public static string Format(int bufferSeconds, bool micActive) =>
         $"~{Math.Round(Megabytes(bufferSeconds, micActive), MidpointRounding.AwayFromZero):0} MB";
 
-    public static double Megabytes(AppSettings settings) => Megabytes(settings.BufferSeconds, settings.Audio.MicEnabled);
+    public static double Megabytes(AppSettings settings) => Megabytes(settings.BufferSeconds, settings.Audio.MicCaptured);
 }
