@@ -68,4 +68,11 @@ public sealed class ClipAppNameTests : IDisposable
 
         Assert.Equal("game.exe", name);
     }
+
+    [Fact]
+    public void Two_names_of_one_program_differ_only_by_case()
+    {
+        Assert.True(ClipAppName.SameProgram("Discord.exe", "discord.EXE"));
+        Assert.False(ClipAppName.SameProgram("Discord.exe", "chrome.exe"));
+    }
 }

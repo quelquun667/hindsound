@@ -734,7 +734,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     internal string? RecordedAppName(string? foregroundName)
     {
         var exe = _settings.Audio.SourceApp;
-        var shown = _sourceAppShown is { } known && string.Equals(known.Exe, exe, StringComparison.OrdinalIgnoreCase) ? known.Name : null;
+        var shown = _sourceAppShown is { } known && ClipAppName.SameProgram(known.Exe, exe) ? known.Name : null;
         return ClipAppName.For(exe, shown, foregroundName);
     }
 
@@ -749,7 +749,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
         _sourceAppName.Start(() =>
         {
-            var found = _shell.AudioChoices.Apps().FirstOrDefault(a => string.Equals(a.ExeName, exe, StringComparison.OrdinalIgnoreCase));
+            var found = _shell.AudioChoices.Apps().FirstOrDefault(a => ClipAppName.SameProgram(a.ExeName, exe));
             return new SourceAppName(exe, found?.Name);
         });
     }
