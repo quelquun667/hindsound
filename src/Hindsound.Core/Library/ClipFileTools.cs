@@ -54,6 +54,12 @@ public enum ClipRenameOutcome
     /// <summary>Ends with a dot or a space, which Windows drops without a word.</summary>
     TrailingDotOrSpace,
 
+    /// <summary>
+    /// A clip in one file whose name would end as a track does: the Library would join it to the other track of that name, and
+    /// show them as one clip. See <see cref="ClipNames.TrackSuffixText"/>.
+    /// </summary>
+    TrackSuffix,
+
     /// <summary>The full path of a file of the clip would be too long.</summary>
     TooLong,
 
@@ -88,6 +94,9 @@ internal static class ClipNames
 {
     /// <summary>What the two files of a clip saved as separate tracks end with, before the extension.</summary>
     public static readonly string[] TrackSuffixes = ["_system", "_mic"];
+
+    /// <summary>The sentence of <see cref="ClipRenameOutcome.TrackSuffix"/>.</summary>
+    public const string TrackSuffixText = "A name can't end with _system or _mic";
 
     /// <summary>The name the user edits: the file name without its extension, and without the suffix of its track for a clip in two files.</summary>
     public static string EditableName(ClipGroup line)
@@ -137,6 +146,12 @@ internal static class ClipNames
                 && "123456789\u00B9\u00B2\u00B3".Contains(stem[3])))
         {
             return ClipRenameOutcome.Reserved;
+        }
+
+        // Only a clip in two files keeps the suffix of each track: one file named so would be taken for a track.
+        if (line.Files.Count < 2 && TrackSuffixes.Any(suffix => typed.EndsWith(suffix, PathRules.Comparison)))
+        {
+            return ClipRenameOutcome.TrackSuffix;
         }
 
         var targets = TargetPaths(line, typed);
