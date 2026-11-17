@@ -65,7 +65,7 @@ internal sealed class NameBoxState
         Name = name;
         ReturnId = returnId;
         _collections = collections;
-        Field = new FieldState(kind == NameBoxKind.Rename ? name : string.Empty);
+        Field = new FieldState(kind is NameBoxKind.Rename or NameBoxKind.RenameClip ? name : string.Empty);
     }
 
     public NameBoxKind Kind { get; }
