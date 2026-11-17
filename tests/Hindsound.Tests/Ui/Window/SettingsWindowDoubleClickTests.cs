@@ -26,6 +26,7 @@ public sealed class SettingsWindowDoubleClickTests
         // The window is created and never shown, so nothing appears and nothing takes the focus.
         using var rig = new ScreenRig();
         var library = new PlayingLibraryFake();
+        rig.Settings.General.WindowZoom = 100;
         var screen = new ScreenInfo(default, default, 96);
         using var window = new SettingsWindow(rig.Settings, rig.Backend, () => 0, firstRun: false, offscreen: true, screen, () => { });
         window.ProbeDpiChange(96);

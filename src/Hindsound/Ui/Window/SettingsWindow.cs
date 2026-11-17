@@ -97,6 +97,9 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
     private uint? _iconAccent;
     private GdiCanvas _canvas;
     private uint _dpi;
+    // What the settings ask for, and what this screen can hold of it: the window is drawn at the second.
+    private int _wantedZoom;
+    private int _zoom = WindowZoomFit.Floor;
     private bool _dirty = true;
     private bool _settingEditText;
     private bool _trackingLeave;
@@ -106,9 +109,10 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
     private readonly CaptureKeys _captureKeys = new();
     private bool _charForEdit;
     private int _wheelRest;
-    private (Face Face, float Size, uint Dpi) _editFontKey;
+    private (Face Face, float Size, float Scale) _editFontKey;
     private Box _editBox;
     private float _editSize;
+    private Face _editFace;
     private bool _closed;
 
     /// <summary>On the screen under the mouse, or off screen, where no screen counts.</summary>
@@ -128,7 +132,9 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
 
         var (area, dpi) = offscreen ? OffscreenArea() : (screen.Work, screen.Dpi);
         _dpi = dpi;
-        var size = OuterSize(dpi);
+        _wantedZoom = settings.General.WindowZoom;
+        _zoom = ChooseZoom(area, dpi);
+        var size = OuterSize(dpi, _zoom);
         var exStyle = offscreen ? Native.WS_EX_NOACTIVATE | Native.WS_EX_TOOLWINDOW : 0;
         _hwnd = Native.CreateWindowExW(exStyle, ClassName, "Hindsound", Style, area.Left + (area.Width - size.Cx) / 2, area.Top + (area.Height - size.Cy) / 2, size.Cx, size.Cy, 0, 0, instance, 0);
         if (_hwnd == 0)
@@ -141,7 +147,8 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
         if (real != 0 && real != _dpi)
         {
             _dpi = real;
-            size = OuterSize(real);
+            _zoom = ChooseZoom(area, real);
+            size = OuterSize(real, _zoom);
             Native.SetWindowPos(_hwnd, 0, 0, 0, size.Cx, size.Cy, Native.SWP_NOMOVE | WindowNative.SWP_NOZORDER | Native.SWP_NOACTIVATE);
         }
 
@@ -191,7 +198,7 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
     /// <summary>What Windows sends when the window moves to a screen of another DPI: <c>--settings-probe</c> goes through the same code.</summary>
     public void ProbeDpiChange(uint dpi)
     {
-        var size = OuterSize(dpi);
+        var size = OuterSize(dpi, ChooseZoom(AreaOfWindow(), dpi));
         Native.RECT now;
         Native.GetWindowRect(_hwnd, &now);
         Native.RECT rect = new() { Left = now.Left, Top = now.Top, Right = now.Left + size.Cx, Bottom = now.Top + size.Cy };
@@ -266,9 +273,38 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
         return (new Native.RECT { Left = right - 1920, Top = top, Right = right, Bottom = top + 1080 }, 96);
     }
 
-    private static Native.SIZE OuterSize(uint dpi)
+    // What a design pixel is in screen pixels: the DPI of the screen, then the zoom of the settings.
+    private static double ScaleAt(uint dpi, int zoom) => dpi / 96.0 * zoom / 100.0;
+
+    // The zoom this screen can hold, out of the one the settings ask for.
+    private int ChooseZoom(ScreenRect area, uint dpi) =>
+        WindowZoomFit.Choose(_wantedZoom, zoom => { var size = OuterSize(dpi, zoom); return (size.Cx, size.Cy); }, area.Width, area.Height);
+
+    // The work area of the screen the window is on; off screen, the made-up one.
+    private ScreenRect AreaOfWindow()
     {
-        var scale = dpi / 96.0;
+        Native.RECT now;
+        Native.GetWindowRect(_hwnd, &now);
+        return AreaAt(now.Left + now.Width / 2, now.Top + now.Height / 2);
+    }
+
+    private ScreenRect AreaAt(int x, int y)
+    {
+        if (_offscreen)
+        {
+            return OffscreenArea().Area;
+        }
+
+        var monitor = Native.MonitorFromPoint(new Native.POINT { X = x, Y = y }, Native.MONITOR_DEFAULTTONEAREST);
+        Native.MONITORINFO info = default;
+        info.Size = sizeof(Native.MONITORINFO);
+        Native.GetMonitorInfoW(monitor, &info);
+        return info.Work;
+    }
+
+    private static Native.SIZE OuterSize(uint dpi, int zoom)
+    {
+        var scale = ScaleAt(dpi, zoom);
         Native.RECT rect = default;
         rect.Right = (int)Math.Round(SettingsScreen.WindowWidth * scale);
         rect.Bottom = (int)Math.Round(SettingsScreen.WindowHeight * scale);
@@ -278,7 +314,7 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
 
     private GdiCanvas NewCanvas()
     {
-        var scale = _dpi / 96.0;
+        var scale = ScaleAt(_dpi, _zoom);
         return new GdiCanvas((int)Math.Round(SettingsScreen.WindowWidth * scale), (int)Math.Round(SettingsScreen.WindowHeight * scale), scale);
     }
 
@@ -331,7 +367,7 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
 
     private static uint ColorRef(uint rgb) => ((rgb & 0xFF) << 16) | (rgb & 0xFF00) | ((rgb >> 16) & 0xFF);
 
-    private float Scale => _dpi / 96f;
+    private float Scale => (float)ScaleAt(_dpi, _zoom);
 
     // An off-screen window never has the keyboard: its keys were sent to it, and what is held on the real keyboard is not
     // theirs. A thread that never took the focus still gets the state of that keyboard (a test thread read the Alt toggle
@@ -385,23 +421,10 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
             return;
         }
 
-        var key = (face, size, _dpi);
-        if (_editFont == 0 || _editFontKey != key)
-        {
-            var old = _editFont;
-            // The text box is a native control, so GDI draws it: the same family as the drawn text (for the mono face, the first
-            // of Cascadia Mono, Consolas and Courier New that is installed), in ClearType like the rest of the window.
-            _editFont = GdiFonts.Create(face == Face.Mono ? Face.Mono : Face.Body, (int)MathF.Round(size * Scale), Native.CLEARTYPE_QUALITY, out _);
-            _editFontKey = key;
-            WindowNative.SendMessageW(_edit, WindowNative.WM_SETFONT, (nuint)_editFont, 1);
-            if (old != 0)
-            {
-                Native.DeleteObject(old);
-            }
-        }
-
         _editBox = box;
         _editSize = size;
+        _editFace = face;
+        SetEditFont();
         PlaceEdit();
         if (resetText)
         {
@@ -426,6 +449,27 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
         if (_edit != 0)
         {
             WindowNative.SetFocus(_edit);
+        }
+    }
+
+    // The font follows the face, the size and the scale of the window, so a new zoom asks for a new one.
+    private void SetEditFont()
+    {
+        var key = (_editFace, _editSize, Scale);
+        if (_editFont != 0 && _editFontKey == key)
+        {
+            return;
+        }
+
+        var old = _editFont;
+        // The text box is a native control, so GDI draws it: the same family as the drawn text (for the mono face, the first
+        // of Cascadia Mono, Consolas and Courier New that is installed), in ClearType like the rest of the window.
+        _editFont = GdiFonts.Create(_editFace == Face.Mono ? Face.Mono : Face.Body, (int)MathF.Round(_editSize * Scale), Native.CLEARTYPE_QUALITY, out _);
+        _editFontKey = key;
+        WindowNative.SendMessageW(_edit, WindowNative.WM_SETFONT, (nuint)_editFont, 1);
+        if (old != 0)
+        {
+            Native.DeleteObject(old);
         }
     }
 
@@ -699,16 +743,46 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
         WindowNative.EndPaint(hwnd, &paint);
     }
 
-    private void OnDpiChanged(uint dpi, Native.RECT* suggested)
+    /// <summary>The size of the window changed in the settings: it takes the largest zoom its screen can hold, up to the one asked for, around the same centre.</summary>
+    public void ZoomChanged(int percent)
     {
-        _dpi = dpi;
+        if (_hwnd == 0 || _closed)
+        {
+            return;
+        }
+
+        _wantedZoom = percent;
+        var area = AreaOfWindow();
+        var zoom = ChooseZoom(area, _dpi);
+        if (zoom == _zoom || Screen.Minimized)
+        {
+            return;
+        }
+
+        Native.RECT now;
+        Native.GetWindowRect(_hwnd, &now);
+        _zoom = zoom;
+        var size = OuterSize(_dpi, zoom);
+        var left = now.Left + now.Width / 2 - size.Cx / 2;
+        var top = now.Top + now.Height / 2 - size.Cy / 2;
+        Resized(Fit(left, top, size, area), size);
+    }
+
+    // Inside the work area, as far as it holds the window.
+    private static (int Left, int Top) Fit(int left, int top, Native.SIZE size, ScreenRect area) =>
+        (Math.Max(area.Left, Math.Min(left, area.Right - size.Cx)), Math.Max(area.Top, Math.Min(top, area.Bottom - size.Cy)));
+
+    // The frame is at its new size and place: the bitmap, the text box and the icons follow, and the page is drawn again.
+    private void Resized((int Left, int Top) at, Native.SIZE size)
+    {
         var old = _canvas;
         _canvas = NewCanvas();
         Screen.SetCanvas(_canvas);
         old.Dispose();
-        Native.SetWindowPos(_hwnd, 0, suggested->Left, suggested->Top, suggested->Width, suggested->Height, WindowNative.SWP_NOZORDER | Native.SWP_NOACTIVATE);
+        Native.SetWindowPos(_hwnd, 0, at.Left, at.Top, size.Cx, size.Cy, WindowNative.SWP_NOZORDER | Native.SWP_NOACTIVATE);
         if (_editVisible)
         {
+            SetEditFont();
             PlaceEdit();
         }
 
@@ -718,6 +792,17 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
         }
 
         Invalidate();
+    }
+
+    private void OnDpiChanged(uint dpi, Native.RECT* suggested)
+    {
+        _dpi = dpi;
+
+        // The frame Windows suggests is the old size scaled by the DPI alone; the zoom is chosen again for the new screen.
+        var area = AreaAt(suggested->Left + suggested->Width / 2, suggested->Top + suggested->Height / 2);
+        _zoom = ChooseZoom(area, dpi);
+        var size = OuterSize(dpi, _zoom);
+        Resized(Fit(suggested->Left, suggested->Top, size, area), size);
     }
 
     private float DesignX(nint lParam) => (short)(lParam & 0xFFFF) / Scale;

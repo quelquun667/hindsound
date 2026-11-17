@@ -588,6 +588,8 @@ internal sealed partial class SettingsScreen
 
         ToggleRow("Start with Windows", "general.startup", y, () => Editor.Settings.General.StartWithWindows, Editor.SetStartWithWindows);
         y += pitch;
+        SegmentRow("Window size", "general.size", y, GeneralSettings.WindowZooms.Select(zoom => $"{zoom}%").ToList(), () => Math.Max(0, Array.IndexOf(GeneralSettings.WindowZooms, Editor.Settings.General.WindowZoom)), i => Editor.SetWindowZoom(GeneralSettings.WindowZooms[i]));
+        y += pitch;
         ToggleRow("Save notifications", "general.notifications", y, () => Editor.Settings.General.Notifications, Editor.SetNotifications);
         y += pitch;
         SegmentRow("Notification position", "general.position", y, ["Right edge", "Left edge"], () => Editor.Settings.General.NotificationPosition == "left" ? 1 : 0, i => Editor.SetNotificationPosition(i == 1 ? "left" : "right"));
