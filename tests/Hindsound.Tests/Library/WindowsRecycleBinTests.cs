@@ -91,6 +91,18 @@ public sealed class WindowsRecycleBinTests : IDisposable
     }
 
     [Fact]
+    public void A_deletion_for_good_stops_the_operation_and_any_other_end_lets_it_go_on()
+    {
+        var tally = new RecycleTally();
+        var sink = new RecycleBinNative.ProgressSink(tally);
+
+        Assert.Equal(0, sink.PostDeleteItem(TSF_DELETE_RECYCLE_IF_POSSIBLE, 0, 0, created: 1));
+        Assert.Equal(0, sink.PostDeleteItem(TSF_DELETE_RECYCLE_IF_POSSIBLE, 0, unchecked((int)0x80070020), created: 0));
+        Assert.Equal(RecycleTally.Cancelled, sink.PostDeleteItem(0, 0, 0, created: 0));
+        Assert.Equal(1, tally.DeletedForGood);
+    }
+
+    [Fact]
     public void A_deletion_the_system_could_not_make_is_a_failure()
     {
         var tally = new RecycleTally();

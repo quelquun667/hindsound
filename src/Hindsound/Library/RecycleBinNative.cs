@@ -194,11 +194,7 @@ internal static partial class RecycleBinNative
 
         public int PreDeleteItem(uint flags, nint item) => tally.BeforeDelete(flags);
 
-        public int PostDeleteItem(uint flags, nint item, int result, nint created)
-        {
-            tally.AfterDelete(result, created != 0);
-            return 0;
-        }
+        public int PostDeleteItem(uint flags, nint item, int result, nint created) => tally.AfterDelete(result, created != 0);
 
         public int PreNewItem(uint flags, nint folder, nint newName) => 0;
 
