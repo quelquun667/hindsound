@@ -27,6 +27,7 @@ internal sealed partial class SettingsScreen
     private EditorSelection? _selection;
     private double[] _editGains = [];
     private EditorSaveDialogState? _saveDialog;
+    private string? _editorReturnId;
     private bool _editSaving;
     private EditorMode _savingMode;
     private string? _editorProblem;
@@ -83,7 +84,10 @@ internal sealed partial class SettingsScreen
     }
 
     /// <summary>Opens the editor on this clip, on the Library page. Without an editor panel, nothing happens.</summary>
-    public void OpenEditor(ClipGroup clip, EditorMode mode)
+    /// <param name="clip">The clip.</param>
+    /// <param name="mode">What it is edited for.</param>
+    /// <param name="returnId">The stop the focus goes back to when the editor closes; the list when null or when it can't take it.</param>
+    public void OpenEditor(ClipGroup clip, EditorMode mode, string? returnId = null)
     {
         if (_editorPanel is not { } panel)
         {
@@ -93,6 +97,7 @@ internal sealed partial class SettingsScreen
         _library?.StopPlaying();
         ResetEditor();
         _editing = (clip, mode);
+        _editorReturnId = returnId;
         _focusId = EditorCancelId;
         panel.Load(clip);
         if (Section == Section.Library)
@@ -116,7 +121,7 @@ internal sealed partial class SettingsScreen
         _editing = null;
         ResetEditor();
         _editorPanel?.Close();
-        _focusId = ClipListId;
+        _focusId = _editorReturnId ?? ClipListId;
         Refresh();
     }
 
@@ -216,7 +221,7 @@ internal sealed partial class SettingsScreen
             _editing = null;
             ResetEditor();
             _editorPanel?.Close();
-            _focusId = ClipListId;
+            _focusId = _editorReturnId ?? ClipListId;
         }
 
         if (path is null)

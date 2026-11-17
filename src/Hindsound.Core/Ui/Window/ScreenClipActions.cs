@@ -252,10 +252,10 @@ internal sealed partial class SettingsScreen
                 OpenBox(NameBoxState.ForClipDelete(line, from));
                 break;
             case ClipMenuItem.Edit:
-                OpenEditor(line, EditorMode.Normal);
+                OpenEditor(line, EditorMode.Normal, from);
                 break;
             case ClipMenuItem.Soundboard:
-                OpenEditor(line, EditorMode.Soundboard);
+                OpenEditor(line, EditorMode.Soundboard, from);
                 break;
             case ClipMenuItem.Copy:
                 ClipGestureOn(line, p => p.Copy);

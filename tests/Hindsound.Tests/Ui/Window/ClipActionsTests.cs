@@ -341,6 +341,23 @@ public sealed class ClipActionsTests : IDisposable
         Assert.Equal(soundboard ? EditorMode.Soundboard : EditorMode.Normal, Screen.Editing!.Value.Mode);
     }
 
+    [Fact]
+    public void Closing_the_editor_gives_the_focus_back_to_the_dots_that_opened_it()
+    {
+        Open(editor: true);
+        Screen.SelectClip(FakeLibrary.PathOf(1));
+        Assert.True(Screen.TabTo(SettingsScreen.ClipMoreId));
+        Screen.Key(Vk.Enter, 0);
+        Screen.Key(Vk.Down, 0);
+        Assert.Equal(ClipMenuItem.Edit, Screen.OpenClipMenu!.Current);
+        Screen.Key(Vk.Enter, 0);
+        Assert.True(Screen.EditorOpen);
+
+        Screen.Key(Vk.Escape, 0);
+        Assert.False(Screen.EditorOpen);
+        Assert.Equal(SettingsScreen.ClipMoreId, Screen.FocusId);
+    }
+
     // ---------------------------------------------------------------- F2 and renaming
 
     [Fact]
