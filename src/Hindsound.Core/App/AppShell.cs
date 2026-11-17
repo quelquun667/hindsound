@@ -38,6 +38,12 @@ internal interface IAppShell
     /// <summary>What plays a clip on the Library page.</summary>
     IPreviewPlayer NewPreviewPlayer();
 
+    /// <summary>The Recycle Bin, where a deleted clip or a replaced original goes. None by default: every file stays where it is.</summary>
+    IRecycleBin NewRecycleBin() => NoRecycleBin.Instance;
+
+    /// <summary>What reads an audio file back for the editor. None by default: every file is unreadable.</summary>
+    IClipDecoder NewClipDecoder() => NoClipDecoder.Instance;
+
     /// <summary>The devices and the apps the settings offer. Touches the audio system: called off the loop's thread.</summary>
     IAudioChoices AudioChoices { get; }
 
@@ -204,6 +210,12 @@ internal interface ISettingsWindow : IDisposable
 
     /// <summary>Writes what the window shows to a picture, for a probe or a test.</summary>
     void ProbePicture(string path);
+
+    /// <summary>The size of the window changed in the settings: it is drawn again at that zoom, or the largest that fits its screen.</summary>
+    /// <param name="percent">One of <see cref="Settings.GeneralSettings.WindowZooms"/>.</param>
+    void ZoomChanged(int percent)
+    {
+    }
 }
 
 /// <summary>The audio devices and the apps that play, as the settings offer them.</summary>

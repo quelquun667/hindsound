@@ -24,6 +24,7 @@ internal sealed class WindowLibrary : ILibraryPanel
     private readonly LibraryReads _reads;
     private readonly Func<IPreviewPlayer>? _player;
     private readonly Func<ClipGroup, bool>? _mayPlay;
+    private readonly IRecycleBin _recycleBin;
 
     /// <summary>Made at the first Play, so that a window where nothing is played never loads MCI. Stopped when the window goes.</summary>
     private ClipPreview? _preview;
@@ -47,6 +48,7 @@ internal sealed class WindowLibrary : ILibraryPanel
     /// <param name="folderExists">Whether a folder can be seen. With it, a clip found missing from a folder that can't be seen is not said to be gone.</param>
     /// <param name="player">What plays a clip: MCI, or a fake. Without it, Play does nothing.</param>
     /// <param name="mayPlay">Whether this clip may be played at all. Without it, any clip may. A clip refused is told as one that can't be played.</param>
+    /// <param name="recycleBin">Where a deleted clip goes. Without it, nothing is ever deleted.</param>
     public WindowLibrary(
         SettingsScreen screen,
         LibraryStore store,
@@ -60,8 +62,10 @@ internal sealed class WindowLibrary : ILibraryPanel
         Func<string, bool>? folderExists = null,
         Func<DateTime?>? clipStarted = null,
         Func<IPreviewPlayer>? player = null,
-        Func<ClipGroup, bool>? mayPlay = null)
+        Func<ClipGroup, bool>? mayPlay = null,
+        IRecycleBin? recycleBin = null)
     {
+        _recycleBin = recycleBin ?? NoRecycleBin.Instance;
         _player = player;
         _mayPlay = mayPlay;
         _folderExists = folderExists;

@@ -441,7 +441,7 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
         if (_focusId is not null && _box is null && Find(_focusId) is not { CanFocus: true })
         {
             // A foot button of the Library that goes dim hands the focus back to its list: from the side bar, the next arrow would leave the page.
-            var backToList = _focusId is ClipCopyId or ClipShowId or ClipPlayId && Section == Section.Library && Find(ClipListId) is { CanFocus: true };
+            var backToList = _focusId is ClipMoreId or ClipCopyId or ClipShowId or ClipPlayId && Section == Section.Library && Find(ClipListId) is { CanFocus: true };
             // Rename and Delete give way to the sentence of the playback: the focus goes to the menu beside them, not to the side bar.
             var backToMenu = _focusId is CollectionActions.RenameId or CollectionActions.DeleteId && Section == Section.Library && Find(ClipFilterId) is { CanFocus: true };
             _focusId = IsCard ? CardStops().FirstOrDefault() : backToList ? ClipListId : backToMenu ? ClipFilterId : NavId;
@@ -636,6 +636,18 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
         {
             CloseUpdateCard();
             return true;
+        }
+
+        // The editor first: its handles take the arrows with Shift, which the widgets below never see.
+        if (Section == Section.Library && EditorKey(vk, modifiers) is { } edited)
+        {
+            return edited;
+        }
+
+        // F2 and Delete on a clip of the list.
+        if (Section == Section.Library && !EditorOpen && LibraryKey(vk, modifiers) is { } library)
+        {
+            return library;
         }
 
         if (vk == Vk.Tab && (modifiers & ~HotkeyGesture.ModShift) == 0)

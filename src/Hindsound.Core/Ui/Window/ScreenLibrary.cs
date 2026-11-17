@@ -82,11 +82,30 @@ internal interface ILibraryPanel
     void StartOver()
     {
     }
+
+    /// <summary>
+    /// Gives the files of the clip a new name, the extension and the suffix of each track kept; its star and its collections
+    /// follow it. What plays of it stops first. The answer is <see cref="SettingsScreen.ClipRenameAnswered"/>, then a new reading.
+    /// </summary>
+    /// <param name="line">The clip.</param>
+    /// <param name="name">The new name, without extension, as <see cref="ClipNames.Refusal"/> lets it through.</param>
+    void Rename(ClipGroup line, string name)
+    {
+    }
+
+    /// <summary>
+    /// Sends every file of the clip to the Recycle Bin, never further. Its entries in the index stay. The answer is
+    /// <see cref="SettingsScreen.ClipDeleteAnswered"/>, then a new reading.
+    /// </summary>
+    void Delete(ClipGroup line)
+    {
+    }
 }
 
 /// <summary>The Library page: the clips on disk, and what can be done with the chosen one.</summary>
 internal sealed partial class SettingsScreen
 {
+    public const string ClipMoreId = "foot.more";
     public const string ClipListId = "lib.list", ClipCopyId = "foot.copy", ClipShowId = "foot.show", ClipPlayId = "foot.play";
     public const string PlayLabel = "Play", StopLabel = "Stop";
     public const string NoClipsTitle = "No clips yet", NoClipsBody = "Save a clip with your shortcut, and it shows up here.";

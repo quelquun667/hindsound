@@ -182,6 +182,12 @@ internal sealed partial class SettingsScreen
     {
         if (Section == Section.Library)
         {
+            if (EditorOpen)
+            {
+                BuildEditorFoot();
+                return;
+            }
+
             BuildLibraryFoot();
             return;
         }
@@ -250,6 +256,12 @@ internal sealed partial class SettingsScreen
                 BuildNow();
                 break;
             case Section.Library:
+                if (EditorOpen)
+                {
+                    BuildEditor();
+                    break;
+                }
+
                 BuildLibrary();
                 break;
             default:

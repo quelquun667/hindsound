@@ -63,7 +63,7 @@ public sealed class ClipToolsSettingsTests : IDisposable
     [InlineData(1200)]
     public void A_size_that_is_not_offered_falls_back_to_120(int zoom)
     {
-        File.WriteAllText(FilePath, $$"""{"general":{"windowZoom":{{zoom}}}}""");
+        File.WriteAllText(FilePath, $$$"""{"general":{"windowZoom":{{{zoom}}}}}""");
 
         Assert.Equal(120, new SettingsStore(FilePath).Load().General.WindowZoom);
     }

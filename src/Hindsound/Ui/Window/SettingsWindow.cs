@@ -10,7 +10,7 @@ internal static unsafe partial class WindowNative
 {
     public const uint WM_SETICON = 0x0080, WM_GETICON = 0x007F, WM_DESTROY = 0x0002, WM_SIZE = 0x0005, SIZE_MINIMIZED = 1, WM_SETFOCUS = 0x0007, WM_KILLFOCUS = 0x0008, WM_PAINT = 0x000F, WM_ERASEBKGND = 0x0014, WM_ACTIVATE = 0x0006,
         WM_SETFONT = 0x0030, WM_KEYDOWN = 0x0100, WM_KEYUP = 0x0101, WM_CHAR = 0x0102, WM_SYSKEYDOWN = 0x0104, WM_SYSKEYUP = 0x0105, WM_SYSCHAR = 0x0106,
-        WM_COMMAND = 0x0111, WM_CTLCOLOREDIT = 0x0133, WM_MOUSEMOVE = 0x0200, WM_LBUTTONDOWN = 0x0201, WM_LBUTTONUP = 0x0202, WM_LBUTTONDBLCLK = 0x0203, CS_DBLCLKS = 0x0008, WM_MOUSEWHEEL = 0x020A,
+        WM_COMMAND = 0x0111, WM_CTLCOLOREDIT = 0x0133, WM_MOUSEMOVE = 0x0200, WM_LBUTTONDOWN = 0x0201, WM_LBUTTONUP = 0x0202, WM_LBUTTONDBLCLK = 0x0203, WM_RBUTTONDOWN = 0x0204, CS_DBLCLKS = 0x0008, WM_MOUSEWHEEL = 0x020A,
         WM_CAPTURECHANGED = 0x0215, WM_MOUSELEAVE = 0x02A3, WM_DPICHANGED = 0x02E0, EM_SETSEL = 0x00B1, EM_SETLIMITTEXT = 0x00C5, EN_CHANGE = 0x0300, TME_LEAVE = 0x0002;
 
     public const uint WS_OVERLAPPED = 0, WS_CAPTION = 0x00C00000, WS_SYSMENU = 0x00080000, WS_MINIMIZEBOX = 0x00020000, WS_CLIPCHILDREN = 0x02000000,
@@ -572,6 +572,16 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
                 }
 
                 Screen.MouseDoubleClick(DesignX(lParam), DesignY(lParam));
+                return 0;
+
+            // The menu of a clip of the Library. The screen decides where it opens, and whether anything opens at all.
+            case WindowNative.WM_RBUTTONDOWN:
+                if (!_editVisible && !_offscreen)
+                {
+                    WindowNative.SetFocus(hwnd);
+                }
+
+                Screen.RightClick(DesignX(lParam), DesignY(lParam));
                 return 0;
 
             case WindowNative.WM_LBUTTONUP:

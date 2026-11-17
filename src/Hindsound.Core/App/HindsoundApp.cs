@@ -74,6 +74,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     private AudioEngineOptions? _engineOptions;
     private ISettingsWindow? _window;
     private WindowLibrary? _library;
+    private WindowEditor? _editor;
     private string? _probeLibraryFolder;
     private readonly WindowGoing _going;
     private bool _firstRun;
@@ -1349,25 +1350,57 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
         // Reads nothing yet: the screen asks when the page is shown.
         _library?.Close();
+        _editor?.Close();
+        var index = new LibraryStore(_store.Path, _journal.Write);
+        var folderShell = _options.Offscreen ? new OffscreenFolderShell(_journal.Write) : _shell.NewFolderShell();
+        var player = PreviewPlayerInstead ?? _shell.NewPreviewPlayer;
+        Func<ClipGroup, bool>? mayPlay = _options.Offscreen || _options.SettingsProbe ? OnlySilence : null;
+
+        // Off screen or in a probe, nothing reaches the real Recycle Bin.
+        var recycleBin = RecycleBinInstead ?? (_options.Offscreen || _options.SettingsProbe ? NoRecycleBin.Instance : _shell.NewRecycleBin());
         _library = new WindowLibrary(
             screen,
-            new LibraryStore(_store.Path, _journal.Write),
+            index,
             LibraryFolders,
             work => (PostInstead ?? _loop.Post)(work),
-            _options.Offscreen ? new OffscreenFolderShell(_journal.Write) : _shell.NewFolderShell(),
+            folderShell,
             File.Exists,
             paths => _clipboard.TrySet(paths),
             (attempt, done) => SettingsMapping.CopyToClipboard(_options, attempt, (ms, then) => _loop.After(ms, then), done),
             _journal.Write,
             Directory.Exists,
             () => _pipeline?.OldestPressUtc,
-            PreviewPlayerInstead ?? _shell.NewPreviewPlayer,
-            _options.Offscreen || _options.SettingsProbe ? OnlySilence : null);
+            player,
+            mayPlay,
+            recycleBin);
         screen.SetLibrary(_library);
+
+        var library = _library;
+        _editor = new WindowEditor(
+            screen,
+            work => (PostInstead ?? _loop.Post)(work),
+            ClipDecoderInstead ?? _shell.NewClipDecoder(),
+            recycleBin,
+            index,
+            () => _settings.Export,
+            player,
+            mayPlay,
+            library.StopPlaying,
+            _options.Offscreen || _options.SettingsProbe ? null : _desktop.Opener,
+            folderShell,
+            Path.GetTempPath(),
+            _journal.Write);
+        screen.SetEditor(_editor);
     }
 
     /// <summary>For a test: what plays a clip in place of the platform's player.</summary>
     internal Func<IPreviewPlayer>? PreviewPlayerInstead { get; set; }
+
+    /// <summary>For a test: the Recycle Bin in place of the platform.s, off screen too.</summary>
+    internal IRecycleBin? RecycleBinInstead { get; set; }
+
+    /// <summary>For a test: what decodes a clip for the editor in place of the platform.s.</summary>
+    internal IClipDecoder? ClipDecoderInstead { get; set; }
 
     /// <summary>
     /// Off screen, this run is a test or a probe: it plays nothing but pure digital silence, read back from the file first. Only
@@ -1419,6 +1452,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         // A look still running holds a list: the memory only goes back once it has ended.
         _library?.Close(ReleaseWindowMemory);
         _library = null;
+        _editor?.Close();
+        _editor = null;
     }
 
     // A system that does not say where the pointer is gets the main screen.
@@ -1565,6 +1600,11 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         if ((change & (SettingsChange.Buffer | SettingsChange.Devices | SettingsChange.SourceApp)) != 0)
         {
             ApplyEngineOptions();
+        }
+
+        if ((change & SettingsChange.WindowSize) != 0)
+        {
+            _window?.ZoomChanged(_settings.General.WindowZoom);
         }
 
         if ((change & SettingsChange.Updates) != 0)
@@ -2434,6 +2474,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
         // Whatever the window did on its way out, nothing plays past the app.
         Guard(() => _library?.Close(), "library");
+        Guard(() => _editor?.Close(), "editor");
         Guard(() => _tray?.Dispose(), "tray");
         Guard(() => _notification?.Dispose(), "notification");
         Guard(() => _hotkeys?.Dispose(), "hotkeys");

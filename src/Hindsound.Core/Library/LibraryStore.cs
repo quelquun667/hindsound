@@ -125,7 +125,7 @@ public readonly record struct LibraryChange(LibraryOutcome Outcome, LibraryRead 
 /// closed window costs nothing. Nothing here throws for a bad file. The names and the paths in the file are private: only
 /// fixed words reach the log, never an exception's message, which holds the full path.
 /// </summary>
-public sealed class LibraryStore
+public sealed class LibraryStore : IClipIndex
 {
     public const int CurrentVersion = 1;
 
@@ -294,6 +294,12 @@ public sealed class LibraryStore
             Label(data, clip, entry => entry.Favorite = favorite);
             return LibraryOutcome.Done;
         });
+
+    /// <inheritdoc/>
+    public LibraryOutcome MoveLabels(ClipGroup from, IReadOnlyList<string> to) => LibraryOutcome.NotWritten;
+
+    /// <inheritdoc/>
+    public LibraryOutcome CopyCollections(ClipGroup from, IReadOnlyList<string> to) => LibraryOutcome.NotWritten;
 
     /// <summary>
     /// The only way past a broken file, and only when the user asks for it: an edit may yet repair the file, and an action

@@ -35,6 +35,10 @@ internal sealed class WindowsShell : IAppShell
 
     public IPreviewPlayer NewPreviewPlayer() => new MciPreviewPlayer();
 
+    public IRecycleBin NewRecycleBin() => new WindowsRecycleBin();
+
+    public IClipDecoder NewClipDecoder() => new MediaFoundationClipDecoder();
+
     public IAudioChoices AudioChoices { get; } = new WasapiAudioChoices();
 
     public ISettingsProbe Probe { get; } = new WindowsSettingsProbe();
