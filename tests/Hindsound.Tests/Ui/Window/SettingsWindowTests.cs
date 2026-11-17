@@ -36,7 +36,20 @@ public sealed class SettingsWindowTests : IDisposable
 
     private void Send(nint target, uint message, nuint wParam, nint lParam = 0) => WindowNative.SendMessageW(target, message, wParam, lParam);
 
-    private void Wheel(int delta) => Send(_window.Hwnd, WindowNative.WM_MOUSEWHEEL, (nuint)(uint)(delta << 16));
+    [DllImport("user32.dll")]
+    private static extern int ClientToScreen(nint hwnd, ref Native.POINT point);
+
+    /// <summary>The wheel with the mouse in the middle of the page.</summary>
+    private void Wheel(int delta) => WheelAt(delta, ScreenRig.PageX, ScreenRig.PageY);
+
+    /// <summary>The wheel with the mouse at this point of the window, given on the screen in pixels, as Windows gives it.</summary>
+    private void WheelAt(int delta, float x, float y)
+    {
+        var scale = WindowNative.GetDpiForWindow(_window.Hwnd) / 96f;
+        var mouse = new Native.POINT { X = (int)(x * scale), Y = (int)(y * scale) };
+        Assert.NotEqual(0, ClientToScreen(_window.Hwnd, ref mouse));
+        Send(_window.Hwnd, WindowNative.WM_MOUSEWHEEL, (nuint)(uint)(delta << 16), (nint)(ushort)mouse.X | ((nint)(ushort)mouse.Y << 16));
+    }
 
     private bool EditVisible => (Native.GetWindowLongPtrW(_window.EditHwnd, StyleIndex) & VisibleStyle) != 0;
 
@@ -108,6 +121,18 @@ public sealed class SettingsWindowTests : IDisposable
         Assert.Equal(0, Screen.Scroll);
 
         Wheel(-30);
+        Assert.True(Screen.Scroll > 0);
+    }
+
+    [Fact]
+    public void The_wheel_over_the_side_bar_leaves_the_page_and_over_the_page_scrolls_it()
+    {
+        Screen.ShowSection(Section.General);
+
+        WheelAt(-120, SettingsScreen.NavWidth / 2, ScreenRig.PageY);
+        Assert.Equal(0, Screen.Scroll);
+
+        WheelAt(-120, ScreenRig.PageX, ScreenRig.PageY);
         Assert.True(Screen.Scroll > 0);
     }
 

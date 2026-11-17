@@ -134,7 +134,7 @@ public sealed class SettingsEditFocusTests : IDisposable
         Screen.Key(Vk.Tab, 0);
         Assert.Equal("general.hex", Screen.FocusId);
         Screen.EditChanged("#FF88");
-        Screen.Wheel(-10);
+        _rig.Wheel(-10);
         Assert.False(_rig.Host.EditVisible);
         Assert.Equal("general.hex", Screen.FocusId);
     }
@@ -228,8 +228,8 @@ public sealed class SettingsEditFocusTests : IDisposable
 
         Assert.Equal(resets, _rig.Host.EditResets);
 
-        Screen.Wheel(-10);
-        Screen.Wheel(10);
+        _rig.Wheel(-10);
+        _rig.Wheel(10);
 
         Assert.True(_rig.Host.EditVisible);
         Assert.Equal(resets, _rig.Host.EditResets);

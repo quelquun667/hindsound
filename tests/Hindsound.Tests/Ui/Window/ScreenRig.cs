@@ -43,6 +43,12 @@ internal sealed class ScreenRig : IDisposable
         }
     }
 
+    /// <summary>The middle of the page: right of the side bar, between the band and the foot.</summary>
+    public const float PageX = (SettingsScreen.NavWidth + SettingsScreen.WindowWidth) / 2, PageY = (SettingsScreen.BandHeight + SettingsScreen.ViewBottom) / 2;
+
+    /// <summary>The wheel with the mouse in the middle of the page.</summary>
+    public void Wheel(int notches) => Screen.Wheel(notches, PageX, PageY);
+
     /// <summary>Tabs until the focus is on this widget.</summary>
     public void FocusOn(string id)
     {

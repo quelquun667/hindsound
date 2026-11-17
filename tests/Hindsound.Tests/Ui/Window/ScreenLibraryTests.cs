@@ -215,7 +215,7 @@ public sealed class ScreenLibraryTests : IDisposable
 
         Assert.DoesNotContain(SettingsScreen.NoClipsTitle, drawn);
         Screen.ReadLibraryAgain();
-        Screen.Wheel(1);
+        _rig.Wheel(1);
         Assert.False(ButtonEnabled(SettingsScreen.ClipCopyId));
     }
 
@@ -384,7 +384,7 @@ public sealed class ScreenLibraryTests : IDisposable
         var library = OpenWith(2000);
         Click(RowX, RowY(0));
 
-        Screen.Wheel(-1);
+        _rig.Wheel(-1);
 
         var drawn = Painted();
         Assert.DoesNotContain("clip0001", drawn);
@@ -403,7 +403,7 @@ public sealed class ScreenLibraryTests : IDisposable
         OpenWith(5);
         Screen.ShowSection(Section.General);
 
-        Screen.Wheel(-1);
+        _rig.Wheel(-1);
 
         Assert.True(Screen.Scroll > 0);
     }

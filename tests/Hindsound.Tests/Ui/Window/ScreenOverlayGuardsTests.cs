@@ -136,11 +136,11 @@ public sealed class ScreenOverlayGuardsTests : IDisposable
         var before = Painted();
         Assert.Contains("clip0000", before);
 
-        Screen.Wheel(-3);
+        _rig.Wheel(-3);
 
         Assert.Contains("clip0000", Painted());
         Screen.Key(Vk.Escape, 0);
-        Screen.Wheel(-3);
+        _rig.Wheel(-3);
         Assert.DoesNotContain("clip0000", Painted());
     }
 

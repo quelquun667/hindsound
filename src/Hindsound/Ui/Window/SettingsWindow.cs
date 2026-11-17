@@ -56,6 +56,7 @@ internal static unsafe partial class WindowNative
     [LibraryImport(U)] public static partial int GetWindowTextLengthW(nint hwnd);
     [LibraryImport(U)] public static partial nint CallWindowProcW(nint proc, nint hwnd, uint msg, nuint wParam, nint lParam);
     [LibraryImport(U)] public static partial int GetClientRect(nint hwnd, Native.RECT* rect);
+    [LibraryImport(U)] public static partial int ScreenToClient(nint hwnd, Native.POINT* point);
     [LibraryImport(U)] public static partial uint GetGuiResources(nint process, uint flags);
     [LibraryImport(U)] public static partial int PrintWindow(nint hwnd, nint dc, uint flags);
     [LibraryImport(G)] public static partial int BitBlt(nint dest, int x, int y, int w, int h, nint source, int sx, int sy, uint op);
@@ -589,7 +590,10 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
                 (var notches, _wheelRest) = WheelNotches.Add(_wheelRest, (short)((wParam >> 16) & 0xFFFF));
                 if (notches != 0)
                 {
-                    Screen.Wheel(notches);
+                    // Unlike the other mouse messages, the wheel gives the mouse on the screen, not in the window.
+                    var mouse = new Native.POINT { X = (short)(lParam & 0xFFFF), Y = (short)((lParam >> 16) & 0xFFFF) };
+                    WindowNative.ScreenToClient(hwnd, &mouse);
+                    Screen.Wheel(notches, mouse.X / Scale, mouse.Y / Scale);
                 }
 
                 return 0;

@@ -468,7 +468,7 @@ public sealed class ScreenCollectionsTests : IDisposable
         // A row of the list, the foot, the wheel and the page keys.
         Click(300, 118 + 20);
         ClickOn(SettingsScreen.ClipCopyId);
-        Screen.Wheel(-3);
+        _rig.Wheel(-3);
         Screen.Key(Vk.PageDown, 0);
 
         Assert.True(Screen.BoxOpen);

@@ -36,7 +36,7 @@ public sealed class ScreenLibraryKeepsRowsTests : IDisposable
             Screen.Key(Vk.Down, 0);
         }
 
-        Screen.Wheel(-5);
+        _rig.Wheel(-5);
     }
 
     [Fact]

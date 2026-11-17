@@ -1052,7 +1052,8 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
         }
     }
 
-    public void Wheel(int notches)
+    /// <summary>The wheel, with the mouse at this point of the window. An open list takes it wherever the mouse is; otherwise it moves only the page under the mouse, never from the side bar, the band or the foot.</summary>
+    public void Wheel(int notches, float x, float y)
     {
         if (_popup is { } popup)
         {
@@ -1068,7 +1069,7 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
             return;
         }
 
-        if (_box is not null)
+        if (_box is not null || !OverPage(x, y))
         {
             return;
         }
@@ -1081,6 +1082,10 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
 
         ScrollTo(_scroll - notches * ScrollStep);
     }
+
+    /// <summary>Whether a point is on the part of the window that scrolls: right of the side bar, between the band and the foot. A card fills the window.</summary>
+    private bool OverPage(float x, float y) =>
+        IsCard || (x >= NavWidth && x < WindowWidth && y >= BandHeight && y < ViewBottom);
 
     private float LocalY(Widget widget, float y) => widget.Scrolls ? y + _scroll : y;
 

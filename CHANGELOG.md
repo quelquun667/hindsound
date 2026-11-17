@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- In the window, the mouse wheel moves only what is under the mouse: over the list of sections on the left, the band at the top or the bar at the bottom, it no longer scrolls the page or the list of clips.
+
 ## [0.6.0] - 2026-11-12
 
 The first Linux version, and a portable copy for Windows. The copy installed by the Setup works as in 0.5.0, apart from the fix below.
