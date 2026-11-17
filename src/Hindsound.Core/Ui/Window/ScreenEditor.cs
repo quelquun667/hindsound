@@ -16,6 +16,8 @@ internal sealed partial class SettingsScreen
     public const string EditorTooBig = "Too big for the soundboard: 512 KB max. Nothing was saved.";
     public const string EditorSourceGone = "The clip is no longer there. Nothing was saved.";
     public const string EditorFailed = "Can't save the edit. The original is as it was.";
+    public const string EditorSavedAside = "The original is in the Recycle Bin. The edit was saved as a new clip.";
+    public const string EditorAsideLost = "The original is in the Recycle Bin. The edit could not be kept.";
     public const string EditorCantPlay = "Can't play the selection.", EditorSaving = "Saving...";
 
     private const float EditorRowTop = EditorWave.Top + EditorWave.Height + 24, EditorVolumePitch = 30;
@@ -195,7 +197,7 @@ internal sealed partial class SettingsScreen
         var mode = _savingMode;
         var wasOpen = _editing is not null;
         _editSaving = false;
-        if (result.Outcome != EditSaveOutcome.Saved)
+        if (result.Outcome is not (EditSaveOutcome.Saved or EditSaveOutcome.SavedAside))
         {
             var problem = result.Outcome switch
             {
@@ -218,7 +220,7 @@ internal sealed partial class SettingsScreen
         }
 
         var path = result.Paths.Count > 0 ? result.Paths[0] : null;
-        var forDiscord = mode == EditorMode.Soundboard && path is not null;
+        var forDiscord = result.Outcome == EditSaveOutcome.Saved && mode == EditorMode.Soundboard && path is not null;
         if (forDiscord)
         {
             _editorPanel?.HandToDiscord(path!);
@@ -234,13 +236,18 @@ internal sealed partial class SettingsScreen
 
         if (path is null)
         {
+            if (result.Outcome == EditSaveOutcome.SavedAside)
+            {
+                SayOnLine(ChosenClip?.Main.Path, EditorAsideLost);
+            }
+
             Refresh();
             return;
         }
 
         // The panel sends a new reading after this answer: the copy is chosen as soon as it brings it.
         SelectClip(path);
-        var notice = forDiscord ? Soundboard.UploadHint : null;
+        var notice = result.Outcome == EditSaveOutcome.SavedAside ? EditorSavedAside : forDiscord ? Soundboard.UploadHint : null;
         if (notice is not null)
         {
             SayOnLine(path, notice);

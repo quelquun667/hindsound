@@ -469,6 +469,35 @@ public sealed class EditorPageTests : IDisposable
         Assert.Empty(_panel.Discord);
     }
 
+    [Fact]
+    public void A_replacement_kept_aside_closes_the_editor_chooses_the_edit_and_says_where_the_original_is()
+    {
+        Open();
+        Click(SettingsScreen.EditorSaveId);
+        Click(EditorSaveDialogState.ReplaceId);
+        Screen.EditorSaved(new EditSaveResult(EditSaveOutcome.SavedAside, [@"C:\Clips\clip0002.mp3"]));
+
+        Assert.False(Screen.EditorOpen);
+        Assert.Equal(1, _panel.Closes);
+        Assert.Equal(@"C:\Clips\clip0002.mp3", Screen.EditorChosenPath);
+        var drawn = string.Join(" ", Painted());
+        Assert.Contains(SettingsScreen.EditorSavedAside, drawn);
+        Assert.DoesNotContain(SettingsScreen.EditorFailed, drawn);
+        Assert.Empty(_panel.Discord);
+    }
+
+    [Fact]
+    public void A_replacement_whose_edit_could_not_be_kept_says_the_original_is_in_the_Recycle_Bin()
+    {
+        Open();
+        Click(SettingsScreen.EditorSaveId);
+        Click(EditorSaveDialogState.ReplaceId);
+        Screen.EditorSaved(new EditSaveResult(EditSaveOutcome.SavedAside, []));
+
+        Assert.False(Screen.EditorOpen);
+        Assert.Contains(SettingsScreen.EditorAsideLost, string.Join(" ", Painted()));
+    }
+
     [Theory]
     [InlineData(EditorLoadOutcome.Gone)]
     [InlineData(EditorLoadOutcome.Unreadable)]
