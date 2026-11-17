@@ -116,7 +116,7 @@ internal static class ClipNames
         }
 
         var name = Path.GetFileNameWithoutExtension(path);
-        return TrackSuffixes.FirstOrDefault(suffix => name.Length > suffix.Length && name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) is { } found
+        return TrackSuffixes.FirstOrDefault(suffix => name.Length > suffix.Length && name.EndsWith(suffix, PathRules.Comparison)) is { } found
             ? name[^found.Length..]
             : "";
     }
