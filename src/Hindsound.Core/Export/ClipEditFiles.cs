@@ -213,8 +213,9 @@ internal sealed class ClipEditFiles(IClipDecoder decoder, IRecycleBin recycleBin
     };
 
     /// <summary>
-    /// The edits that could not take the name of their original take a name of their own, as a copy would. One that can't is
-    /// removed rather than left hidden under <see cref="TempExtension"/>: the original can still come back from the Recycle Bin.
+    /// The edits that could not take the name of their original take a name of their own, as a copy would, and so do the ones of the
+    /// same clip already in place, so that the copy stays whole. One that can't is removed rather than left hidden under
+    /// <see cref="TempExtension"/>: the original can still come back from the Recycle Bin.
     /// </summary>
     private List<string> Rescue(ClipGroup clip, string[] originals, List<string> temps, List<int> stuck)
     {
@@ -235,8 +236,19 @@ internal sealed class ClipEditFiles(IClipDecoder decoder, IRecycleBin recycleBin
         {
             if (!stuck.Contains(i))
             {
-                DeleteOurs([reserved[i]]);
-                paths.Add(originals[i]);
+                // In place already, it goes beside the others: a pair is never half edit and half original.
+                try
+                {
+                    File.Move(originals[i], reserved[i], overwrite: true);
+                    paths.Add(reserved[i]);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    journal($"editor: edit left under the name of its original ({ClipFolders.Describe(ex)})");
+                    DeleteOurs([reserved[i]]);
+                    paths.Add(originals[i]);
+                }
+
                 continue;
             }
 
