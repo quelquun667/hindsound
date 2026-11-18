@@ -82,6 +82,9 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
         private IntPtr _timing;
         private Timer? _playedOut;
 
+        // Waits given up while their callback may already be on its way to the loop's lock: Close waits for them too.
+        private readonly List<Timer> _givenUp = [];
+
         // Counts the drains given up: a wait of one given up does not end the track.
         private int _drainTurn;
         private bool _endReached;
@@ -120,8 +123,10 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
             PulseNative.Release(PulseNative.StreamCork(_stream, 0, IntPtr.Zero, IntPtr.Zero));
 
             // The end of the file was reached while the stream was corked and its drain has answered already, to no one: drain again, now it plays.
+            // A wait left from that answer is given up first, so it cannot end this play early.
             if (_endReached && _drain == IntPtr.Zero)
             {
+                CancelDrain();
                 StartDrain(_stream);
             }
         });
@@ -138,7 +143,7 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
 
         public void Close()
         {
-            Timer? playedOut = null;
+            List<Timer> waits = [];
             if (_stream != IntPtr.Zero)
             {
                 Locked(() =>
@@ -149,9 +154,9 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
                     }
 
                     _closed = true;
-                    playedOut = _playedOut;
-                    _playedOut = null;
                     CancelDrain();
+                    waits.AddRange(_givenUp);
+                    _givenUp.Clear();
                     PulseNative.StreamSetWriteCallback(_stream, IntPtr.Zero, IntPtr.Zero);
                     PulseNative.StreamSetStateCallback(_stream, IntPtr.Zero, IntPtr.Zero);
                     PulseNative.StreamDisconnect(_stream);
@@ -159,12 +164,13 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
                 });
             }
 
-            // A wait for the end to play that had already fired takes the loop's lock, and finds the stream closed: it is
-            // waited for outside that lock, so the feed is called no more once this returns.
-            if (playedOut is not null)
+            // A wait for the end to play that had already fired takes the loop's lock, and finds the stream closed: every
+            // wait, the current one and those given up by a stop, is waited for outside that lock, so neither the feed nor
+            // the connection is touched by one once this returns.
+            foreach (var wait in waits)
             {
                 using var done = new ManualResetEvent(false);
-                if (playedOut.Dispose(done))
+                if (wait.Dispose(done))
                 {
                     done.WaitOne();
                 }
@@ -265,8 +271,15 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
                 _timing = IntPtr.Zero;
             }
 
-            _playedOut?.Dispose();
-            _playedOut = null;
+            // Stopped, not disposed: its callback may have fired already and wait for this lock. Close waits for it, and its
+            // turn no longer matches, so it does nothing.
+            if (_playedOut is not null)
+            {
+                _playedOut.Change(Timeout.Infinite, Timeout.Infinite);
+                _givenUp.Add(_playedOut);
+                _playedOut = null;
+            }
+
             _drainTurn++;
             _draining = false;
         }
