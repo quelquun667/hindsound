@@ -29,6 +29,12 @@ internal static unsafe partial class SdlNative
     public const string HintAppId = "SDL_APP_ID";
     public const string HintVideoDriver = "SDL_VIDEO_DRIVER";
 
+    /// <summary>"1" keeps SDL from catching SIGINT and SIGTERM: the app has its own way to end on them.</summary>
+    public const string HintNoSignalHandlers = "SDL_NO_SIGNAL_HANDLERS";
+
+    /// <summary>"1" lets the screen saver start while the window is open: SDL stops it by default, as a game would.</summary>
+    public const string HintAllowScreensaver = "SDL_VIDEO_ALLOW_SCREENSAVER";
+
     /// <summary>The application id the window carries (the Wayland app id, the X11 class), that of the desktop entry.</summary>
     public const string AppId = "io.github.quelquun667.Hindsound";
 
@@ -468,6 +474,39 @@ internal static unsafe partial class SdlNative
     [LibraryImport(Library, EntryPoint = "SDL_CaptureMouse")]
     [return: MarshalAs(UnmanagedType.U1)]
     public static partial bool CaptureMouse([MarshalAs(UnmanagedType.U1)] bool enabled);
+
+    /// <summary>Where the mouse is on the desktop, in screen coordinates. Wayland does not tell: it then gives a guess or 0.</summary>
+    [LibraryImport(Library, EntryPoint = "SDL_GetGlobalMouseState")]
+    public static partial uint GetGlobalMouseState(float* x, float* y);
+
+    // SDL_keyboard.h.
+
+    /// <summary>The SDL_Keymod of the modifier keys held now.</summary>
+    [LibraryImport(Library, EntryPoint = "SDL_GetModState")]
+    public static partial ushort GetModState();
+
+    // SDL_video.h: what a window needs to fit its screen.
+
+    /// <summary>SDL_Point.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Point
+    {
+        public int X;
+        public int Y;
+    }
+
+    /// <summary>The display a point is on, or the closest one; 0 on error.</summary>
+    [LibraryImport(Library, EntryPoint = "SDL_GetDisplayForPoint")]
+    public static partial uint GetDisplayForPoint(Point* point);
+
+    /// <summary>The frame the desktop draws around the window, in window coordinates. False when it is not known yet.</summary>
+    [LibraryImport(Library, EntryPoint = "SDL_GetWindowBordersSize")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static partial bool GetWindowBordersSize(nint window, int* top, int* left, int* bottom, int* right);
+
+    [LibraryImport(Library, EntryPoint = "SDL_RestoreWindow")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static partial bool RestoreWindow(nint window);
 
     // SDL_error.h and SDL_stdinc.h.
 
