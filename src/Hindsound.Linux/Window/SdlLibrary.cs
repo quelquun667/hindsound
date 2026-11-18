@@ -34,7 +34,11 @@ internal static class SdlLibrary
     /// <summary>Why the library could not be loaded, or null when it was (or was not tried yet).</summary>
     public static string? LastError { get; private set; }
 
-    /// <summary>One way to try a candidate: true with its handle if it loads and is SDL 3.</summary>
+    /// <summary>
+    /// One way to try a candidate: true with its handle if it loads and is SDL 3, false if it is not SDL 3. A candidate that
+    /// the loader refuses is reported by throwing <see cref="DllNotFoundException"/> or <see cref="BadImageFormatException"/>,
+    /// which carry the loader's reason into <see cref="LastError"/>.
+    /// </summary>
     public delegate bool TryOpen(string candidate, out nint handle);
 
     /// <summary>
@@ -52,14 +56,22 @@ internal static class SdlLibrary
                 continue;
             }
 
-            if (tryOpen(candidate, out var handle))
+            try
             {
-                loadedFrom = candidate;
-                error = null;
-                return handle;
-            }
+                if (tryOpen(candidate, out var handle))
+                {
+                    loadedFrom = candidate;
+                    error = null;
+                    return handle;
+                }
 
-            tried.Add(candidate + " (cannot be loaded)");
+                tried.Add(candidate + " (cannot be loaded)");
+            }
+            catch (Exception ex) when (ex is DllNotFoundException or BadImageFormatException)
+            {
+                // The loader's own words: a missing dependency, a version of the C library that is too old, a wrong architecture.
+                tried.Add(candidate + " (" + ex.Message + ")");
+            }
         }
 
         loadedFrom = null;
@@ -110,11 +122,7 @@ internal static class SdlLibrary
 
     private static bool OpenSdl(string candidate, out nint handle)
     {
-        if (!NativeLibrary.TryLoad(candidate, out handle))
-        {
-            return false;
-        }
-
+        handle = NativeLibrary.Load(candidate);
         if (NativeLibrary.TryGetExport(handle, "SDL_Init", out _))
         {
             return true;

@@ -1,4 +1,5 @@
 using System.Runtime.Versioning;
+using System.Text.RegularExpressions;
 using Hindsound.Linux.Window;
 using Hindsound.Linux.Window.Text;
 
@@ -30,7 +31,11 @@ internal static class LinuxWindowSupport
     {
         if (!SdlLibrary.TryLoad())
         {
-            log(NoSdlLine(File.Exists(SdlLibrary.ProgramCandidates[0])));
+            foreach (var line in NoSdlLines(File.Exists(SdlLibrary.ProgramCandidates[0]), SdlLibrary.LastError))
+            {
+                log(line);
+            }
+
             return false;
         }
 
@@ -46,6 +51,23 @@ internal static class LinuxWindowSupport
 
         log(FoundLine(SdlLibrary.LoadedFrom, Environment.GetEnvironmentVariable(FreeTypeText.FontDirectoryVariable)));
         return true;
+    }
+
+    /// <summary>
+    /// Why SDL did not load, as the loader said it, for the log: every folder of a path is dropped (it would carry the name of
+    /// the user) and the lines of the message are joined.
+    /// </summary>
+    internal static string Reason(string message) =>
+        Regex.Replace(Regex.Replace(message, @"(?<![\w.])/(?:[^/\s:'`()]+/)+", ""), @"\s+", " ").Trim();
+
+    /// <summary>The lines of a system where SDL does not load: the line below, then why, when the loader said it.</summary>
+    internal static IEnumerable<string> NoSdlLines(bool copyNextToProgram, string? loaderError)
+    {
+        yield return NoSdlLine(copyNextToProgram);
+        if (!string.IsNullOrWhiteSpace(loaderError))
+        {
+            yield return "window: " + Reason(loaderError);
+        }
     }
 
     /// <summary>The line of a system where SDL does not load: whether the copy shipped next to the program is there or not.</summary>

@@ -24,8 +24,8 @@
 #   build-sdl3.sh WORK_DIR OUT_DIR   builds and checks; OUT_DIR receives libSDL3.so.0
 #   build-sdl3.sh --check OUT_DIR    checks a libSDL3.so.0 already built (one a cache gave back)
 #   build-sdl3.sh --packages         prints the Ubuntu packages the build needs, for apt-get install
-# The packages are those docs/README-linux.md of SDL 3.2.30 lists for Ubuntu, less those of the parts left out (audio,
-# KMS/DRM, udev, pipewire, liburing), plus the CMake and Ninja the build runs with.
+# The packages are those README-linux.md, in the documentation folder of SDL 3.2.30, lists for Ubuntu, less those of the
+# parts left out (audio, KMS/DRM, udev, pipewire, liburing), plus the CMake and Ninja the build runs with.
 
 set -euo pipefail
 
@@ -114,7 +114,9 @@ check_library() {
   fi
 
   # The version is in the file as SDL's revision string, "SDL-3.2.30-..." or "SDL-release-3.2.30-...".
-  if ! strings -a "$library" | grep -Eq "SDL-(release-)?${SDL_VERSION//./[.]}([^0-9]|$)"; then
+  # No -q: grep reads all of the output of strings. With -q it leaves at the first match, strings is then killed by SIGPIPE
+  # if it has more to write, and pipefail turns that into a failure of a correct library.
+  if ! strings -a "$library" | grep -E "SDL-(release-)?${SDL_VERSION//./[.]}([^0-9]|$)" > /dev/null; then
     echo "The library does not carry the revision of SDL $SDL_VERSION." >&2
     exit 1
   fi

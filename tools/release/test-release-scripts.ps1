@@ -1039,7 +1039,7 @@ try {
         Report "the step $($step[0]) runs $($step[1])" ($filesText -cmatch "- name: $($step[0])\n(?:\s+timeout-minutes: \d+\n)?\s+run: \./tools/release/$($step[1])\.ps1 ")
     }
     Report 'the window library is built from its pinned source by build-sdl3.sh, into the folder the packages take it from' ($filesText -cmatch '- name: Build the window library\n\s+run: \|\n\s+sudo apt-get install -y --no-install-recommends \$\(bash tools/linux/build-sdl3\.sh --packages\)\n\s+bash tools/linux/build-sdl3\.sh "\$RUNNER_TEMP/sdl3-work" "\$RUNNER_TEMP/sdl3"\n')
-    Report 'the window library is checked against the pins of build-sdl3.sh' ($filesText -cmatch '- name: Check the window library\n\s+run: bash tools/linux/build-sdl3\.sh --check "\$RUNNER_TEMP/sdl3"\n')
+    Report 'the window library is checked by build-sdl3.sh --check: its name, its functions, what it links, its version' ($filesText -cmatch '- name: Check the window library\n\s+run: bash tools/linux/build-sdl3\.sh --check "\$RUNNER_TEMP/sdl3"\n')
     Report 'the fonts are fetched by fetch-fonts.sh, into the folder the packages take them from' ($filesText -cmatch '- name: Fetch the fonts of the window\n\s+run: bash tools/linux/fetch-fonts\.sh "\$RUNNER_TEMP/fonts-work" "\$RUNNER_TEMP/fonts"\n')
     Report 'the fonts are checked against the pins of fetch-fonts.sh' ($filesText -cmatch '- name: Check the fonts of the window\n\s+run: bash tools/linux/fetch-fonts\.sh --check "\$RUNNER_TEMP/fonts"\n')
     Report 'the packages are made from the window library and the fonts that were checked' ($filesText -cmatch '- name: Make the AppImage and the tar\.gz\n\s+run: >-\n[^\n]+\n\s+"\$RUNNER_TEMP/sdl3/libSDL3\.so\.0" "\$RUNNER_TEMP/fonts" ')

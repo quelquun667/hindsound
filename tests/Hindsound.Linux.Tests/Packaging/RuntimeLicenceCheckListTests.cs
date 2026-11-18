@@ -20,7 +20,7 @@ public sealed partial class RuntimeLicenceCheckListTests
         var named = loop.Groups[1].Value.Replace("\\\n", " ").Split(' ', StringSplitOptions.RemoveEmptyEntries).Order(StringComparer.Ordinal).ToList();
         var folder = Directory.GetFiles(Path.Combine(root, "licenses", "linux"), "*.txt").Select(path => Path.GetFileName(path)!).Order(StringComparer.Ordinal).ToList();
 
-        Assert.Equal(15, folder.Count);
+        Assert.Equal(18, folder.Count);
         Assert.Equal(folder, named);
         Assert.Contains("has \"$doc/licenses/linux/$licence\"", loop.Value, StringComparison.Ordinal);
     }

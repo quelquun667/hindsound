@@ -50,6 +50,49 @@ public sealed class SdlLibraryTests
     }
 
     [Fact]
+    public void A_candidate_the_loader_refuses_gives_the_reason_the_loader_gave_and_the_next_one_is_tried()
+    {
+        var asked = new List<string>();
+        var handle = SdlLibrary.Open(SdlLibrary.Candidates(Program), _ => true, (string candidate, out nint h) =>
+        {
+            asked.Add(candidate);
+            if (asked.Count == 1)
+            {
+                throw new DllNotFoundException("libSDL3.so.0: version `GLIBC_2.34' not found");
+            }
+
+            h = 9;
+            return true;
+        }, out var from, out var error);
+
+        Assert.Equal(9, handle);
+        Assert.Equal("libSDL3.so.0", from);
+        Assert.Null(error);
+        Assert.Equal(2, asked.Count);
+    }
+
+    [Theory]
+    [InlineData(typeof(DllNotFoundException), "version `GLIBC_2.34' not found")]
+    [InlineData(typeof(BadImageFormatException), "wrong ELF class: ELFCLASS32")]
+    public void When_the_loader_refuses_every_candidate_the_error_carries_its_reasons(Type exception, string reason)
+    {
+        var handle = SdlLibrary.Open(SdlLibrary.Candidates(Program), _ => true, (string candidate, out nint h) =>
+            throw (Exception)Activator.CreateInstance(exception, reason + " in " + candidate)!, out var from, out var error);
+
+        Assert.Equal(0, handle);
+        Assert.Null(from);
+        Assert.Contains(reason + " in " + Path.Combine(Program, "libSDL3.so.0"), error, StringComparison.Ordinal);
+        Assert.Contains(reason + " in libSDL3.so.0)", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_error_that_is_not_the_loaders_is_not_swallowed()
+    {
+        Assert.Throws<InvalidOperationException>(() => SdlLibrary.Open(SdlLibrary.Candidates(Program), _ => true, (string candidate, out nint h) =>
+            throw new InvalidOperationException("a bug"), out _, out _));
+    }
+
+    [Fact]
     public void When_nothing_loads_the_error_says_what_was_tried()
     {
         var handle = SdlLibrary.Open(SdlLibrary.Candidates(Program), path => true, (string candidate, out nint h) =>

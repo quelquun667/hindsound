@@ -522,8 +522,8 @@ Hindsound has only run on one Windows 11 PC so far. These have not been tried fo
 - Windows 10
 - the windows of the Setup and its uninstaller, and the uninstaller deleting or keeping `library.json`
 
-The [Linux version](#linux) has not run on a real desktop yet. The CI builds both packages and starts each once, with no
-sound server, no desktop and no FUSE, to write a test MP3. Not tried for real:
+The [Linux version](#linux) has not run on a real desktop yet. The CI builds both packages and starts each twice, with no
+sound server, no desktop and no FUSE: once to write a test MP3, once to draw every page of the window off screen. Not tried for real:
 
 - capturing a real PC and a real microphone, through PipeWire or PulseAudio
 - the hotkey through the shortcut portal (GNOME 48 and later, KDE) and on X11
