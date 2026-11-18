@@ -2,7 +2,7 @@
 
 Hindsound itself is under the MIT licence: see [LICENSE](LICENSE).
 
-Hindsound contains or ships the components below. The last column, "In", says whether a component is in the Windows build, in the Linux packages (the AppImage and the tar.gz), or in both; it comes from the files of each trimmed publish, listed on 2026-11-10, and from what build-packages.sh adds to it for the Linux packages: `libmp3lame.so.0` in both, and the runtime at the head of the AppImage, with the libraries built into it. The Windows build comes as the Setup and as the portable zip: a Windows component is in both, except Inno Setup, in the Setup only (the portable zip has no `unins000.exe`). Every file in [licenses/](licenses) is an unchanged copy of the upstream text; the table says where each one comes from. The texts of the AppImage runtime, of the libraries built into it and of Tmds.DBus.Protocol, which only the Linux app references, are in [licenses/linux/](licenses/linux), which only the Linux packages carry: the Setup and the portable zip take the files at the top of [licenses/](licenses) only. This document records what the project checked on 2026-11-06, 2026-11-07 and 2026-11-10. It is not legal advice.
+Hindsound contains or ships the components below. The last column, "In", says whether a component is in the Windows build, in the Linux packages (the AppImage and the tar.gz), or in both; it comes from the files of each trimmed publish, listed on 2026-11-10, and from what build-packages.sh adds to it for the Linux packages: `libmp3lame.so.0`, `libSDL3.so.0` and the four fonts of the window in both, and the runtime at the head of the AppImage, with the libraries built into it. The Windows build comes as the Setup and as the portable zip: a Windows component is in both, except Inno Setup, in the Setup only (the portable zip has no `unins000.exe`). Every file in [licenses/](licenses) is an unchanged copy of the upstream text; the table says where each one comes from. The texts of the AppImage runtime, of the libraries built into it, of SDL, of the fonts, and of Tmds.DBus.Protocol and NLayer, which only the Linux app references, are in [licenses/linux/](licenses/linux), which only the Linux packages carry: the Setup and the portable zip take the files at the top of [licenses/](licenses) only. This document records what the project checked on 2026-11-06, 2026-11-07, 2026-11-10 and 2026-11-18. It is not legal advice.
 
 | Component | Version | Licence | Copyright | Text | Copied from | In |
 |---|---|---|---|---|---|---|
@@ -11,6 +11,11 @@ Hindsound contains or ships the components below. The last column, "In", says wh
 | NAudio.Core and NAudio.Wasapi | 3.3.0 | MIT | Copyright 2008-2026 Mark Heath | [NAudio-LICENSE.txt](licenses/NAudio-LICENSE.txt) | `LICENSE` in [naudio/NAudio](https://github.com/naudio/NAudio) at commit `4f8889e2bd34c3978a25652c6c172fa1502ccba3`, the commit both packages name. The packages themselves state "MIT" but hold no licence file | NAudio.Core: Windows (the Setup and the portable zip) and Linux. NAudio.Wasapi: Windows (the Setup and the portable zip) |
 | NAudio.Lame | 2.1.0 | MIT | Copyright (c) 2013-2019 Corey Murtagh | [NAudio.Lame-LICENSE.txt](licenses/NAudio.Lame-LICENSE.txt) | `LICENSE.txt` in the NuGet package | Windows (the Setup and the portable zip): `NAudio.Lame.dll` and `LameDLLWrap.dll`. Linux: `NAudio.Lame.dll` only (Hindsound.Core references it; the Windows DLLs of the package are left out of the Linux publish) |
 | Tmds.DBus.Protocol | 0.95.2 | MIT | Copyright 2006 Alp Toker, Copyright 2010 Other Contributors, Copyright 2016 Tom Deseyn | [Tmds.DBus.Protocol-COPYING.txt](licenses/linux/Tmds.DBus.Protocol-COPYING.txt) | `COPYING` in [tmds/Tmds.DBus](https://github.com/tmds/Tmds.DBus) at commit `5557e043025de2251128ab8048c9d3f0cf50495e`, the commit the package names. The package itself states "MIT" (`license` of its nuspec) but holds no licence file | Linux |
+| NLayer | 3.0.1 | MIT | Copyright (c) 2018 Mark Heath, Andrew Ward & Contributors | [NLayer-LICENSE.txt](licenses/linux/NLayer-LICENSE.txt) | `LICENSE` of [naudio/NLayer](https://github.com/naudio/NLayer) at the tag `v3.0.1` (commit `cdd16ea2a389b30f99d5797ad7b09224ab29e01a`) | Linux: the MP3 decoder of the listening and of the clip tools |
+| SDL (`libSDL3.so.0`) | 3.2.30 | zlib License, with code under other permissive terms compiled in: see [SDL](#sdl) | Copyright (C) 1997-2025 Sam Lantinga | [SDL3-LICENSE.txt](licenses/linux/SDL3-LICENSE.txt), [SDL3-yuv2rgb-LICENSE.txt](licenses/linux/SDL3-yuv2rgb-LICENSE.txt) | `LICENSE.txt` and `src/video/yuv2rgb/LICENSE` of [libsdl-org/SDL](https://github.com/libsdl-org/SDL) at the tag `release-3.2.30` (commit `f5e5f6588921eed3d7d048ce43d9eb1ff0da0ffc`) | Linux |
+| Selawik (`fonts/Selawik-Regular.ttf`, `fonts/Selawik-Semibold.ttf`) | 1.01 | SIL Open Font License, Version 1.1 | Copyright 2015, Microsoft Corporation (www.microsoft.com), with Reserved Font Name Selawik | [Selawik-LICENSE.txt](licenses/linux/Selawik-LICENSE.txt) | `LICENSE.txt` of [microsoft/Selawik](https://github.com/microsoft/Selawik) at the tag `1.01` (commit `b65ff9ce7c4673e75ec5c622924a6b6f61f2f876`) | Linux |
+| Barlow Semi Condensed SemiBold (`fonts/BarlowSemiCondensed-SemiBold.ttf`) | 1.422 | SIL Open Font License, Version 1.1 | Copyright 2017 The Barlow Project Authors (https://github.com/jpt/barlow) | [Barlow-OFL.txt](licenses/linux/Barlow-OFL.txt) | `OFL.txt` of [jpt/barlow](https://github.com/jpt/barlow) at the tag `1.422` (commit `697600fcece1685b0ba409eb82868546def9a84e`) | Linux |
+| Cascadia Mono (`fonts/CascadiaMono-Regular.ttf`) | 2407.24 | SIL Open Font License, Version 1.1 | Copyright (c) 2019 - Present, Microsoft Corporation, with Reserved Font Name Cascadia Code | [CascadiaCode-LICENSE.txt](licenses/linux/CascadiaCode-LICENSE.txt) | `LICENSE` of [microsoft/cascadia-code](https://github.com/microsoft/cascadia-code) at the tag `v2407.24` (commit `56bcca3f2c1e4cb19458954f0e2bb4635960df91`) | Linux |
 | System.Numerics.Tensors | 9.0.0 | MIT | Copyright (c) .NET Foundation and Contributors | [System.Numerics.Tensors-LICENSE.txt](licenses/System.Numerics.Tensors-LICENSE.txt), [System.Numerics.Tensors-THIRD-PARTY-NOTICES.txt](licenses/System.Numerics.Tensors-THIRD-PARTY-NOTICES.txt) | `LICENSE.TXT` and `THIRD-PARTY-NOTICES.TXT` in the NuGet package | Neither: a dependency of NAudio.Core whose DLL is not in the trimmed publish of either build (checked on 2026-11-10); its licence is kept in case a build keeps it |
 | .NET runtime | 10 (texts from 10.0.14) | MIT, with the third-party notices listed in its own file | Copyright (c) .NET Foundation and Contributors | [dotnet-runtime-LICENSE.txt](licenses/dotnet-runtime-LICENSE.txt), [dotnet-runtime-THIRD-PARTY-NOTICES.txt](licenses/dotnet-runtime-THIRD-PARTY-NOTICES.txt) | `LICENSE.TXT` and `THIRD-PARTY-NOTICES.TXT` in the `Microsoft.NETCore.App.Runtime.win-x64` 10.0.14 package | Windows (the Setup and the portable zip) and Linux (self-contained in both) |
 | Inno Setup (the Setup program, and the `unins000.exe` it installs) | 7.1.0 | Inno Setup License | Copyright (C) 1997-2026 Jordan Russell, portions Copyright (C) 2000-2026 Martijn Laan | [InnoSetup-license.txt](licenses/InnoSetup-license.txt) | `tools/license.txt` in the NuGet package Tools.InnoSetup 7.1.0, the one [get-iscc.ps1](tools/release/get-iscc.ps1) pins. The licence asks to keep its notices in the binaries, which the Setup does, and calls a mention appreciated, not required | Windows (the Setup only: the portable zip has no `unins000.exe`) |
@@ -81,6 +86,47 @@ Every release that hands out the AppImage attaches, next to it, as it attaches L
 - `type2-runtime-20251108-libraries-source.tar.gz`, the source of every other library linked into the runtime: `squashfuse-0.5.2.tar.gz`, the upstream archives of musl, Zstandard, zlib and mimalloc, their folders of aports under `aports/`, and a `README.txt` that gives where each file comes from and its SHA-256.
 
 With these three, the release meets point (d): it offers the source of libfuse with its change, and the source of everything else the runtime is linked from, with the scripts that build and link it. Without any one of them it would not, and the check of the files of a release refuses a release that lacks one. The compiler's own start-up and support code is not in them: section 6 does not ask for anything normally distributed with the major components of the operating system, such as the compiler, unless that component itself accompanies the executable. The artifact `hindsound-linux-x64` of the CI, which also hands out the AppImage, carries the same three files next to it.
+
+## The window on Linux
+
+The Linux packages ship the library the window is made with and the fonts it is drawn with, next to the `hindsound` program, where the app looks for them first: `libSDL3.so.0`, and the folder `fonts`.
+
+### SDL
+
+- `libSDL3.so.0` is SDL 3.2.30, built by [tools/linux/build-sdl3.sh](tools/linux/build-sdl3.sh) from `SDL3-3.2.30.tar.gz` of the release `release-3.2.30` of [libsdl-org/SDL](https://github.com/libsdl-org/SDL), after a SHA-256 check: `4c3b09330d866dc52eb65b66259a6684ad387252ca8c57901b3a2b534eb42e3d`, the digest GitHub gives for that asset. No file of the archive is changed: the script fails if the build changes one.
+- It is built with the X11 and Wayland video drivers (with libdecor), the offscreen driver, D-Bus, the input methods IBus and Fcitx, the dialogs and the renderer, and without SDL's audio, GPU API, camera, joystick, haptic, sensor, HID, power or KMS/DRM code. It links the C library only: SDL opens the libraries of X11, Wayland, libdecor, EGL, OpenGL and D-Bus itself, from the system, when they are there. None of them is shipped.
+- SDL is under the zlib License: its notice must stay in any distribution of the source, and an altered version must be marked as such. It asks for no source to go with a binary. SDL is not changed.
+- Code of others compiled into the same library, each with its notice:
+  - `src/video/yuv2rgb`, the conversion of YUV images: BSD-3-Clause, Copyright (c) 2016, Adrien Descamps, in [SDL3-yuv2rgb-LICENSE.txt](licenses/linux/SDL3-yuv2rgb-LICENSE.txt). It asks a binary distribution to reproduce that notice in its documentation, which this document and that file do.
+  - `src/libm`, maths functions SDL carries for every system, from FreeBSD's msun: its files carry the notice below, which asks only to be kept.
+  - The Wayland driver, compiled with the code that `wayland-scanner` generates from the protocol descriptions in `wayland-protocols/` of the archive, each under its own permissive notice (the MIT licence for most). They are not listed one by one here.
+
+The notice of the files of `src/libm` in SDL 3.2.30:
+
+```text
+Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+
+Developed at SunPro, a Sun Microsystems, Inc. business.
+Permission to use, copy, modify, and distribute this
+software is freely granted, provided that this notice
+is preserved.
+```
+
+To use your own build of SDL 3, put it in the folder of the program as `libSDL3.so.0` (in the tar.gz; an AppImage is read-only), or remove the shipped one so that the system's copy is used.
+
+### The fonts
+
+Four TrueType files, unchanged and only renamed, in the folder `fonts` next to the program. [tools/linux/fetch-fonts.sh](tools/linux/fetch-fonts.sh) fetches them and checks each against a pin before reading it:
+
+- `Selawik-Regular.ttf` and `Selawik-Semibold.ttf` are `selawk.ttf` and `selawksb.ttf` of `Selawik_Release.zip`, the asset of the release `1.01` of [microsoft/Selawik](https://github.com/microsoft/Selawik), SHA-256 `3f62c51e05e3b5a1e6241cf92a371f0be2ea1183aa87b30718bbd40832a8d423`. GitHub gives no digest for an asset of 2015: that SHA-256 is the one the Homebrew cask `font-selawik` publishes for the same URL.
+- `CascadiaMono-Regular.ttf` is `ttf/static/CascadiaMono-Regular.ttf` of `CascadiaCode-2407.24.zip`, the asset of the release `v2407.24` of [microsoft/cascadia-code](https://github.com/microsoft/cascadia-code), SHA-256 `e67a68ee3386db63f48b9054bd196ea752bc6a4ebb4df35adce6733da50c8474`, the one the Homebrew casks `font-cascadia-mono` and `font-cascadia-code` publish for the same URL.
+- `BarlowSemiCondensed-SemiBold.ttf` is `fonts/ttf/BarlowSemiCondensed-SemiBold.ttf` of [jpt/barlow](https://github.com/jpt/barlow) at the commit of the tag `1.422`, `697600fcece1685b0ba409eb82868546def9a84e`; that release has no asset. The file is checked against its git blob id in that commit, `bac233a9249fc0e33ce5140e52723fce5bf601f4`, and its size, 168,500 bytes.
+
+The SIL Open Font License 1.1 lets the fonts be bundled with software and redistributed, provided that each copy carries the copyright notice and the licence, and that no font is sold by itself. Each text is in [licenses/linux/](licenses/linux), which both Linux packages carry. The fonts are not modified, so their Reserved Font Names do not come into play.
+
+### What the window takes from the system
+
+The text of the window is shaped and drawn by FreeType (`libfreetype.so.6`), HarfBuzz (`libharfbuzz.so.0`) and fontconfig (`libfontconfig.so.1`), the copies of the system, loaded when the app starts: every Linux desktop has them. A character that the four fonts lack, such as a Japanese name of a clip, is drawn with a font of the system that fontconfig finds. The packages hold no copy of these libraries or of those fonts, so their licences ask nothing of the packages; the same goes for the libraries SDL opens from the system.
 
 ## LAME
 

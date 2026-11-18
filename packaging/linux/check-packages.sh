@@ -3,12 +3,16 @@
 # each one started for real with --prove-mp3, which writes one second of a sine as an MP3 through the path of a real clip
 # and leaves. That needs no sound server, no session bus and no FUSE. The run must load the libmp3lame.so.0 of the
 # package, not one the machine may already have: the dynamic loader says which file it loaded (LD_DEBUG=libs).
+# Then the program of each one draws the pages of its window into PNG files (--dump-settings), with the fonts of the
+# package and the FreeType, HarfBuzz and fontconfig of the system. A libSDL3.so.0 that either run loads must be the
+# package's.
 #
 # Usage: check-packages.sh <out folder> <version>
 set -euo pipefail
 
 readonly APP_ID='io.github.quelquun667.Hindsound'
 readonly ICON_SIZES='48 128 256'
+readonly FONTS='Selawik-Regular.ttf Selawik-Semibold.ttf BarlowSemiCondensed-SemiBold.ttf CascadiaMono-Regular.ttf'
 
 fail() {
     echo "check-packages: $*" >&2
@@ -21,6 +25,7 @@ name="hindsound-$2-linux-x64"
 appimage="$out/$name.AppImage"
 archive="$out/$name.tar.gz"
 
+tools=$(realpath -e -- "$(dirname -- "$(realpath -e -- "$0")")/../../tools/linux")
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
 
@@ -53,6 +58,41 @@ prove_mp3() {
     grep -h -E "calling init: ($encoder)\$" "$run/ld"/trace.* > /dev/null \
         || fail "$label: libmp3lame.so.0 was not loaded from the package (wanted $encoder)"
     echo "check-packages: $label wrote $(basename -- "$mp3"), $(stat -c %s -- "$mp3") bytes"
+    sdl_from_package "$label" "$encoder" "$run/ld"
+}
+
+# Every libSDL3.so.0 the run loaded is the package's: the one in the folder of the encoder, the folder of the program.
+sdl_from_package() {
+    local label=$1 encoder=$2 trace=$3
+    local sdl="${encoder%'libmp3lame\.so\.0'}libSDL3\.so\.0"
+    local loaded path
+    loaded=$(grep -h -E 'calling init: .*/libSDL3\.so\.0$' "$trace"/trace.* | sed 's/.*calling init: //' | sort -u || true)
+    while IFS= read -r path; do
+        [ -z "$path" ] || [[ $path =~ ^($sdl)$ ]] || fail "$label: libSDL3.so.0 was loaded from outside the package: $path"
+    done <<< "$loaded"
+}
+
+# The program draws every page of its window into PNG files and leaves: off screen, with the microphone, the clipboard and
+# the shortcuts off, and settings of its own in which the microphone is disabled too. No font folder is given: the app
+# takes the fonts next to it.
+dump_window() {
+    local label=$1 encoder=$2
+    shift 2
+    local run="$work/dump-$label"
+    mkdir -p -- "$run/png" "$run/ld"
+    printf '%s\n' '{"audio":{"micDeviceId":"disabled"}}' > "$run/settings.json"
+    local code=0
+    env -u HINDSOUND_FONT_DIR LD_DEBUG=libs LD_DEBUG_OUTPUT="$run/ld/trace" SDL_VIDEO_DRIVER=offscreen timeout 300 "$@" \
+        --settings "$run/settings.json" --no-mic --no-clipboard --no-hotkeys --offscreen --dump-settings "$run/png" || code=$?
+    if [ -f "$run/settings.log" ]; then
+        sed "s/^/  $label log: /" -- "$run/settings.log"
+    fi
+    [ "$code" -eq 0 ] || fail "$label: --dump-settings ended with code $code"
+    local count
+    count=$(find "$run/png" -name '*.png' | wc -l)
+    [ "$count" -gt 0 ] || fail "$label: --dump-settings wrote no PNG"
+    sdl_from_package "$label" "$encoder" "$run/ld"
+    echo "check-packages: $label drew $count PNG files"
 }
 
 # The files each package must hold, under its prefix.
@@ -62,6 +102,16 @@ check_layout() {
     has "$bin/libmp3lame.so.0"
     readelf -d -- "$bin/libmp3lame.so.0" | grep -q 'Library soname: \[libmp3lame\.so\.0\]' \
         || fail "$label: libmp3lame.so.0 does not have the soname libmp3lame.so.0"
+    has "$bin/libSDL3.so.0"
+    readelf -d -- "$bin/libSDL3.so.0" | grep -q 'Library soname: \[libSDL3\.so\.0\]' \
+        || fail "$label: libSDL3.so.0 does not have the soname libSDL3.so.0"
+    # The fonts of the window, next to the program: the four TrueType files, and nothing else in their folder.
+    local font
+    for font in $FONTS; do
+        has "$bin/fonts/$font"
+    done
+    bash "$tools/fetch-fonts.sh" --check "$bin/fonts" > /dev/null || fail "$label: the fonts are not TrueType files"
+    [ "$(find "$bin/fonts" -mindepth 1 | wc -l)" -eq 4 ] || fail "$label: $bin/fonts holds more than the four fonts"
     has "$share/applications/$APP_ID.desktop"
     local size
     for size in $ICON_SIZES; do
@@ -75,7 +125,9 @@ check_layout() {
     # of Tmds.DBus.Protocol, which only the Linux app references. THIRD-PARTY-NOTICES.md links them.
     local licence
     for licence in AppImage-type2-runtime-LICENSE.txt musl-COPYRIGHT.txt libfuse-LGPL2.txt libfuse-LICENSE.txt \
-        squashfuse-LICENSE.txt zstd-LICENSE.txt zlib-LICENSE.txt mimalloc-LICENSE.txt Tmds.DBus.Protocol-COPYING.txt; do
+        squashfuse-LICENSE.txt zstd-LICENSE.txt zlib-LICENSE.txt mimalloc-LICENSE.txt Tmds.DBus.Protocol-COPYING.txt \
+        SDL3-LICENSE.txt SDL3-yuv2rgb-LICENSE.txt Selawik-LICENSE.txt Barlow-OFL.txt CascadiaCode-LICENSE.txt \
+        NLayer-LICENSE.txt; do
         has "$doc/licenses/linux/$licence"
     done
     if command -v desktop-file-validate > /dev/null; then
@@ -102,6 +154,8 @@ check_layout AppImage "$root/usr/bin" "$root/usr/share" "$root/usr/share/doc/hin
 mkdir -p -- "$work/tmp"
 prove_mp3 AppImage "$work/tmp/appimage_extracted_[0-9a-f]+/usr/bin/libmp3lame\.so\.0" \
     env TMPDIR="$work/tmp" APPIMAGE_EXTRACT_AND_RUN=1 "$appimage"
+dump_window AppImage "$work/tmp/appimage_extracted_[0-9a-f]+/usr/bin/libmp3lame\.so\.0" \
+    env TMPDIR="$work/tmp" APPIMAGE_EXTRACT_AND_RUN=1 "$appimage"
 
 # The archive: one folder named like it, nothing beside it.
 has "$archive"
@@ -113,6 +167,7 @@ folder="$work/tar/$name"
 has "$folder/README.txt"
 check_layout tar.gz "$folder" "$folder/share" "$folder"
 prove_mp3 tar.gz "$folder/libmp3lame\.so\.0" "$folder/hindsound"
+dump_window tar.gz "$folder/libmp3lame\.so\.0" "$folder/hindsound"
 
 (cd -- "$out" && sha256sum --check --strict --quiet SHA256SUMS) || fail "SHA256SUMS does not match the packages"
 echo "check-packages: both packages are fine"
