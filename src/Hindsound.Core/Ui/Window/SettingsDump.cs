@@ -170,7 +170,7 @@ internal static unsafe class SettingsDump
         public Library.LibraryStatus IndexStatus { get; set; } = Library.LibraryStatus.Loaded;
 
         /// <summary>The labels of a clip, by the path of its main file.</summary>
-        public Dictionary<string, Library.ClipLabels> Labels { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, Library.ClipLabels> Labels { get; } = new(Library.PathRules.Comparer);
 
         public Library.ClipLabels LabelsOf(Library.ClipGroup line) => Labels.TryGetValue(line.Main.Path, out var labels) ? labels : new(false, []);
 
