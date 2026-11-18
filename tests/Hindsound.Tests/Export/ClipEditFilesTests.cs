@@ -121,13 +121,66 @@ public sealed class ClipEditFilesTests : IDisposable
 
         var result = Files(bin).Save(Group(original), Cut(0, 0.5, 0), new EditSave(EditSaveChoice.Replace, null), Export, CancellationToken.None);
 
-        Assert.Equal(EditSaveOutcome.Failed, result.Outcome);
+        Assert.Equal(EditSaveOutcome.SavedAside, result.Outcome);
         Assert.Equal([Path.Combine(_folder.Path, "dogs (cut).wav")], result.Paths);
         Assert.Equal(Rate / 2, WavFrames(result.Paths[0]));
         Assert.Equal([1, 2, 3, 4], File.ReadAllBytes(original));
         Assert.Equal(["dogs (cut).wav", "dogs.wav"], _folder.Names());
         Assert.Empty(_index.Moved);
         Assert.NotEmpty(_journal);
+        Assert.DoesNotContain(_journal, line => line.Contains(_folder.Path, StringComparison.OrdinalIgnoreCase) || line.Contains("dogs", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void An_edit_that_can_take_neither_its_name_nor_one_of_its_own_is_never_left_hidden()
+    {
+        // The bin says the original went, but it is still there; and the name of its own is a folder, which no file can take.
+        var original = _folder.Clip("dogs.wav", _decoder, Tone(Rate, 1, 0.1f), 1);
+        Directory.CreateDirectory(Path.Combine(_folder.Path, "dogs (cut).wav"));
+
+        var result = Files(new FakeBin(RecycleOutcome.Recycled)).Save(Group(original), Cut(0, 0.5, 0), new EditSave(EditSaveChoice.Replace, null), Export, CancellationToken.None);
+
+        Assert.Equal(EditSaveOutcome.SavedAside, result.Outcome);
+        Assert.Empty(result.Paths);
+        Assert.Equal(["dogs.wav"], _folder.Names());
+        Assert.Equal([1, 2, 3, 4], File.ReadAllBytes(original));
+        Assert.Contains(_journal, line => line.StartsWith("editor: edit not kept", StringComparison.Ordinal));
+        Assert.DoesNotContain(_journal, line => line.Contains(_folder.Path, StringComparison.OrdinalIgnoreCase) || line.Contains("dogs", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void A_replacement_whose_original_went_in_part_keeps_the_whole_edit_as_a_clip_of_its_own()
+    {
+        // The bin takes the system track, then fails on the mic track, which stays.
+        var system = _folder.Clip("dogs_system.wav", _decoder, Tone(Rate, 1, 0.1f), 1);
+        var mic = _folder.Clip("dogs_mic.wav", _decoder, Tone(Rate, 1, 0.1f), 1);
+        var bin = new HalfBin(Path.Combine(_folder.Path, "bin"));
+
+        var result = Files(bin).Save(Group(system, mic), Cut(0, 0.5, 0, 0), new EditSave(EditSaveChoice.Replace, null), Export, CancellationToken.None);
+
+        Assert.Equal(EditSaveOutcome.SavedAside, result.Outcome);
+        Assert.Equal([Path.Combine(_folder.Path, "dogs (cut)_system.wav"), Path.Combine(_folder.Path, "dogs (cut)_mic.wav")], result.Paths);
+        Assert.All(result.Paths, path => Assert.Equal(Rate / 2, WavFrames(path)));
+        Assert.Equal(["dogs (cut)_mic.wav", "dogs (cut)_system.wav", "dogs_mic.wav"], _folder.Names());
+        Assert.Equal([1, 2, 3, 4], File.ReadAllBytes(mic));
+        Assert.Empty(_index.Moved);
+        Assert.DoesNotContain(_journal, line => line.Contains(_folder.Path, StringComparison.OrdinalIgnoreCase) || line.Contains("dogs", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void A_replacement_whose_original_is_gone_before_the_bin_keeps_the_edit_as_a_clip_of_its_own()
+    {
+        // The user deleted the original while the edit was being written.
+        var original = _folder.Clip("dogs.wav", _decoder, Tone(Rate, 1, 0.1f), 1);
+        var bin = new GoneBin();
+
+        var result = Files(bin).Save(Group(original), Cut(0, 0.5, 0), new EditSave(EditSaveChoice.Replace, null), Export, CancellationToken.None);
+
+        Assert.Equal(EditSaveOutcome.SavedAside, result.Outcome);
+        Assert.Equal([Path.Combine(_folder.Path, "dogs (cut).wav")], result.Paths);
+        Assert.Equal(Rate / 2, WavFrames(result.Paths[0]));
+        Assert.Equal(["dogs (cut).wav"], _folder.Names());
+        Assert.Empty(_index.Moved);
         Assert.DoesNotContain(_journal, line => line.Contains(_folder.Path, StringComparison.OrdinalIgnoreCase) || line.Contains("dogs", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -147,6 +200,19 @@ public sealed class ClipEditFilesTests : IDisposable
         Assert.Equal([.. before.Append("dogs (soundboard).mp3").Order(StringComparer.Ordinal)], _folder.Names());
         using var reader = new Mp3FileReader(path);
         Assert.Equal(1, reader.WaveFormat.Channels);
+    }
+
+    [Fact]
+    public void A_soundboard_copy_asked_longer_than_discord_takes_stops_at_its_longest()
+    {
+        var original = _folder.Clip("dogs.mp3", _decoder, Tone(10 * Rate, 1, 0.1f), 1);
+        var request = new EditRequest(EditorMode.Soundboard, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(9), [0]);
+
+        var result = Files().Save(Group(original), request, new EditSave(EditSaveChoice.Copy, "dogs (soundboard)"), Export, CancellationToken.None);
+
+        Assert.Equal(EditSaveOutcome.Saved, result.Outcome);
+        using var reader = new Mp3FileReader(Assert.Single(result.Paths));
+        Assert.InRange(reader.TotalTime.TotalSeconds, Soundboard.MaxSeconds - 0.1, Soundboard.MaxSeconds + 0.1);
     }
 
     [Fact]

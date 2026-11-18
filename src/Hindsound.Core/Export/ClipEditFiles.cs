@@ -171,7 +171,14 @@ internal sealed class ClipEditFiles(IClipDecoder decoder, IRecycleBin recycleBin
 
         // From here the originals may be in the bin: the edit is never thrown away, whatever happens to it.
         var stuck = new List<int>();
-        for (var i = 0; i < originals.Length; i++)
+        var left = Left(recycled, originals);
+        if (left is not null)
+        {
+            journal(left);
+            stuck.AddRange(Enumerable.Range(0, originals.Length));
+        }
+
+        for (var i = 0; i < originals.Length && left is null; i++)
         {
             try
             {
@@ -190,10 +197,25 @@ internal sealed class ClipEditFiles(IClipDecoder decoder, IRecycleBin recycleBin
             return new EditSaveResult(EditSaveOutcome.Saved, originals);
         }
 
-        return new EditSaveResult(EditSaveOutcome.Failed, Rescue(clip, originals, temps, stuck));
+        return new EditSaveResult(EditSaveOutcome.SavedAside, Rescue(clip, originals, temps, stuck));
     }
 
-    /// <summary>The edits that could not take the name of their original take a name of their own, as a copy would.</summary>
+    /// <summary>
+    /// Why no edited file may take the place of an original, for the log, or null if each may. Only part of the original went,
+    /// and an edited file next to one that was not would read as one clip out of step; or a file of the original was gone before
+    /// the bin could take it, and what the user deleted is not brought back under its name.
+    /// </summary>
+    private static string? Left(RecycleOutcome recycled, string[] originals) => recycled switch
+    {
+        RecycleOutcome.Gone => "editor: original gone before it went to the Recycle Bin",
+        RecycleOutcome.Failed when originals.Any(File.Exists) => "editor: original recycled in part",
+        _ => null,
+    };
+
+    /// <summary>
+    /// The edits that could not take the name of their original take a name of their own, as a copy would. One that can't is
+    /// removed rather than left hidden under <see cref="TempExtension"/>: the original can still come back from the Recycle Bin.
+    /// </summary>
     private List<string> Rescue(ClipGroup clip, string[] originals, List<string> temps, List<int> stuck)
     {
         var paths = new List<string>(originals.Length);
@@ -204,7 +226,8 @@ internal sealed class ClipEditFiles(IClipDecoder decoder, IRecycleBin recycleBin
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            journal($"editor: edit left aside ({ClipFolders.Describe(ex)})");
+            journal($"editor: edit not kept, no name of its own ({ClipFolders.Describe(ex)})");
+            DeleteOurs(stuck.Select(i => temps[i]));
             return [.. Enumerable.Range(0, originals.Length).Where(i => !stuck.Contains(i)).Select(i => originals[i])];
         }
 
@@ -225,8 +248,8 @@ internal sealed class ClipEditFiles(IClipDecoder decoder, IRecycleBin recycleBin
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                journal($"editor: edit left aside ({ClipFolders.Describe(ex)})");
-                DeleteOurs([reserved[i]]);
+                journal($"editor: edit not kept, no name of its own ({ClipFolders.Describe(ex)})");
+                DeleteOurs([reserved[i], temps[i]]);
             }
         }
 
@@ -245,9 +268,11 @@ internal sealed class ClipEditFiles(IClipDecoder decoder, IRecycleBin recycleBin
             var streams = OpenAll(clip);
             try
             {
+                // The screen keeps the selection short; whatever asks, the copy never holds more than Discord takes.
+                var end = TimeSpan.FromTicks(Math.Min(request.End.Ticks, (request.Start + TimeSpan.FromSeconds(Soundboard.MaxSeconds)).Ticks));
                 var channels = ClipEditRender.MixChannels(streams);
                 using var writer = ClipEditRender.OpenWriter(path, ExportFormat.Mp3, channels, ClipEditRender.SoundboardBitrateKbps);
-                ClipEditRender.Render(streams, request.GainsDb, request.Start, request.End, channels, ClipEditRender.Ceiling(export.PeakCeilingDb), writer, cancel);
+                ClipEditRender.Render(streams, request.GainsDb, request.Start, end, channels, ClipEditRender.Ceiling(export.PeakCeilingDb), writer, cancel);
             }
             finally
             {

@@ -1395,7 +1395,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         Func<ClipGroup, bool>? mayPlay = _options.Offscreen || _options.SettingsProbe ? OnlySilence : null;
 
         // Off screen or in a probe, nothing reaches the real Recycle Bin.
-        var recycleBin = RecycleBinInstead ?? (_options.Offscreen || _options.SettingsProbe ? NoRecycleBin.Instance : _shell.NewRecycleBin());
+        var recycleBin = RecycleBinInstead ?? (_options.Offscreen || _options.SettingsProbe ? NoRecycleBin.Instance : _shell.NewRecycleBin(_journal.Write));
         _library = new WindowLibrary(
             screen,
             index,

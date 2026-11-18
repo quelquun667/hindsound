@@ -28,10 +28,16 @@ internal sealed class WindowsRecycleBin : IRecycleBin
                 return RecycleOutcome.Recycled;
             }
 
-            // Asked before anything moves. A drive with no bin (a network share, some removable drives) takes nothing.
+            // Asked before anything moves. A file deleted by another hand is gone, not refused.
+            if (paths.Any(path => !File.Exists(path)))
+            {
+                return RecycleOutcome.Gone;
+            }
+
+            // A drive with no bin (a network share, some removable drives) takes nothing.
             foreach (var path in paths)
             {
-                if (!File.Exists(path) || Path.GetPathRoot(Path.GetFullPath(path)) is not { Length: > 0 } root || !RecycleBinNative.HasBin(root))
+                if (Path.GetPathRoot(Path.GetFullPath(path)) is not { Length: > 0 } root || !RecycleBinNative.HasBin(root))
                 {
                     return RecycleOutcome.CannotRecycle;
                 }
@@ -117,24 +123,27 @@ internal sealed class RecycleTally
         return 0;
     }
 
-    /// <summary>Told by PostDeleteItem.</summary>
+    /// <summary>
+    /// Told by PostDeleteItem, and its answer: <see cref="Cancelled"/> after a deletion for good, which stops the operation before
+    /// any other file goes the same way.
+    /// </summary>
     /// <param name="result">How the deletion ended.</param>
     /// <param name="inBin">Whether the system gave the item it made in the bin.</param>
-    public void AfterDelete(int result, bool inBin)
+    public int AfterDelete(int result, bool inBin)
     {
         if (result < 0)
         {
-            return;
+            return 0;
         }
 
         if (inBin)
         {
             Recycled++;
+            return 0;
         }
-        else
-        {
-            DeletedForGood++;
-        }
+
+        DeletedForGood++;
+        return Cancelled;
     }
 
     /// <summary>What became of <paramref name="count"/> files once the operation is over.</summary>

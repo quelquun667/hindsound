@@ -117,6 +117,31 @@ internal sealed class FakeBin(RecycleOutcome answer, string? binFolder = null) :
     }
 }
 
+/// <summary>A Recycle Bin that takes the first file to a folder of the test, then fails on the others, which stay.</summary>
+internal sealed class HalfBin(string binFolder) : IRecycleBin
+{
+    public RecycleOutcome Recycle(IReadOnlyList<string> paths)
+    {
+        Directory.CreateDirectory(binFolder);
+        File.Move(paths[0], Path.Combine(binFolder, Path.GetFileName(paths[0])));
+        return RecycleOutcome.Failed;
+    }
+}
+
+/// <summary>A Recycle Bin that finds each file deleted by another hand just before it was to take it.</summary>
+internal sealed class GoneBin : IRecycleBin
+{
+    public RecycleOutcome Recycle(IReadOnlyList<string> paths)
+    {
+        foreach (var path in paths)
+        {
+            File.Delete(path);
+        }
+
+        return RecycleOutcome.Gone;
+    }
+}
+
 internal sealed class FakeIndex : IClipIndex
 {
     public List<(ClipGroup From, IReadOnlyList<string> To)> Moved { get; } = [];

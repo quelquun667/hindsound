@@ -1,4 +1,6 @@
+using System.Collections;
 using System.Collections.Concurrent;
+using Hindsound.App;
 using Hindsound.Library;
 
 namespace Hindsound.Tests.Library;
@@ -91,6 +93,18 @@ public sealed class WindowsRecycleBinTests : IDisposable
     }
 
     [Fact]
+    public void A_deletion_for_good_stops_the_operation_and_any_other_end_lets_it_go_on()
+    {
+        var tally = new RecycleTally();
+        var sink = new RecycleBinNative.ProgressSink(tally);
+
+        Assert.Equal(0, sink.PostDeleteItem(TSF_DELETE_RECYCLE_IF_POSSIBLE, 0, 0, created: 1));
+        Assert.Equal(0, sink.PostDeleteItem(TSF_DELETE_RECYCLE_IF_POSSIBLE, 0, unchecked((int)0x80070020), created: 0));
+        Assert.Equal(RecycleTally.Cancelled, sink.PostDeleteItem(0, 0, 0, created: 0));
+        Assert.Equal(1, tally.DeletedForGood);
+    }
+
+    [Fact]
     public void A_deletion_the_system_could_not_make_is_a_failure()
     {
         var tally = new RecycleTally();
@@ -117,9 +131,30 @@ public sealed class WindowsRecycleBinTests : IDisposable
         var there = Path.Combine(_root, "there.mp3");
         File.WriteAllBytes(there, [1]);
 
-        Assert.Equal(RecycleOutcome.CannotRecycle, bin.Recycle([there, Path.Combine(_root, "gone.mp3")]));
+        Assert.Equal(RecycleOutcome.Gone, bin.Recycle([there, Path.Combine(_root, "gone.mp3")]));
         Assert.True(File.Exists(there));
         Assert.Empty(_journal);
+    }
+
+    [Fact]
+    public void The_bin_of_the_shell_tells_the_log_of_the_app()
+    {
+        var bin = new WindowsShell().NewRecycleBin(_journal.Enqueue);
+
+        Assert.Equal(RecycleOutcome.Failed, bin.Recycle(new Unreadable()));
+        Assert.Equal(["recycle bin: failed (InvalidOperationException, 0x80131509)"], _journal);
+    }
+
+    /// <summary>A list that breaks as soon as it is read, before any file is reached.</summary>
+    private sealed class Unreadable : IReadOnlyList<string>
+    {
+        public int Count => 1;
+
+        public string this[int index] => throw new InvalidOperationException();
+
+        public IEnumerator<string> GetEnumerator() => throw new InvalidOperationException();
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
     [Fact]

@@ -38,6 +38,16 @@ public class ClipNamesTests
             ClipNames.TargetPaths(line, "Raid"));
     }
 
+    [Theory]
+    [InlineData("y_system")]
+    [InlineData("y_mic")]
+    public void A_clip_in_one_file_can_not_take_the_name_of_a_track(string typed)
+    {
+        Assert.Equal(ClipRenameOutcome.TrackSuffix, ClipNames.Refusal(Line("a.mp3"), typed, _ => false));
+        Assert.Null(ClipNames.Refusal(Line("a_system.mp3", "a_mic.mp3"), typed, _ => false));
+        Assert.Null(ClipNames.Refusal(Line("a.mp3"), "y_mic up", _ => false));
+    }
+
     [Fact]
     public void An_empty_name_is_refused()
     {
