@@ -121,6 +121,7 @@ check_layout() {
     has "$doc/THIRD-PARTY-NOTICES.md"
     has "$doc/licenses/LAME-COPYING.txt"
     has "$doc/licenses/linux/Tmds.DBus.Protocol-COPYING.txt"
+    has "$doc/licenses/linux/NLayer-LICENSE.txt"
     # Every text only the Linux packages carry: those of the AppImage runtime and of the libraries built into it, and that
     # of Tmds.DBus.Protocol, which only the Linux app references. THIRD-PARTY-NOTICES.md links them.
     local licence
