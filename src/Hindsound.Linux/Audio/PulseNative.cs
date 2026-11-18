@@ -4,8 +4,8 @@ using System.Runtime.Versioning;
 namespace Hindsound.Linux.Audio;
 
 /// <summary>
-/// The calls of libpulse the capture makes, as declared in pulse/thread-mainloop.h, context.h, introspect.h, subscribe.h,
-/// stream.h and error.h. Callbacks are passed as pointers to [UnmanagedCallersOnly] methods, and their user data is a
+/// The calls of libpulse the capture and the preview make, as declared in pulse/thread-mainloop.h, context.h, introspect.h, subscribe.h,
+/// stream.h, proplist.h, operation.h and error.h. Callbacks are passed as pointers to [UnmanagedCallersOnly] methods, and their user data is a
 /// GCHandle, so nothing here needs reflection and the trimmed build keeps it all.
 /// </summary>
 [SupportedOSPlatform("linux")]
@@ -121,6 +121,38 @@ internal static unsafe partial class PulseNative
 
     [LibraryImport(Library, EntryPoint = "pa_stream_unref")]
     public static partial void StreamUnref(IntPtr stream);
+
+    // The playback of the preview (PulsePlaybackOutput): every one of these is in libpulse since 0.9, long before 15.
+
+    [LibraryImport(Library, EntryPoint = "pa_proplist_new")]
+    public static partial IntPtr ProplistNew();
+
+    [LibraryImport(Library, EntryPoint = "pa_proplist_sets", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int ProplistSets(IntPtr proplist, string key, string value);
+
+    [LibraryImport(Library, EntryPoint = "pa_proplist_free")]
+    public static partial void ProplistFree(IntPtr proplist);
+
+    [LibraryImport(Library, EntryPoint = "pa_stream_new_with_proplist", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial IntPtr StreamNewWithProplist(IntPtr context, string name, PaSampleSpec* spec, IntPtr channelMap, IntPtr proplist);
+
+    [LibraryImport(Library, EntryPoint = "pa_stream_set_write_callback")]
+    public static partial void StreamSetWriteCallback(IntPtr stream, IntPtr callback, IntPtr userData);
+
+    [LibraryImport(Library, EntryPoint = "pa_stream_connect_playback")]
+    public static partial int StreamConnectPlayback(IntPtr stream, IntPtr device, PaBufferAttr* attributes, uint flags, IntPtr volume, IntPtr syncStream);
+
+    [LibraryImport(Library, EntryPoint = "pa_stream_write")]
+    public static partial int StreamWrite(IntPtr stream, void* data, nuint length, IntPtr freeCallback, long offset, int seek);
+
+    [LibraryImport(Library, EntryPoint = "pa_stream_drain")]
+    public static partial IntPtr StreamDrain(IntPtr stream, IntPtr callback, IntPtr userData);
+
+    [LibraryImport(Library, EntryPoint = "pa_stream_flush")]
+    public static partial IntPtr StreamFlush(IntPtr stream, IntPtr callback, IntPtr userData);
+
+    [LibraryImport(Library, EntryPoint = "pa_operation_cancel")]
+    public static partial void OperationCancel(IntPtr operation);
 
     /// <summary>Releases an operation the caller does not follow. A null one means the call failed, and holds nothing.</summary>
     public static void Release(IntPtr operation)

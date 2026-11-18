@@ -63,9 +63,16 @@ internal static class PulseCaptureRules
     /// <summary>
     /// Why a request cannot be opened, or null. The engine asks first to leave this app's sounds out, and opens an ordinary
     /// capture when that throws, reporting it as such: the monitor of an output carries everything the output plays, and the
-    /// server has no way to leave one application out of it. The app plays nothing on Linux, so nothing is lost.
+    /// server has no way to leave one application out of it. This one is for a factory without the preview's silence.
     /// </summary>
-    public static Exception? Refuse(CaptureRequest request)
+    public static Exception? Refuse(CaptureRequest request) => Refuse(request, canSilence: false);
+
+    /// <summary>
+    /// Why a request cannot be opened, or null. With <paramref name="canSilence"/>, the app's sounds can be left out of the PC's
+    /// sound: its only sound is the preview, and the capture writes silence while it plays. The microphone has nothing to
+    /// leave out.
+    /// </summary>
+    public static Exception? Refuse(CaptureRequest request, bool canSilence)
     {
         ArgumentNullException.ThrowIfNull(request);
         if (request.TargetProcessId is not null)
@@ -73,11 +80,18 @@ internal static class PulseCaptureRules
             return new PlatformNotSupportedException("Capturing one application is not in the Linux version.");
         }
 
-        if (request.ExcludeOwnProcess)
+        if (request.ExcludeOwnProcess && !(canSilence && request.Flow == AudioFlow.System))
         {
             return new PlatformNotSupportedException("The monitor of an output cannot leave one application's sounds out.");
         }
 
         return null;
     }
+
+    /// <summary>
+    /// The silence a capture reads: the PC's sound asked to leave the app's sounds out, and only it. The microphone keeps
+    /// what it hears, and an output chosen by name is captured as it is, as on Windows.
+    /// </summary>
+    public static PulsePlaybackSilence? SilenceFor(CaptureRequest request, PulsePlaybackSilence? silence) =>
+        request.Flow == AudioFlow.System && request.ExcludeOwnProcess && request.TargetProcessId is null ? silence : null;
 }

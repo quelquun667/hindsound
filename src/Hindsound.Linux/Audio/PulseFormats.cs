@@ -77,6 +77,29 @@ internal static class PulseFormats
     public static PacketFlags FlagsOf(bool hole) => hole ? PacketFlags.TimestampError | PacketFlags.Silent : PacketFlags.TimestampError;
 
     /// <summary>
+    /// The flags of one packet of a capture that the preview may silence: while it plays, the packet says it is silent, so the
+    /// engine writes silence of its length, and the frames that follow keep their place.
+    /// </summary>
+    public static PacketFlags FlagsOf(bool hole, bool silenced) => silenced ? FlagsOf(hole) | PacketFlags.Silent : FlagsOf(hole);
+
+    /// <summary>How much the preview's stream keeps ahead of the output, about: what it still plays once told to stop is less.</summary>
+    public const int PlaybackAheadMilliseconds = 100;
+
+    /// <summary>A playback stream reads maxlength, tlength, prebuf and minreq; only the target length is set here.</summary>
+    public static PaBufferAttr PlaybackBufferAttrFor(int channels) => new()
+    {
+        MaxLength = ServerDefault,
+        TargetLength = (uint)(InternalFormat.SampleRate * PlaybackAheadMilliseconds / 1000 * channels * sizeof(float)),
+        PreBuffer = ServerDefault,
+        MinRequest = ServerDefault,
+        FragmentSize = ServerDefault,
+    };
+
+    /// <summary>The format of the preview's stream: what the decoder reads, 32-bit float at the engine's rate.</summary>
+    public static PaSampleSpec PlaybackSpecFor(int channels) =>
+        new() { Format = Float32Le, Rate = InternalFormat.SampleRate, Channels = (byte)channels };
+
+    /// <summary>
     /// Whether an event of the server may change what the engine captures: an output or an input that comes or goes, or a
     /// change of the server, which is where the defaults change. A change of an output or input itself is its volume or
     /// its state, and is left out: a volume slider sends dozens of them.
