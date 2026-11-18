@@ -115,24 +115,12 @@ jobs:
           sudo apt-get install -y --no-install-recommends build-essential curl file binutils
           bash tools/release/build-lame-linux.sh "$RUNNER_TEMP/lame-work" "$RUNNER_TEMP/lame"
 
-      # A release builds SDL3 and fetches the fonts afresh, each checked against the pins of its script. Elsewhere (the
-      # rehearsal of every pull request) they come from a cache keyed by the system and the script when there is one.
-      - name: Name the system for the caches
-        id: system
-        run: echo "id=$(. /etc/os-release && echo "$ID-$VERSION_ID")" >> "$GITHUB_OUTPUT"
-
-      - name: Restore SDL3
-        id: sdl3-cache
-        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ runner.temp }}/sdl3
-          key: sdl3-${{ steps.system.outputs.id }}-${{ hashFiles('tools/linux/build-sdl3.sh') }}
-
+      # A release, like the rehearsal of every pull request, builds SDL3 and fetches the fonts afresh, each checked against
+      # the pins of its script: no cache, no step that a ref could skip.
+      #
       # SDL 3.2.30 from its source, which the script verifies, with X11, Wayland, the input methods and nothing of SDL's
       # audio: Ubuntu 22.04 and 24.04 have no SDL3 package.
       - name: Build the window library
-        if: steps.sdl3-cache.outputs.cache-hit != 'true'
         run: |
           sudo apt-get install -y --no-install-recommends $(bash tools/linux/build-sdl3.sh --packages)
           bash tools/linux/build-sdl3.sh "$RUNNER_TEMP/sdl3-work" "$RUNNER_TEMP/sdl3"
@@ -140,16 +128,7 @@ jobs:
       - name: Check the window library
         run: bash tools/linux/build-sdl3.sh --check "$RUNNER_TEMP/sdl3"
 
-      - name: Restore the fonts of the window
-        id: fonts-cache
-        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ runner.temp }}/fonts
-          key: fonts-${{ hashFiles('tools/linux/fetch-fonts.sh') }}
-
       - name: Fetch the fonts of the window
-        if: steps.fonts-cache.outputs.cache-hit != 'true'
         run: bash tools/linux/fetch-fonts.sh "$RUNNER_TEMP/fonts-work" "$RUNNER_TEMP/fonts"
 
       - name: Check the fonts of the window

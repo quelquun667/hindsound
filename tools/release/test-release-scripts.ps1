@@ -1030,7 +1030,7 @@ try {
     $filesStepOrder = @(
         'Check out', 'Set up .NET', 'Build the tests', 'Publish the app', 'Build LAME', 'Replace the DLL in the published folder', 'Prove the encoding with the compiled DLL', 'Build the Setup', 'Check the Setup',
         'Write the update manifest', 'Make the portable zip', 'Add the LAME source', 'Keep the Windows files',
-        'Check out', 'Set up .NET', 'Publish the Linux app', 'Build the MP3 encoder', 'Install the checker of desktop entries', 'Make the AppImage and the tar.gz', 'Check the packages', 'Add the LAME source', 'Add the source of the AppImage runtime', 'Keep the packages',
+        'Check out', 'Set up .NET', 'Publish the Linux app', 'Build the MP3 encoder', 'Build the window library', 'Check the window library', 'Fetch the fonts of the window', 'Check the fonts of the window', 'Install the checker of desktop entries and the text libraries', 'Make the AppImage and the tar.gz', 'Check the packages', 'Add the LAME source', 'Add the source of the AppImage runtime', 'Keep the packages',
         'Check out', 'Take the Windows files', 'Take the Linux files', 'Gather the files of the release', 'Check the files of the release', 'Keep the files of the release'
     )
     $filesSteps = @($files | ForEach-Object { if ($_ -match '^\s+- name: (.+)$') { $Matches[1] } })
@@ -1038,6 +1038,12 @@ try {
     foreach ($step in @(@('Build LAME', 'build-lame'), @('Prove the encoding with the compiled DLL', 'prove-encoding'), @('Check the Setup', 'check-setup'), @('Make the portable zip', 'build-portable-zip'), @('Gather the files of the release', 'assemble-release'), @('Check the files of the release', 'check-release-files'))) {
         Report "the step $($step[0]) runs $($step[1])" ($filesText -cmatch "- name: $($step[0])\n(?:\s+timeout-minutes: \d+\n)?\s+run: \./tools/release/$($step[1])\.ps1 ")
     }
+    Report 'the window library is built from its pinned source by build-sdl3.sh, into the folder the packages take it from' ($filesText -cmatch '- name: Build the window library\n\s+run: \|\n\s+sudo apt-get install -y --no-install-recommends \$\(bash tools/linux/build-sdl3\.sh --packages\)\n\s+bash tools/linux/build-sdl3\.sh "\$RUNNER_TEMP/sdl3-work" "\$RUNNER_TEMP/sdl3"\n')
+    Report 'the window library is checked against the pins of build-sdl3.sh' ($filesText -cmatch '- name: Check the window library\n\s+run: bash tools/linux/build-sdl3\.sh --check "\$RUNNER_TEMP/sdl3"\n')
+    Report 'the fonts are fetched by fetch-fonts.sh, into the folder the packages take them from' ($filesText -cmatch '- name: Fetch the fonts of the window\n\s+run: bash tools/linux/fetch-fonts\.sh "\$RUNNER_TEMP/fonts-work" "\$RUNNER_TEMP/fonts"\n')
+    Report 'the fonts are checked against the pins of fetch-fonts.sh' ($filesText -cmatch '- name: Check the fonts of the window\n\s+run: bash tools/linux/fetch-fonts\.sh --check "\$RUNNER_TEMP/fonts"\n')
+    Report 'the packages are made from the window library and the fonts that were checked' ($filesText -cmatch '- name: Make the AppImage and the tar\.gz\n\s+run: >-\n[^\n]+\n\s+"\$RUNNER_TEMP/sdl3/libSDL3\.so\.0" "\$RUNNER_TEMP/fonts" ')
+    Report 'release-files has no cache of the window library or the fonts' (-not ($filesText -match 'actions/cache|cache-hit'))
     Report 'the tests the proof of the encoding runs are built first' ($filesText -cmatch '- name: Build the tests\n\s+run: dotnet build tests/Hindsound\.Tests/Hindsound\.Tests\.csproj -c Release\n')
     Report 'the compiled DLL replaces the one in the published folder' ($filesText -cmatch '- name: Replace the DLL in the published folder\n\s+run: Copy-Item -LiteralPath "\$env:RUNNER_TEMP/lame/libmp3lame\.64\.dll" -Destination "\$env:RUNNER_TEMP/publish/libmp3lame\.64\.dll" -Force')
     Report 'the zip is made from the folder the Setup is built from' (($filesText -cmatch '"/DPublishDir=\$env:RUNNER_TEMP/publish"') -and ($filesText -cmatch 'build-portable-zip\.ps1 -PublishDir "\$env:RUNNER_TEMP/publish" '))
