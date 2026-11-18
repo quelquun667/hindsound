@@ -64,6 +64,7 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
     private bool _picking;
     private bool _closeAfterPick;
     private bool _hiddenByDesktop;
+    private bool _frameRead;
     private bool _closed;
 
     /// <summary>Opens SDL's video and makes the window, hidden until <see cref="Show"/>.</summary>
@@ -357,6 +358,11 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
         {
             case SdlNative.EventWindowShown:
             case SdlNative.EventWindowExposed:
+                if (type == SdlNative.EventWindowShown)
+                {
+                    FrameKnown();
+                }
+
                 // Back from what the desktop hid it for: the paints and the timers go on.
                 if (_hiddenByDesktop)
                 {
@@ -702,6 +708,27 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
         _displayScale = scale;
         _density = density;
         _zoom = zoom;
+        Resized();
+    }
+
+    // X11 learns the size of the title bar when the window is mapped, after the size and the zoom were chosen without it: the
+    // first time the window is shown, they are chosen again with it.
+    private void FrameKnown()
+    {
+        if (_frameRead || _offscreen)
+        {
+            return;
+        }
+
+        _frameRead = true;
+        var borders = _video.Borders;
+        if (borders == _borders)
+        {
+            return;
+        }
+
+        _borders = borders;
+        _zoom = ChooseZoom(AreaNow());
         Resized();
     }
 

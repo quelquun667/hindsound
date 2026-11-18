@@ -177,6 +177,21 @@ public sealed unsafe class LinuxSettingsWindowTests
     }
 
     [Fact]
+    public void A_title_bar_that_X11_reports_only_once_the_window_is_shown_makes_the_zoom_and_the_place_fit_again()
+    {
+        using var rig = new WindowRig(offscreen: false, zoom: 140, setUp: v => v.Area = new ScreenRect(0, 0, 1920, 700));
+        Assert.Equal(140, rig.Window.AppliedZoom);
+
+        rig.Video.FrameSize = new WindowBorders(30, 0, 0, 0);
+        rig.Send(rig.WindowEvent(SdlNative.EventWindowShown));
+        rig.Drain();
+
+        Assert.Equal(120, rig.Window.AppliedZoom);
+        var bounds = rig.Video.Bounds;
+        Assert.True(bounds.X >= 0 && bounds.X + bounds.W <= 1920 && bounds.Y >= 30 && bounds.Y + bounds.H <= 700, bounds.ToString());
+    }
+
+    [Fact]
     public void A_wayland_output_at_twice_the_density_gets_a_window_of_half_the_pixels()
     {
         using var rig = new WindowRig(offscreen: false, setUp: v =>
