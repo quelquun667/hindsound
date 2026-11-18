@@ -222,8 +222,8 @@ internal sealed unsafe class PulseCaptureSource : ICaptureSource
                 packet = new ReadOnlySpan<byte>((void*)data, bytes);
             }
 
-            // Read for each packet: the preview starting or ending silences the very next one, and keeps the frames where they were.
-            var flags = PulseFormats.FlagsOf(hole, _silence?.IsSilent == true);
+            // Judged for each packet, by when its sound was captured: a thread that was late must not read the end of a preview as real audio.
+            var flags = PulseFormats.FlagsOf(hole, IsSilenced(stream, bytes));
             try
             {
                 PacketAvailable?.Invoke(packet, flags, _position, 0);
@@ -240,6 +240,19 @@ internal sealed unsafe class PulseCaptureSource : ICaptureSource
                 return;
             }
         }
+    }
+
+    // Whether the packet just peeked, of this many bytes, was captured while the preview silenced the PC's sound: read now, less
+    // the audio the stream still holds behind it.
+    private bool IsSilenced(IntPtr stream, int packetBytes)
+    {
+        if (_silence is null)
+        {
+            return false;
+        }
+
+        var backlog = PulseCaptureRules.BacklogMs(PulseNative.StreamReadableSize(stream), packetBytes, Format.AverageBytesPerSecond);
+        return _silence.IsSilentAgo(backlog);
     }
 
     // The callbacks below run on the loop's thread, called by C: nothing may be thrown out of them.

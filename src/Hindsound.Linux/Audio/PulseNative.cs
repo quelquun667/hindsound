@@ -107,6 +107,10 @@ internal static unsafe partial class PulseNative
     [LibraryImport(Library, EntryPoint = "pa_stream_peek")]
     public static partial int StreamPeek(IntPtr stream, IntPtr* data, nuint* length);
 
+    // The bytes a record stream holds for the client, the packet being read included; (size_t)-1 if it cannot say. Since 0.9.
+    [LibraryImport(Library, EntryPoint = "pa_stream_readable_size")]
+    public static partial nuint StreamReadableSize(IntPtr stream);
+
     [LibraryImport(Library, EntryPoint = "pa_stream_drop")]
     public static partial int StreamDrop(IntPtr stream);
 

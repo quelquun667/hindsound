@@ -94,4 +94,19 @@ internal static class PulseCaptureRules
     /// </summary>
     public static PulsePlaybackSilence? SilenceFor(CaptureRequest request, PulsePlaybackSilence? silence) =>
         request.Flow == AudioFlow.System && request.ExcludeOwnProcess && request.TargetProcessId is null ? silence : null;
+
+    /// <summary>
+    /// How long ago the sound of the packet being read was captured, at most: the audio still queued behind it, which the
+    /// capture's thread has not read yet. <paramref name="readable"/> is what the stream holds, this packet included, or
+    /// (size_t)-1 if it cannot say.
+    /// </summary>
+    public static long BacklogMs(ulong readable, int packetBytes, int bytesPerSecond)
+    {
+        if (bytesPerSecond <= 0 || readable <= (ulong)Math.Max(packetBytes, 0) || readable == ulong.MaxValue)
+        {
+            return 0;
+        }
+
+        return (long)Math.Min((double)(readable - (ulong)packetBytes) * 1000 / bytesPerSecond, PulsePlaybackSilence.HistoryMs);
+    }
 }
