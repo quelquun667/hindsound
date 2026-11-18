@@ -170,6 +170,8 @@ internal sealed class ClipEditFiles(IClipDecoder decoder, IRecycleBin recycleBin
         }
 
         // From here the originals may be in the bin: the edit is never thrown away, whatever happens to it.
+        // A file already gone is refused before the bin is asked, so that Gone sent nothing; a part that failed sent the files no longer there.
+        var inBin = recycled == RecycleOutcome.Recycled || (recycled == RecycleOutcome.Failed && originals.Any(path => !File.Exists(path)));
         var stuck = new List<int>();
         var left = Left(recycled, originals);
         if (left is not null)
@@ -197,7 +199,7 @@ internal sealed class ClipEditFiles(IClipDecoder decoder, IRecycleBin recycleBin
             return new EditSaveResult(EditSaveOutcome.Saved, originals);
         }
 
-        return new EditSaveResult(EditSaveOutcome.SavedAside, Rescue(clip, originals, temps, stuck));
+        return new EditSaveResult(EditSaveOutcome.SavedAside, Rescue(clip, originals, temps, stuck), inBin);
     }
 
     /// <summary>

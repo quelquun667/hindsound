@@ -458,7 +458,10 @@ public sealed class EditorPageTests : IDisposable
     [InlineData(EditSaveOutcome.Failed, SettingsScreen.EditorFailed)]
     public void A_save_that_fails_after_the_editor_closed_is_said_on_the_line_of_the_Library(EditSaveOutcome outcome, string text)
     {
-        Open();
+        // The line is said for the clip that was edited: a clip of the list, and still the one chosen.
+        var edited = _library.Lines!.Lines[2];
+        Screen.SelectClip(edited.Main.Path);
+        Open(clip: edited);
         Click(SettingsScreen.EditorSaveId);
         Click(EditorSaveDialogState.ReplaceId);
         Screen.SetEditor(_panel);
@@ -475,7 +478,7 @@ public sealed class EditorPageTests : IDisposable
         Open();
         Click(SettingsScreen.EditorSaveId);
         Click(EditorSaveDialogState.ReplaceId);
-        Screen.EditorSaved(new EditSaveResult(EditSaveOutcome.SavedAside, [@"C:\Clips\clip0002.mp3"]));
+        Screen.EditorSaved(new EditSaveResult(EditSaveOutcome.SavedAside, [@"C:\Clips\clip0002.mp3"], OriginalInBin: true));
 
         Assert.False(Screen.EditorOpen);
         Assert.Equal(1, _panel.Closes);
@@ -489,7 +492,10 @@ public sealed class EditorPageTests : IDisposable
     [Fact]
     public void A_replacement_whose_edit_could_not_be_kept_says_the_original_is_in_the_Recycle_Bin()
     {
-        Open();
+        // The line is said for the clip that was edited: a clip of the list, and still the one chosen.
+        var edited = _library.Lines!.Lines[2];
+        Screen.SelectClip(edited.Main.Path);
+        Open(clip: edited);
         Click(SettingsScreen.EditorSaveId);
         Click(EditorSaveDialogState.ReplaceId);
         Screen.EditorSaved(new EditSaveResult(EditSaveOutcome.SavedAside, []));
@@ -569,7 +575,7 @@ public sealed class EditorPageTests : IDisposable
         Open(clip: TwoFiles, files: 2);
         Click(SettingsScreen.EditorSaveId);
         Click(EditorSaveDialogState.ReplaceId);
-        Screen.EditorSaved(new EditSaveResult(EditSaveOutcome.SavedAside, [@"C:\Clips\clip0003.mp3"]));
+        Screen.EditorSaved(new EditSaveResult(EditSaveOutcome.SavedAside, [@"C:\Clips\clip0003.mp3"], OriginalInBin: true));
 
         Assert.False(Screen.EditorOpen);
         Assert.Equal(@"C:\Clips\clip0003.mp3", Screen.EditorChosenPath);
@@ -614,5 +620,104 @@ public sealed class EditorPageTests : IDisposable
         Assert.NotNull(Screen.EditorDialog);
         Assert.Equal(EditorSaveDialogState.NameId, Screen.FocusId);
         Assert.Empty(_panel.Saves);
+    }
+
+    [Fact]
+    public void The_dialog_of_Save_has_these_three_buttons_and_the_copy_is_the_one_in_accent()
+    {
+        // The words are written out: a label changed in the code reads differently here.
+        Assert.Equal("Save your edit", EditorSaveDialogState.Title);
+        Assert.Equal("Replace the original", EditorSaveDialogState.ReplaceLabel);
+        Assert.Equal("Save as a copy", EditorSaveDialogState.CopyLabel);
+        Open();
+        Click(SettingsScreen.EditorSaveId);
+
+        var drawn = Painted();
+        Assert.Contains("Save your edit", drawn);
+        Assert.Contains("Cancel", drawn);
+        Assert.Contains("Replace the original", drawn);
+        Assert.Contains("Save as a copy", drawn);
+        Assert.True(((Button)Screen.WidgetById(EditorSaveDialogState.CopyId)!).Accented);
+        Assert.False(((Button)Screen.WidgetById(EditorSaveDialogState.ReplaceId)!).Accented);
+        Assert.False(((Button)Screen.WidgetById(EditorSaveDialogState.CancelId)!).Accented);
+
+        // The default, the one Enter in the name sends, is the copy.
+        _rig.Press(Vk.Enter);
+        Assert.Equal(EditSaveChoice.Copy, Assert.Single(_panel.Saves).Save.Choice);
+    }
+
+    [Fact]
+    public void A_replacement_kept_aside_says_the_original_went_to_the_Recycle_Bin_only_when_it_did()
+    {
+        Assert.Equal("The original is in the Recycle Bin. The edit was saved as a new clip.", SettingsScreen.EditorSavedAside);
+        Assert.Equal("The original could not be replaced. The edit was saved as a new clip.", SettingsScreen.EditorNotReplaced);
+
+        Open();
+        Click(SettingsScreen.EditorSaveId);
+        Click(EditorSaveDialogState.ReplaceId);
+        Screen.EditorSaved(new EditSaveResult(EditSaveOutcome.SavedAside, [@"C:\Clips\clip0002.mp3"], OriginalInBin: false));
+
+        var drawn = string.Join(" ", Painted());
+        Assert.Contains("The original could not be replaced. The edit was saved as a new clip.", drawn);
+        Assert.DoesNotContain("Recycle Bin", drawn);
+        Assert.DoesNotContain(SettingsScreen.EditorAsideLost, drawn);
+    }
+
+    [Fact]
+    public void A_replacement_kept_aside_with_its_original_in_the_Recycle_Bin_says_so()
+    {
+        Open();
+        Click(SettingsScreen.EditorSaveId);
+        Click(EditorSaveDialogState.ReplaceId);
+        Screen.EditorSaved(new EditSaveResult(EditSaveOutcome.SavedAside, [@"C:\Clips\clip0002.mp3"], OriginalInBin: true));
+
+        var drawn = string.Join(" ", Painted());
+        Assert.Contains("The original is in the Recycle Bin. The edit was saved as a new clip.", drawn);
+        Assert.DoesNotContain(SettingsScreen.EditorNotReplaced, drawn);
+    }
+
+    /// <summary>A replacement of the clip of a row, asked from the dialog, the editor closed since, and another clip chosen.</summary>
+    private ClipGroup SaveAskedThenAnotherClipChosen()
+    {
+        var rows = _library.Lines!.Lines;
+        var (edited, other) = (rows[3], rows[5]);
+        Screen.SelectClip(edited.Main.Path);
+        Open(clip: edited);
+        Click(SettingsScreen.EditorSaveId);
+        Click(EditorSaveDialogState.ReplaceId);
+        Screen.SetEditor(_panel);
+        Screen.SelectClip(other.Main.Path);
+        return edited;
+    }
+
+    [Fact]
+    public void A_failure_after_the_editor_closed_is_not_said_for_the_clip_chosen_since()
+    {
+        SaveAskedThenAnotherClipChosen();
+
+        Screen.EditorSaved(new EditSaveResult(EditSaveOutcome.Failed, []));
+
+        Assert.DoesNotContain(SettingsScreen.EditorFailed, string.Join(" ", Painted()));
+    }
+
+    [Fact]
+    public void A_failure_after_the_editor_closed_is_said_on_the_line_of_the_clip_that_was_edited_while_it_is_chosen()
+    {
+        var edited = SaveAskedThenAnotherClipChosen();
+        Screen.SelectClip(edited.Main.Path);
+
+        Screen.EditorSaved(new EditSaveResult(EditSaveOutcome.Failed, []));
+
+        Assert.Contains(SettingsScreen.EditorFailed, string.Join(" ", Painted()));
+    }
+
+    [Fact]
+    public void An_edit_lost_after_the_editor_closed_is_not_said_for_the_clip_chosen_since()
+    {
+        SaveAskedThenAnotherClipChosen();
+
+        Screen.EditorSaved(new EditSaveResult(EditSaveOutcome.SavedAside, []));
+
+        Assert.DoesNotContain(SettingsScreen.EditorAsideLost, string.Join(" ", Painted()));
     }
 }

@@ -48,6 +48,84 @@ public sealed class ClipEditFilesRescueTests : IDisposable
         Assert.DoesNotContain(_journal, line => line.Contains(_folder.Path, StringComparison.OrdinalIgnoreCase) || line.Contains("dogs", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public void An_edit_that_can_not_be_moved_to_a_name_of_its_own_leaves_no_hidden_file_behind()
+    {
+        // The bin says the original went but it stays, so the edit can't take its name; then the edit, held by another hand, can't
+        // be moved to a name of its own. The hand lets go as the log tells it, and what is left of the edit must go.
+        var original = _folder.Clip("dogs.wav", _decoder, Tone(Rate, 0.1f), 1);
+        var bin = new HoldingBin();
+        var files = new ClipEditFiles(_decoder, bin, _index, line =>
+        {
+            _journal.Add(line);
+            if (line.StartsWith("editor: edit not kept", StringComparison.Ordinal))
+            {
+                bin.LetGo();
+            }
+        });
+        var request = new EditRequest(EditorMode.Normal, TimeSpan.Zero, TimeSpan.FromSeconds(0.5), [0.0]);
+
+        var result = files.Save(Group(original), request, new EditSave(EditSaveChoice.Replace, null), Export, CancellationToken.None);
+
+        Assert.Equal(EditSaveOutcome.SavedAside, result.Outcome);
+        Assert.Empty(result.Paths);
+        Assert.Contains(_journal, line => line.StartsWith("editor: edit not kept", StringComparison.Ordinal));
+        Assert.Equal(["dogs.wav"], _folder.Names());
+        Assert.Equal([1, 2, 3, 4], File.ReadAllBytes(original));
+        Assert.Empty(_index.Moved);
+    }
+
+    [Fact]
+    public void A_replacement_says_its_original_is_in_the_bin_when_the_bin_took_all_of_it_or_part_of_it()
+    {
+        var kept = _folder.Clip("cats.wav", _decoder, Tone(Rate, 0.1f), 1);
+        var request = new EditRequest(EditorMode.Normal, TimeSpan.Zero, TimeSpan.FromSeconds(0.5), [0.0]);
+        var all = new ClipEditFiles(_decoder, new FakeBin(RecycleOutcome.Recycled), _index, _journal.Add)
+            .Save(Group(kept), request, new EditSave(EditSaveChoice.Replace, null), Export, CancellationToken.None);
+
+        Assert.Equal(EditSaveOutcome.SavedAside, all.Outcome);
+        Assert.True(all.OriginalInBin);
+
+        var system = _folder.Clip("dogs_system.wav", _decoder, Tone(Rate, 0.1f), 1);
+        var mic = _folder.Clip("dogs_mic.wav", _decoder, Tone(Rate, 0.1f), 1);
+        var part = new ClipEditFiles(_decoder, new HalfBin(Path.Combine(_folder.Path, "bin")), _index, _journal.Add)
+            .Save(Group(system, mic), new EditRequest(EditorMode.Normal, TimeSpan.Zero, TimeSpan.FromSeconds(0.5), [0.0, 0.0]), new EditSave(EditSaveChoice.Replace, null), Export, CancellationToken.None);
+
+        Assert.Equal(EditSaveOutcome.SavedAside, part.Outcome);
+        Assert.True(part.OriginalInBin);
+    }
+
+    [Fact]
+    public void A_replacement_whose_original_was_gone_before_the_bin_says_nothing_went_to_the_bin()
+    {
+        var original = _folder.Clip("dogs.wav", _decoder, Tone(Rate, 0.1f), 1);
+        var request = new EditRequest(EditorMode.Normal, TimeSpan.Zero, TimeSpan.FromSeconds(0.5), [0.0]);
+
+        var result = new ClipEditFiles(_decoder, new GoneBin(), _index, _journal.Add)
+            .Save(Group(original), request, new EditSave(EditSaveChoice.Replace, null), Export, CancellationToken.None);
+
+        Assert.Equal(EditSaveOutcome.SavedAside, result.Outcome);
+        Assert.False(result.OriginalInBin);
+    }
+
+    /// <summary>A Recycle Bin that says it took the original, which stays, and keeps the edit of it open until it is told to let go.</summary>
+    private sealed class HoldingBin : IRecycleBin
+    {
+        private FileStream? _held;
+
+        public RecycleOutcome Recycle(IReadOnlyList<string> paths)
+        {
+            _held = new FileStream(paths[0] + ClipEditFiles.TempExtension, FileMode.Open, FileAccess.Read, FileShare.None);
+            return RecycleOutcome.Recycled;
+        }
+
+        public void LetGo()
+        {
+            _held?.Dispose();
+            _held = null;
+        }
+    }
+
     /// <summary>A Recycle Bin that takes the first file to a folder of the test and says it took them all: the others stay.</summary>
     private sealed class FirstOnlyBin(string binFolder) : IRecycleBin
     {

@@ -17,6 +17,7 @@ internal sealed partial class SettingsScreen
     public const string EditorSourceGone = "The clip is no longer there. Nothing was saved.";
     public const string EditorFailed = "Can't save the edit. The original is as it was.";
     public const string EditorSavedAside = "The original is in the Recycle Bin. The edit was saved as a new clip.";
+    public const string EditorNotReplaced = "The original could not be replaced. The edit was saved as a new clip.";
     public const string EditorAsideLost = "The original is in the Recycle Bin. The edit could not be kept.";
     public const string EditorCantPlay = "Can't play the selection.", EditorSaving = "Saving...";
 
@@ -31,6 +32,7 @@ internal sealed partial class SettingsScreen
     private EditorSaveDialogState? _saveDialog;
     private string? _editorReturnId;
     private bool _editSaving;
+    private string? _savingClipPath;
     private EditorMode _savingMode;
     private string? _editorProblem;
     private PreviewState _editPreview;
@@ -195,6 +197,7 @@ internal sealed partial class SettingsScreen
     public void EditorSaved(EditSaveResult result)
     {
         var mode = _savingMode;
+        var edited = _savingClipPath;
         var wasOpen = _editing is not null;
         _editSaving = false;
         if (result.Outcome is not (EditSaveOutcome.Saved or EditSaveOutcome.SavedAside))
@@ -212,7 +215,7 @@ internal sealed partial class SettingsScreen
             }
             else
             {
-                SayOnLine(ChosenClip?.Main.Path, problem);
+                SayOnLine(edited, problem);
             }
 
             Refresh();
@@ -238,7 +241,7 @@ internal sealed partial class SettingsScreen
         {
             if (result.Outcome == EditSaveOutcome.SavedAside)
             {
-                SayOnLine(ChosenClip?.Main.Path, EditorAsideLost);
+                SayOnLine(edited, EditorAsideLost);
             }
 
             Refresh();
@@ -247,7 +250,7 @@ internal sealed partial class SettingsScreen
 
         // The panel sends a new reading after this answer: the copy is chosen as soon as it brings it.
         SelectClip(path);
-        var notice = result.Outcome == EditSaveOutcome.SavedAside ? EditorSavedAside : forDiscord ? Soundboard.UploadHint : null;
+        var notice = result.Outcome == EditSaveOutcome.SavedAside ? (result.OriginalInBin ? EditorSavedAside : EditorNotReplaced) : forDiscord ? Soundboard.UploadHint : null;
         if (notice is not null)
         {
             SayOnLine(path, notice);
@@ -382,6 +385,7 @@ internal sealed partial class SettingsScreen
 
     private void EditorSaveClicked()
     {
+        // The _editSaving test is a defense: the Save button is grey while a save runs, so no gesture reaches it today.
         if (_editing is not { } editing || !EditorReady || _editSaving)
         {
             return;
@@ -425,6 +429,7 @@ internal sealed partial class SettingsScreen
 
         _saveDialog = null;
         _editSaving = true;
+        _savingClipPath = _editing?.Clip.Main.Path;
         _savingMode = request.Mode;
         _editorProblem = null;
         // Cancel and Save are grey until the answer: the focus waits on Play.

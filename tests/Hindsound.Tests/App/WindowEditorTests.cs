@@ -190,6 +190,26 @@ public sealed class WindowEditorTests : IDisposable
     }
 
     [Fact]
+    public void A_save_that_fails_after_another_page_was_opened_is_written_to_the_log_without_a_path()
+    {
+        var gate = new ManualResetEventSlim(true);
+        var editor = Loaded(Clip(("dogs.wav", 1)), new GatedDecoder(_decoder, gate));
+        gate.Reset();
+        _decoder.Files.Clear();
+
+        // The decoder knows no file any more: the save fails. Another page is opened before it ends, so no screen is told.
+        editor.Save(Selection(0, 0.5), new EditSave(EditSaveChoice.Copy, "dogs (cut)"));
+        editor.Close();
+        editor.Load(Clip(("cats.wav", 1)));
+        gate.Set();
+        Assert.True(editor.WaitForWork(10_000));
+        PumpAll();
+
+        Assert.Contains("editor: not saved after the page was left (Failed)", _journal);
+        Assert.DoesNotContain(_journal, line => line.Contains(_clips.Path, StringComparison.OrdinalIgnoreCase) || line.Contains("dogs", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void A_save_that_ends_after_the_page_was_left_is_still_told_to_the_screen()
     {
         var library = new PlayingLibraryFake();

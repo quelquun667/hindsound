@@ -125,7 +125,8 @@ public enum EditSaveOutcome
 /// <summary>What a save did.</summary>
 /// <param name="Outcome">What happened.</param>
 /// <param name="Paths">The files written, in the order of the files of the clip (one for a soundboard copy). Empty unless saved, or unless a replacement kept its edit under a name of its own.</param>
-internal sealed record EditSaveResult(EditSaveOutcome Outcome, IReadOnlyList<string> Paths);
+/// <param name="OriginalInBin">True when at least one file of the original went to the Recycle Bin. Only a replacement sets it.</param>
+internal sealed record EditSaveResult(EditSaveOutcome Outcome, IReadOnlyList<string> Paths, bool OriginalInBin = false);
 
 public enum EditorLoadOutcome
 {

@@ -332,6 +332,8 @@ internal sealed partial class SettingsScreen
     /// </summary>
     public void MouseDoubleClick(float x, float y)
     {
+        // The _saveDialog test is a defense: the dialog covers the window and the first press on the foot button does not reach a
+        // second one that opens it, so no gesture reaches this today.
         if (PopupOpen || BoxOpen || _saveDialog is not null)
         {
             return;

@@ -546,7 +546,17 @@ public unsafe class TextEngineTests
 [CollectionDefinition("Counts handles", DisableParallelization = true)]
 public class CountsHandles;
 
-[Collection("Counts handles")]
+/// <summary>
+/// The counts of GDI and USER objects are those of the whole process: a test that makes a window or a bitmap beside them moves
+/// them (10 expected, 9 got, where alone it gives 5 of 5). The tests that count run one at a time, apart from the others.
+/// </summary>
+[CollectionDefinition(TextLeakCollection.Name, DisableParallelization = true)]
+public sealed class TextLeakCollection
+{
+    public const string Name = "Text leak";
+}
+
+[Collection(TextLeakCollection.Name)]
 public class TextLeakTests
 {
     [Fact]

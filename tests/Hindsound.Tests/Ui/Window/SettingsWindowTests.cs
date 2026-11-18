@@ -140,6 +140,8 @@ public sealed class SettingsWindowTests : IDisposable
     public void The_wheel_just_right_of_the_side_bar_scrolls_the_page_at_the_zoom_of_the_window()
     {
         Screen.ShowSection(Section.General);
+        _window.ZoomChanged(120);
+        Assert.Equal(120, _window.AppliedZoom);
 
         // At 120% a point 6 design pixels into the page is 7 pixels past the side bar: the DPI alone would put it on the bar.
         WheelAt(-120, SettingsScreen.NavWidth + 6, ScreenRig.PageY);

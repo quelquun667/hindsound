@@ -352,9 +352,12 @@ internal sealed class WindowEditor(
     // takes it for its own.
     private void TellSaved(int session, EditSaveResult result)
     {
-        if (session != _session && result.Outcome is EditSaveOutcome.Saved or EditSaveOutcome.SavedAside)
+        if (session != _session)
         {
-            _journal("editor: saved after the page was left");
+            // Never a path: the line says only that the save ended after the page was left, and how.
+            _journal(result.Outcome is EditSaveOutcome.Saved or EditSaveOutcome.SavedAside
+                ? "editor: saved after the page was left"
+                : $"editor: not saved after the page was left ({result.Outcome})");
         }
 
         if (session == _session || _clip is null)
