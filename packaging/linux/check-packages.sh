@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Checks the packages made by build-packages.sh, as a user would get them: the files each one holds, and the program of
 # each one started for real with --prove-mp3, which writes one second of a sine as an MP3 through the path of a real clip
+# and reads it back with the decoder of the preview and the editor (code 5 if it does not come back as that second of sine),
 # and leaves. That needs no sound server, no session bus and no FUSE. The run must load the libmp3lame.so.0 of the
 # package, not one the machine may already have: the dynamic loader says which file it loaded (LD_DEBUG=libs).
 # Then the program of each one draws the pages of its window into PNG files (--dump-settings), with the fonts of the
@@ -45,7 +46,7 @@ prove_mp3() {
     if [ -f "$run/settings.log" ]; then
         sed "s/^/  $label log: /" -- "$run/settings.log"
     fi
-    [ "$code" -eq 0 ] || fail "$label: --prove-mp3 ended with code $code (4: the clip came out as WAV)"
+    [ "$code" -eq 0 ] || fail "$label: --prove-mp3 ended with code $code (4: the clip came out as WAV, 5: it does not read back)"
 
     local mp3
     mp3=$(find "$run/proof" -maxdepth 1 -name '*.mp3' -print -quit)
