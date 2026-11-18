@@ -286,6 +286,44 @@ public sealed class PulsePreviewPlayerTests
     }
 
     [Fact]
+    public void Stop_after_the_end_of_the_file_leaves_the_drained_stream_alone()
+    {
+        using var player = NewPlayer();
+        player.Open(FilePath, Track);
+        player.Play(Track);
+        var stream = _outputs.Last.Stream(0);
+        stream.FillAll();
+        stream.Feed.Drained(played: true);
+
+        Assert.Equal(0, player.Stop(Track));
+
+        Assert.Equal(0, stream.Pauses);
+        Assert.Equal(0, player.StateOf(Track, out var state));
+        Assert.Equal(PreviewTrackState.Stopped, state);
+    }
+
+    [Fact]
+    public void Stop_then_play_starts_the_stream_again_with_one_hold_at_a_time()
+    {
+        using var player = NewPlayer();
+        player.Open(FilePath, Track);
+        player.Play(Track);
+        var stream = _outputs.Last.Stream(0);
+
+        Assert.Equal(0, player.Stop(Track));
+        _clock.Ms += PulsePlaybackSilence.TailMs;
+        Assert.False(_silence.IsSilent);
+
+        Assert.Equal(0, player.Play(Track));
+        Assert.Equal(2, stream.Starts);
+        Assert.True(_silence.IsSilent);
+
+        Assert.Equal(0, player.Stop(Track));
+        _clock.Ms += PulsePlaybackSilence.TailMs;
+        Assert.False(_silence.IsSilent);
+    }
+
+    [Fact]
     public void A_whole_preview_of_two_tracks_ends_with_nothing_open_and_the_capture_hearing_again()
     {
         _outputs.PlayWholeFileOnStart = true;

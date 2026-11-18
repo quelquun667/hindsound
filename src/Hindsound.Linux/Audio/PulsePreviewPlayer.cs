@@ -391,7 +391,9 @@ internal sealed class PulsePreviewPlayer : IPreviewPlayer, IDisposable
 
             lock (_gate)
             {
+                // Played to its end: nothing left to stop, so a Stop after it does not touch the drained stream.
                 _ended = true;
+                _playing = false;
                 Lift();
             }
         }
