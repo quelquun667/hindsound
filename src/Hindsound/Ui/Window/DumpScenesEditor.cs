@@ -89,7 +89,8 @@ internal static class DumpScenesEditor
         return peaks;
     }
 
-    private sealed class SampleEditor : IEditorPanel
+    /// <summary>An editor that does nothing but give a size: the scenes of the Library use it too.</summary>
+    internal sealed class SampleEditor : IEditorPanel
     {
         private const long BytesPerSecond = 24_000;
 

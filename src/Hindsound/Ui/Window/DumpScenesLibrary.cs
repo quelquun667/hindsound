@@ -41,7 +41,7 @@ internal static class DumpScenesLibrary
     private static (string Name, Action<SettingsScreen> Act) Scene(string name, Action<SettingsScreen> act) =>
         (name, s =>
         {
-            s.SetEditor(new SampleEditor());
+            s.SetEditor(new DumpScenesEditor.SampleEditor());
             act(s);
         });
 
@@ -65,35 +65,5 @@ internal static class DumpScenesLibrary
     {
         s.TabTo(SettingsScreen.ClipListId);
         s.Key(vk, 0);
-    }
-
-    /// <summary>An editor that does nothing: the scenes of this page never open it.</summary>
-    private sealed class SampleEditor : IEditorPanel
-    {
-        public void Load(ClipGroup clip)
-        {
-        }
-
-        public long EstimateBytes(EditRequest request) => 0;
-
-        public void Play(EditRequest request)
-        {
-        }
-
-        public void StopPlaying()
-        {
-        }
-
-        public void Save(EditRequest request, EditSave save)
-        {
-        }
-
-        public void HandToDiscord(string path)
-        {
-        }
-
-        public void Close()
-        {
-        }
     }
 }
