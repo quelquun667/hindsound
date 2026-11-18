@@ -268,9 +268,11 @@ internal sealed class ClipEditFiles(IClipDecoder decoder, IRecycleBin recycleBin
             var streams = OpenAll(clip);
             try
             {
+                // The screen keeps the selection short; whatever asks, the copy never holds more than Discord takes.
+                var end = TimeSpan.FromTicks(Math.Min(request.End.Ticks, (request.Start + TimeSpan.FromSeconds(Soundboard.MaxSeconds)).Ticks));
                 var channels = ClipEditRender.MixChannels(streams);
                 using var writer = ClipEditRender.OpenWriter(path, ExportFormat.Mp3, channels, ClipEditRender.SoundboardBitrateKbps);
-                ClipEditRender.Render(streams, request.GainsDb, request.Start, request.End, channels, ClipEditRender.Ceiling(export.PeakCeilingDb), writer, cancel);
+                ClipEditRender.Render(streams, request.GainsDb, request.Start, end, channels, ClipEditRender.Ceiling(export.PeakCeilingDb), writer, cancel);
             }
             finally
             {

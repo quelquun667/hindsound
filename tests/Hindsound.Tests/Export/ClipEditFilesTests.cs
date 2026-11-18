@@ -203,6 +203,19 @@ public sealed class ClipEditFilesTests : IDisposable
     }
 
     [Fact]
+    public void A_soundboard_copy_asked_longer_than_discord_takes_stops_at_its_longest()
+    {
+        var original = _folder.Clip("dogs.mp3", _decoder, Tone(10 * Rate, 1, 0.1f), 1);
+        var request = new EditRequest(EditorMode.Soundboard, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(9), [0]);
+
+        var result = Files().Save(Group(original), request, new EditSave(EditSaveChoice.Copy, "dogs (soundboard)"), Export, CancellationToken.None);
+
+        Assert.Equal(EditSaveOutcome.Saved, result.Outcome);
+        using var reader = new Mp3FileReader(Assert.Single(result.Paths));
+        Assert.InRange(reader.TotalTime.TotalSeconds, Soundboard.MaxSeconds - 0.1, Soundboard.MaxSeconds + 0.1);
+    }
+
+    [Fact]
     public void A_soundboard_copy_too_big_leaves_nothing_behind()
     {
         var original = _folder.Clip("dogs.mp3", _decoder, Tone(3 * Rate, 2, 0.1f), 2);
