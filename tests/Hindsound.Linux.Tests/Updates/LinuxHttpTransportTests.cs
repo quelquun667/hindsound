@@ -11,6 +11,7 @@ namespace Hindsound.Linux.Tests.Updates;
 /// The HTTP of the Linux update check. HttpClient is the same on every system, so these run here too: on a local server,
 /// through <see cref="LinuxHttpTransport.Run"/> with a redirect loop that lets the loopback address through.
 /// </summary>
+[Collection(HttpTransportCollection.Name)]
 public class LinuxHttpTransportTests
 {
     private const string GitHubUrl = "https://github.com/quelquun667/hindsound/releases/latest/download/hindsound-update-linux-x64.json";
