@@ -116,5 +116,64 @@ public sealed unsafe class LinuxSettingsWindowOnLinuxTests
         }
     }
 
+    // SDL frees its queue's lock when video stops with the window: a wake pushed from another thread at that moment must not
+    // overlap it. The other thread posts all along while the window opens and closes again and again.
+    [Fact]
+    public void Posts_from_another_thread_while_the_window_opens_and_closes_leave_SDL_stopped()
+    {
+        Assert.True(SdlLibrary.TryLoad(), SdlLibrary.LastError);
+        var bitmaps = LinuxSettingsWindow.LiveBitmaps;
+        using var loop = new LinuxLoop();
+        var stop = false;
+        var posts = 0;
+        var poster = new Thread(() =>
+        {
+            while (!Volatile.Read(ref stop))
+            {
+                loop.Post(() => { });
+                posts++;
+                Thread.SpinWait(200);
+            }
+        });
+        poster.Start();
+        try
+        {
+            var closed = 0;
+            for (var i = 0; i < 200; i++)
+            {
+                var window = Open(loop, () => closed++);
+                RunGuarded(loop);
+                window.Dispose();
+                RunGuarded(loop);
+            }
+
+            Assert.Equal(200, closed);
+        }
+        finally
+        {
+            Volatile.Write(ref stop, true);
+            Assert.True(poster.Join(GuardMs));
+        }
+
+        Assert.True(posts > 0);
+        Assert.Null(loop.Pump);
+        Assert.Equal(bitmaps, LinuxSettingsWindow.LiveBitmaps);
+        Assert.Equal(0u, SdlNative.WasInit(SdlNative.InitVideo));
+    }
+
+    // Runs what is posted now, with a guard against a loop that never ends.
+    private static void RunGuarded(LinuxLoop loop)
+    {
+        var guarded = false;
+        using var guard = new Timer(_ =>
+        {
+            guarded = true;
+            loop.Quit();
+        }, null, GuardMs, Timeout.Infinite);
+        loop.Post(loop.Quit);
+        loop.Run();
+        Assert.False(guarded, "the loop had to be stopped by the guard");
+    }
+
     private static uint IdOf(LinuxSettingsWindow window) => window.WindowId;
 }

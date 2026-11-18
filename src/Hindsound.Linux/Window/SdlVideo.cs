@@ -288,6 +288,8 @@ internal sealed unsafe class SdlVideo : ISdlVideo
     {
         if (_pump is not null)
         {
+            // Before SDL's events stop: a wake pushed from another thread must not overlap their end.
+            _pump.Stop();
             _pump.Handler = null;
         }
 

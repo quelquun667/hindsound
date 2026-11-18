@@ -17,6 +17,14 @@ internal sealed unsafe class SdlPump : ILoopPump
 {
     private readonly uint _wakeType;
 
+    // The push of a wake, for a test; null pushes to SDL's queue.
+    private readonly Func<uint, bool>? _push;
+
+    // A push from another thread and the stop of SDL's events never overlap: SDL frees its queue's lock when its events stop,
+    // and a push waiting on that lock would then use it freed.
+    private readonly Lock _gate = new();
+    private bool _stopped;
+
     // 1 while a wake event is in the queue: no second one is pushed until the wait takes it.
     private int _wakePending;
 
@@ -28,6 +36,13 @@ internal sealed unsafe class SdlPump : ILoopPump
         {
             throw new InvalidOperationException("SDL gave no event type for the wake of the loop: " + SdlNative.Error());
         }
+    }
+
+    /// <summary>A pump whose wakes go to <paramref name="push"/> instead of SDL, for a test.</summary>
+    internal SdlPump(uint wakeType, Func<uint, bool> push)
+    {
+        _wakeType = wakeType;
+        _push = push;
     }
 
     /// <summary>The event type of the wake, never handed to <see cref="Handler"/>.</summary>
@@ -59,13 +74,43 @@ internal sealed unsafe class SdlPump : ILoopPump
             return;
         }
 
+        lock (_gate)
+        {
+            if (_stopped)
+            {
+                return;
+            }
+
+            if (!Push())
+            {
+                // Not queued (the queue is full, or SDL is shutting down): the next wake tries again.
+                Volatile.Write(ref _wakePending, 0);
+            }
+        }
+    }
+
+    /// <summary>
+    /// No wake is pushed after this returns, and none is still being pushed: called before SDL's events stop. A wake from
+    /// another thread that is being pushed is waited for.
+    /// </summary>
+    public void Stop()
+    {
+        lock (_gate)
+        {
+            _stopped = true;
+        }
+    }
+
+    private bool Push()
+    {
+        if (_push is not null)
+        {
+            return _push(_wakeType);
+        }
+
         var e = default(SdlNative.Event);
         e.User.Type = _wakeType;
-        if (!SdlNative.PushEvent(&e))
-        {
-            // Not queued (the queue is full, or SDL is shutting down): the next wake tries again.
-            Volatile.Write(ref _wakePending, 0);
-        }
+        return SdlNative.PushEvent(&e);
     }
 
     private void Dispatch(ref SdlNative.Event e)
