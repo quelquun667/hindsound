@@ -333,6 +333,12 @@ internal sealed class PulsePreviewPlayer : IPreviewPlayer, IDisposable
 
         public int Fill(Span<float> interleaved)
         {
+            // A track still asking for samples is still playing, whatever length its file announced: the hold follows it.
+            lock (_gate)
+            {
+                _hold?.Extend(HoldSlack);
+            }
+
             try
             {
                 var written = 0;

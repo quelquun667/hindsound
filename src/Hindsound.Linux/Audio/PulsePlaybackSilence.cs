@@ -67,6 +67,19 @@ internal sealed class PulsePlaybackSilence
 
     private static long SpanOf(TimeSpan span) => span < TimeSpan.Zero ? 0 : (long)Math.Min(span.TotalMilliseconds, int.MaxValue);
 
+    private void Extend(Hold hold, TimeSpan longest)
+    {
+        var now = _nowMs();
+        lock (_gate)
+        {
+            // A hold released, or already lifted at its deadline, is not brought back.
+            if (hold.ReleasedMs == long.MaxValue && now < hold.DeadlineMs)
+            {
+                hold.DeadlineMs = Math.Max(hold.DeadlineMs, now + SpanOf(longest));
+            }
+        }
+    }
+
     private void Release(Hold hold)
     {
         var now = _nowMs();
@@ -98,5 +111,11 @@ internal sealed class PulsePlaybackSilence
                 owner.Release(this);
             }
         }
+
+        /// <summary>
+        /// Moves the deadline to <paramref name="longest"/> from now, if that is later, for a track that is still being fed past
+        /// the length its file announced. A hold already lifted stays lifted.
+        /// </summary>
+        public void Extend(TimeSpan longest) => owner.Extend(this, longest);
     }
 }

@@ -242,6 +242,31 @@ public sealed class PulsePreviewPlayerTests
     }
 
     [Fact]
+    public void A_file_longer_than_it_announced_keeps_the_capture_silent_while_it_is_fed_and_lets_go_after_it_stops()
+    {
+        // One second announced, twenty in the file: the stream asks for more every 100 ms as long as it plays.
+        _decoder.Announced = TimeSpan.FromSeconds(1);
+        _decoder.FramesInFile = 20 * InternalFormat.SampleRate;
+        using var player = NewPlayer();
+        player.Open(FilePath, Track);
+        player.Play(Track);
+        var stream = _outputs.Last.Stream(0);
+
+        var buffer = new float[960];
+        for (var elapsed = 0; elapsed < 10_000; elapsed += 100)
+        {
+            _clock.Ms += 100;
+            Assert.True(stream.Feed.Fill(buffer) > 0);
+            Assert.True(_silence.IsSilent, $"the capture heard again {elapsed} ms in, with the file still playing");
+        }
+
+        _clock.Ms += (long)PulsePreviewPlayer.HoldSlack.TotalMilliseconds - 1;
+        Assert.True(_silence.IsSilent);
+        _clock.Ms += 1;
+        Assert.False(_silence.IsSilent);
+    }
+
+    [Fact]
     public void A_whole_preview_of_two_tracks_ends_with_nothing_open_and_the_capture_hearing_again()
     {
         _outputs.PlayWholeFileOnStart = true;
@@ -290,6 +315,12 @@ public sealed class PulsePreviewPlayerTests
 
         public int FailAfterReads { get; set; } = -1;
 
+        /// <summary>How many frames the file really has, whatever length it announces.</summary>
+        public int FramesInFile { get; set; } = Frames;
+
+        /// <summary>The length the file announces.</summary>
+        public TimeSpan Announced { get; set; } = Length;
+
         public int Opened
         {
             get
@@ -319,7 +350,7 @@ public sealed class PulsePreviewPlayerTests
                 throw new ClipDecodeException("can't read " + path);
             }
 
-            var stream = new Stream(FailAfterReads);
+            var stream = new Stream(FailAfterReads, FramesInFile, Announced);
             lock (_streams)
             {
                 _streams.Add(stream);
@@ -328,7 +359,7 @@ public sealed class PulsePreviewPlayerTests
             return stream;
         }
 
-        private sealed class Stream(int failAfterReads) : IDecodedStream
+        private sealed class Stream(int failAfterReads, int framesInFile, TimeSpan announced) : IDecodedStream
         {
             private int _frame;
             private int _reads;
@@ -337,7 +368,7 @@ public sealed class PulsePreviewPlayerTests
 
             public int Channels => 2;
 
-            public TimeSpan Duration => Length;
+            public TimeSpan Duration => announced;
 
             public void Seek(TimeSpan at) => _frame = (int)(at.TotalSeconds * InternalFormat.SampleRate);
 
@@ -348,7 +379,7 @@ public sealed class PulsePreviewPlayerTests
                     throw new ClipDecodeException("damaged " + FilePath);
                 }
 
-                var frames = Math.Min(interleaved.Length / 2, Frames - _frame);
+                var frames = Math.Min(interleaved.Length / 2, framesInFile - _frame);
                 for (var i = 0; i < frames; i++, _frame++)
                 {
                     interleaved[2 * i] = interleaved[(2 * i) + 1] = (float)(0.5 * Math.Sin(2 * Math.PI * 1000 * _frame / InternalFormat.SampleRate));
