@@ -35,7 +35,7 @@ internal sealed class WindowsShell : IAppShell
 
     public IPreviewPlayer NewPreviewPlayer() => new MciPreviewPlayer();
 
-    public IRecycleBin NewRecycleBin() => new WindowsRecycleBin();
+    public IRecycleBin NewRecycleBin(Action<string> journal) => new WindowsRecycleBin(journal);
 
     public IClipDecoder NewClipDecoder() => new MediaFoundationClipDecoder();
 

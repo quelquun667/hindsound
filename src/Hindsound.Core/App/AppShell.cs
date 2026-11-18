@@ -39,7 +39,8 @@ internal interface IAppShell
     IPreviewPlayer NewPreviewPlayer();
 
     /// <summary>The Recycle Bin, where a deleted clip or a replaced original goes. None by default: every file stays where it is.</summary>
-    IRecycleBin NewRecycleBin() => NoRecycleBin.Instance;
+    /// <param name="journal">The log of the app, told of what went wrong by code only.</param>
+    IRecycleBin NewRecycleBin(Action<string> journal) => NoRecycleBin.Instance;
 
     /// <summary>What reads an audio file back for the editor. None by default: every file is unreadable.</summary>
     IClipDecoder NewClipDecoder() => NoClipDecoder.Instance;
