@@ -101,7 +101,7 @@ The Linux packages ship the library the window is made with and the fonts it is 
   - `src/video/x11/edid-parse.c`, the reading of the EDID data of a screen: MIT licence, Copyright 2007 Red Hat, Inc., in [SDL3-x11-edid-LICENSE.txt](licenses/linux/SDL3-x11-edid-LICENSE.txt). It asks its notice to be included in all copies, which this document and that file do.
   - `src/video/x11/xsettings-client.c`, the reading of the settings of the X11 desktop: Copyright (c) 2001, 2007 Red Hat, Inc. and Copyright 2024 Igalia S.L., in [SDL3-x11-xsettings-LICENSE.txt](licenses/linux/SDL3-x11-xsettings-LICENSE.txt). It asks its notice to appear in the supporting documentation, which this document and that file are.
   - `src/libm`, maths functions SDL carries for every system, from FreeBSD's msun: its files carry the notice below, which asks only to be kept.
-  - The Wayland driver, compiled with the code that `wayland-scanner` generates from the protocol descriptions in `wayland-protocols/` of the archive, each under its own permissive notice (the MIT licence for most). They are not listed one by one here.
+  - The Wayland driver, compiled with the code that `wayland-scanner` generates from the protocol descriptions in `wayland-protocols/` of the archive, each under its own permissive notice (the MIT licence for all but one). The copyright lines of the 22 descriptions of SDL 3.2.30 and the two notices they carry are in [SDL3-wayland-protocols-NOTICES.txt](licenses/linux/SDL3-wayland-protocols-NOTICES.txt).
 
 The notice of the files of `src/libm` in SDL 3.2.30:
 
