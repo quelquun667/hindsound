@@ -247,6 +247,16 @@ internal static unsafe class SettingsDump
     public static void Write(string folder, double scale, Func<int, int, double, PixelCanvas> newCanvas)
     {
         Directory.CreateDirectory(folder);
+        Render(scale, newCanvas, (name, canvas) => PngFile.Write(Path.Combine(folder, name + ".png"), canvas.Bits, canvas.Width, canvas.Height));
+    }
+
+    /// <summary>
+    /// Draws every scene in turn on one canvas, and hands each to <paramref name="drawn"/> before the next is drawn over it, with
+    /// its name and scale, as <c>audio@100</c>: the name of its picture, less the extension.
+    /// </summary>
+    /// <param name="newCanvas">Makes the canvas, as for <see cref="Write"/>.</param>
+    public static void Render(double scale, Func<int, int, double, PixelCanvas> newCanvas, Action<string, PixelCanvas> drawn)
+    {
         var host = new QuietHost();
         var suffix = "@" + (int)Math.Round(scale * 100);
         var width = (int)Math.Round(SettingsScreen.WindowWidth * scale);
@@ -272,7 +282,7 @@ internal static unsafe class SettingsDump
                 [new AudioAppChoice("Discord.exe", "Discord"), new AudioAppChoice("chrome.exe", "Google Chrome")]);
             prepare?.Invoke(screen, backend);
             screen.Paint(canvas);
-            PngFile.Write(Path.Combine(folder, name + suffix + ".png"), canvas.Bits, canvas.Width, canvas.Height);
+            drawn(name + suffix, canvas);
         }
 
         // The four pictures of the README: the side bar they show is the one of the window, with Now and Library above the settings.
