@@ -232,6 +232,22 @@ public class LinuxTextFieldTests
     }
 
     [Fact]
+    public void A_composition_left_behind_by_a_lost_focus_does_not_hold_the_keys_when_the_focus_comes_back()
+    {
+        var field = Field("abc");
+        field.KeyDown(Vk.End, 0);
+        field.Composition("ni", -1);
+
+        field.Blur();
+        field.Composition("", 0);
+        field.Focus();
+
+        Assert.Equal("", field.ComposingText);
+        Assert.True(field.KeyDown(Vk.Back, 0));
+        Assert.Equal("ab", field.Text);
+    }
+
+    [Fact]
     public void A_composition_shows_at_the_caret_underlined_and_holds_the_keys()
     {
         var field = Field("ab");

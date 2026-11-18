@@ -114,11 +114,16 @@ internal sealed class LinuxTextField
         Wake();
     }
 
-    /// <summary>The window lost the keyboard: the field shows no caret and no selection until it gets it back.</summary>
+    /// <summary>
+    /// The window lost the keyboard: the field shows no caret and no selection until it gets it back, and what the input
+    /// method was composing is dropped, as it is told to stop, but the field no longer takes the event that clears it.
+    /// </summary>
     public void Blur()
     {
         Focused = false;
         _dragging = false;
+        _composition = string.Empty;
+        _compositionCursor = 0;
         Repaint?.Invoke();
     }
 
