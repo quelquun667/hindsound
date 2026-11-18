@@ -267,6 +267,36 @@ public sealed class PulsePreviewPlayerTests
     }
 
     [Fact]
+    public void A_track_fed_again_after_its_silence_lifted_while_the_server_stopped_asking_silences_the_capture_again()
+    {
+        // One second announced, twenty in the file: the server stops asking for longer than the hold lasts, then asks again.
+        _decoder.Announced = TimeSpan.FromSeconds(1);
+        _decoder.FramesInFile = 20 * InternalFormat.SampleRate;
+        using var player = NewPlayer();
+        player.Open(FilePath, Track);
+        player.Play(Track);
+        var stream = _outputs.Last.Stream(0);
+
+        _clock.Ms += (long)(TimeSpan.FromSeconds(1) + PulsePreviewPlayer.HoldSlack).TotalMilliseconds + 1_000;
+        Assert.False(_silence.IsSilent);
+
+        var buffer = new float[960];
+        Assert.True(stream.Feed.Fill(buffer) > 0);
+        Assert.True(_silence.IsSilent, "the rest of the file plays into the capture");
+
+        _clock.Ms += (long)PulsePreviewPlayer.HoldSlack.TotalMilliseconds - 1;
+        Assert.True(_silence.IsSilent);
+        _clock.Ms += 1;
+        Assert.False(_silence.IsSilent);
+
+        // Stopped, it is not held again by a last request of the server.
+        Assert.Equal(0, player.Stop(Track));
+        _clock.Ms += PulsePlaybackSilence.TailMs;
+        Assert.True(stream.Feed.Fill(buffer) > 0);
+        Assert.False(_silence.IsSilent);
+    }
+
+    [Fact]
     public void A_stream_that_fails_to_close_does_not_leave_its_file_to_be_read_after_it_was_let_go_of()
     {
         using var player = NewPlayer();

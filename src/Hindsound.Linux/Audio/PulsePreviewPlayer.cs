@@ -343,10 +343,15 @@ internal sealed class PulsePreviewPlayer : IPreviewPlayer, IDisposable
 
         public int Fill(Span<float> interleaved)
         {
-            // A track still asking for samples is still playing, whatever length its file announced: the hold follows it.
+            // A track still asking for samples is still playing, whatever length its file announced: the hold follows it. One
+            // that lifted at its deadline, while the server stopped asking for a while, is taken again for what is left to play.
             lock (_gate)
             {
-                _hold?.Extend(HoldSlack);
+                if (_hold is { } hold && !hold.Extend(HoldSlack) && _playing)
+                {
+                    hold.Release();
+                    _hold = silence.Silence(HoldSlack);
+                }
             }
 
             // The file is read and let go of under one lock: it is never read after it was let go of, even if closing the stream failed.

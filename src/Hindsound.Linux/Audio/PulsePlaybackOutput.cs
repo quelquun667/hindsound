@@ -120,10 +120,10 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
         {
             ThrowIfGone();
 
-            // A drain under way is dropped: the flush makes the server ask for samples again, and the file's end asks for it again.
+            // A drain under way is dropped: Start drains again once the file's end was reached. What the server holds is kept
+            // and plays at the next Start, so a stop then a play goes on where it stopped, as MCI does: the file is already past it.
             CancelDrain();
             PulseNative.Release(PulseNative.StreamCork(_stream, 1, IntPtr.Zero, IntPtr.Zero));
-            PulseNative.Release(PulseNative.StreamFlush(_stream, IntPtr.Zero, IntPtr.Zero));
         });
 
         public void Close()

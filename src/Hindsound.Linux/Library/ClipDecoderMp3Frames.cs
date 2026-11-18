@@ -192,6 +192,8 @@ internal static class ClipDecoderMp3Frames
     {
         found = default;
         var block = new byte[4096 + 4];
+        // Outside the loops: a stackalloc is only given back when the method returns, so one per candidate would use up the stack.
+        Span<byte> after = stackalloc byte[4];
         var limit = Math.Min(length, from + ResyncLimit);
         for (var at = from; at + 4 <= limit; at += 4096)
         {
@@ -206,7 +208,6 @@ internal static class ClipDecoderMp3Frames
                 var next = at + i + header.Length;
                 if (next + 4 <= length)
                 {
-                    Span<byte> after = stackalloc byte[4];
                     file.Position = next;
                     if (file.Read(after) != 4
                         || !ClipDecoderMp3Header.TryParse((uint)(after[0] << 24 | after[1] << 16 | after[2] << 8 | after[3]), out var following)
