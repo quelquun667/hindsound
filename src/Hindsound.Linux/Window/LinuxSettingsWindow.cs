@@ -152,6 +152,9 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
 
     internal int IconSideNow => _iconSide;
 
+    /// <summary>The id SDL gives the window, which its events carry.</summary>
+    internal uint WindowId => _video.WindowId;
+
     public void Show()
     {
         // Off screen the window is in memory only: never shown, so it never takes the focus.
