@@ -1,0 +1,3 @@
+# The shell scripts here run on Linux: a CR at the end of a line breaks them, whatever the line-ending setting of the
+# clone they come from.
+*.sh text eol=lf
