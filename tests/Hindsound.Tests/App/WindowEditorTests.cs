@@ -6,6 +6,7 @@ using Hindsound.Settings;
 using Hindsound.Tests.Export;
 using Hindsound.Tests.Ui.Window;
 using Hindsound.Ui;
+using Hindsound.Ui.Window;
 
 namespace Hindsound.Tests.App;
 
@@ -186,6 +187,32 @@ public sealed class WindowEditorTests : IDisposable
         PumpAll();
         Assert.Contains("editor: saved after the page was left", _journal);
         Assert.DoesNotContain(_journal, line => line.Contains(_clips.Path, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void A_save_that_ends_after_the_page_was_left_is_still_told_to_the_screen()
+    {
+        var library = new PlayingLibraryFake();
+        _rig.Screen.UpdateStatus(ScreenRig.Capturing());
+        _rig.Screen.SetLibrary(library);
+        _rig.Screen.ShowSection(Section.Library);
+        var gate = new ManualResetEventSlim(true);
+        var editor = Loaded(Clip(("dogs.wav", 1)), new GatedDecoder(_decoder, gate));
+        gate.Reset();
+
+        editor.Save(Selection(0, 0.5), new EditSave(EditSaveChoice.Copy, "dogs (cut)"));
+        editor.Close();
+        gate.Set();
+        Assert.True(editor.WaitForWork(10_000));
+
+        // The reading that brings the copy is there before the answer: the screen chooses the copy only once it is told.
+        var copy = Path.Combine(_clips.Path, "dogs (cut).wav");
+        library.Lines = new ClipLines([.. library.Lines!.Lines, new ClipGroup([new ClipFile(copy, 4, default)])], 0);
+        _rig.Screen.LibraryReadingArrived();
+        Assert.NotEqual(copy, _rig.Screen.EditorChosenPath);
+
+        PumpAll();
+        Assert.Equal(copy, _rig.Screen.EditorChosenPath);
     }
 
     [Fact]
