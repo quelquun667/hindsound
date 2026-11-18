@@ -257,7 +257,8 @@ internal sealed unsafe class FreeTypeText : ICanvasText
 
     /// <summary>What the text does with this string, for the messages of the tests that run on Linux only: HarfBuzz's
     /// version, the tables of each font that kern or hint, every glyph's advance, and the highest coverage of its
-    /// glyphs at each quarter-pixel shift, with how many were drawn with their stems snapped.</summary>
+    /// glyphs at each quarter-pixel shift, with how many were drawn with their stems snapped and how many of their pixels fall
+    /// in each eighth of coverage.</summary>
     internal string Describe(FontSpec font, string text)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -289,14 +290,19 @@ internal sealed unsafe class FreeTypeText : ICanvasText
             for (var subpixel = 0; subpixel < Subpixels; subpixel++)
             {
                 int highest = 0, snapped = 0;
+                var steps = new int[GlyphBlender.Levels + 1];
                 foreach (var glyph in glyphs)
                 {
                     var drawn = GlyphOf(file, em, glyph, subpixel);
                     highest = Math.Max(highest, drawn.Coverage.Length == 0 ? 0 : drawn.Coverage.Max());
                     snapped += drawn.Snapped ? 1 : 0;
+                    foreach (var c in drawn.Coverage)
+                    {
+                        steps[GlyphBlender.Level(c)] += c == 0 ? 0 : 1;
+                    }
                 }
 
-                report.Append(System.FormattableString.Invariant($"; at +{subpixel}/{Subpixels} px highest coverage {highest}, {snapped}/{glyphs.Length} snapped"));
+                report.Append(System.FormattableString.Invariant($"; at +{subpixel}/{Subpixels} px highest coverage {highest}, {snapped}/{glyphs.Length} snapped, pixels by eighth of coverage {string.Join(",", steps)}"));
             }
         }
 
