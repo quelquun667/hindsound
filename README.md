@@ -38,7 +38,10 @@ window, comes with the releases after 0.5.0: see [Linux](#linux).
 - **Stays out of your game:** the notification does not take the focus, and over a game, clicks pass through it. In exclusive
   fullscreen, you get a short sound instead.
 - **Your clips in one list:** the `Library` page shows them newest first, with their length, and copies one or shows it in its
-  folder. Star your favorites and tick them into your own collections. Your files never move.
+  folder. Star your favorites and tick them into your own collections. Rename or delete a clip from its menu; a deleted clip
+  goes to the Recycle Bin.
+- **Cut and turn up:** open a clip, keep the part you want between two handles, turn its volume up or down, and save a copy or
+  replace it. A part of 5.2 seconds or less can go to the Discord soundboard.
 - **Your color:** six accent colors, or any bright color you type.
 - **No account:** the only network use is the daily check for a new version, which you can turn off. See [Updates](#updates).
 
@@ -309,6 +312,10 @@ listed), and of the rescue folder. A folder you filled with music shows that mus
   A double click on a line plays it too (not on its star). Choosing another line doesn't stop the sound, and its `Play` plays it
   instead. The sound goes on if you go to another page, and stops when you stop it, when the clip ends, or when the window
   closes. If the clip that plays leaves the list, the button still says `Stop`. Hindsound copies nothing to play a clip. A file it can't play says `Can't play this file` in place of its name.
+- **The menu of a clip:** right-click a line, or choose it and use `...` at the bottom. It offers `Rename` (`F2`), `Edit...`,
+  `Send to soundboard...`, `Copy`, `Show in folder` and `Delete` (`Del`). `Rename` says why before you confirm when Windows
+  can't use a name. `Delete` asks first, then moves the clip to the Recycle Bin; if the Recycle Bin can't take it, the clip
+  stays where it is and the line says so.
 - **Will it end up in a clip?** When it records the whole PC on your default output, Hindsound asks Windows to leave its own
   sound out of what it records. On the PC it was tried on, a tone played here was missing from the next clip, and the same tone
   played by another program was in it. When it records a chosen output, or on a Windows too old to leave its sound out, `Playback can end up in your
@@ -329,6 +336,21 @@ listed), and of the rescue folder. A folder you filled with music shows that mus
   can't be read, or a newer version of Hindsound wrote it, nothing is changed. If it is damaged, `Start over` keeps a copy of it
   next to it and starts with no collections. Your clips are not touched.
 
+### Edit a clip
+
+`Edit...`, in the menu of a clip, opens it in place of the list. Nothing changes until you save.
+
+- **The part to keep:** drag the handle on each side of the wave. With a handle focused, the arrow keys move it by a tenth of a
+  second, and `Shift` with an arrow by a second. `Start`, `End` and `Kept` say where you are, and `Play` plays the kept part.
+- **Volume:** turn it from -12 to +20 dB, each track on its own for a clip saved as two files. The peaks are held under the
+  ceiling of your export settings, so a voice that was too quiet can come up without clipping.
+- **Save:** `Save as a copy` writes a new clip next to the original, named after it with ` (cut)`, in the same collections.
+  `Replace the original` puts the edit in its place, with its star and collections, and moves the original to the Recycle
+  Bin. A save you started always goes to its end, even if you leave the page, and the `Library` line tells you how it went.
+- **Discord soundboard:** `Send to soundboard...` opens the same page for at most 5.2 seconds, the longest a soundboard sound
+  can be. Its save writes a short copy named after the clip with ` (soundboard)`, opens Discord if it is installed and shows
+  the file in its folder. In Discord, add it from the settings of your server: `Soundboard`, then `Upload Sound`.
+
 ### Hotkeys
 | Action | Default |
 | --- | --- |
@@ -345,7 +367,8 @@ You can change them all in Settings > Hotkeys. If another app already holds a co
 
 They are in the left column of the window, under `Settings`, or through `Settings` in the menu of the icon. There is no OK button: a change is saved at once, in `%AppData%\Hindsound\settings.json`.
 
-`Now`, above the settings in the same column, is not a setting: it draws a wave for the PC sound and one for the microphone, with the part a save would keep in the accent color and `Save: last 0:30` under it. `Record` is on that page too, and it is the same setting as on `Audio`.
+`Now`, above the settings in the same column, is not a setting: it draws a wave for the PC sound and one for the microphone, with the part a save would keep in the accent color and `Save: last 0:30` under it. `Record` is on that page too, and it is the same setting as on `Audio`. `Record my voice` is
+there too, next to the `Mic` lane: turned off, the microphone is not opened at all, and turned back on, it uses the microphone you chose.
 
 | Page | Setting | Choices (default in bold) |
 | --- | --- | --- |
@@ -365,6 +388,7 @@ They are in the left column of the window, under `Settings`, or through `Setting
 | General | Accent color | **Lime**, Mint, Cyan, Violet, Pink, White, Custom |
 | General | When a version is out | **Install automatically**, Ask me, Off. See [Updates](#updates). |
 | General | Start with Windows | **Off** |
+| General | Window size | 100%, **120%**, 140%. If the screen can't hold it, the window takes the largest size that fits, and a line says so. |
 | General | Save notifications | **On** |
 | General | Notification position | **Right edge**, Left edge |
 | General | In fullscreen games | **Auto**, Sound only |
@@ -379,7 +403,8 @@ applications that have an audio session, so an application that has played nothi
 - If the application closes, the band says `Not running: Discord`, and the memory gets silence. The capture attaches again
   when the application comes back. None of this makes a notification.
 - `Output` is greyed out in this mode: the capture does not depend on an output.
-- The microphone keeps its own setting. Set it to `Off` if you only want the application.
+- The microphone keeps its own setting. Turn `Record my voice` off on `Now`, or set the microphone to `Off`, if you only want
+  the application.
 
 ### Memory
 

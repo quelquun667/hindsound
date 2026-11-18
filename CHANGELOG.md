@@ -9,13 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Each clip in the Library has a menu: right-click its row, or use the `...` button under the list. It offers `Rename`, `Edit...`, `Send to soundboard...`, `Copy`, `Show in folder` and `Delete`.
-- Rename a clip from the Library (`F2`). A clip saved as two files keeps both files together under the new name, and its star and collections follow it. Hindsound refuses a name Windows can't use and says why before you confirm: forbidden characters, a dot or space at the end, a name Windows keeps for itself (`CON`, `NUL`, `COM1`...), a name that is too long, or a name another clip already has.
+- Rename a clip from the Library (`F2`). A clip saved as two files keeps both files together under the new name, and its star and collections follow it. Hindsound refuses a name Windows can't use and says why before you confirm: forbidden characters, a dot or space at the end, a name Windows keeps for itself (`CON`, `NUL`, `COM1`...), a name that is too long, a name another clip already has, or, for a clip in one file, a name that ends with `_system` or `_mic`. A clip never takes the star or collections of a clip that had its name before going to the Recycle Bin.
 - Delete a clip from the Library (`Del`). Hindsound asks first, then moves the clip to the Recycle Bin and never deletes it for good. If the Recycle Bin can't take it, the clip stays where it is and Hindsound says so.
-- Edit a clip from the Library: drag two handles on its wave to choose the part to keep, listen to it, and turn its volume up or down (each track on its own for a clip saved as two files), with the peaks held under your ceiling. The arrow keys move the chosen handle by a tenth of a second, and `Shift` with an arrow by a second. Save the edit as a copy next to the original, or in place of it: the original then goes to the Recycle Bin, never deleted for good, and the edit keeps its star and its collections.
-- Send a clip to the Discord soundboard: the editor keeps at most 5.2 seconds, saves a short mp3 copy, opens Discord if it is installed and shows the file in its folder, so you can upload it.
+- Edit a clip from the Library: drag two handles on its wave to choose the part to keep, listen to it, and turn its volume up or down (each track on its own for a clip saved as two files), with the peaks held under your ceiling. The arrow keys move the chosen handle by a tenth of a second, and `Shift` with an arrow by a second. Save the edit as a copy next to the original, or in place of it: the original then goes to the Recycle Bin, never deleted for good, and the edit keeps its star and its collections. A save you started always goes to its end, even if you leave the page, and the Library tells you how it went.
+- Send a clip to the Discord soundboard: the editor keeps at most 5.2 seconds, saves a short mp3 copy, opens Discord if it is installed and shows the file in its folder, so you can upload it in the soundboard settings of your server.
 - The clip editor reads your mp3 and wav clips at their exact length, without the short silence an mp3 encoder adds at the start and the end, and shows the shape of each track as a wave, even for long clips.
-- A `Record my voice` switch on the `Now` page, next to the `Mic` lane. Turn it off and the microphone is no longer opened at all, while your chosen microphone is remembered for when you turn it back on.
-- A `Window size` setting in `General` (100%, 120% or 140%). The window opens at 120% by default and takes a smaller size if your screen can't hold it.
+- A `Record my voice` switch on the `Now` page, next to the `Mic` lane. Turn it off and the microphone is no longer opened at all, and the `Mic level` bar and `Mic gain` slider of the `Audio` page are off; your chosen microphone is remembered for when you turn it back on.
+- A `Window size` setting in `General` (100%, 120% or 140%). If your screen can't hold the size you chose, your choice stays selected, the window takes the largest size that fits, and a grey line under the setting says so.
 
 ### Changed
 
@@ -25,13 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - In the window, the mouse wheel moves only what is under the mouse: over the list of sections on the left, the band at the top or the bar at the bottom, it no longer scrolls the page or the list of clips.
-- A clip in one file can no longer be renamed, or copied by the editor, under a name that ends with `_system` or `_mic`, which the Library would join to another track.
-- A clip renamed or copied under the name of a clip sent to the Recycle Bin no longer takes that clip's star or collections.
-- A soundboard copy never holds more than 5.2 seconds, whatever the selection.
-- On a screen too small for the chosen `Window size`, your choice stays selected and a grey line under it says what the screen fits (`This screen fits up to 100%`).
-- On a screen too small even for 100%, the window now opens at the top left of the usable area, so its title bar is always within reach.
-- A `Window size` chosen while the window is minimized now applies when you restore it.
-- With `Record my voice` off, the `Mic level` bar and the `Mic gain` slider on the Audio page are off, like a muted microphone.
+- On a screen too small for the window even at its smallest size, the window now opens at the top left of the usable area, so its title bar is always within reach.
 
 ## [0.6.0] - 2026-11-12
 
