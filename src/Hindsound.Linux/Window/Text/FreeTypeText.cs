@@ -10,10 +10,10 @@ namespace Hindsound.Linux.Window.Text;
 /// by FreeType in grayscale, with the measures of the Windows text (see <see cref="ICanvasText"/>), so every layout of the
 /// pages falls where it falls on Windows. A character the fonts lack comes from a font of the system that fontconfig finds.
 /// <para>
-/// Hinting is FreeType's light hinting: it snaps the outlines vertically only, as DirectWrite's grayscale text does, so the
-/// letters keep crisp baselines and x-heights at 12 to 14 px while their widths and the advances stay the design ones the
-/// measures use. Glyphs are placed at a quarter of a pixel: the fraction of x that the Windows text keeps shows, and a glyph
-/// is drawn at most four times per size.
+/// Hinting is along y only, as DirectWrite's grayscale text does: baselines, x-heights and the heights of the horizontal
+/// stems snap to whole pixels, so the letters stay crisp at 12 to 14 px, while x, the widths and the advances stay the design
+/// ones the measures use. Glyphs are placed at a quarter of a pixel: the fraction of x that the Windows text keeps shows, and
+/// a glyph is drawn at most four times per size.
 /// </para>
 /// <para>
 /// One thread only, the window's loop: FreeType faces, the HarfBuzz buffer and the caches are not locked. Everything native
@@ -255,6 +255,54 @@ internal sealed unsafe class FreeTypeText : ICanvasText
             *(ushort*)(bitmap + BitmapNumGraysOffset), *(uint*)(bitmap + BitmapWidthOffset), *(uint*)(bitmap + BitmapRowsOffset));
     }
 
+    /// <summary>What the text does with this string, for the messages of the tests that run on Linux only: HarfBuzz's
+    /// version, the tables of each font that kern or hint, every glyph's advance, and the highest coverage of its
+    /// glyphs at each quarter-pixel shift, with how many were drawn with their stems snapped.</summary>
+    internal string Describe(FontSpec font, string text)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var em = Em(font);
+        var report = new System.Text.StringBuilder();
+        report.Append("HarfBuzz ").Append(Marshal.PtrToStringUTF8((nint)hb_version_string()));
+        foreach (var (file, start, length) in Runs(font.Face, text))
+        {
+            report.Append(" | ").Append(file.Name).Append(" tables:");
+            foreach (var tag in new[] { "GPOS", "GSUB", "kern", "fpgm", "prep", "gasp" })
+            {
+                report.Append(' ').Append(tag).Append(file.HasTable(tag) ? "+" : "-");
+            }
+
+            var positions = Shape(file, text, start, length, out var infos, out var count);
+            var glyphs = new uint[count];
+            report.Append("; advances in units of ").Append(file.Metrics.UnitsPerEm).Append(':');
+            for (var i = 0; i < count; i++)
+            {
+                glyphs[i] = infos[i].Codepoint;
+                report.Append(System.FormattableString.Invariant($" #{infos[i].Codepoint}@{infos[i].Cluster}={positions[i].XAdvance}"));
+                if (positions[i].XOffset != 0)
+                {
+                    report.Append(System.FormattableString.Invariant($"(dx {positions[i].XOffset})"));
+                }
+            }
+
+            file.SetEm(em);
+            for (var subpixel = 0; subpixel < Subpixels; subpixel++)
+            {
+                int highest = 0, snapped = 0;
+                foreach (var glyph in glyphs)
+                {
+                    var drawn = GlyphOf(file, em, glyph, subpixel);
+                    highest = Math.Max(highest, drawn.Coverage.Length == 0 ? 0 : drawn.Coverage.Max());
+                    snapped += drawn.Snapped ? 1 : 0;
+                }
+
+                report.Append(System.FormattableString.Invariant($"; at +{subpixel}/{Subpixels} px highest coverage {highest}, {snapped}/{glyphs.Length} snapped"));
+            }
+        }
+
+        return report.ToString();
+    }
+
     private static int Em(FontSpec font) => Math.Max(1, (int)MathF.Floor(font.Size + 0.5f));
 
     private static string Capital(string text) => char.ToUpperInvariant(text[0]) + text[1..];
@@ -380,16 +428,53 @@ internal sealed unsafe class FreeTypeText : ICanvasText
         return glyph;
     }
 
+    // The outline hinted along y only, with its horizontal stems snapped to whole pixels, then drawn in grayscale. FreeType
+    // has no load mode for that: its light mode leaves the stem heights fractional (a 0.9 px bar of Selawik at 13 px never
+    // fills a row, and the text looks blurred next to the Windows one), and the auto-hinter snaps them only in the modes
+    // that also hint x. So the outline is loaded twice, at the same quarter-pixel shift: once unhinted, for the design x of
+    // every point, and once by the auto-hinter for vertical LCD, whose y snaps the stems; the y of the second is kept with
+    // the x of the first. Should the two outlines differ in their points, the light mode draws the glyph.
     private static Glyph Render(FontFile file, uint glyphIndex, int subpixel)
     {
         TextNative.FtVector delta = new() { X = subpixel * 64 / Subpixels };
         FT_Set_Transform(file.FtFace, 0, &delta);
-        if (FT_Load_Glyph(file.FtFace, glyphIndex, LoadNoBitmap | LoadTargetLight | LoadRender) != 0)
+        var slot = *(nint*)(file.FtFace + FaceGlyphOffset);
+        var outline = slot + SlotOutlineOffset;
+        if (FT_Load_Glyph(file.FtFace, glyphIndex, LoadNoBitmap | LoadNoHinting) != 0)
         {
             return Glyph.Empty;
         }
 
-        var slot = *(nint*)(file.FtFace + FaceGlyphOffset);
+        var loaded = false;
+        if (*(uint*)(slot + SlotFormatOffset) == GlyphFormatOutline)
+        {
+            int count = *(short*)(outline + OutlinePointCountOffset);
+            var designX = new long[Math.Max(0, count)];
+            var points = *(TextNative.FtVector**)(outline + OutlinePointsOffset);
+            for (var i = 0; i < designX.Length; i++)
+            {
+                designX[i] = points[i].X;
+            }
+
+            if (FT_Load_Glyph(file.FtFace, glyphIndex, LoadNoBitmap | LoadForceAutohint | LoadTargetLcdV) == 0
+                && *(uint*)(slot + SlotFormatOffset) == GlyphFormatOutline
+                && *(short*)(outline + OutlinePointCountOffset) == count)
+            {
+                points = *(TextNative.FtVector**)(outline + OutlinePointsOffset);
+                for (var i = 0; i < designX.Length; i++)
+                {
+                    points[i].X = designX[i];
+                }
+
+                loaded = FT_Render_Glyph(slot, RenderModeNormal) == 0;
+            }
+        }
+
+        if (!loaded && FT_Load_Glyph(file.FtFace, glyphIndex, LoadNoBitmap | LoadTargetLight | LoadRender) != 0)
+        {
+            return Glyph.Empty;
+        }
+
         var bitmap = slot + SlotBitmapOffset;
         var rows = (int)*(uint*)(bitmap + BitmapRowsOffset);
         var width = (int)*(uint*)(bitmap + BitmapWidthOffset);
@@ -412,10 +497,11 @@ internal sealed unsafe class FreeTypeText : ICanvasText
             }
         }
 
-        return new Glyph(*(int*)(slot + SlotBitmapLeftOffset), *(int*)(slot + SlotBitmapTopOffset), width, rows, coverage);
+        return new Glyph(*(int*)(slot + SlotBitmapLeftOffset), *(int*)(slot + SlotBitmapTopOffset), width, rows, coverage, loaded);
     }
 
-    private sealed record Glyph(int Left, int Top, int Width, int Height, byte[] Coverage)
+    // Snapped: drawn with the stems snapped along y, not by the light mode.
+    private sealed record Glyph(int Left, int Top, int Width, int Height, byte[] Coverage, bool Snapped = false)
     {
         public static readonly Glyph Empty = new(0, 0, 0, 0, []);
     }
