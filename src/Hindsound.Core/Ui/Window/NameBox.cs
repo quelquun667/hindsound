@@ -1,3 +1,4 @@
+using Hindsound.App;
 using Hindsound.Library;
 
 namespace Hindsound.Ui.Window;
@@ -49,6 +50,9 @@ internal sealed class NameBoxState
     public const string ClipTakenText = "Another clip has this name";
     public const string CannotRecycleText = "The Recycle Bin can't take this clip. It stays where it is.";
     public const string TwoFilesText = "This clip is 2 files, the system sound and the microphone. Both files go to the Recycle Bin.";
+
+    /// <summary>The words of the system the box is shown on: the sentences above are the Windows ones.</summary>
+    public PlatformFeatures Features { get; set; } = PlatformFeatures.Windows;
 
     private readonly Func<IReadOnlyList<LibraryCollection>> _collections;
     private Func<string, ClipRenameOutcome?> _clipRefusal = _ => null;
@@ -156,11 +160,14 @@ internal sealed class NameBoxState
         new(NameBoxKind.DeleteClip, null, ListRow.NameOf(clip), returnId, () => []) { Clip = clip };
 
     /// <summary>The sentence of a name a clip can't take. Null for an outcome that is no reason of the name.</summary>
-    public static string? ClipRefusalText(ClipRenameOutcome outcome) => outcome switch
+    public static string? ClipRefusalText(ClipRenameOutcome outcome) => ClipRefusalText(outcome, PlatformFeatures.Windows);
+
+    /// <summary>The sentence of a name a clip can't take, in the words of <paramref name="features"/>.</summary>
+    public static string? ClipRefusalText(ClipRenameOutcome outcome, PlatformFeatures features) => outcome switch
     {
         ClipRenameOutcome.Empty => ClipEmptyText,
         ClipRenameOutcome.BadCharacters => SettingsEditor.TemplateCharsError,
-        ClipRenameOutcome.Reserved => ClipReservedText,
+        ClipRenameOutcome.Reserved => features.ReservedNameText,
         ClipRenameOutcome.TrailingDotOrSpace => ClipTrailingText,
         ClipRenameOutcome.TooLong => ClipTooLongText,
         ClipRenameOutcome.Taken => ClipTakenText,
@@ -179,7 +186,7 @@ internal sealed class NameBoxState
 
     /// <summary>The name of a clip, at each key. Unlike a collection, an empty name says why: the field was full when the box opened.</summary>
     private FieldCheck CheckClip(string text) =>
-        _clipRefusal(text) is { } refusal ? FieldCheck.Bad(ClipRefusalText(refusal) ?? ClipEmptyText) : FieldCheck.Fine;
+        _clipRefusal(text) is { } refusal ? FieldCheck.Bad(ClipRefusalText(refusal, Features) ?? ClipEmptyText) : FieldCheck.Fine;
 
     /// <summary>What a key means here, before any widget has it. Tab stays in the box by way of <see cref="NameBox.NextStop"/>.</summary>
     /// <param name="vk">The virtual key.</param>
@@ -247,7 +254,7 @@ internal sealed class NameBoxState
     public bool AnsweredClip(ClipRenameOutcome outcome)
     {
         Waiting = false;
-        if (ClipRefusalText(outcome) is not { } text)
+        if (ClipRefusalText(outcome, Features) is not { } text)
         {
             return true;
         }
@@ -331,10 +338,10 @@ internal static class NameBox
             canvas.Frame(box, 6, Theme.Panel, Theme.Control);
             if (state.Kind == NameBoxKind.DeleteClip)
             {
-                var used = canvas.Wrapped(ClipDeleteQuestion(canvas, state.Name), Face.Body, TextSize, box.X + Inset, box.Y + 22, inner, Theme.Text);
+                var used = canvas.Wrapped(state.Features.Words(ClipDeleteQuestion(canvas, state.Name)), Face.Body, TextSize, box.X + Inset, box.Y + 22, inner, Theme.Text);
                 if (state.Clip!.Files.Count > 1)
                 {
-                    canvas.Wrapped(NameBoxState.TwoFilesText, Face.Body, 13, box.X + Inset, box.Y + 22 + used + 6, inner, Theme.Muted);
+                    canvas.Wrapped(state.Features.Words(NameBoxState.TwoFilesText), Face.Body, 13, box.X + Inset, box.Y + 22 + used + 6, inner, Theme.Muted);
                 }
             }
             else if (isDelete)

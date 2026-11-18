@@ -50,6 +50,9 @@ internal static class PlatformDefaults
     /// </summary>
     public static Func<string?>? LaunchPath { get; set; }
 
+    /// <summary>What the system offers the pages of the window, and its words. Null: the installed Windows app's.</summary>
+    public static PlatformFeatures? Features { get; set; }
+
     /// <summary>The program a startup entry starts, and the folder an update replaces files in.</summary>
     public static string? ResolveLaunchPath() => LaunchPath?.Invoke() is { Length: > 0 } path ? path : Environment.ProcessPath;
 

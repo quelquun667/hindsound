@@ -672,6 +672,7 @@ internal sealed partial class SettingsScreen
         LeaveFocused();
         _popup = null;
         _moreList = null;
+        state.Features = Features;
         _box = state;
         _focusId = state.EntryId;
         Refresh();

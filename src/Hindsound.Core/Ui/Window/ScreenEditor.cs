@@ -204,7 +204,7 @@ internal sealed partial class SettingsScreen
         {
             var problem = result.Outcome switch
             {
-                EditSaveOutcome.CannotRecycle => EditorCantRecycle,
+                EditSaveOutcome.CannotRecycle => Features.Words(EditorCantRecycle),
                 EditSaveOutcome.TooBig => EditorTooBig,
                 EditSaveOutcome.SourceGone => EditorSourceGone,
                 _ => EditorFailed,
@@ -241,7 +241,7 @@ internal sealed partial class SettingsScreen
         {
             if (result.Outcome == EditSaveOutcome.SavedAside)
             {
-                SayOnLine(edited, EditorAsideLost);
+                SayOnLine(edited, Features.Words(EditorAsideLost));
             }
 
             Refresh();
@@ -250,7 +250,7 @@ internal sealed partial class SettingsScreen
 
         // The panel sends a new reading after this answer: the copy is chosen as soon as it brings it.
         SelectClip(path);
-        var notice = result.Outcome == EditSaveOutcome.SavedAside ? (result.OriginalInBin ? EditorSavedAside : EditorNotReplaced) : forDiscord ? Soundboard.UploadHint : null;
+        var notice = result.Outcome == EditSaveOutcome.SavedAside ? (result.OriginalInBin ? Features.Words(EditorSavedAside) : EditorNotReplaced) : forDiscord ? Soundboard.UploadHint : null;
         if (notice is not null)
         {
             SayOnLine(path, notice);
@@ -398,7 +398,7 @@ internal sealed partial class SettingsScreen
         }
 
         LeaveFocused();
-        _saveDialog = new EditorSaveDialogState(editing.Clip);
+        _saveDialog = new EditorSaveDialogState(editing.Clip) { Features = Features };
         _focusId = EditorSaveDialogState.NameId;
         Refresh();
     }
