@@ -240,6 +240,9 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
 
     public void ShowEdit(Box box, string text, Face face, float size, bool resetText) => _field.Show(box, text, face, size, resetText);
 
+    /// <summary>The command of the shortcuts, put on the clipboard as text by the Copy button of the page.</summary>
+    public void CopyText(string text) => _video.SetClipboardText(text);
+
     public void HideEdit()
     {
         _field.Hide();

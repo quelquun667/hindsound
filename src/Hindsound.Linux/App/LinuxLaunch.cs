@@ -18,7 +18,10 @@ internal sealed record LinuxLaunch(bool Save, IReadOnlyList<string> Rest)
         return new LinuxLaunch(rest.Length != args.Count, rest);
     }
 
-    /// <summary>An option that only means something with a window, or null: the Linux app has none to draw.</summary>
+    /// <summary>
+    /// An option that draws what a window shows, or null. The entry point runs <c>--dump-settings</c> itself, on the text of
+    /// the window, and refuses the others: the notification of the Linux app is the desktop's, which it cannot draw.
+    /// </summary>
     public static string? WindowOnlyOption(AppOptions options) =>
         options.DumpSettingsFolder is not null ? "--dump-settings"
         : options.DumpNotificationsFolder is not null ? "--dump-notifications"

@@ -3,10 +3,11 @@ using Hindsound.App;
 using Hindsound.Linux.App;
 using Hindsound.Linux.Desktop;
 using Hindsound.Linux.Export;
+using Hindsound.Linux.Window;
 
 namespace Hindsound.Linux;
 
-/// <summary>The entry point of the Linux app: no window, one instance at a time, <c>hindsound --save</c> for a key of the desktop.</summary>
+/// <summary>The entry point of the Linux app: one instance at a time, the settings window where it can be drawn, <c>hindsound --save</c> for a key of the desktop.</summary>
 [SupportedOSPlatform("linux")]
 internal static class Program
 {
@@ -27,9 +28,14 @@ internal static class Program
             e.SetObserved();
         };
 
+        if (options.DumpSettingsFolder is not null)
+        {
+            return LinuxDump.Write(options.DumpSettingsFolder, options.DumpScale, journal.Write);
+        }
+
         if (LinuxLaunch.WindowOnlyOption(options) is { } option)
         {
-            journal.Write(option + " draws a window, and the Linux app has none");
+            journal.Write(option + " draws what the Linux app does not draw itself");
             return ExitFailed;
         }
 

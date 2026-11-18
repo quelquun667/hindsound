@@ -1,3 +1,5 @@
+using Hindsound.App;
+using Hindsound.Input;
 using Hindsound.Linux.App;
 using Hindsound.Linux.DBus;
 
@@ -33,17 +35,36 @@ internal static class HotkeyChoice
     /// that would need an escape inside them, that the markup of a notification reads (&amp;, &lt;, &gt;), or a % that the
     /// Exec key reads as a field code, gets the generic text instead, which is right for any path.
     /// </summary>
-    public static string NoShortcutTextFor(string? program)
+    public static string NoShortcutTextFor(string? program) =>
+        SaveCommandFor(program) is { } command
+            ? "No global shortcut on this desktop. In your keyboard settings, bind this command to a key: " + command
+            : NoShortcutGenericText;
+
+    /// <summary>
+    /// The command that saves a clip through <paramref name="program"/>, written as <see cref="NoShortcutTextFor"/> writes
+    /// it, for the settings to show and copy; null when that notice falls back to its generic text.
+    /// </summary>
+    public static string? SaveCommandFor(string? program)
     {
         if (string.IsNullOrEmpty(program) || !program.StartsWith('/')
             || program.Any(c => c < ' ' || c == 0x7f || "&<>%\"$`\\".Contains(c)))
         {
-            return NoShortcutGenericText;
+            return null;
         }
 
         var command = program.All(c => char.IsAsciiLetterOrDigit(c) || "/._+,:=@-".Contains(c)) ? program : "\"" + program + "\"";
-        return "No global shortcut on this desktop. In your keyboard settings, bind this command to a key: " + command + " --save";
+        return command + " " + LinuxLaunch.SaveOption;
     }
+
+    /// <summary>
+    /// How the settings show the shortcuts: keys typed in a field where a layer grabs them itself (X11), the keys the desktop
+    /// chose under the portal or while the choice is still pending, and the command to bind when no layer works.
+    /// </summary>
+    public static ShortcutMode ModeOf(IHotkeyNative? layer, bool pending) =>
+        layer is PortalHotkeys ? ShortcutMode.Portal
+        : layer is not null ? ShortcutMode.Capture
+        : pending ? ShortcutMode.Portal
+        : ShortcutMode.Command;
 
     /// <summary>The marker that says the notice went out, so it is not shown again.</summary>
     public const string NoticeMarkerName = "no-global-shortcut-notice";

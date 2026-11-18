@@ -14,6 +14,8 @@ namespace Hindsound.Linux;
 // Each part the portable code needs is one line below (or one line of App/LinuxShell.cs), and one class in its own file.
 //
 //   Audio/    PulseCaptureFactory.cs     capture: the monitor of the default output, and the microphone
+//             PulsePlaybackSilence.cs    the PC's sound read as silence while a clip is listened to (one per process)
+//             PulsePreviewPlayer.cs      listening to a clip, through a playback stream (LinuxShell)
 //             PulseDeviceWatcher.cs      a change of the default output or of the microphone
 //             ProcProcessSnapshot.cs     the process list, read from /proc
 //             PulseAudioChoices.cs       the devices the settings would offer (LinuxShell)
@@ -21,8 +23,14 @@ namespace Hindsound.Linux;
 //   App/      LinuxLoop.cs               the loop of the app: done
 //             LinuxInstanceChannel.cs    one instance at a time, and what "hindsound" or "hindsound --save" tells it (Program)
 //             LaunchPaths.cs             the file the session starts again: done
-//             NoPreviewPlayer.cs         no listening in this version: done
-//             NoSettingsProbe.cs         no window in this version: done
+//             LinuxWindowSupport.cs      whether the window can be drawn here: SDL, FreeType, HarfBuzz, fontconfig, the fonts
+//             NoSettingsProbe.cs         --settings-probe where the window cannot be drawn
+//   Window/   LinuxSettingsWindow.cs     the settings window, on SDL (LinuxShell); LinuxSettingsProbe.cs, its probe
+//             SdlNative.cs, SdlVideo.cs, SdlPump.cs, SdlLibrary.cs, SdlWindowSizing.cs   SDL 3.2 and the arithmetic of the window
+//             LinuxDump.cs               --dump-settings, on the text of the window
+//             Text/FreeTypeText.cs       the text of the window, with the fonts shipped with the app
+//             Input/                     the keys, the text field, the clipboard text and the folder dialog of the window
+//   Library/  LinuxClipDecoder.cs        reading a clip back for the editor and the listening (LinuxShell)
 //   Desktop/  FreedesktopNotification.cs the notification, silent, with "Show in folder" (LinuxShell)
 //             LinuxClipboard.cs          the clip on the clipboard as text/uri-list (LinuxShell)
 //             LinuxFolderShell.cs        the folder of the clips, the clip selected (LinuxShell)
@@ -32,7 +40,8 @@ namespace Hindsound.Linux;
 //             AutostartEntry.cs          starting with the session, through ~/.config/autostart
 //             LinuxScreens.cs            the screens and the active window
 //             LinuxQuietState.cs         do not disturb
-//             SilentConfirmSound.cs      the app plays nothing on Linux: done
+//             SilentConfirmSound.cs      no confirmation sound on Linux: done
+//             FreedesktopTrash.cs        the Trash, where a deleted clip goes (LinuxShell)
 //   Input/    LinuxHotkeys.cs            the global shortcuts: the GlobalShortcuts portal, else XGrabKey on X11
 //   Tray/     StatusNotifierTray.cs      the icon and its menu, through StatusNotifierItem (LinuxShell)
 //   Updates/  LinuxHttpTransport.cs      the HTTP of the update check
@@ -45,6 +54,13 @@ internal static class LinuxPlatform
     private static readonly object Lock = new();
     private static bool _installed;
     private static Action<string> _log = _ => { };
+    private static HotkeyChooser? _hotkeys;
+
+    /// <summary>
+    /// The one silence of the process: the listening holds it while a clip plays, and the capture of the PC's sound reads it.
+    /// Both sides must share it, or a clip listened to would end up in the next clip.
+    /// </summary>
+    public static PulsePlaybackSilence Silence { get; } = new();
 
     /// <summary>Fills <see cref="PlatformDefaults"/>. Called first thing by the entry point, and by the tests; once is enough.</summary>
     /// <param name="log">The log of the run: the parts not there yet say so in it.</param>
@@ -59,12 +75,18 @@ internal static class LinuxPlatform
 
             _log = log;
             SessionBus.Shared = new SessionBus(SessionAddress, log);
-            PlatformDefaults.CaptureFactory = () => new PulseCaptureFactory(log);
+            PlatformDefaults.CaptureFactory = () => new PulseCaptureFactory(log, Silence);
             PlatformDefaults.DeviceWatcher = () => new PulseDeviceWatcher(log);
             PlatformDefaults.ProcessSnapshot = () => new ProcProcessSnapshot();
             PlatformDefaults.RunKey = () => new AutostartEntry(log);
             PlatformDefaults.LaunchPath = LaunchPaths.Current;
-            PlatformDefaults.Hotkeys = () => new LinuxHotkeys(log);
+            PlatformDefaults.Hotkeys = () =>
+            {
+                var hotkeys = new LinuxHotkeys(log);
+                Volatile.Write(ref _hotkeys, hotkeys);
+                return hotkeys;
+            };
+            PlatformDefaults.Features = PlatformFeatures.Linux(ShortcutModeNow, SaveCommand);
             PlatformDefaults.UpdateNetwork = () => new LinuxHttpTransport(log);
             PlatformDefaults.UpdateChannel = Hindsound.Updates.UpdateChannel.LinuxAnnounce;
             PlatformDefaults.Mp3Encoder = LameMp3Encoder.Open;
@@ -77,6 +99,12 @@ internal static class LinuxPlatform
     /// <summary>The desktop parts of a Linux run.</summary>
     public static DesktopParts Desktop() =>
         new(new LinuxScreens(), new LinuxQuietState(), new SilentConfirmSound(), new XdgFileOpener(_log), new ProcSelfMeter());
+
+    // Read at each build of a page: the portal answers after the window may have opened, and the screen then builds again.
+    private static ShortcutMode ShortcutModeNow() =>
+        Volatile.Read(ref _hotkeys) is { } hotkeys ? HotkeyChoice.ModeOf(hotkeys.Layer, hotkeys.Pending) : ShortcutMode.Command;
+
+    private static string SaveCommand() => HotkeyChoice.SaveCommandFor(LaunchPaths.Current()) ?? "hindsound " + LinuxLaunch.SaveOption;
 
     // Read when the bus is first needed, not at start: a test sets its own session before that.
     private static string? SessionAddress()
