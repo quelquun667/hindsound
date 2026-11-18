@@ -162,7 +162,9 @@ public sealed class PulsePreviewOnLinuxTests
 
             Assert.True(Peak(plain.Samples(), PreviewHz) > 0.1, "the plain capture did not hear the preview: it did not play");
             Assert.True(gated.SilentPackets > 0, "no packet of the gated capture was silenced");
-            Assert.True(Peak(gated.Samples(), PreviewHz) < 0.01, $"the late reader let the preview into the gated capture at {Peak(gated.Samples(), PreviewHz):0.000}");
+            Assert.True(
+                Peak(gated.Samples(), PreviewHz) < 0.01,
+                $"the late reader let the preview into the gated capture at {Peak(gated.Samples(), PreviewHz):0.000}. Gated: {gated.Summary()}. Plain: {plain.Summary()}");
         }
         finally
         {
@@ -300,7 +302,10 @@ public sealed class PulsePreviewOnLinuxTests
     private sealed class Recorder
     {
         private readonly List<float> _samples = [];
+        private readonly List<(long Start, long End)> _silentRuns = [];
         private long _next = -1;
+        private int _packets;
+        private int _largest;
 
         public int SilentPackets { get; private set; }
 
@@ -319,8 +324,19 @@ public sealed class PulsePreviewOnLinuxTests
                 }
 
                 _next = position + frames;
+                _packets++;
+                _largest = Math.Max(_largest, frames);
                 if ((flags & PacketFlags.Silent) != 0)
                 {
+                    if (_silentRuns.Count > 0 && _silentRuns[^1].End == position)
+                    {
+                        _silentRuns[^1] = (_silentRuns[^1].Start, position + frames);
+                    }
+                    else
+                    {
+                        _silentRuns.Add((position, position + frames));
+                    }
+
                     SilentPackets++;
                     _samples.AddRange(new float[frames * 2]);
                 }
@@ -328,6 +344,31 @@ public sealed class PulsePreviewOnLinuxTests
                 {
                     _samples.AddRange(MemoryMarshal.Cast<byte, float>(packet).ToArray());
                 }
+            }
+        }
+
+        /// <summary>What a failure needs to tell where the silence fell: the packets, and the frames that were silenced.</summary>
+        public string Summary()
+        {
+            lock (_samples)
+            {
+                var loud = new List<string>();
+                for (var frame = 0; frame + 960 <= _samples.Count / 2; frame += 960)
+                {
+                    var peak = 0f;
+                    for (var i = frame * 2; i < (frame + 960) * 2; i++)
+                    {
+                        peak = Math.Max(peak, Math.Abs(_samples[i]));
+                    }
+
+                    if (peak > 0.01f)
+                    {
+                        loud.Add($"{frame}:{peak:0.00}");
+                    }
+                }
+
+                return $"{_packets} packets, the largest {_largest} frames, {SilentPackets} silent in frames [{string.Join(", ", _silentRuns.Select(run => $"{run.Start}-{run.End}"))}], " +
+                    $"sound above 0.01 by 20 ms from frame [{string.Join(", ", loud.Take(80))}]" + (Gap is null ? string.Empty : ", " + Gap);
             }
         }
 

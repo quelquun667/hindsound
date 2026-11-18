@@ -105,18 +105,24 @@ public sealed class PulsePlaybackSilenceTests
     }
 
     [Fact]
-    public void The_audio_still_queued_behind_a_packet_is_how_long_ago_it_was_captured_at_most()
+    public void A_packet_captured_across_the_start_or_the_end_of_the_silence_is_silent_and_one_beside_it_is_not()
     {
-        const int BytesPerSecond = 48_000 * 2 * sizeof(float);
+        var silence = new PulsePlaybackSilence(() => _now);
+        var start = _now;
+        var hold = silence.Silence(TimeSpan.FromMinutes(1));
+        _now = start + 1_000;
+        hold.Release();
+        var end = start + 1_000 + PulsePlaybackSilence.TailMs;
+        _now = end + 2_000;
 
-        // Nothing behind it, or the stream cannot say: read when captured.
-        Assert.Equal(0, PulseCaptureRules.BacklogMs(7_680, 7_680, BytesPerSecond));
-        Assert.Equal(0, PulseCaptureRules.BacklogMs(ulong.MaxValue, 7_680, BytesPerSecond));
-        Assert.Equal(0, PulseCaptureRules.BacklogMs(100, 7_680, BytesPerSecond));
-        Assert.Equal(0, PulseCaptureRules.BacklogMs(7_680, 7_680, 0));
-
-        Assert.Equal(500, PulseCaptureRules.BacklogMs(7_680 + (BytesPerSecond / 2), 7_680, BytesPerSecond));
-        Assert.Equal(PulsePlaybackSilence.HistoryMs, PulseCaptureRules.BacklogMs((ulong)BytesPerSecond * 60, 7_680, BytesPerSecond));
+        Assert.False(silence.IsSilentDuring(start - 20, start - 1));
+        Assert.True(silence.IsSilentDuring(start - 20, start));
+        Assert.True(silence.IsSilentDuring(start - 500, end + 500));
+        Assert.True(silence.IsSilentDuring(end - 1, end + 19));
+        Assert.False(silence.IsSilentDuring(end, end + 20));
+        Assert.True(silence.IsSilentDuring(start + 100, start + 100));
+        Assert.True(silence.IsSilentDuring(start + 120, start + 100));
+        Assert.Equal(_now, silence.NowMs);
     }
 
     [Fact]
