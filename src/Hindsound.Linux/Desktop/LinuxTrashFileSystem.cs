@@ -19,6 +19,7 @@ internal sealed partial class LinuxTrashFileSystem : ITrashFileSystem
     private const uint NoReplace = 1; // RENAME_NOREPLACE
     private const uint Private = 0x1C0; // 0700
     private const int StatxSize = 256;
+    private const string LibC = "libc.so.6";
 
     // The offsets of struct statx (linux/stat.h): stx_uid, stx_mode, stx_dev_major, stx_dev_minor.
     private const int OwnerAt = 20;
@@ -163,24 +164,24 @@ internal sealed partial class LinuxTrashFileSystem : ITrashFileSystem
         _ => Errno.Io,
     };
 
-    [LibraryImport("libc", EntryPoint = "statx", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
+    [LibraryImport(LibC, EntryPoint = "statx", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
     private static unsafe partial int StatX(int folder, string path, int flags, uint mask, byte* buffer);
 
-    [LibraryImport("libc", EntryPoint = "realpath", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
+    [LibraryImport(LibC, EntryPoint = "realpath", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
     private static partial nint RealPathC(string path, nint resolved);
 
-    [LibraryImport("libc", EntryPoint = "free")]
+    [LibraryImport(LibC, EntryPoint = "free")]
     private static partial void Free(nint memory);
 
-    [LibraryImport("libc", EntryPoint = "mkdir", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
+    [LibraryImport(LibC, EntryPoint = "mkdir", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
     private static partial int MkDir(string path, uint mode);
 
-    [LibraryImport("libc", EntryPoint = "renameat2", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
+    [LibraryImport(LibC, EntryPoint = "renameat2", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
     private static partial int RenameAt2(int fromFolder, string from, int toFolder, string to, uint flags);
 
-    [LibraryImport("libc", EntryPoint = "rename", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
+    [LibraryImport(LibC, EntryPoint = "rename", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
     private static partial int RenameC(string from, string to);
 
-    [LibraryImport("libc", EntryPoint = "getuid")]
+    [LibraryImport(LibC, EntryPoint = "getuid")]
     private static partial uint GetUid();
 }
