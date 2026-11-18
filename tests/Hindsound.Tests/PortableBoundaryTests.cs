@@ -13,7 +13,7 @@ public class PortableBoundaryTests
     /// <summary>The Windows layer: the types that may reach Win32, WASAPI or the registry. Nested types follow their outer one.</summary>
     private static readonly string[] WindowsTypes =
     [
-        "Hindsound.Ui.Native", "Hindsound.Ui.FontSpec", "Hindsound.Ui.FontFaces", "Hindsound.Ui.GdiFonts", "Hindsound.Ui.TextEngine",
+        "Hindsound.Ui.Native", "Hindsound.Ui.FontFaces", "Hindsound.Ui.GdiFonts", "Hindsound.Ui.TextEngine",
         "Hindsound.Ui.TextPainter", "Hindsound.Ui.TrayPresence", "Hindsound.Ui.TrayIcon", "Hindsound.Ui.UiLoop",
         "Hindsound.Ui.Notification", "Hindsound.Ui.NotificationBitmap", "Hindsound.Ui.ClipboardFiles", "Hindsound.Ui.ConfirmSound",
         "Hindsound.Ui.ForegroundWindow", "Hindsound.Ui.ExplorerFolderShell", "Hindsound.Ui.NotificationPlacement",

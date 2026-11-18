@@ -3,9 +3,6 @@ using Hindsound.Ui.Window;
 
 namespace Hindsound.Ui;
 
-/// <summary>One font of the interface at one size, in physical pixels (the em size, as GDI's negative height was).</summary>
-internal readonly record struct FontSpec(Face Face, float Size);
-
 /// <summary>
 /// What each <see cref="Face"/> asks for: the family, weight and stretch DirectWrite matches, the font that replaces a missing
 /// family, and the face name GDI is given when DirectWrite could not start.
@@ -714,7 +711,7 @@ internal sealed unsafe partial class TextEngine : IDisposable
 }
 
 /// <summary>Text on a bitmap: DirectWrite through Direct2D when it started, GDI otherwise. The measures come from the engine that draws.</summary>
-internal sealed unsafe class TextPainter : IDisposable
+internal sealed unsafe class TextPainter : ICanvasText
 {
     private const int StockSystemFont = 13;
     // D2DERR_RECREATE_TARGET: the target was lost and must be made again.
@@ -848,6 +845,17 @@ internal sealed unsafe class TextPainter : IDisposable
                 line[col] |= 0xFF000000;
             }
         }
+    }
+
+    /// <summary>The canvas's way in: the same as <see cref="Text"/>, on the bitmap this painter was made on, the only one its DC reaches.</summary>
+    public void Draw(Pixels target, FontSpec font, string text, float x, float top, uint rgb)
+    {
+        if (target.Origin != _pixels.Origin)
+        {
+            throw new ArgumentException("A painter draws on the bitmap it was made on.", nameof(target));
+        }
+
+        Text(font, text, x, top, rgb);
     }
 
     // True when Direct2D drew the text; false when GDI has to.
