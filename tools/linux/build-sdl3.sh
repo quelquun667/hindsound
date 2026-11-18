@@ -113,6 +113,12 @@ check_library() {
     exit 1
   fi
 
+  # The newest C library the window needs, for the notes on which systems have the window: on an older one SDL does
+  # not load, and the app runs without its window, as it says in its log.
+  local glibc
+  glibc="$( (nm -D --undefined-only "$library" | grep -o 'GLIBC_[0-9.]*' || true) | sort -uV | tail -n 1)"
+  echo "Newest C library version the library needs: ${glibc:-none}"
+
   # The version is in the file as SDL's revision string, "SDL-3.2.30-..." or "SDL-release-3.2.30-...".
   # No -q: grep reads all of the output of strings. With -q it leaves at the first match, strings is then killed by SIGPIPE
   # if it has more to write, and pipefail turns that into a failure of a correct library.
