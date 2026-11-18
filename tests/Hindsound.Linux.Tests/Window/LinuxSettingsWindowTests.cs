@@ -298,6 +298,42 @@ public sealed unsafe class LinuxSettingsWindowTests
     }
 
     [Fact]
+    public void While_the_folder_dialog_is_open_the_work_posted_to_the_loop_runs()
+    {
+        using var rig = new WindowRig();
+        rig.Window.Show();
+        rig.Drain();
+        var presents = rig.Video.Presents.Count;
+        var ran = false;
+        rig.Video.Folder = "/home/user/clips";
+
+        // What a hotkey, the tray or a second launch posts while the dialog is open, and a paint asked before it.
+        rig.Loop.Post(() => ran = true);
+        rig.Window.Invalidate();
+        rig.Window.PickFolder("/home/user");
+
+        Assert.True(ran, "a posted action waited for the dialog to close");
+        Assert.True(rig.Video.Presents.Count > presents, "the window did not paint while the dialog was open");
+    }
+
+    [Fact]
+    public void A_close_asked_while_the_folder_dialog_is_open_waits_for_its_answer()
+    {
+        using var rig = new WindowRig();
+        rig.Window.Show();
+        rig.Drain();
+        rig.Video.Folder = "/home/user/clips";
+        rig.Window.Close();
+
+        Assert.Equal("/home/user/clips", rig.Window.PickFolder("/home/user"));
+        Assert.False(rig.Window.IsClosed, "the window went under the dialog");
+
+        rig.Drain();
+        Assert.True(rig.Window.IsClosed);
+        Assert.Equal(1, rig.Video.Closes);
+    }
+
+    [Fact]
     public void Events_of_another_window_are_not_ours()
     {
         using var rig = new WindowRig();

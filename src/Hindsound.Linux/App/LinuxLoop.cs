@@ -140,6 +140,59 @@ internal sealed class LinuxLoop : IAppLoop
         }
     }
 
+    /// <summary>
+    /// One turn of the loop from inside an action of the loop thread that waits for something outside (a dialog of the
+    /// desktop): runs the actions posted so far, then the timers due, then waits once for at most <paramref name="timeoutMs"/>
+    /// in the pump, which hands out the window's events. What those post or set waits for the next turn. A quit asked meanwhile
+    /// is left to <see cref="Run"/>.
+    /// </summary>
+    public void RunOnce(int timeoutMs)
+    {
+        List<Action> ready = [];
+        ILoopPump? pump;
+        lock (_gate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            // Only what is there now: an action that posts itself again does not keep this turn from ending.
+            ready.AddRange(_actions);
+            _actions.Clear();
+            var now = _nowMs();
+            while (_timers.TryPeek(out var timer, out var key) && key.Due <= now)
+            {
+                _timers.Dequeue();
+                ready.Add(timer);
+            }
+
+            pump = _pump;
+        }
+
+        foreach (var action in ready)
+        {
+            RunGuarded(action);
+        }
+
+        if (ready.Count > 0)
+        {
+            timeoutMs = 0;
+        }
+
+        if (pump is null)
+        {
+            lock (_gate)
+            {
+                Monitor.Wait(_gate, timeoutMs);
+            }
+
+            return;
+        }
+
+        WaitGuarded(pump, timeoutMs);
+    }
+
     public void Quit()
     {
         ILoopPump? pump;
@@ -219,15 +272,20 @@ internal sealed class LinuxLoop : IAppLoop
 
             // Outside the lock: the pump hands the window's events out here, on the loop thread, and they may post. A wake
             // that comes between the lock and this wait is not lost, since a pump keeps it for its next wait.
-            try
-            {
-                pump.Wait(wait);
-            }
-            catch (Exception ex)
-            {
-                // A handler of the window threw: the events it left stay in the queue of the pump, for the next wait.
-                UiErrors.Report(ex);
-            }
+            WaitGuarded(pump, wait);
+        }
+    }
+
+    private static void WaitGuarded(ILoopPump pump, int timeoutMs)
+    {
+        try
+        {
+            pump.Wait(timeoutMs);
+        }
+        catch (Exception ex)
+        {
+            // A handler of the window threw: the events it left stay in the queue of the pump, for the next wait.
+            UiErrors.Report(ex);
         }
     }
 

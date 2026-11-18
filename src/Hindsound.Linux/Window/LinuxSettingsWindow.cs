@@ -62,6 +62,7 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
     private int _wheelRest;
     private bool _capturing;
     private bool _picking;
+    private bool _closeAfterPick;
     private bool _closed;
 
     /// <summary>Opens SDL's video and makes the window, hidden until <see cref="Show"/>.</summary>
@@ -305,14 +306,21 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
     public string? PickFolder(string startFolder)
     {
         // The dialog is the desktop's: while it is open, the window's own input waits, as behind a modal dialog on Windows.
+        // The loop goes on all the same (a save asked by the hotkey, the paints, the timers), as the dialog's own loop
+        // dispatches the messages of the loop on Windows.
         _picking = true;
         try
         {
-            return _video.PickFolder(startFolder, () => _pump.Wait(50));
+            return _video.PickFolder(startFolder, () => _loop.RunOnce(50));
         }
         finally
         {
             _picking = false;
+            if (_closeAfterPick)
+            {
+                _closeAfterPick = false;
+                _loop.Post(CloseNow);
+            }
         }
     }
 
@@ -742,6 +750,13 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
     {
         if (_closed)
         {
+            return;
+        }
+
+        // Not under the dialog of the desktop: the window goes once it is answered.
+        if (_picking)
+        {
+            _closeAfterPick = true;
             return;
         }
 
