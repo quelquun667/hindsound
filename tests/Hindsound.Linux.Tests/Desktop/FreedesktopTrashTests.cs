@@ -380,6 +380,19 @@ public sealed class FreedesktopTrashTests
         Assert.StartsWith("recycle bin: failed (IOException, 0x", _journal[0]);
     }
 
+    [Fact]
+    public void ThePathOfAFileListedTwiceIsRecycledOnce()
+    {
+        _fs.File("/home/u/clips/a.wav");
+
+        var outcome = Recycle("/home/u/clips/a.wav", "/home/u/clips/a.wav");
+
+        Assert.Equal(RecycleOutcome.Recycled, outcome);
+        Assert.Equal(["a.wav"], _fs.Paths.Where(path => path.StartsWith(Trash + "/files/")).Select(TrashInfo.NameOf));
+        Assert.Equal(["a.wav.trashinfo"], _fs.Paths.Where(path => path.StartsWith(Trash + "/info/")).Select(TrashInfo.NameOf));
+        Assert.Empty(_journal);
+    }
+
     // The top directory trash of another file system.
 
     private void Usb()

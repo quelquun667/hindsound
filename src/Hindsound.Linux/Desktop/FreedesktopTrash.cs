@@ -60,9 +60,10 @@ internal sealed class FreedesktopTrash : IRecycleBin
 
     private RecycleOutcome Send(IReadOnlyList<string> paths)
     {
-        // Everything is looked at before anything moves: what is refused here leaves every file where it was.
+        // Everything is looked at before anything moves: what is refused here leaves every file where it was. A path
+        // listed twice is one file: the second move would find nothing to move.
         var found = new List<(string Path, TrashStat Stat)>();
-        foreach (var path in paths)
+        foreach (var path in paths.Distinct(StringComparer.Ordinal))
         {
             if (!path.StartsWith('/'))
             {
