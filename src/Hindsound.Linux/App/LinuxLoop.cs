@@ -7,8 +7,13 @@ namespace Hindsound.Linux.App;
 /// <see cref="Run"/>. Every other thread (the sound server, D-Bus, the shortcuts) comes back through <see cref="Post"/>.
 /// As with the Windows message loop, posted actions go before due timers, and <see cref="Quit"/> lets the actions already
 /// posted run before <see cref="Run"/> returns; the timers left are dropped.
+/// While a window is open, its <see cref="Pump"/> does the waiting, so the loop thread also handles the window's events:
+/// <see cref="Run"/> waits in <see cref="ILoopPump.Wait"/> instead of on its own lock, and <see cref="Post"/>,
+/// <see cref="After"/>, <see cref="Quit"/> and <see cref="Dispose"/> wake it from any thread. Every guarantee above holds
+/// with or without a pump.
 /// </summary>
-/// <remarks>An exception thrown by an action leaves <see cref="Run"/>, as one thrown in a window procedure ends the app on Windows.</remarks>
+/// <remarks>An exception thrown by an action, or by a window event the pump hands out, leaves <see cref="Run"/>, as one
+/// thrown in a window procedure ends the app on Windows.</remarks>
 internal sealed class LinuxLoop : IAppLoop
 {
     private readonly object _gate = new();
@@ -19,6 +24,7 @@ internal sealed class LinuxLoop : IAppLoop
     private bool _quit;
     private bool _disposed;
     private Thread? _running;
+    private ILoopPump? _pump;
 
     /// <param name="nowMs">The clock of the timers, in milliseconds. A monotonic count by default.</param>
     public LinuxLoop(Func<long>? nowMs = null) => _nowMs = nowMs ?? (static () => Environment.TickCount64);
@@ -26,6 +32,37 @@ internal sealed class LinuxLoop : IAppLoop
     public Action? CloseAsked { get; set; }
 
     public Action? ScaleMayHaveChanged { get; set; }
+
+    /// <summary>
+    /// What the loop waits through, set while a window is open; null, it waits on its own. It can be set or cleared from any
+    /// thread, even while the loop waits: the pump it replaces is woken, and the loop goes on with the new one.
+    /// </summary>
+    public ILoopPump? Pump
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _pump;
+            }
+        }
+
+        set
+        {
+            ILoopPump? old;
+            lock (_gate)
+            {
+                old = _pump;
+                _pump = value;
+                Monitor.PulseAll(_gate);
+            }
+
+            if (old is not null && !ReferenceEquals(old, value))
+            {
+                old.Wake();
+            }
+        }
+    }
 
     /// <summary>Whether the calling thread is the one running the loop now.</summary>
     public bool OnLoopThread
@@ -42,6 +79,7 @@ internal sealed class LinuxLoop : IAppLoop
     public void Post(Action action)
     {
         ArgumentNullException.ThrowIfNull(action);
+        ILoopPump? pump;
         lock (_gate)
         {
             if (_disposed)
@@ -51,12 +89,16 @@ internal sealed class LinuxLoop : IAppLoop
 
             _actions.Enqueue(action);
             Monitor.PulseAll(_gate);
+            pump = _pump;
         }
+
+        pump?.Wake();
     }
 
     public void After(int milliseconds, Action action)
     {
         ArgumentNullException.ThrowIfNull(action);
+        ILoopPump? pump;
         lock (_gate)
         {
             if (_disposed)
@@ -67,7 +109,10 @@ internal sealed class LinuxLoop : IAppLoop
             // The order breaks ties: two timers due at the same moment run in the order they were set.
             _timers.Enqueue(action, (_nowMs() + Math.Max(0, milliseconds), _order++));
             Monitor.PulseAll(_gate);
+            pump = _pump;
         }
+
+        pump?.Wake();
     }
 
     public void Run()
@@ -95,11 +140,15 @@ internal sealed class LinuxLoop : IAppLoop
 
     public void Quit()
     {
+        ILoopPump? pump;
         lock (_gate)
         {
             _quit = true;
             Monitor.PulseAll(_gate);
+            pump = _pump;
         }
+
+        pump?.Wake();
     }
 
     /// <summary>The Linux app has no window of its own to be in front.</summary>
@@ -107,21 +156,27 @@ internal sealed class LinuxLoop : IAppLoop
 
     public void Dispose()
     {
+        ILoopPump? pump;
         lock (_gate)
         {
             _disposed = true;
             _actions.Clear();
             _timers.Clear();
             Monitor.PulseAll(_gate);
+            pump = _pump;
         }
+
+        pump?.Wake();
     }
 
     // The next thing to run, waiting for it; null once the loop is asked to end and nothing posted is left.
     private Action? Next()
     {
-        lock (_gate)
+        while (true)
         {
-            while (true)
+            ILoopPump? pump;
+            int wait;
+            lock (_gate)
             {
                 if (_actions.Count > 0)
                 {
@@ -135,7 +190,7 @@ internal sealed class LinuxLoop : IAppLoop
                     return null;
                 }
 
-                var wait = Timeout.Infinite;
+                wait = Timeout.Infinite;
                 if (_timers.TryPeek(out var timer, out var key))
                 {
                     var left = key.Due - _nowMs();
@@ -148,8 +203,17 @@ internal sealed class LinuxLoop : IAppLoop
                     wait = (int)Math.Min(left, int.MaxValue);
                 }
 
-                Monitor.Wait(_gate, wait);
+                pump = _pump;
+                if (pump is null)
+                {
+                    Monitor.Wait(_gate, wait);
+                    continue;
+                }
             }
+
+            // Outside the lock: the pump hands the window's events out here, on the loop thread, and they may post. A wake
+            // that comes between the lock and this wait is not lost, since a pump keeps it for its next wait.
+            pump.Wait(wait);
         }
     }
 }
