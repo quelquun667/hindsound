@@ -164,6 +164,7 @@ internal sealed class NameBoxState
         ClipRenameOutcome.TrailingDotOrSpace => ClipTrailingText,
         ClipRenameOutcome.TooLong => ClipTooLongText,
         ClipRenameOutcome.Taken => ClipTakenText,
+        ClipRenameOutcome.TrackSuffix => ClipNames.TrackSuffixText,
         _ => null,
     };
 

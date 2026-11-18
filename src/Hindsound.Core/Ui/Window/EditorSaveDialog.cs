@@ -28,6 +28,7 @@ internal sealed class EditorSaveDialogState(ClipGroup clip)
         ClipRenameOutcome.Reserved => "Windows keeps this name for itself.",
         ClipRenameOutcome.TrailingDotOrSpace => "A name can't end with a dot or a space.",
         ClipRenameOutcome.TooLong => "This name is too long.",
+        ClipRenameOutcome.TrackSuffix => ClipNames.TrackSuffixText,
         _ => "Can't use this name.",
     };
 }
