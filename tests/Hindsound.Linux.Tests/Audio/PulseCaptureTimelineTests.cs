@@ -142,6 +142,24 @@ public sealed class PulseCaptureTimelineTests
     }
 
     [Fact]
+    public void A_reader_held_past_the_window_while_the_server_dropped_what_it_could_not_keep_is_placed_from_its_new_readings()
+    {
+        var timeline = new PulseCaptureTimeline(Rate);
+        long frame = 0;
+        long ms = Start;
+        for (var i = 0; i < 50; i++)
+        {
+            ms += 20;
+            timeline.Place(ms, frame, frame + Packet);
+            frame += Packet;
+        }
+
+        // Held 12 s, longer than the window, and only the last 20 ms of it were kept: the frames counted no longer say when.
+        ms += 12_000;
+        Assert.Equal((ms - 20, ms), timeline.Place(ms, frame, frame + Packet));
+    }
+
+    [Fact]
     public void An_empty_packet_is_a_moment_and_a_rate_of_nothing_is_refused()
     {
         var timeline = new PulseCaptureTimeline(Rate);
