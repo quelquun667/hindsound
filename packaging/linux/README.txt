@@ -5,7 +5,9 @@ Hindsound runs in the background and keeps the last minutes of the sound of your
 set one, in memory. Save that past to an MP3 or WAV file with a hotkey, with "hindsound --save", or from the menu of
 its icon.
 
-This first Linux version has no window: no settings window, no listening, no recording of a single app.
+The window (Now, Library and the settings) is drawn with libSDL3.so.0 and the fonts folder of this package, and with
+FreeType, HarfBuzz and fontconfig, which every desktop has. Without them Hindsound runs with its icon only, and its log
+says why. Recording a single app is not there yet.
 Home page: https://github.com/quelquun667/hindsound
 
 
@@ -48,7 +50,8 @@ Ubuntu has already.
 Settings
 --------
 
-~/.config/Hindsound/settings.json, the same file as on Windows. Edit it by hand while Hindsound is not running.
+~/.config/Hindsound/settings.json, the same file as on Windows. The settings window edits it; you can also edit it by
+hand while Hindsound is not running.
 
 
 Uninstall

@@ -25,7 +25,7 @@ paste into a Discord message.
 
 **Status:** early development. The Setup is on the [Releases page](https://github.com/quelquun667/hindsound/releases), and you can also [build it from source](#build-from-source).
 It has been tried on one Windows 11 PC, and some things are [not tried yet](#not-tried-yet). A first Linux version, with no
-window, comes with the releases after 0.5.0: see [Linux](#linux).
+window, comes with the releases after 0.5.0, and the releases after 0.7.0 add its window: see [Linux](#linux).
 
 ## Features
 
@@ -162,7 +162,8 @@ want nothing left.
 
 ### Linux
 
-A first Linux version, for 64-bit Ubuntu 22.04 and later, comes with the releases after 0.5.0. It has no window. From the
+A first Linux version, for 64-bit Ubuntu 22.04 and later, comes with the releases after 0.5.0, with no window; the
+releases after 0.7.0 add the window (see [The window on Linux](#the-window-on-linux) below). From the
 start it captures the sound of the whole PC, and the microphone if your settings name one. It saves a clip on its hotkey,
 on `hindsound --save` or from the menu of its icon, says so with a notification, and copies the clip when the desktop
 allows it. A click on the notification of a clip shows the clip in its folder.
@@ -213,14 +214,28 @@ View and Customize Shortcuts > Custom Shortcuts, add one, and set its command to
 Ubuntu has already. Its menu saves a clip, pauses or resumes, opens the folder of the clips, turns `Start with the
 session` on or off, and quits.
 
-**Settings** are in `~/.config/Hindsound/settings.json`, the same file as on Windows (see [Settings](#settings)). There
-is no settings window yet: edit it by hand while Hindsound is not running.
+**Settings** are in `~/.config/Hindsound/settings.json`, the same file as on Windows (see [Settings](#settings)). The
+settings window edits it; without the window, edit it by hand while Hindsound is not running.
+
+#### The window on Linux
+
+From the releases after 0.7.0, a launch or a click on the icon opens the same window as on Windows: `Now`, `Library` and
+the settings. The packages bring SDL 3.2, which draws it, and its fonts: Selawik, Barlow Semi Condensed and Cascadia
+Mono. FreeType, HarfBuzz and fontconfig come from the system, as on any desktop. If one of them is missing, Hindsound runs
+without the window, as before, and its log says why.
+
+- Listening to a clip: while it plays, the capture of the PC's sound records silence, so the clip does not end up in the
+  next one. The microphone keeps recording.
+- `Delete`, and an edit saved in place of its original, send the file to the Trash of the desktop.
+- The `Hotkeys` page shows keys typed in a field on X11, the keys the desktop chose under its shortcut portal (change them
+  in the shortcut settings of the desktop), or, with neither, the command to bind to a key, with a `Copy` button.
+- The settings leave out what the notification of the desktop does not have: its look, its position and the
+  confirmation sound.
 
 **Updates.** When a new version is out, a notification says so, with the link to its release. Nothing installs itself:
 replace the file.
 
-**Not there yet:** the window (settings, `Now`, `Library`), listening to a clip, recording one application, and any
-processor other than x64.
+**Not there yet:** recording one application, and any processor other than x64.
 
 **Remove it.** Before you delete the AppImage (or the program), turn `Start with the session` off in the menu of the icon,
 or delete `~/.config/autostart/io.github.quelquun667.Hindsound.desktop`: otherwise your session tries to start a file that
@@ -243,7 +258,9 @@ dotnet publish src/Hindsound.Linux/Hindsound.Linux.csproj -c Release -r linux-x6
 ```
 
 For MP3 the program uses `libmp3lame.so.0`, which the packages put next to it. The CI builds that library with
-`tools/release/build-lame-linux.sh`, then makes the AppImage and the tar.gz with `packaging/linux/build-packages.sh`.
+`tools/release/build-lame-linux.sh`, builds `libSDL3.so.0` with `tools/linux/build-sdl3.sh`, fetches the fonts of the
+window with `tools/linux/fetch-fonts.sh`, then makes the AppImage and the tar.gz with `packaging/linux/build-packages.sh`.
+The program looks for its fonts in the folder `HINDSOUND_FONT_DIR` names, or else in `fonts` next to it.
 
 ## First run
 
@@ -515,10 +532,13 @@ sound server, no desktop and no FUSE, to write a test MP3. Not tried for real:
 - `Start with the session`
 - the AppImage mounted through FUSE on a PC without libfuse2, and the tar.gz installed in `~/.local`
 - Ubuntu 22.04, 24.04 and 26.04, and any other distribution
+- the window on X11 and on Wayland, at each display scale, with its keyboard, its input methods and its folder dialog
+- listening to a clip, and the PC's sound recorded as silence meanwhile
+- deleting a clip to the Trash of the desktop
 
 ## Roadmap
 
-- A Linux version with a window, after the [first one](#linux), and a Mac version, with no date yet
+- Recording one application on Linux, and a Mac version, with no date yet
 
 ## License
 

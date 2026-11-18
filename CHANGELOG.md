@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- On Linux, the window: `Now`, `Library` and the settings, drawn by the same pages as on Windows. The AppImage and the tar.gz ship SDL 3.2 and the fonts of the window (Selawik, Barlow Semi Condensed and Cascadia Mono); FreeType, HarfBuzz and fontconfig come from the system, and a character the fonts lack, a Japanese clip name for example, comes from a font of the system. Without one of these, Hindsound runs without the window, as before, and its log says why.
+- On Linux, listen to a clip in the Library and in the editor. While a clip plays, the capture of the PC's sound records silence, so the clip does not end up in the next one; the microphone keeps recording.
+- On Linux, the tools of the Library: `Delete` and an edit saved in place of its original send the file to the Trash of the desktop, never deleted for good, and `Edit...` and `Send to soundboard...` read MP3 and WAV clips back.
+- On Linux, the `Hotkeys` page shows what the desktop allows: keys typed in a field on X11, the keys the desktop chose through its shortcut portal, or the command to bind to a key, with a `Copy` button. The settings say `Start with the session`, and leave out what the notification of the desktop does not have: its look, its position and the confirmation sound.
+
 ## [0.7.0] - 2026-11-18
 
 Tools for the clips you saved, in the Library: rename, delete, edit, and send to the Discord soundboard.
