@@ -4,10 +4,12 @@
 #   hindsound-<version>-linux-x64.tar.gz    the same program in a folder, to unpack anywhere
 # and SHA256SUMS for both.
 #
-# Usage: build-packages.sh <publish folder> <libmp3lame.so.0> <version> <out folder>
+# Usage: build-packages.sh <publish folder> <libmp3lame.so.0> <libSDL3.so.0> <fonts folder> <version> <out folder>
 #   publish folder   the output of: dotnet publish src/Hindsound.Linux/Hindsound.Linux.csproj -c Release -r linux-x64
 #                    --self-contained -p:PublishSingleFile=true -p:PublishTrimmed=true
 #   libmp3lame.so.0  the MP3 encoder built by tools/release/build-lame-linux.sh
+#   libSDL3.so.0     the window library built by tools/linux/build-sdl3.sh
+#   fonts folder     the four fonts of the window, fetched by tools/linux/fetch-fonts.sh
 #   version          for the file names, for example 0.5.0
 #
 # appimagetool and the runtime come from fixed releases and are checked against the sha256 below before anything runs.
@@ -22,23 +24,31 @@ readonly RUNTIME_SHA256='2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873
 # The id of the portal, the desktop entry and the bus (DBusNames.AppId in the app).
 readonly APP_ID='io.github.quelquun667.Hindsound'
 readonly ICON_SIZES='48 128 256'
+readonly FONTS='Selawik-Regular.ttf Selawik-Semibold.ttf BarlowSemiCondensed-SemiBold.ttf CascadiaMono-Regular.ttf'
 
 fail() {
     echo "build-packages: $*" >&2
     exit 1
 }
 
-[ $# -eq 4 ] || fail "usage: build-packages.sh <publish folder> <libmp3lame.so.0> <version> <out folder>"
+[ $# -eq 6 ] || fail "usage: build-packages.sh <publish folder> <libmp3lame.so.0> <libSDL3.so.0> <fonts folder> <version> <out folder>"
 
 publish=$(realpath -e -- "$1") || fail "no publish folder at $1"
 lame=$(realpath -e -- "$2") || fail "no libmp3lame.so.0 at $2"
-version=$3
-mkdir -p -- "$4"
-out=$(realpath -e -- "$4")
+sdl=$(realpath -e -- "$3") || fail "no libSDL3.so.0 at $3"
+fonts=$(realpath -e -- "$4") || fail "no fonts folder at $4"
+version=$5
+mkdir -p -- "$6"
+out=$(realpath -e -- "$6")
 
 [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || fail "not a version: $version"
 [ -f "$publish/hindsound" ] || fail "$publish has no program named hindsound"
 [ -f "$lame" ] || fail "$lame is not a file"
+[ -f "$sdl" ] || fail "$sdl is not a file"
+# The names the text of the window looks for in the fonts folder next to the program.
+for font in $FONTS; do
+    [ -f "$fonts/$font" ] || fail "$fonts has no $font"
+done
 
 here=$(dirname -- "$(realpath -e -- "$0")")
 repo=$(realpath -e -- "$here/../..")
@@ -62,12 +72,18 @@ fetch() {
     echo "$sha  $dest" | sha256sum --check --strict --quiet - || fail "$url does not have the expected sha256"
 }
 
-# What both packages hold, under a prefix: bin holds the program and the encoder side by side.
+# What both packages hold, under a prefix: bin holds the program, the encoder, the window library and the fonts side by
+# side, where the app looks for them first.
 lay_out() {
     local bin=$1 share=$2 doc=$3
-    mkdir -p -- "$bin" "$share/applications" "$doc/licenses/linux"
+    mkdir -p -- "$bin/fonts" "$share/applications" "$doc/licenses/linux"
     install -m 755 -- "$publish/hindsound" "$bin/hindsound"
     install -m 644 -- "$lame" "$bin/libmp3lame.so.0"
+    install -m 644 -- "$sdl" "$bin/libSDL3.so.0"
+    local font
+    for font in $FONTS; do
+        install -m 644 -- "$fonts/$font" "$bin/fonts/$font"
+    done
     install -m 644 -- "$here/$APP_ID.desktop" "$share/applications/$APP_ID.desktop"
     local size
     for size in $ICON_SIZES; do
@@ -78,7 +94,7 @@ lay_out() {
     install -m 644 -- "$repo/LICENSE" "$doc/LICENSE"
     install -m 644 -- "$repo/THIRD-PARTY-NOTICES.md" "$doc/THIRD-PARTY-NOTICES.md"
     install -m 644 -- "$repo"/licenses/*.txt "$doc/licenses/"
-    # The texts only the Linux packages carry (the AppImage runtime, Tmds.DBus.Protocol): kept apart in the repository so the Windows Setup and zip leave them out.
+    # The texts only the Linux packages carry (the AppImage runtime, SDL3, the fonts, Tmds.DBus.Protocol, NLayer): kept apart in the repository so the Windows Setup and zip leave them out.
     install -m 644 -- "$repo"/licenses/linux/*.txt "$doc/licenses/linux/"
 }
 

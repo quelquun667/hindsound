@@ -15,10 +15,11 @@ Install
 From this folder:
 
     mkdir -p ~/.local/bin ~/.local/share
-    cp hindsound libmp3lame.so.0 ~/.local/bin/
+    cp -r hindsound libmp3lame.so.0 libSDL3.so.0 fonts ~/.local/bin/
     cp -r share/. ~/.local/share/
 
-libmp3lame.so.0 stays next to hindsound: it is the MP3 encoder. ~/.local/bin is on the PATH of Ubuntu once you log in
+libmp3lame.so.0, libSDL3.so.0 and the fonts folder stay next to hindsound: the MP3 encoder, the library of the window
+and the fonts it draws with. ~/.local/bin is on the PATH of Ubuntu once you log in
 again. Then start Hindsound from the list of applications, or run "hindsound".
 
 You can also run ./hindsound from this folder, without copying anything. It then adds itself to the list of
@@ -55,7 +56,8 @@ Uninstall
 
 Turn "Start with the session" off in the menu of the icon first, or the last line below removes it for you. Then:
 
-    rm ~/.local/bin/hindsound ~/.local/bin/libmp3lame.so.0
+    rm ~/.local/bin/hindsound ~/.local/bin/libmp3lame.so.0 ~/.local/bin/libSDL3.so.0
+    rm -r ~/.local/bin/fonts
     rm ~/.local/share/applications/io.github.quelquun667.Hindsound.desktop
     rm ~/.local/share/icons/hicolor/*/apps/io.github.quelquun667.Hindsound.png
     rm -f ~/.config/autostart/io.github.quelquun667.Hindsound.desktop
@@ -73,5 +75,6 @@ What Hindsound leaves, and you can delete too:
 Licenses
 --------
 
-Hindsound is under the MIT license (LICENSE). LAME, the MP3 encoder, is under the LGPL; the licenses of everything
-shipped with it are in THIRD-PARTY-NOTICES.md and the licenses folder.
+Hindsound is under the MIT license (LICENSE). LAME, the MP3 encoder, is under the LGPL; SDL, the library of the window,
+under the zlib license; the fonts under the SIL Open Font License 1.1. The licenses of everything shipped with it are in
+THIRD-PARTY-NOTICES.md and the licenses folder.
