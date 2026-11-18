@@ -69,16 +69,24 @@ public sealed unsafe class FreeTypeTextOnLinuxTests(ITestOutputHelper output)
     {
         using var text = new FreeTypeText(Fonts);
         var worst = new Dictionary<Face, double>();
+        var failures = new List<string>();
         foreach (var row in WindowsTextWidths.Rows)
         {
             for (var i = 0; i < WindowsTextWidths.Texts.Length; i++)
             {
-                var linux = text.Measure(new FontSpec(row.Face, row.Size), WindowsTextWidths.Texts[i]);
+                var s = WindowsTextWidths.Texts[i];
+                var linux = text.Measure(new FontSpec(row.Face, row.Size), s);
                 var ratio = linux / row.Widths[i];
                 worst[row.Face] = Math.Max(worst.GetValueOrDefault(row.Face), Math.Abs(ratio - 1));
-                if (row.Face != Face.Title)
+
+                // Segoe UI kerns the capitals of this string (AV, VA, AT, TA, Wa) and Selawik has no kerning: the Linux
+                // text is wider by what those pairs take back on Windows, 5.0 % on Body 12 (76.76 for 73.09). It stays
+                // within 3 % narrower, as every string, and within 7 % wider: that 5 % and 2 % for the faces themselves.
+                var kernedOnWindows = s == "AVATAR Wave" && row.Face is Face.Body or Face.Medium;
+                var widest = kernedOnWindows ? 0.07 : 0.03;
+                if (row.Face != Face.Title && (ratio < 0.97 || ratio > 1 + widest))
                 {
-                    Assert.True(Math.Abs(ratio - 1) <= 0.03, $"{row.Face} {row.Size} \"{WindowsTextWidths.Texts[i]}\": {linux} on Linux, {row.Widths[i]} on Windows; {text.Describe(new FontSpec(row.Face, row.Size), WindowsTextWidths.Texts[i])}");
+                    failures.Add($"{row.Face} {row.Size} \"{s}\": {linux} on Linux, {row.Widths[i]} on Windows ({ratio - 1:P1}, within -3 % and +{widest:P0}); {text.Describe(new FontSpec(row.Face, row.Size), s)}");
                 }
             }
         }
@@ -88,6 +96,8 @@ public sealed unsafe class FreeTypeTextOnLinuxTests(ITestOutputHelper output)
         {
             output.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{face}: widest gap from Windows {gap:P1}"));
         }
+
+        Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures));
     }
 
     [Fact]
@@ -123,9 +133,45 @@ public sealed unsafe class FreeTypeTextOnLinuxTests(ITestOutputHelper output)
         Assert.True(text.Measure(body, "a ") > text.Measure(body, "a"));
         Assert.NotEqual(MathF.Round(text.Measure(body, "Settings")), text.Measure(body, "Settings"));
         Assert.Equal(text.Measure(new FontSpec(Face.Body, 16), "Settings"), text.Measure(new FontSpec(Face.Body, 16.25f), "Settings"));
-        var kerned = text.Measure(body, "AV") < text.Measure(body, "A") + text.Measure(body, "V")
-            || text.Measure(body, "To") < text.Measure(body, "T") + text.Measure(body, "o");
-        Assert.True(kerned, $"neither AV nor To is kerned: AV {text.Measure(body, "AV")} for A + V {text.Measure(body, "A") + text.Measure(body, "V")}, To {text.Measure(body, "To")} for T + o {text.Measure(body, "T") + text.Measure(body, "o")}; {text.Describe(body, "AVTo")}");
+
+        // Barlow kerns T against a (its sources: -14 to -66 thousandths of an em across its masters): HarfBuzz's kerning
+        // reaches the measure, and the drawing, whose ink sits further left than that of an "a" drawn after the unkerned "T".
+        var title = new FontSpec(Face.Title, 44);
+        var pair = text.Measure(title, "Ta");
+        var apart = text.Measure(title, "T") + text.Measure(title, "a");
+        Assert.True(pair < apart - 0.1f, $"Ta is not kerned: Ta {pair} for T + a {apart}; {text.Describe(title, "Ta")}");
+        var kerned = new Bitmap(160, 70);
+        kerned.Draw(text, title, "Ta", 4, 4, 0xFFFFFF);
+        var unkerned = new Bitmap(160, 70);
+        unkerned.Draw(text, title, "T", 4, 4, 0xFFFFFF);
+        unkerned.Draw(text, title, "a", 4 + text.Measure(title, "T"), 4, 0xFFFFFF);
+        Assert.True(InkCentre(kerned) < InkCentre(unkerned), $"the ink of the drawn Ta is centred at {InkCentre(kerned)}, of T then a at {InkCentre(unkerned)}");
+
+        // Selawik has no kerning (no kern table, no pairs in its GPOS), where Segoe UI kerns AV and To: the pairs measure
+        // what their letters do. A font with kerning in its place fails here, and the widths of the Windows text show it.
+        foreach (var (left, right) in new[] { ("A", "V"), ("T", "o") })
+        {
+            var together = text.Measure(body, left + right);
+            var sum = text.Measure(body, left) + text.Measure(body, right);
+            Assert.True(Math.Abs(together - sum) < 0.001f, $"{left}{right} {together} for {left} + {right} {sum}: the body font kerns; {text.Describe(body, left + right)}");
+        }
+    }
+
+    // The mean column of the ink, each pixel weighed by how far its green is from the background's.
+    private static double InkCentre(Bitmap bitmap)
+    {
+        double sum = 0, weight = 0;
+        for (var y = 0; y < bitmap.Height; y++)
+        {
+            for (var x = 0; x < bitmap.Width; x++)
+            {
+                var ink = (int)((bitmap[x, y] >> 8) & 0xFF) - 0x14;
+                sum += x * ink;
+                weight += ink;
+            }
+        }
+
+        return sum / weight;
     }
 
     [Fact]
@@ -153,6 +199,8 @@ public sealed unsafe class FreeTypeTextOnLinuxTests(ITestOutputHelper output)
         bitmap.Draw(text, body, "Hg Settings", 5.25f, 10, 0xF2F4F7);
 
         int solid = 0, partial = 0;
+        // The drawn pixels by sixteenth of the way from the background's green to the text's.
+        var shades = new int[17];
         for (var y = 0; y < bitmap.Height; y++)
         {
             for (var x = 0; x < bitmap.Width; x++)
@@ -165,12 +213,13 @@ public sealed unsafe class FreeTypeTextOnLinuxTests(ITestOutputHelper output)
                 }
 
                 _ = p == 0xFFF2F4F7 ? solid++ : partial++;
+                shades[Math.Clamp((((int)(p >> 8) & 0xFF) - 0x14) * 16 / (0xF4 - 0x14), 0, 16)]++;
                 Assert.InRange(y, 9, 10 + line);
                 Assert.InRange(x, 5, 5 + (int)text.Measure(body, "Hg Settings") + 2);
             }
         }
 
-        Assert.True(solid > 20 && partial > 20, $"{solid} solid, {partial} partial; {text.Describe(body, "Hg Settings")}");
+        Assert.True(solid > 20 && partial > 20, $"{solid} solid, {partial} partial (DirectWrite on Windows: 70 and 223); by sixteenth of the way to the text's colour {string.Join(",", shades)}; {text.Describe(body, "Hg Settings")}");
         var snapped = new Bitmap(120, 40);
         snapped.Draw(text, body, "Hg Settings", 5.25f, 10.3f, 0xF2F4F7);
         Assert.Equal(bitmap.Memory, snapped.Memory);
