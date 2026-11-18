@@ -17,7 +17,7 @@ public class PortableBoundaryTests
         "Hindsound.Ui.TextPainter", "Hindsound.Ui.TrayPresence", "Hindsound.Ui.TrayIcon", "Hindsound.Ui.UiLoop",
         "Hindsound.Ui.Notification", "Hindsound.Ui.NotificationBitmap", "Hindsound.Ui.ClipboardFiles", "Hindsound.Ui.ConfirmSound",
         "Hindsound.Ui.ForegroundWindow", "Hindsound.Ui.ExplorerFolderShell", "Hindsound.Ui.NotificationPlacement",
-        "Hindsound.Ui.Window.GdiCanvas", "Hindsound.Ui.Window.PngFile", "Hindsound.Ui.Window.WindowNative", "Hindsound.Ui.Window.SettingsWindow",
+        "Hindsound.Ui.Window.GdiCanvas", "Hindsound.Ui.Window.WindowNative", "Hindsound.Ui.Window.SettingsWindow",
         "Hindsound.Ui.Window.FolderPicker", "Hindsound.Ui.Window.SettingsDump",
         "Hindsound.Input.Win32HotkeyNative",
         "Hindsound.Audio.CaptureSource", "Hindsound.Audio.WasapiCaptureSourceFactory", "Hindsound.Audio.DeviceWatcher", "Hindsound.Audio.ToolHelpProcessSnapshot",
