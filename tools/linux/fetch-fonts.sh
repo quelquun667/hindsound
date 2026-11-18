@@ -19,7 +19,8 @@
 #
 # Usage:
 #   fetch-fonts.sh WORK_DIR OUT_DIR   fetches, checks and writes the four fonts; WORK_DIR receives the downloads
-#   fetch-fonts.sh --check OUT_DIR    checks four fonts already there (a cache gave them back)
+#   fetch-fonts.sh --check OUT_DIR    checks four fonts already there (a cache gave them back, or a package holds them): each
+#                                     must be a TrueType file with the SHA-256 of the font that was pinned
 
 set -euo pipefail
 
@@ -34,6 +35,18 @@ readonly BARLOW_SIZE=168500
 
 readonly FONTS='Selawik-Regular.ttf Selawik-Semibold.ttf BarlowSemiCondensed-SemiBold.ttf CascadiaMono-Regular.ttf'
 
+# The SHA-256 of each font as this script writes it: what the pins above give once the file is extracted. check_fonts
+# compares them, so that a cache or a package cannot hold another valid TrueType file under the name of a font.
+pinned_sha256() {
+  case "$1" in
+    Selawik-Regular.ttf) echo e9d98518d8ac2817782a9a382430463a2e0793ea68350b695bb727d9a830ee1c ;;
+    Selawik-Semibold.ttf) echo 0a9e9d0549a10f24bef9b3a29e06fe6e0b5c21e7a784c503b048a307841a7783 ;;
+    BarlowSemiCondensed-SemiBold.ttf) echo 5358c566b2039988c68b4ea2af05270da055110a5d23fbd686d5a11fbecf4e03 ;;
+    CascadiaMono-Regular.ttf) echo 06520d032ec274fa5040b22c6f4a1d829081b24ba40b2da56dae89bf10c7b481 ;;
+    *) echo "No pin for $1." >&2; exit 1 ;;
+  esac
+}
+
 usage() {
   echo "Usage: $0 WORK_DIR OUT_DIR | --check OUT_DIR" >&2
   exit 2
@@ -41,9 +54,9 @@ usage() {
 
 sha256_of() { sha256sum "$1" | cut -d' ' -f1; }
 
-# A TrueType font starts with the version 1.0 of the sfnt table directory, or with "true".
+# A TrueType font starts with the version 1.0 of the sfnt table directory, or with "true"; and each one is the pinned file.
 check_fonts() {
-  local dir="$1" font head
+  local dir="$1" font head actual
   for font in $FONTS; do
     if [ ! -s "$dir/$font" ]; then
       echo "$dir/$font is missing or empty." >&2
@@ -54,7 +67,12 @@ check_fonts() {
       echo "$dir/$font is not a TrueType font: it starts with $head." >&2
       exit 1
     fi
-    echo "$font: $(stat -c %s -- "$dir/$font") bytes, SHA-256 $(sha256_of "$dir/$font")"
+    actual="$(sha256_of "$dir/$font")"
+    if [ "$actual" != "$(pinned_sha256 "$font")" ]; then
+      echo "$dir/$font has the SHA-256 $actual, expected $(pinned_sha256 "$font")." >&2
+      exit 1
+    fi
+    echo "$font: $(stat -c %s -- "$dir/$font") bytes, SHA-256 $actual"
   done
 }
 
