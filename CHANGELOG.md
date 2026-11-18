@@ -25,6 +25,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - In the window, the mouse wheel moves only what is under the mouse: over the list of sections on the left, the band at the top or the bar at the bottom, it no longer scrolls the page or the list of clips.
+- A clip in one file can no longer be renamed, or copied by the editor, under a name that ends with `_system` or `_mic`, which the Library would join to another track.
+- A clip renamed or copied under the name of a clip sent to the Recycle Bin no longer takes that clip's star or collections.
+- A soundboard copy never holds more than 5.2 seconds, whatever the selection.
+- On a screen too small for the chosen `Window size`, your choice stays selected and a grey line under it says what the screen fits (`This screen fits up to 100%`).
+- On a screen too small even for 100%, the window now opens at the top left of the usable area, so its title bar is always within reach.
+- A `Window size` chosen while the window is minimized now applies when you restore it.
+- With `Record my voice` off, the `Mic level` bar and the `Mic gain` slider on the Audio page are off, like a muted microphone.
 
 ## [0.6.0] - 2026-11-12
 
