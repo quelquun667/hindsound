@@ -1,4 +1,5 @@
 using System.Reflection;
+using Hindsound.App;
 using Hindsound.Export;
 using Hindsound.Linux.Desktop;
 using Hindsound.Ui;
@@ -53,6 +54,11 @@ public sealed class EveryNotificationUrgencyTests
         if (inner == typeof(bool))
         {
             return true;
+        }
+
+        if (inner == typeof(PlatformFeatures))
+        {
+            return PlatformFeatures.Linux(() => ShortcutMode.Capture);
         }
 
         if (inner == typeof(TimeSpan))

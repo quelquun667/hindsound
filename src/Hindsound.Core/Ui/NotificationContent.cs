@@ -1,3 +1,4 @@
+using Hindsound.App;
 using Hindsound.Export;
 
 namespace Hindsound.Ui;
@@ -255,8 +256,10 @@ internal static class NotificationStates
     public static NotificationContent SettingsNotSaved() =>
         Problem(NotificationKind.SettingsNotSaved, "Couldn't save your settings", "This change is lost at the next start");
 
-    public static NotificationContent StartupNotChanged() =>
-        Problem(NotificationKind.StartupNotChanged, "Couldn't change Start with Windows", "It stays as it was");
+    /// <summary>Named as the toggle is on this system: "Start with Windows", or "Start with the session" on Linux.</summary>
+    /// <param name="features">The words of the system; the running one's when left out.</param>
+    public static NotificationContent StartupNotChanged(PlatformFeatures? features = null) =>
+        Problem(NotificationKind.StartupNotChanged, "Couldn't change " + (features ?? PlatformDefaults.Features ?? PlatformFeatures.Windows).StartupLabel, "It stays as it was");
 
     /// <summary><c>m:ss</c>.</summary>
     public static string FormatDuration(int seconds) => $"{seconds / 60}:{seconds % 60:00}";

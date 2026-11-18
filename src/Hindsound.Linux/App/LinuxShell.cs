@@ -49,7 +49,25 @@ internal sealed class LinuxShell : IAppShell
     public IClipboardFiles Clipboard(IAppLoop loop) => new LinuxClipboard(log);
 
     public ISettingsWindow? NewSettingsWindow(SettingsWindowRequest request) =>
-        HasWindow && _loop is { } loop ? LinuxSettingsWindow.Open(request, loop, () => new FreeTypeText()) : null;
+        HasWindow && _loop is { } loop ? OpenOrNone(() => LinuxSettingsWindow.Open(request, loop, () => new FreeTypeText()), log) : null;
+
+    /// <summary>
+    /// SDL loads, yet its video can still fail to start or make the window: no display reachable, no driver for the
+    /// compositor. The capture is running, so that is no reason to lose it: no window, and the app shows the clips folder
+    /// instead, as on a system without one.
+    /// </summary>
+    internal static ISettingsWindow? OpenOrNone(Func<ISettingsWindow> open, Action<string> log)
+    {
+        try
+        {
+            return open();
+        }
+        catch (InvalidOperationException ex)
+        {
+            log("window: none, " + ex.Message);
+            return null;
+        }
+    }
 
     public IFolderShell NewFolderShell() => new LinuxFolderShell(log);
 
