@@ -78,7 +78,7 @@ public sealed unsafe class FreeTypeTextOnLinuxTests(ITestOutputHelper output)
                 worst[row.Face] = Math.Max(worst.GetValueOrDefault(row.Face), Math.Abs(ratio - 1));
                 if (row.Face != Face.Title)
                 {
-                    Assert.True(Math.Abs(ratio - 1) <= 0.03, $"{row.Face} {row.Size} \"{WindowsTextWidths.Texts[i]}\": {linux} on Linux, {row.Widths[i]} on Windows");
+                    Assert.True(Math.Abs(ratio - 1) <= 0.03, $"{row.Face} {row.Size} \"{WindowsTextWidths.Texts[i]}\": {linux} on Linux, {row.Widths[i]} on Windows; {text.Describe(new FontSpec(row.Face, row.Size), WindowsTextWidths.Texts[i])}");
                 }
             }
         }
@@ -125,7 +125,7 @@ public sealed unsafe class FreeTypeTextOnLinuxTests(ITestOutputHelper output)
         Assert.Equal(text.Measure(new FontSpec(Face.Body, 16), "Settings"), text.Measure(new FontSpec(Face.Body, 16.25f), "Settings"));
         var kerned = text.Measure(body, "AV") < text.Measure(body, "A") + text.Measure(body, "V")
             || text.Measure(body, "To") < text.Measure(body, "T") + text.Measure(body, "o");
-        Assert.True(kerned, "neither AV nor To is kerned");
+        Assert.True(kerned, $"neither AV nor To is kerned: AV {text.Measure(body, "AV")} for A + V {text.Measure(body, "A") + text.Measure(body, "V")}, To {text.Measure(body, "To")} for T + o {text.Measure(body, "T") + text.Measure(body, "o")}; {text.Describe(body, "AVTo")}");
     }
 
     [Fact]
@@ -170,7 +170,7 @@ public sealed unsafe class FreeTypeTextOnLinuxTests(ITestOutputHelper output)
             }
         }
 
-        Assert.True(solid > 20 && partial > 20, $"{solid} solid, {partial} partial");
+        Assert.True(solid > 20 && partial > 20, $"{solid} solid, {partial} partial; {text.Describe(body, "Hg Settings")}");
         var snapped = new Bitmap(120, 40);
         snapped.Draw(text, body, "Hg Settings", 5.25f, 10.3f, 0xF2F4F7);
         Assert.Equal(bitmap.Memory, snapped.Memory);

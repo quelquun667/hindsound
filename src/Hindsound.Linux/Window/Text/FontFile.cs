@@ -12,9 +12,10 @@ internal sealed unsafe class FontFile : IDisposable
     private int _em = -1;
     private bool _disposed;
 
-    private FontFile(int id, nint ftFace, nint hbBlob, nint hbFace, nint hbFont, VerticalMetrics metrics)
+    private FontFile(int id, string name, nint ftFace, nint hbBlob, nint hbFace, nint hbFont, VerticalMetrics metrics)
     {
         Id = id;
+        Name = name;
         FtFace = ftFace;
         HbBlob = hbBlob;
         HbFace = hbFace;
@@ -24,6 +25,9 @@ internal sealed unsafe class FontFile : IDisposable
 
     /// <summary>A number of its own for the whole life of the text, so the glyphs of a closed fallback never match a new one.</summary>
     public int Id { get; }
+
+    /// <summary>The name of the file, for the messages of the tests.</summary>
+    public string Name { get; }
 
     public nint FtFace { get; }
 
@@ -63,11 +67,14 @@ internal sealed unsafe class FontFile : IDisposable
         var hbFont = hb_font_create(hbFace);
         hb_ot_font_set_funcs(hbFont);
         hb_font_set_scale(hbFont, metrics.UnitsPerEm, metrics.UnitsPerEm);
-        return new FontFile(id, ftFace, blob, hbFace, hbFont, metrics);
+        return new FontFile(id, System.IO.Path.GetFileName(path), ftFace, blob, hbFace, hbFont, metrics);
     }
 
     /// <summary>Whether the font has a glyph of its own for this code point.</summary>
     public bool Covers(int codePoint) => FT_Get_Char_Index(FtFace, (nuint)codePoint) != 0;
+
+    /// <summary>Whether the font has this table, for the messages of the tests.</summary>
+    public bool HasTable(string tag) => Table(HbFace, tag).Length > 0;
 
     /// <summary>Sets FreeType's size to this em, once per change.</summary>
     public void SetEm(int em)

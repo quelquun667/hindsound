@@ -17,6 +17,16 @@ internal static unsafe partial class TextNative
     public const int LoadNoBitmap = 1 << 3;
     public const int LoadTargetLight = 1 << 16;
 
+    // FT_LOAD_NO_HINTING, FT_LOAD_FORCE_AUTOHINT, FT_LOAD_TARGET_LCD_V (FT_RENDER_MODE_LCD_V = 4, shifted by 16) and
+    // FT_RENDER_MODE_NORMAL.
+    public const int LoadNoHinting = 1 << 1;
+    public const int LoadForceAutohint = 1 << 5;
+    public const int LoadTargetLcdV = 4 << 16;
+    public const int RenderModeNormal = 0;
+
+    // FT_GLYPH_FORMAT_OUTLINE, the tag 'outl'.
+    public const uint GlyphFormatOutline = 0x6F75746C;
+
     public const long FaceFlagScalable = 1;
     public const byte PixelModeMono = 1;
     public const byte PixelModeGray = 2;
@@ -29,8 +39,13 @@ internal static unsafe partial class TextNative
 
     // Offsets in FT_GlyphSlotRec on LP64: library (0), face (8), next, glyph_index (padded), generic (16 bytes), metrics
     // (64 bytes), linearHoriAdvance, linearVertAdvance, advance (16 bytes), format (padded), bitmap (152), bitmap_left (192),
-    // bitmap_top (196). In FT_Bitmap: rows, width, pitch, buffer (16), num_grays (24), pixel_mode (26).
+    // bitmap_top (196), outline (200). format sits at 144, after advance. In FT_Bitmap: rows, width, pitch, buffer (16),
+    // num_grays (24), pixel_mode (26). In FT_Outline: n_contours, n_points (2), points (8), an array of FT_Vector.
     public const int SlotFaceOffset = 8;
+    public const int SlotFormatOffset = 144;
+    public const int SlotOutlineOffset = 200;
+    public const int OutlinePointCountOffset = 2;
+    public const int OutlinePointsOffset = 8;
     public const int SlotBitmapOffset = 152;
     public const int SlotBitmapLeftOffset = 192;
     public const int SlotBitmapTopOffset = 196;
@@ -96,9 +111,15 @@ internal static unsafe partial class TextNative
     public static partial int FT_Load_Glyph(nint face, uint glyphIndex, int loadFlags);
 
     [LibraryImport(FreeType)]
+    public static partial int FT_Render_Glyph(nint slot, int renderMode);
+
+    [LibraryImport(FreeType)]
     public static partial uint FT_Get_Char_Index(nint face, nuint charcode);
 
     // HarfBuzz
+
+    [LibraryImport(HarfBuzz)]
+    public static partial byte* hb_version_string();
 
     [LibraryImport(HarfBuzz, StringMarshalling = StringMarshalling.Utf8)]
     public static partial nint hb_blob_create_from_file(string path);
