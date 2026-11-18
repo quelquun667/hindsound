@@ -279,7 +279,7 @@ internal static unsafe class SettingsDump
             // Where the desktop binds the keys, it has answered: each action holds the key the settings proposed.
             if (screen.Features.Shortcuts() == ShortcutMode.Portal)
             {
-                screen.SetHotkeyResults([.. Enum.GetValues<HotkeyAction>().Select(a => new HotkeyResult(a, screen.Editor.GestureOf(a), HotkeyStatus.Registered, null))]);
+                screen.SetHotkeyResults([.. Enum.GetValues<HotkeyAction>().Select(a => screen.Editor.GestureOf(a) is { } gesture ? new HotkeyResult(a, gesture, HotkeyStatus.Registered, null) : new HotkeyResult(a, null, HotkeyStatus.NotSet, null))]);
             }
 
             screen.UpdateStatus(sampleStatus);
