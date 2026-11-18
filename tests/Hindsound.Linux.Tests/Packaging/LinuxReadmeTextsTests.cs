@@ -35,6 +35,19 @@ public sealed class LinuxReadmeTextsTests
         Assert.DoesNotContain("on its way", Text("README.md"), StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void The_readme_of_the_repository_tells_what_the_CI_does_with_each_package_as_the_package_check_does_it()
+    {
+        // check-packages.sh starts each package for the test MP3, then for the pages of the window: the README says both.
+        var check = File.ReadAllLines(Path.Combine(RepositoryRoot(), "packaging", "linux", "check-packages.sh"));
+        Assert.Equal(2, check.Count(line => line.StartsWith("prove_mp3 ", StringComparison.Ordinal)));
+        Assert.Equal(2, check.Count(line => line.StartsWith("dump_window ", StringComparison.Ordinal)));
+
+        var readme = Text("README.md");
+        Assert.DoesNotContain("starts each once", readme, StringComparison.Ordinal);
+        Assert.Contains("starts each twice, with no sound server, no desktop and no FUSE: once to write a test MP3, once to draw every page of the window off screen", readme, StringComparison.Ordinal);
+    }
+
     /// <summary>The menu path that ends at Custom Shortcuts, read across a line break.</summary>
     private static string PathToCustomShortcuts(string text)
     {
