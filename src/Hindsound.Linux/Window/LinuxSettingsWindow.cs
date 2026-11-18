@@ -62,6 +62,9 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
     private int _wheelRest;
     private bool _capturing;
     private bool _picking;
+    private bool _closeAfterPick;
+    private bool _hiddenByDesktop;
+    private bool _frameRead;
     private bool _closed;
 
     /// <summary>Opens SDL's video and makes the window, hidden until <see cref="Show"/>.</summary>
@@ -313,14 +316,21 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
     public string? PickFolder(string startFolder)
     {
         // The dialog is the desktop's: while it is open, the window's own input waits, as behind a modal dialog on Windows.
+        // The loop goes on all the same (a save asked by the hotkey, the paints, the timers), as the dialog's own loop
+        // dispatches the messages of the loop on Windows.
         _picking = true;
         try
         {
-            return _video.PickFolder(startFolder, () => _pump.Wait(50));
+            return _video.PickFolder(startFolder, () => _loop.RunOnce(50));
         }
         finally
         {
             _picking = false;
+            if (_closeAfterPick)
+            {
+                _closeAfterPick = false;
+                _loop.Post(CloseNow);
+            }
         }
     }
 
@@ -356,7 +366,27 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
         {
             case SdlNative.EventWindowShown:
             case SdlNative.EventWindowExposed:
+                if (type == SdlNative.EventWindowShown)
+                {
+                    FrameKnown();
+                }
+
+                // Back from what the desktop hid it for: the paints and the timers go on.
+                if (_hiddenByDesktop)
+                {
+                    _hiddenByDesktop = false;
+                    Screen.WindowMinimized(false);
+                }
+
                 PresentAll();
+                break;
+
+            // Wayland has no minimized state: a minimized window is only told it is suspended, which SDL reports as occluded.
+            // Nobody sees the window then, as when it is minimized: no paint, no wave, no meter.
+            case SdlNative.EventWindowOccluded:
+            case SdlNative.EventWindowHidden:
+                _hiddenByDesktop = true;
+                Screen.WindowMinimized(true);
                 break;
 
             case SdlNative.EventWindowMinimized:
@@ -467,7 +497,11 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
 
         // This key brought a scrolled-away field back. Text input was off when it went down, so SDL sent no text for it:
         // the field gets the character of the key, as the box gets its WM_CHAR on Windows.
-        if (!used && fieldWasHidden && _field.Visible && SdlWindowSizing.TypedText(key.Key, modifiers) is { } text)
+        // With Shift or Caps Lock on, the layout says what the key types ('!' for Shift and 1): not the key's own character.
+        var layoutKey = (key.Mod & (SdlKeys.ModLShift | SdlKeys.ModRShift | SdlKeys.ModCaps)) != 0
+            ? _video.KeyFromScancode((uint)key.Scancode, key.Mod)
+            : 0u;
+        if (!used && fieldWasHidden && _field.Visible && SdlWindowSizing.TypedText(key.Key, modifiers, layoutKey) is { } text)
         {
             var hadFocus = _field.Focused;
             _field.Focus();
@@ -685,6 +719,27 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
         Resized();
     }
 
+    // X11 learns the size of the title bar when the window is mapped, after the size and the zoom were chosen without it: the
+    // first time the window is shown, they are chosen again with it.
+    private void FrameKnown()
+    {
+        if (_frameRead || _offscreen)
+        {
+            return;
+        }
+
+        _frameRead = true;
+        var borders = _video.Borders;
+        if (borders == _borders)
+        {
+            return;
+        }
+
+        _borders = borders;
+        _zoom = ChooseZoom(AreaNow());
+        Resized();
+    }
+
     private ScreenRect AreaNow() => _offscreen ? OffscreenArea : _video.UsableArea();
 
     private int ChooseZoom(ScreenRect area) => ChooseZoom(area, _displayScale, _density);
@@ -750,6 +805,13 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
     {
         if (_closed)
         {
+            return;
+        }
+
+        // Not under the dialog of the desktop: the window goes once it is answered.
+        if (_picking)
+        {
+            _closeAfterPick = true;
             return;
         }
 

@@ -60,6 +60,9 @@ internal unsafe interface ISdlVideo
     /// <summary>The SDL_Keymod held now.</summary>
     ushort ModState();
 
+    /// <summary>The keycode the scancode types on the layout with the SDL_Keymod applied; 0 when it has none.</summary>
+    uint KeyFromScancode(uint scancode, ushort mod);
+
     /// <summary>Text input on or off, its box and caret in window coordinates.</summary>
     void TextInput(bool wanted, int x, int y, int w, int h, int cursor);
 
@@ -263,6 +266,8 @@ internal sealed unsafe class SdlVideo : ISdlVideo
     }
 
     public ushort ModState() => SdlNative.GetModState();
+
+    public uint KeyFromScancode(uint scancode, ushort mod) => SdlNative.GetKeyFromScancode(scancode, mod, false);
 
     public void TextInput(bool wanted, int x, int y, int w, int h, int cursor) => _textInput?.Update(wanted, x, y, w, h, cursor);
 

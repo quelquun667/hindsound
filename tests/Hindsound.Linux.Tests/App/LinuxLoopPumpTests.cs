@@ -284,18 +284,60 @@ public sealed class LinuxLoopPumpTests
     }
 
     [Fact]
-    public void An_exception_in_a_window_event_leaves_run()
+    public void A_turn_from_inside_an_action_runs_what_is_posted_then_the_timers_due_then_waits_once()
     {
-        using var loop = new LinuxLoop();
+        var now = 1_000L;
+        using var loop = new LinuxLoop(() => now);
         var pump = new FakePump();
         loop.Pump = pump;
-        pump.Raise(() => throw new InvalidOperationException("from a window event"));
+        var ran = new List<string>();
+        loop.After(0, () => ran.Add("timer"));
+        loop.After(500, () => ran.Add("later timer"));
+        loop.Post(() => ran.Add("posted"));
 
-        // A loop that did not wait through its pump would never see the event: the guard ends it, and nothing is thrown.
-        using var guard = new Timer(_ => loop.Quit(), null, GuardMs, Timeout.Infinite);
-        var thrown = Assert.Throws<InvalidOperationException>(loop.Run);
+        loop.RunOnce(50);
 
-        Assert.Equal("from a window event", thrown.Message);
-        Assert.False(loop.OnLoopThread);
+        Assert.Equal(["posted", "timer"], ran);
+        Assert.Single(pump.Timeouts);
+
+        // Nothing left to run: the turn waits for the time it was given, in the pump.
+        loop.RunOnce(50);
+        Assert.Equal([0, 50], pump.Timeouts);
+
+        // An action that posts itself again does not keep the turn from ending; its next run is for the next turn.
+        var again = 0;
+        void Repost()
+        {
+            again++;
+            loop.Post(Repost);
+        }
+
+        loop.Post(Repost);
+        loop.RunOnce(50);
+        Assert.Equal(1, again);
+
+        now += 600;
+        loop.RunOnce(50);
+        Assert.Equal(["posted", "timer", "later timer"], ran);
+    }
+
+    [Fact]
+    public void A_turn_from_inside_an_action_does_not_take_a_quit_from_run()
+    {
+        using var loop = new LinuxLoop();
+        loop.Pump = new FakePump();
+        var ran = new List<string>();
+        loop.Post(() =>
+        {
+            loop.Quit();
+            loop.RunOnce(0);
+            ran.Add("inside");
+        });
+        loop.Post(() => ran.Add("posted after"));
+
+        RunGuarded(loop);
+
+        // The turn ran what was posted, and the quit asked inside it still ended Run (the guard did not have to).
+        Assert.Equal(["posted after", "inside"], ran);
     }
 }

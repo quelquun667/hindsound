@@ -1,4 +1,5 @@
 using Hindsound.App;
+using Hindsound.Ui;
 
 namespace Hindsound.Linux.App;
 
@@ -12,8 +13,9 @@ namespace Hindsound.Linux.App;
 /// <see cref="After"/>, <see cref="Quit"/> and <see cref="Dispose"/> wake it from any thread. Every guarantee above holds
 /// with or without a pump.
 /// </summary>
-/// <remarks>An exception thrown by an action, or by a window event the pump hands out, leaves <see cref="Run"/>, as one
-/// thrown in a window procedure ends the app on Windows.</remarks>
+/// <remarks>An exception thrown by an action, a timer or a window event the pump hands out is reported through
+/// <see cref="UiErrors"/> and the loop goes on, as the Windows loop does: one failed piece of work must not end the app,
+/// and the buffer with it.</remarks>
 internal sealed class LinuxLoop : IAppLoop
 {
     private readonly object _gate = new();
@@ -126,7 +128,7 @@ internal sealed class LinuxLoop : IAppLoop
         {
             while (Next() is { } action)
             {
-                action();
+                RunGuarded(action);
             }
         }
         finally
@@ -136,6 +138,59 @@ internal sealed class LinuxLoop : IAppLoop
                 _running = null;
             }
         }
+    }
+
+    /// <summary>
+    /// One turn of the loop from inside an action of the loop thread that waits for something outside (a dialog of the
+    /// desktop): runs the actions posted so far, then the timers due, then waits once for at most <paramref name="timeoutMs"/>
+    /// in the pump, which hands out the window's events. What those post or set waits for the next turn. A quit asked meanwhile
+    /// is left to <see cref="Run"/>.
+    /// </summary>
+    public void RunOnce(int timeoutMs)
+    {
+        List<Action> ready = [];
+        ILoopPump? pump;
+        lock (_gate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            // Only what is there now: an action that posts itself again does not keep this turn from ending.
+            ready.AddRange(_actions);
+            _actions.Clear();
+            var now = _nowMs();
+            while (_timers.TryPeek(out var timer, out var key) && key.Due <= now)
+            {
+                _timers.Dequeue();
+                ready.Add(timer);
+            }
+
+            pump = _pump;
+        }
+
+        foreach (var action in ready)
+        {
+            RunGuarded(action);
+        }
+
+        if (ready.Count > 0)
+        {
+            timeoutMs = 0;
+        }
+
+        if (pump is null)
+        {
+            lock (_gate)
+            {
+                Monitor.Wait(_gate, timeoutMs);
+            }
+
+            return;
+        }
+
+        WaitGuarded(pump, timeoutMs);
     }
 
     public void Quit()
@@ -217,7 +272,33 @@ internal sealed class LinuxLoop : IAppLoop
 
             // Outside the lock: the pump hands the window's events out here, on the loop thread, and they may post. A wake
             // that comes between the lock and this wait is not lost, since a pump keeps it for its next wait.
-            pump.Wait(wait);
+            WaitGuarded(pump, wait);
+        }
+    }
+
+    private static void WaitGuarded(ILoopPump pump, int timeoutMs)
+    {
+        try
+        {
+            pump.Wait(timeoutMs);
+        }
+        catch (Exception ex)
+        {
+            // A handler of the window threw: the events it left stay in the queue of the pump, for the next wait.
+            UiErrors.Report(ex);
+        }
+    }
+
+    // One failed piece of work must not take the rest of the queue with it.
+    private static void RunGuarded(Action action)
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception ex)
+        {
+            UiErrors.Report(ex);
         }
     }
 }

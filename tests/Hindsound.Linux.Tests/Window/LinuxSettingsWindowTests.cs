@@ -233,6 +233,21 @@ public sealed unsafe class LinuxSettingsWindowTests
     }
 
     [Fact]
+    public void A_title_bar_that_X11_reports_only_once_the_window_is_shown_makes_the_zoom_and_the_place_fit_again()
+    {
+        using var rig = new WindowRig(offscreen: false, zoom: 140, setUp: v => v.Area = new ScreenRect(0, 0, 1920, 700));
+        Assert.Equal(140, rig.Window.AppliedZoom);
+
+        rig.Video.FrameSize = new WindowBorders(30, 0, 0, 0);
+        rig.Send(rig.WindowEvent(SdlNative.EventWindowShown));
+        rig.Drain();
+
+        Assert.Equal(120, rig.Window.AppliedZoom);
+        var bounds = rig.Video.Bounds;
+        Assert.True(bounds.X >= 0 && bounds.X + bounds.W <= 1920 && bounds.Y >= 30 && bounds.Y + bounds.H <= 700, bounds.ToString());
+    }
+
+    [Fact]
     public void A_wayland_output_at_twice_the_density_gets_a_window_of_half_the_pixels()
     {
         using var rig = new WindowRig(offscreen: false, setUp: v =>
@@ -351,6 +366,75 @@ public sealed unsafe class LinuxSettingsWindowTests
         rig.Drain();
         Assert.Equal(section, rig.Window.Screen.Section);
         Assert.Contains((0, 0, 760, 488), rig.Video.Presents.Skip(1));
+    }
+
+    [Fact]
+    public void While_the_folder_dialog_is_open_the_work_posted_to_the_loop_runs()
+    {
+        using var rig = new WindowRig();
+        rig.Window.Show();
+        rig.Drain();
+        var presents = rig.Video.Presents.Count;
+        var ran = false;
+        rig.Video.Folder = "/home/user/clips";
+
+        // What a hotkey, the tray or a second launch posts while the dialog is open, and a paint asked before it.
+        rig.Loop.Post(() => ran = true);
+        rig.Window.Invalidate();
+        rig.Window.PickFolder("/home/user");
+
+        Assert.True(ran, "a posted action waited for the dialog to close");
+        Assert.True(rig.Video.Presents.Count > presents, "the window did not paint while the dialog was open");
+    }
+
+    [Fact]
+    public void A_close_asked_while_the_folder_dialog_is_open_waits_for_its_answer()
+    {
+        using var rig = new WindowRig();
+        rig.Window.Show();
+        rig.Drain();
+        rig.Video.Folder = "/home/user/clips";
+        rig.Window.Close();
+
+        Assert.Equal("/home/user/clips", rig.Window.PickFolder("/home/user"));
+        Assert.False(rig.Window.IsClosed, "the window went under the dialog");
+
+        rig.Drain();
+        Assert.True(rig.Window.IsClosed);
+        Assert.Equal(1, rig.Video.Closes);
+    }
+
+    [Fact]
+    public void A_window_the_desktop_hides_without_minimizing_it_stops_painting_until_it_is_exposed()
+    {
+        using var rig = new WindowRig();
+        rig.Window.Show();
+        rig.Drain();
+
+        rig.Send(rig.WindowEvent(SdlNative.EventWindowOccluded));
+        Assert.True(rig.Window.Screen.Minimized);
+        var presents = rig.Video.Presents.Count;
+        rig.Window.Invalidate();
+        rig.Drain();
+        Assert.Equal(presents, rig.Video.Presents.Count);
+
+        rig.Send(rig.WindowEvent(SdlNative.EventWindowExposed));
+        rig.Drain();
+        Assert.False(rig.Window.Screen.Minimized);
+        Assert.True(rig.Video.Presents.Count > presents);
+    }
+
+    [Fact]
+    public void An_exposed_window_that_was_minimized_by_the_app_is_still_minimized()
+    {
+        using var rig = new WindowRig();
+        rig.Window.Show();
+        rig.Drain();
+
+        rig.Send(rig.WindowEvent(SdlNative.EventWindowMinimized));
+        rig.Send(rig.WindowEvent(SdlNative.EventWindowExposed));
+
+        Assert.True(rig.Window.Screen.Minimized);
     }
 
     [Fact]

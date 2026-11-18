@@ -175,18 +175,6 @@ public sealed class LinuxLoopTests
     }
 
     [Fact]
-    public void An_exception_in_an_action_leaves_run()
-    {
-        using var loop = new LinuxLoop();
-        loop.Post(() => throw new InvalidOperationException("from an action"));
-
-        var thrown = Assert.Throws<InvalidOperationException>(loop.Run);
-
-        Assert.Equal("from an action", thrown.Message);
-        Assert.False(loop.OnLoopThread);
-    }
-
-    [Fact]
     public void The_app_has_no_window_in_front()
     {
         using var loop = new LinuxLoop();

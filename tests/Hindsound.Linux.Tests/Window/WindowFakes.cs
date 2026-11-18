@@ -197,6 +197,8 @@ internal sealed unsafe class FakeVideo : ISdlVideo
 
     public void SetClipboardText(string text) => Clipboard = text;
 
+    public uint KeyFromScancode(uint scancode, ushort mod) => 0;
+
     public string? PickFolder(string startFolder, Action pumpOnce)
     {
         pumpOnce();
