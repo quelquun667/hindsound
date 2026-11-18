@@ -149,8 +149,19 @@ internal sealed unsafe class FakeVideo : ISdlVideo
 
     public bool HasFocus => Focused;
 
+    /// <summary>When set, <see cref="Start"/> fails as SDL does when its video cannot start, with this as SDL's error.</summary>
+    public string? StartFails { get; set; }
+
+    /// <summary>When set, <see cref="Create"/> fails as SDL does when it makes no window, with this as SDL's error.</summary>
+    public string? CreateFails { get; set; }
+
     public void Start(bool offscreen)
     {
+        if (StartFails is { } error)
+        {
+            throw new InvalidOperationException("SDL video did not start: " + error);
+        }
+
         Started = true;
         StartedOffscreen = offscreen;
     }
@@ -159,6 +170,11 @@ internal sealed unsafe class FakeVideo : ISdlVideo
 
     public void Create(string title, int width, int height, int x, int y)
     {
+        if (CreateFails is { } error)
+        {
+            throw new InvalidOperationException("SDL made no window: " + error);
+        }
+
         Created = (width, height);
         Bounds = (x, y, width, height);
     }
