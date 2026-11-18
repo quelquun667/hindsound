@@ -114,7 +114,9 @@ check_library() {
   fi
 
   # The version is in the file as SDL's revision string, "SDL-3.2.30-..." or "SDL-release-3.2.30-...".
-  if ! strings -a "$library" | grep -Eq "SDL-(release-)?${SDL_VERSION//./[.]}([^0-9]|$)"; then
+  # No -q: grep reads all of the output of strings. With -q it leaves at the first match, strings is then killed by SIGPIPE
+  # if it has more to write, and pipefail turns that into a failure of a correct library.
+  if ! strings -a "$library" | grep -E "SDL-(release-)?${SDL_VERSION//./[.]}([^0-9]|$)" > /dev/null; then
     echo "The library does not carry the revision of SDL $SDL_VERSION." >&2
     exit 1
   fi

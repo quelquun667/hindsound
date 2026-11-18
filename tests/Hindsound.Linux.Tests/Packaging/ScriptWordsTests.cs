@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace Hindsound.Linux.Tests.Packaging;
 
 /// <summary>
@@ -35,6 +37,19 @@ public sealed class ScriptWordsTests
         {
             Assert.DoesNotContain(word, text, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public void The_check_of_the_SDL_library_does_not_stop_grep_at_the_first_match_of_the_output_of_strings()
+    {
+        // strings -a of a library writes far more than a pipe holds. grep -q leaves at its first match, strings is killed by
+        // SIGPIPE if it still has output to write, and under pipefail the check then fails a correct library.
+        var lines = File.ReadAllLines(Path.Combine(Root, "tools", "linux", "build-sdl3.sh"));
+
+        Assert.Contains(lines, line => line.TrimStart().StartsWith("set -", StringComparison.Ordinal) && line.Contains("pipefail", StringComparison.Ordinal));
+        var reads = lines.Where(line => line.Contains("strings ", StringComparison.Ordinal) && !line.TrimStart().StartsWith('#')).ToList();
+        Assert.NotEmpty(reads);
+        Assert.DoesNotContain(reads, line => Regex.IsMatch(line, @"\|\s*grep\s+-[A-Za-z]*q"));
     }
 
     private static string RepositoryRoot()
