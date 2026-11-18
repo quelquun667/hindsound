@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-18
+
+Tools for the clips you saved, in the Library: rename, delete, edit, and send to the Discord soundboard.
+
 ### Added
 
 - Each clip in the Library has a menu: right-click its row, or use the `...` button under the list. It offers `Rename`, `Edit...`, `Send to soundboard...`, `Copy`, `Show in folder` and `Delete`.
