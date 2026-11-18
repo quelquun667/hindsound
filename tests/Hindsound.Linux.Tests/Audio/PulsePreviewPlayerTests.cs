@@ -303,6 +303,27 @@ public sealed class PulsePreviewPlayerTests
     }
 
     [Fact]
+    public void A_drain_that_answers_before_the_track_plays_changes_nothing_and_play_still_starts_the_stream()
+    {
+        using var player = NewPlayer();
+        player.Open(FilePath, Track);
+        var stream = _outputs.Last.Stream(0);
+        stream.Feed.Drained(played: true);
+
+        Assert.Equal(0, player.Play(Track));
+
+        Assert.Equal(1, stream.Starts);
+        Assert.True(_silence.IsSilent);
+        Assert.Equal(0, player.StateOf(Track, out var state));
+        Assert.Equal(PreviewTrackState.Playing, state);
+
+        stream.FillAll();
+        stream.Feed.Drained(played: true);
+        Assert.Equal(0, player.StateOf(Track, out state));
+        Assert.Equal(PreviewTrackState.Stopped, state);
+    }
+
+    [Fact]
     public void Stop_then_play_starts_the_stream_again_with_one_hold_at_a_time()
     {
         using var player = NewPlayer();

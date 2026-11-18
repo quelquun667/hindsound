@@ -391,6 +391,12 @@ internal sealed class PulsePreviewPlayer : IPreviewPlayer, IDisposable
 
             lock (_gate)
             {
+                // A drain that completes before the track plays, or after it was stopped, has played nothing: the stream drains again when it starts.
+                if (!_playing)
+                {
+                    return;
+                }
+
                 // Played to its end: nothing left to stop, so a Stop after it does not touch the drained stream.
                 _ended = true;
                 _playing = false;

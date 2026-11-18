@@ -74,6 +74,7 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
         private float[] _buffer = [];
         private IntPtr _drain;
         private bool _draining;
+        private bool _endReached;
         private bool _closed;
 
         private PulsePlaybackStream(PulseConnection connection, int channels, IPulsePlaybackFeed feed)
@@ -107,6 +108,12 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
         {
             ThrowIfGone();
             PulseNative.Release(PulseNative.StreamCork(_stream, 0, IntPtr.Zero, IntPtr.Zero));
+
+            // The end of the file was reached while the stream was corked and its drain has answered already, to no one: drain again, now it plays.
+            if (_endReached && _drain == IntPtr.Zero)
+            {
+                StartDrain(_stream);
+            }
         });
 
         public void Pause() => Locked(() =>
@@ -283,6 +290,14 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
                 return true;
             }
 
+            _endReached = true;
+            StartDrain(stream);
+            return false;
+        }
+
+        // Holding the loop's lock.
+        private void StartDrain(IntPtr stream)
+        {
             _draining = true;
             _drain = PulseNative.StreamDrain(stream, (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, int, IntPtr, void>)&OnDrained, GCHandle.ToIntPtr(_self));
             if (_drain == IntPtr.Zero)
@@ -290,8 +305,6 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
                 _draining = false;
                 _feed.Drained(false);
             }
-
-            return false;
         }
 
         // The callbacks below run on the loop's thread, called by C: nothing may be thrown out of them.

@@ -170,6 +170,55 @@ public sealed class PulsePreviewOnLinuxTests
         }
     }
 
+    [Fact]
+    public async Task A_file_shorter_than_the_stream_s_buffer_plays_and_ends_and_is_silence_in_the_capture()
+    {
+        var module = Pactl("load-module", "module-null-sink", "sink_name=" + Sink);
+        try
+        {
+            var silence = new PulsePlaybackSilence();
+            var gated = new Recorder();
+            var plain = new Recorder();
+            using var gatedSource = PulseCaptureSource.Open(AudioFlow.System, Sink + ".monitor", "Test gated", null, silence);
+            using var plainSource = PulseCaptureSource.Open(AudioFlow.System, Sink + ".monitor", "Test plain", null);
+            gatedSource.PacketAvailable += gated.Take;
+            plainSource.PacketAvailable += plain.Take;
+            gatedSource.Start();
+            plainSource.Start();
+            await Task.Delay(300);
+
+            using (var player = new PulsePreviewPlayer(new ToneDecoder(PreviewHz, seconds: 0.08), silence, () => PulsePlaybackOutput.Connect(Sink)))
+            {
+                Assert.Equal(0, player.Open("/nonexistent/tone.wav", "hindsound_preview_1"));
+                Assert.Equal(0, player.Play("hindsound_preview_1"));
+
+                using var never = new ManualResetEvent(false);
+                var clock = Stopwatch.StartNew();
+                PreviewTrackState state;
+                do
+                {
+                    Assert.True(clock.Elapsed < TimeSpan.FromSeconds(5), "the short file did not end: its drain never answered after the stream started");
+                    player.Wait(never, ClipPreview.PollMs);
+                    Assert.Equal(0, player.StateOf("hindsound_preview_1", out state));
+                }
+                while (state != PreviewTrackState.Stopped);
+
+                Assert.Equal(0, player.Close("hindsound_preview_1"));
+            }
+
+            await Task.Delay(PulsePlaybackSilence.TailMs + 300);
+            gatedSource.Stop();
+            plainSource.Stop();
+
+            Assert.True(Peak(plain.Samples(), PreviewHz) > 0.05, "the plain capture did not hear the short file: it did not play");
+            Assert.True(Peak(gated.Samples(), PreviewHz) < 0.01, $"the short file is in the gated capture at {Peak(gated.Samples(), PreviewHz):0.000}");
+        }
+        finally
+        {
+            Pactl("unload-module", module);
+        }
+    }
+
     // The largest amplitude of one frequency over blocks of 100 ms, on the first channel.
     private static double Peak(float[] interleaved, double hz)
     {
