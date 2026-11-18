@@ -74,7 +74,7 @@ sdl_from_package() {
 
 # The program draws every page of its window into PNG files and leaves: off screen, with the microphone, the clipboard and
 # the shortcuts off, and settings of its own in which the microphone is disabled too. No font folder is given: the app
-# takes the fonts next to it.
+# takes the fonts next to it. It loads SDL too, without opening it, to say in its log whether a window could open.
 dump_window() {
     local label=$1 encoder=$2
     shift 2
@@ -91,6 +91,9 @@ dump_window() {
     local count
     count=$(find "$run/png" -name '*.png' | wc -l)
     [ "$count" -gt 0 ] || fail "$label: --dump-settings wrote no PNG"
+    # The log says where SDL and the fonts came from: with no font folder given, a package must have used its own copies.
+    grep -q -F 'window: SDL next to the program, fonts next to the program' -- "$run/settings.log" \
+        || fail "$label: the window did not load the libSDL3.so.0 and the fonts of the package"
     sdl_from_package "$label" "$encoder" "$run/ld"
     echo "check-packages: $label drew $count PNG files"
 }

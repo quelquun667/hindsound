@@ -30,6 +30,9 @@ internal static class Program
 
         if (options.DumpSettingsFolder is not null)
         {
+            // Not needed to draw, but the log then says whether a window could open here, and where SDL and the fonts come
+            // from: the check of the packages reads it.
+            LinuxWindowSupport.Available(journal.Write);
             return LinuxDump.Write(options.DumpSettingsFolder, options.DumpScale, journal.Write);
         }
 
