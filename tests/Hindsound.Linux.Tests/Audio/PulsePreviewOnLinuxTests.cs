@@ -199,6 +199,84 @@ public sealed class PulsePreviewOnLinuxTests
         }
     }
 
+    /// <summary>
+    /// A track played from its start to its end, as the Library and the editor play one, is heard whole: no start or end of
+    /// the file is lost between the decoder, the stream and the sink.
+    /// </summary>
+    [Fact]
+    public async Task A_track_played_through_is_heard_for_its_whole_length()
+    {
+        var module = Pactl("load-module", "module-null-sink", "sink_name=" + Sink);
+        var log = new List<string>();
+        try
+        {
+            var plain = new Recorder();
+            using var plainSource = PulseCaptureSource.Open(AudioFlow.System, Sink + ".monitor", "Test plain", null);
+            plainSource.PacketAvailable += plain.Take;
+            plainSource.Start();
+            await Task.Delay(300);
+
+            const double Seconds = 1.5;
+            using (var player = new PulsePreviewPlayer(new ToneDecoder(PreviewHz, Seconds), new PulsePlaybackSilence(), () => PulsePlaybackOutput.Connect(Sink), Write))
+            {
+                Assert.Equal(0, player.Open("/nonexistent/tone.wav", "hindsound_preview_1"));
+                Assert.Equal(0, player.Play("hindsound_preview_1"));
+
+                using var never = new ManualResetEvent(false);
+                var clock = Stopwatch.StartNew();
+                PreviewTrackState state;
+                do
+                {
+                    Assert.True(clock.Elapsed < Guard, "the preview did not end. Log: " + string.Join(" | ", log));
+                    player.Wait(never, ClipPreview.PollMs);
+                    Assert.Equal(0, player.StateOf("hindsound_preview_1", out state));
+                }
+                while (state != PreviewTrackState.Stopped);
+
+                Assert.Equal(0, player.Close("hindsound_preview_1"));
+            }
+
+            await Task.Delay(300);
+            plainSource.Stop();
+
+            // The same measure as the test of a stop then a play: the energy of the tone over that of one of its steady blocks.
+            var samples = plain.Samples();
+            const int Block = Rate / 50;
+            var blocks = new List<double>();
+            var energy = 0.0;
+            for (var frame = 0; frame + Block <= samples.Length / 2; frame += Block)
+            {
+                var sum = 0.0;
+                for (var i = frame; i < frame + Block; i++)
+                {
+                    sum += samples[i * 2] * samples[i * 2];
+                }
+
+                blocks.Add(sum / Block);
+                energy += sum;
+            }
+
+            var loudest = blocks.Count == 0 ? 0 : blocks.Max();
+            var steady = blocks.Where(block => block > loudest / 2).Order().ToList();
+            Assert.True(steady.Count > 0, "the plain capture did not hear the preview: it did not play");
+            var heard = energy / steady[steady.Count / 2] / Rate;
+            Assert.True(heard is > Seconds - 0.04 and < Seconds + 0.3, $"the tone of {Seconds} s was heard for {heard:0.000} s. Plain: {plain.Summary()}");
+            Assert.True(plain.Continuous, "the plain capture lost or added frames: " + plain.Gap);
+        }
+        finally
+        {
+            Pactl("unload-module", module);
+        }
+
+        void Write(string line)
+        {
+            lock (log)
+            {
+                log.Add(line);
+            }
+        }
+    }
+
     [Fact]
     public async Task A_capture_whose_thread_is_late_still_silences_the_packets_that_carry_the_preview()
     {
