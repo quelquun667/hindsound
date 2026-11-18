@@ -267,6 +267,25 @@ public sealed class PulsePreviewPlayerTests
     }
 
     [Fact]
+    public void A_stream_that_fails_to_close_does_not_leave_its_file_to_be_read_after_it_was_let_go_of()
+    {
+        using var player = NewPlayer();
+        player.Open(FilePath, Track);
+        player.Play(Track);
+        var stream = _outputs.Last.Stream(0);
+        stream.CloseFails = true;
+
+        Assert.Throws<IOException>(() => player.Close(Track));
+        Assert.True(_decoder.AllDisposed);
+
+        // The server's thread, not knowing the stream is gone, asks again.
+        Assert.Equal(0, Task.Run(() => stream.Feed.Fill(new float[960])).GetAwaiter().GetResult());
+        Assert.False(_decoder.ReadAfterDispose);
+        _clock.Ms += PulsePlaybackSilence.TailMs;
+        Assert.False(_silence.IsSilent);
+    }
+
+    [Fact]
     public void A_whole_preview_of_two_tracks_ends_with_nothing_open_and_the_capture_hearing_again()
     {
         _outputs.PlayWholeFileOnStart = true;
@@ -332,6 +351,18 @@ public sealed class PulsePreviewPlayerTests
             }
         }
 
+        /// <summary>Whether a file was read after it was let go of.</summary>
+        public bool ReadAfterDispose
+        {
+            get
+            {
+                lock (_streams)
+                {
+                    return _streams.Exists(stream => stream.ReadAfterDispose);
+                }
+            }
+        }
+
         public bool AllDisposed
         {
             get
@@ -366,6 +397,8 @@ public sealed class PulsePreviewPlayerTests
 
             public bool Disposed { get; private set; }
 
+            public bool ReadAfterDispose { get; private set; }
+
             public int Channels => 2;
 
             public TimeSpan Duration => announced;
@@ -374,6 +407,8 @@ public sealed class PulsePreviewPlayerTests
 
             public int Read(Span<float> interleaved)
             {
+                ReadAfterDispose |= Disposed;
+
                 if (failAfterReads >= 0 && _reads++ >= failAfterReads)
                 {
                     throw new ClipDecodeException("damaged " + FilePath);
@@ -480,6 +515,16 @@ public sealed class PulsePreviewPlayerTests
             SilentWhenPaused = owner.Silence!.IsSilent;
         }
 
-        public void Close() => Closed = true;
+        /// <summary>Whether closing throws, as a connection already torn down does.</summary>
+        public bool CloseFails { get; set; }
+
+        public void Close()
+        {
+            Closed = true;
+            if (CloseFails)
+            {
+                throw new IOException("The connection to the sound server ended.");
+            }
+        }
     }
 }

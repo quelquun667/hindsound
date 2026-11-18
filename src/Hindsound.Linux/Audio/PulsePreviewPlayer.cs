@@ -226,6 +226,8 @@ internal sealed class PulsePreviewPlayer : IPreviewPlayer, IDisposable
     private sealed class Track(IDecodedStream decoded, PulsePlaybackSilence silence, Action<string> log) : IPulsePlaybackFeed
     {
         private readonly Lock _gate = new();
+        private readonly Lock _decoderGate = new();
+        private bool _decoderDisposed;
         private bool _playing;
         private bool _ended;
         private bool _failed;
@@ -318,7 +320,15 @@ internal sealed class PulsePreviewPlayer : IPreviewPlayer, IDisposable
                     Lift();
                 }
 
-                decoded.Dispose();
+                // Never with the track's own lock held: Fill takes this one, then the track's.
+                lock (_decoderGate)
+                {
+                    if (!_decoderDisposed)
+                    {
+                        _decoderDisposed = true;
+                        decoded.Dispose();
+                    }
+                }
             }
         }
 
@@ -339,26 +349,35 @@ internal sealed class PulsePreviewPlayer : IPreviewPlayer, IDisposable
                 _hold?.Extend(HoldSlack);
             }
 
-            try
+            // The file is read and let go of under one lock: it is never read after it was let go of, even if closing the stream failed.
+            lock (_decoderGate)
             {
-                var written = 0;
-                while (written < interleaved.Length)
+                if (_decoderDisposed)
                 {
-                    var read = decoded.Read(interleaved[written..]);
-                    if (read <= 0)
-                    {
-                        break;
-                    }
-
-                    written += read;
+                    return 0;
                 }
 
-                return written;
-            }
-            catch (Exception exception)
-            {
-                Failed("the file failed while playing: " + exception.GetType().Name);
-                return -1;
+                try
+                {
+                    var written = 0;
+                    while (written < interleaved.Length)
+                    {
+                        var read = decoded.Read(interleaved[written..]);
+                        if (read <= 0)
+                        {
+                            break;
+                        }
+
+                        written += read;
+                    }
+
+                    return written;
+                }
+                catch (Exception exception)
+                {
+                    Failed("the file failed while playing: " + exception.GetType().Name);
+                    return -1;
+                }
             }
         }
 
