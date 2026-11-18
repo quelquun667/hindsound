@@ -191,6 +191,9 @@ allows it. A click on the notification of a clip shows the clip in its folder.
   ./hindsound-*-linux-x64/hindsound
   ```
 
+Both bring what the window needs that a desktop may lack: SDL 3 and the fonts. The rest, FreeType, HarfBuzz and
+fontconfig, comes with every desktop install, so neither asks you to install anything more.
+
 `SHA256SUMS`, next to them, has their checksums: run `sha256sum --check --ignore-missing SHA256SUMS` in the folder where
 you downloaded them.
 
