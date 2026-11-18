@@ -488,7 +488,7 @@ internal sealed partial class SettingsScreen
         return string.Create(CultureInfo.InvariantCulture, $"{tenths / 600}:{tenths % 600 / 10.0:00.0}");
     }
 
-    internal static string KeptText(long ms) => string.Create(CultureInfo.InvariantCulture, $"{ms / 1000.0:0.0} s");
+    internal static string KeptText(long ms) => EditorSelection.KeptText(ms);
 
     internal static string SizeText(long bytes) => bytes < 1_000_000
         ? string.Create(CultureInfo.InvariantCulture, $"about {Math.Max(1, Math.Round(bytes / 1000.0)):0} KB")

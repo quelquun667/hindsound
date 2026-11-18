@@ -327,12 +327,12 @@ internal sealed partial class SettingsScreen
 
     /// <summary>
     /// A double click on a row plays it. The first press of it has already chosen the row; a press on the star, the scroll bar or
-    /// below the rows plays nothing. A list, a menu or a box open by now was opened by that first press: the second one is not for
-    /// it, a new box asks for a new press.
+    /// below the rows plays nothing. A list, a menu, a box or the dialog of Save open by now was opened by that first press: the
+    /// second one is not for it, a new box asks for a new press.
     /// </summary>
     public void MouseDoubleClick(float x, float y)
     {
-        if (PopupOpen || BoxOpen)
+        if (PopupOpen || BoxOpen || _saveDialog is not null)
         {
             return;
         }

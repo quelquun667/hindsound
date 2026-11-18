@@ -549,4 +549,70 @@ public sealed class EditorPageTests : IDisposable
         now = TimeSpan.FromMinutes(5);
         Assert.Equal(30_000, Screen.EditorPlayheadMs);
     }
+
+    [Fact]
+    public void Kept_never_reads_as_the_limit_of_the_soundboard_beside_its_warning()
+    {
+        Open();
+        Selection.Nudge(EditorEnd.End, 5_210 - Selection.EndMs);
+        Assert.Equal(5_210, Selection.KeptMs);
+
+        var drawn = Painted();
+        Assert.Contains(Soundboard.TooLongText, drawn);
+        Assert.Contains("5.21 s", drawn);
+        Assert.DoesNotContain("5.2 s", drawn);
+    }
+
+    [Fact]
+    public void A_replacement_kept_aside_with_fewer_files_than_the_clip_chooses_the_first_and_says_where_the_original_is()
+    {
+        Open(clip: TwoFiles, files: 2);
+        Click(SettingsScreen.EditorSaveId);
+        Click(EditorSaveDialogState.ReplaceId);
+        Screen.EditorSaved(new EditSaveResult(EditSaveOutcome.SavedAside, [@"C:\Clips\clip0003.mp3"]));
+
+        Assert.False(Screen.EditorOpen);
+        Assert.Equal(@"C:\Clips\clip0003.mp3", Screen.EditorChosenPath);
+        var drawn = string.Join(" ", Painted());
+        Assert.Contains(SettingsScreen.EditorSavedAside, drawn);
+        Assert.DoesNotContain(SettingsScreen.EditorAsideLost, drawn);
+    }
+
+    [Fact]
+    public void While_a_save_from_the_dialog_runs_Escape_Cancel_and_Save_do_nothing_and_the_foot_says_so()
+    {
+        Open();
+        Click(SettingsScreen.EditorSaveId);
+        Click(EditorSaveDialogState.ReplaceId);
+        Assert.Null(Screen.EditorDialog);
+        Assert.Contains(SettingsScreen.EditorSaving, Painted());
+        Assert.False(((Button)Screen.WidgetById(SettingsScreen.EditorCancelId)!).Enabled);
+        Assert.False(((Button)Screen.WidgetById(SettingsScreen.EditorSaveId)!).Enabled);
+
+        _rig.Press(Vk.Escape);
+        Click(SettingsScreen.EditorCancelId);
+        Click(SettingsScreen.EditorSaveId);
+        Assert.True(Screen.EditorOpen);
+        Assert.Null(Screen.EditorDialog);
+        Assert.Equal(0, _panel.Closes);
+        Assert.Single(_panel.Saves);
+    }
+
+    [Fact]
+    public void The_second_press_of_a_double_click_on_Save_leaves_the_dialog_it_opened()
+    {
+        Open();
+        var save = Screen.WidgetById(SettingsScreen.EditorSaveId)!.Bounds;
+        Screen.MouseDown(save.MidX, save.MidY);
+        Screen.MouseUp(save.MidX, save.MidY);
+        Assert.NotNull(Screen.EditorDialog);
+        Assert.Equal(EditorSaveDialogState.NameId, Screen.FocusId);
+
+        Screen.MouseDoubleClick(save.MidX, save.MidY);
+        Screen.MouseUp(save.MidX, save.MidY);
+
+        Assert.NotNull(Screen.EditorDialog);
+        Assert.Equal(EditorSaveDialogState.NameId, Screen.FocusId);
+        Assert.Empty(_panel.Saves);
+    }
 }
