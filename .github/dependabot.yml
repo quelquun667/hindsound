@@ -13,8 +13,10 @@ updates:
     directories:
       - /src/Hindsound
       - /src/Hindsound.Core
+      - /src/Hindsound.Linux
       - /tests/Hindsound.Tests
       - /tests/Hindsound.Core.Tests
+      - /tests/Hindsound.Linux.Tests
     schedule:
       interval: weekly
     groups:
