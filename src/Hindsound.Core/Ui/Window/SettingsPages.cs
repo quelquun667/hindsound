@@ -444,7 +444,7 @@ internal sealed partial class SettingsScreen
         y += pitch;
         GainRow("PC sound gain", "audio.systemGain", y, audio.SystemGainDb, Editor.SetSystemGain, true);
         y += pitch;
-        GainRow("Mic gain", "audio.micGain", y, audio.MicGainDb, Editor.SetMicGain, audio.MicEnabled);
+        GainRow("Mic gain", "audio.micGain", y, audio.MicGainDb, Editor.SetMicGain, audio.MicCaptured);
         _contentBottom = y + RowHeight;
     }
 
@@ -458,7 +458,7 @@ internal sealed partial class SettingsScreen
     /// <summary>The bar only moves on what the capture already holds: a mic that is off stays closed.</summary>
     private string? MeterCaption()
     {
-        if (!Editor.Settings.Audio.MicEnabled)
+        if (!Editor.Settings.Audio.MicCaptured)
         {
             return "The microphone is off";
         }
@@ -590,6 +590,13 @@ internal sealed partial class SettingsScreen
         y += pitch;
         SegmentRow("Window size", "general.size", y, GeneralSettings.WindowZooms.Select(zoom => $"{zoom}%").ToList(), () => Math.Max(0, Array.IndexOf(GeneralSettings.WindowZooms, Editor.Settings.General.WindowZoom)), i => Editor.SetWindowZoom(GeneralSettings.WindowZooms[i]));
         y += pitch;
+        // The choice stays lit when the screen cannot hold it; this says why the window is smaller.
+        if (_host.AppliedZoom is > 0 and var applied && applied < Editor.Settings.General.WindowZoom)
+        {
+            Note($"This screen fits up to {applied}%", y - pitch + RowHeight + 10);
+            y += 18;
+        }
+
         ToggleRow("Save notifications", "general.notifications", y, () => Editor.Settings.General.Notifications, Editor.SetNotifications);
         y += pitch;
         SegmentRow("Notification position", "general.position", y, ["Right edge", "Left edge"], () => Editor.Settings.General.NotificationPosition == "left" ? 1 : 0, i => Editor.SetNotificationPosition(i == 1 ? "left" : "right"));

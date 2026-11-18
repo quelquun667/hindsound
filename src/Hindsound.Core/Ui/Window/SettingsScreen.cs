@@ -75,6 +75,9 @@ internal interface IWindowHost
     /// <summary>Starts or stops reading the microphone level.</summary>
     void MeterWanted(bool wanted);
 
+    /// <summary>The window size the screen really holds, in percent, which may be less than the one the settings ask for. 0 if the host does not know.</summary>
+    int AppliedZoom => 0;
+
     /// <summary>Starts or stops the timer of the live wave.</summary>
     void WaveWanted(bool wanted)
     {
@@ -188,7 +191,7 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
     public bool PopupOpen => _popup is not null || _moreList is not null || _clipMenu is not null;
 
     public bool WantsMeter =>
-        (Section == Section.Audio || (Section == Section.FirstRun && _firstRunStep == 1)) && Editor.Settings.Audio.MicEnabled && _status?.MicCapturing == true;
+        (Section == Section.Audio || (Section == Section.FirstRun && _firstRunStep == 1)) && Editor.Settings.Audio.MicCaptured && _status?.MicCapturing == true;
 
     public void SetCanvas(ICanvas canvas)
     {

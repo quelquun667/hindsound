@@ -19,6 +19,9 @@ public sealed class WindowZoomTests : IDisposable
     [DllImport("user32.dll")]
     private static extern int GetWindowRect(nint hwnd, out Rect rect);
 
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForSystem();
+
     public void Dispose()
     {
         _window?.Dispose();
@@ -92,6 +95,60 @@ public sealed class WindowZoomTests : IDisposable
         window.ProbeDpiChange(192);
 
         Assert.EndsWith("bitmap 1520x976", window.ClientSizeText());
+    }
+
+    [Fact]
+    public void A_zoom_the_screen_cannot_hold_stays_chosen_and_the_page_says_what_the_screen_fits()
+    {
+        var window = Open(140);
+        window.ProbeDpiChange(192);
+        window.Screen.ShowSection(Section.General);
+        var canvas = new FakeCanvas();
+
+        window.Screen.Paint(canvas);
+
+        Assert.Equal(140, _rig.Settings.General.WindowZoom);
+        Assert.Contains("This screen fits up to 100%", canvas.Drawn);
+    }
+
+    [Fact]
+    public void A_zoom_the_screen_holds_gets_no_such_line()
+    {
+        var window = Open(140);
+        window.Screen.ShowSection(Section.General);
+        var canvas = new FakeCanvas();
+
+        window.Screen.Paint(canvas);
+
+        Assert.DoesNotContain(canvas.Drawn, text => text.StartsWith("This screen fits", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_zoom_asked_for_while_the_window_is_minimized_is_applied_when_it_comes_back()
+    {
+        var window = Open(120);
+        WindowNative.SendMessageW(window.Hwnd, WindowNative.WM_SIZE, WindowNative.SIZE_MINIMIZED, 0);
+
+        window.ZoomChanged(100);
+        Assert.Equal("912x586, bitmap 912x586", window.ClientSizeText());
+
+        WindowNative.SendMessageW(window.Hwnd, WindowNative.WM_SIZE, 0, 0);
+
+        Assert.Equal("760x488, bitmap 760x488", window.ClientSizeText());
+    }
+
+    [Fact]
+    public void A_work_area_too_small_for_even_100_percent_puts_the_window_at_its_top_left()
+    {
+        // 600 x 400 cannot hold the 760 x 488 window: centred, its title bar would be above the top of the area.
+        _rig.Settings.General.WindowZoom = 100;
+        var work = new ScreenRect(100, 80, 700, 480);
+        var screen = new ScreenInfo(work, work, GetDpiForSystem());
+        _window = new SettingsWindow(_rig.Settings, _rig.Backend, () => 0f, firstRun: false, offscreen: false, screen, () => { });
+
+        GetWindowRect(_window.Hwnd, out var rect);
+
+        Assert.Equal((100, 80), (rect.Left, rect.Top));
     }
 
     [Fact]

@@ -136,7 +136,8 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
         _zoom = ChooseZoom(area, dpi);
         var size = OuterSize(dpi, _zoom);
         var exStyle = offscreen ? Native.WS_EX_NOACTIVATE | Native.WS_EX_TOOLWINDOW : 0;
-        _hwnd = Native.CreateWindowExW(exStyle, ClassName, "Hindsound", Style, area.Left + (area.Width - size.Cx) / 2, area.Top + (area.Height - size.Cy) / 2, size.Cx, size.Cy, 0, 0, instance, 0);
+        var at = Centered(area, size);
+        _hwnd = Native.CreateWindowExW(exStyle, ClassName, "Hindsound", Style, at.Left, at.Top, size.Cx, size.Cy, 0, 0, instance, 0);
         if (_hwnd == 0)
         {
             throw new InvalidOperationException("CreateWindowEx failed");
@@ -149,7 +150,8 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
             _dpi = real;
             _zoom = ChooseZoom(area, real);
             size = OuterSize(real, _zoom);
-            Native.SetWindowPos(_hwnd, 0, 0, 0, size.Cx, size.Cy, Native.SWP_NOMOVE | WindowNative.SWP_NOZORDER | Native.SWP_NOACTIVATE);
+            at = Centered(area, size);
+            Native.SetWindowPos(_hwnd, 0, at.Left, at.Top, size.Cx, size.Cy, WindowNative.SWP_NOZORDER | Native.SWP_NOACTIVATE);
         }
 
         DarkFrame();
@@ -162,6 +164,9 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
     public SettingsScreen Screen { get; }
 
     public nint Hwnd => _hwnd;
+
+    /// <summary>The window size this screen holds, in percent: the one the settings ask for, or the largest that fits.</summary>
+    public int AppliedZoom => _zoom;
 
     public Action Closed { get; }
 
@@ -367,7 +372,8 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
 
     private static uint ColorRef(uint rgb) => ((rgb & 0xFF) << 16) | (rgb & 0xFF00) | ((rgb >> 16) & 0xFF);
 
-    private float Scale => (float)ScaleAt(_dpi, _zoom);
+    /// <summary>What a design pixel is on the screen now: the DPI, then the zoom.</summary>
+    internal float Scale => (float)ScaleAt(_dpi, _zoom);
 
     // An off-screen window never has the keyboard: its keys were sent to it, and what is held on the real keyboard is not
     // theirs. A thread that never took the focus still gets the state of that keyboard (a test thread read the Alt toggle
@@ -666,6 +672,8 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
 
             case WindowNative.WM_SIZE:
                 Screen.WindowMinimized(wParam == WindowNative.SIZE_MINIMIZED);
+                // A size asked for while the window was minimized waits for its way back.
+                ZoomChanged(_wantedZoom);
                 return Native.DefWindowProcW(hwnd, message, wParam, lParam);
 
             case WindowNative.WM_ACTIVATE:
@@ -767,6 +775,10 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
         var top = now.Top + now.Height / 2 - size.Cy / 2;
         Resized(Fit(left, top, size, area), size);
     }
+
+    // Around the middle of the work area, and never above or left of it: when even the smallest window is too big for the screen, its title bar stays in reach.
+    private static (int Left, int Top) Centered(ScreenRect area, Native.SIZE size) =>
+        Fit(area.Left + (area.Width - size.Cx) / 2, area.Top + (area.Height - size.Cy) / 2, size, area);
 
     // Inside the work area, as far as it holds the window.
     private static (int Left, int Top) Fit(int left, int top, Native.SIZE size, ScreenRect area) =>
