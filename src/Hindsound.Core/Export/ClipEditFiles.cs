@@ -199,7 +199,17 @@ internal sealed class ClipEditFiles(IClipDecoder decoder, IRecycleBin recycleBin
             return new EditSaveResult(EditSaveOutcome.Saved, originals);
         }
 
-        return new EditSaveResult(EditSaveOutcome.SavedAside, Rescue(clip, originals, temps, stuck), inBin);
+        var aside = Rescue(clip, originals, temps, stuck);
+        if (aside.Count > 0)
+        {
+            // With the whole original in the Recycle Bin, the edit stands in for the clip the user replaced: it takes its star and
+            // collections. Otherwise (a file of it still here, or gone before the bin) it joins its collections as a copy would. Either
+            // way, no older entry at its name gives it others.
+            var standsIn = recycled == RecycleOutcome.Recycled && !originals.Any(File.Exists);
+            Labels(standsIn ? index.MoveLabels(clip, aside) : index.CopyCollections(clip, aside), "replace aside");
+        }
+
+        return new EditSaveResult(EditSaveOutcome.SavedAside, aside, inBin);
     }
 
     /// <summary>

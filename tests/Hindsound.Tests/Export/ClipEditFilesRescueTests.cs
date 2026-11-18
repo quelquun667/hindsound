@@ -126,6 +126,66 @@ public sealed class ClipEditFilesRescueTests : IDisposable
         }
     }
 
+    [Fact]
+    public void An_edit_kept_aside_once_the_original_went_to_the_bin_takes_its_star_and_collections()
+    {
+        // The bin takes the original, and something takes its name at once: the edit is kept under a name of its own, and it stands
+        // in for the original the user replaced, so the star and the collections go with it.
+        var original = _folder.Clip("dogs.wav", _decoder, Tone(Rate, 0.1f), 1);
+        var clip = Group(original);
+        var files = new ClipEditFiles(_decoder, new BlockingBin(Path.Combine(_folder.Path, "bin")), _index, _journal.Add);
+        var request = new EditRequest(EditorMode.Normal, TimeSpan.Zero, TimeSpan.FromSeconds(0.5), [0.0]);
+
+        var result = files.Save(clip, request, new EditSave(EditSaveChoice.Replace, null), Export, CancellationToken.None);
+
+        Assert.Equal(EditSaveOutcome.SavedAside, result.Outcome);
+        Assert.Equal([Path.Combine(_folder.Path, "dogs (cut).wav")], result.Paths);
+        var moved = Assert.Single(_index.Moved);
+        Assert.Same(clip, moved.From);
+        Assert.Equal(result.Paths, moved.To);
+        Assert.Empty(_index.Copied);
+    }
+
+    [Fact]
+    public void An_edit_kept_aside_beside_an_original_still_there_only_joins_its_collections()
+    {
+        // The bin says the original went, but it is still there: it keeps its star, and the edit joins its collections as a copy.
+        var original = _folder.Clip("dogs.wav", _decoder, Tone(Rate, 0.1f), 1);
+        var clip = Group(original);
+        var files = new ClipEditFiles(_decoder, new SayingBin(), _index, _journal.Add);
+        var request = new EditRequest(EditorMode.Normal, TimeSpan.Zero, TimeSpan.FromSeconds(0.5), [0.0]);
+
+        var result = files.Save(clip, request, new EditSave(EditSaveChoice.Replace, null), Export, CancellationToken.None);
+
+        Assert.Equal(EditSaveOutcome.SavedAside, result.Outcome);
+        var copied = Assert.Single(_index.Copied);
+        Assert.Same(clip, copied.From);
+        Assert.Equal(result.Paths, copied.To);
+        Assert.Empty(_index.Moved);
+    }
+
+    /// <summary>A Recycle Bin that takes every file to a folder of the test, then a folder takes the name of each, which no file can take.</summary>
+    private sealed class BlockingBin(string binFolder) : IRecycleBin
+    {
+        public RecycleOutcome Recycle(IReadOnlyList<string> paths)
+        {
+            Directory.CreateDirectory(binFolder);
+            foreach (var path in paths)
+            {
+                File.Move(path, Path.Combine(binFolder, Path.GetFileName(path)));
+                Directory.CreateDirectory(path);
+            }
+
+            return RecycleOutcome.Recycled;
+        }
+    }
+
+    /// <summary>A Recycle Bin that says it took the files and leaves them where they are.</summary>
+    private sealed class SayingBin : IRecycleBin
+    {
+        public RecycleOutcome Recycle(IReadOnlyList<string> paths) => RecycleOutcome.Recycled;
+    }
+
     /// <summary>A Recycle Bin that takes the first file to a folder of the test and says it took them all: the others stay.</summary>
     private sealed class FirstOnlyBin(string binFolder) : IRecycleBin
     {
