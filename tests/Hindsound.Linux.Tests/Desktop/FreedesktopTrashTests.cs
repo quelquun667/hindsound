@@ -411,6 +411,36 @@ public sealed class FreedesktopTrashTests
         Assert.StartsWith("recycle bin: failed (IOException, 0x", _journal[0]);
     }
 
+    [Fact]
+    public void AHomeTrashThatIsALinkToAnotherFileSystemIsNotRenamedInto()
+    {
+        _fs.Folder("/mnt/big/Trash", device: 2);
+        _fs.Link(Trash, "/mnt/big/Trash");
+        _fs.File("/home/u/clips/a.wav");
+
+        var outcome = Recycle("/home/u/clips/a.wav");
+
+        Assert.Equal(RecycleOutcome.Recycled, outcome);
+        Assert.Equal("audio", _fs.TextOf("/.Trash-1000/files/a.wav"));
+        Assert.DoesNotContain(_fs.Steps, step => step.StartsWith("rename") && step.Contains("/mnt/big"));
+        Assert.DoesNotContain(_fs.Steps, step => step.StartsWith("rename") && step.Contains(Trash));
+    }
+
+    [Fact]
+    public void AHomeTrashOnAnotherFileSystemWithNoTopDirectoryTrashLeavesTheFileWithoutARename()
+    {
+        _fs.Folder("/mnt/big/Trash", device: 2);
+        _fs.Link(Trash, "/mnt/big/Trash");
+        _fs.File("/home/u/clips/a.wav");
+        _fs.MakeFault = path => path == "/.Trash-1000" ? Errno.Access : 0;
+
+        var outcome = Recycle("/home/u/clips/a.wav");
+
+        Assert.Equal(RecycleOutcome.CannotRecycle, outcome);
+        Assert.True(_fs.Exists("/home/u/clips/a.wav"));
+        Assert.DoesNotContain(_fs.Steps, step => step.StartsWith("rename"));
+    }
+
     // The top directory trash of another file system.
 
     private void Usb()

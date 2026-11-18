@@ -241,10 +241,20 @@ internal sealed class FreedesktopTrash : IRecycleBin
             return null;
         }
 
-        // On the file system of the home, the home trash only: another trash would only scatter the files.
+        // On the file system of the home, the home trash only: another trash would only scatter the files. Unless that trash
+        // is a link, or a mount, to another file system (a Trash moved to a bigger disk): a rename into it is bound to fail
+        // with EXDEV, so the trash of the top directory is used, as for any file the home trash cannot take.
         if (home == device)
         {
-            return OwnedTrash(TrashInfo.Join(_dataHome, "Trash"), top: null, strict: false, "home");
+            if (OwnedTrash(TrashInfo.Join(_dataHome, "Trash"), top: null, strict: false, "home") is not { } homeTrash)
+            {
+                return null;
+            }
+
+            if (_files.Stat(homeTrash.FilesFolder, follow: true) is { Found: true } inFiles && inFiles.Device == device)
+            {
+                return homeTrash;
+            }
         }
 
         var top = TopDirectory(folder, device);
