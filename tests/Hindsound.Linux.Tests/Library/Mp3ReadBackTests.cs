@@ -34,6 +34,21 @@ public sealed class Mp3ReadBackTests : IDisposable
     }
 
     [Fact]
+    public void The_proof_s_clip_passes_at_the_level_its_normalization_gave_it_but_not_at_another_pitch()
+    {
+        // The proof's clip is normalized like a real one: its sine comes back at the normalizer's level, not the one written
+        // (0.166 on the runner for 0.25 written). The fixture's 0.5 stands for a level the check does not know in advance.
+        File.WriteAllBytes(_folder.Combine("sine.mp3"), ClipFixtures.SineStereo48);
+
+        Assert.Equal(0, Mp3ReadBack.Check(Folder, _decoder, _log.Add, seconds: 0.6, hz: 997, amplitude: null));
+        Assert.Contains(_log, line => line.StartsWith("prove-mp3: read back 0.6", StringComparison.Ordinal));
+        Assert.Equal(Mp3ReadBack.ExitDoesNotReadBack, Mp3ReadBack.Check(Folder, _decoder, _log.Add, seconds: 0.6, hz: 997, amplitude: 0.25));
+        Assert.Equal(Mp3ReadBack.ExitDoesNotReadBack, Mp3ReadBack.Check(Folder, _decoder, _log.Add, seconds: 0.6, hz: 440, amplitude: null));
+        Assert.Equal(Mp3ReadBack.ExitDoesNotReadBack, Mp3ReadBack.Check(Folder, _decoder, _log.Add, seconds: 0.6, hz: 1100, amplitude: null));
+        Assert.Equal(Mp3ReadBack.ExitDoesNotReadBack, Mp3ReadBack.Check(Folder, _decoder, _log.Add, seconds: 1, hz: 997, amplitude: null));
+    }
+
+    [Fact]
     public void No_mp3_or_one_that_does_not_decode_fails_and_says_why()
     {
         Assert.Equal(Mp3ReadBack.ExitDoesNotReadBack, Mp3ReadBack.Check(Folder, _decoder, _log.Add));
