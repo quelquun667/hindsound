@@ -4,6 +4,7 @@ using Hindsound.Export;
 using Hindsound.Library;
 using Hindsound.Linux.Library;
 using Hindsound.Linux.Tests.Export;
+using static Hindsound.Linux.Tests.Library.ClipSignals;
 
 namespace Hindsound.Linux.Tests.Library;
 
@@ -43,6 +44,34 @@ internal static class ClipSignals
         }
 
         return samples;
+    }
+
+    public static float[] ReadAll(IDecodedStream stream)
+    {
+        var all = new List<float>();
+        var buffer = new float[4096];
+        int read;
+        while ((read = stream.Read(buffer)) > 0) all.AddRange(buffer.AsSpan(0, read).ToArray());
+        return all.ToArray();
+    }
+
+    // The shift, in frames, at which the decoded signal best matches the reference over frames [from, to) of the reference.
+    public static int BestLag(float[] decoded, float[] reference, int from, int to)
+    {
+        var best = 0;
+        var bestSum = double.MinValue;
+        for (var lag = -1500; lag <= 1500; lag++)
+        {
+            var sum = 0.0;
+            for (var n = from; n < to; n++) sum += (double)decoded[n + lag] * reference[n];
+            if (sum > bestSum)
+            {
+                bestSum = sum;
+                best = lag;
+            }
+        }
+
+        return best;
     }
 }
 
@@ -492,15 +521,6 @@ public sealed class LinuxClipDecoderTests : IDisposable
         return path;
     }
 
-    private static float[] ReadAll(IDecodedStream stream)
-    {
-        var all = new List<float>();
-        var buffer = new float[4096];
-        int read;
-        while ((read = stream.Read(buffer)) > 0) all.AddRange(buffer.AsSpan(0, read).ToArray());
-        return all.ToArray();
-    }
-
     private static float[] ReadSome(IDecodedStream stream, int floats)
     {
         var buffer = new float[floats];
@@ -534,25 +554,6 @@ public sealed class LinuxClipDecoderTests : IDisposable
         var expected = 2 * ClipSignals.Frequency * (to - from);
         Assert.InRange(peak, Amplitude * 0.95, Amplitude * 1.05);
         Assert.InRange(crossings, expected - 2, expected + 2);
-    }
-
-    // The shift, in frames, at which the decoded signal best matches the reference over frames [from, to) of the reference.
-    private static int BestLag(float[] decoded, float[] reference, int from, int to)
-    {
-        var best = 0;
-        var bestSum = double.MinValue;
-        for (var lag = -1500; lag <= 1500; lag++)
-        {
-            var sum = 0.0;
-            for (var n = from; n < to; n++) sum += (double)decoded[n + lag] * reference[n];
-            if (sum > bestSum)
-            {
-                bestSum = sum;
-                best = lag;
-            }
-        }
-
-        return best;
     }
 
     /// <summary>A PCM wav at any rate and channel count. <paramref name="bits"/> is negative for float.</summary>
