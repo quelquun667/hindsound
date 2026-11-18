@@ -155,6 +155,16 @@ public sealed class ClipFileWorkTests : IDisposable
     }
 
     [Fact]
+    public void A_clip_the_bin_finds_already_gone_is_told_gone_and_logged_without_its_name()
+    {
+        var bin = new FakeBin(RecycleOutcome.Gone);
+
+        Assert.Equal(ClipDeleteOutcome.Gone, ClipFileWork.Delete(Clip("secret.mp3"), bin, _journal.Enqueue));
+        Assert.NotEmpty(_journal);
+        Assert.DoesNotContain(_journal, line => line.Contains("secret", StringComparison.Ordinal) || line.Contains(At("secret.mp3"), StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Both_files_of_a_clip_go_to_the_bin_in_one_call()
     {
         var bin = new FakeBin(RecycleOutcome.Recycled);

@@ -613,6 +613,10 @@ internal static class ClipFileWork
             case RecycleOutcome.CannotRecycle:
                 journal?.Invoke("clip delete: the Recycle Bin can't take it, the files stay");
                 return ClipDeleteOutcome.CannotRecycle;
+            case RecycleOutcome.Gone:
+                // Deleted by another hand: what the user asked is done, the next reading drops the line.
+                journal?.Invoke("clip delete: already gone");
+                return ClipDeleteOutcome.Gone;
             default:
                 journal?.Invoke($"clip delete: failed ({outcome})");
                 return ClipDeleteOutcome.Failed;
