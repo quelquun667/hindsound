@@ -1,3 +1,6 @@
+using Hindsound.Export;
+using Hindsound.Library;
+
 namespace Hindsound.Ui.Window;
 
 /// <summary>
@@ -13,26 +16,34 @@ internal static class DumpScenesLibrary
     /// <summary>The name of each picture, and what brings the screen there.</summary>
     public static IReadOnlyList<(string Name, Action<SettingsScreen> Act)> Scenes { get; } =
     [
-        ("library-menu", s => RightClickRow(s, 1)),
-        ("library-menu-pied", s => Press(s, SettingsScreen.ClipMoreId)),
-        ("library-renommer", s => Key(s, ClipKeys.F2)),
-        ("library-renommer-vide", s =>
+        Scene("library-menu", s => RightClickRow(s, 1)),
+        Scene("library-menu-pied", s => Press(s, SettingsScreen.ClipMoreId)),
+        Scene("library-renommer", s => Key(s, ClipKeys.F2)),
+        Scene("library-renommer-vide", s =>
         {
             Key(s, ClipKeys.F2);
             s.EditChanged(string.Empty);
         }),
-        ("library-renommer-signe", s =>
+        Scene("library-renommer-signe", s =>
         {
             Key(s, ClipKeys.F2);
             s.EditChanged("best: moment");
         }),
-        ("library-supprimer-clip", s => Key(s, ClipKeys.Delete)),
-        ("library-supprimer-2-fichiers", s =>
+        Scene("library-supprimer-clip", s => Key(s, ClipKeys.Delete)),
+        Scene("library-supprimer-2-fichiers", s =>
         {
             s.SelectClip(TwoFilesClip);
             Key(s, ClipKeys.Delete);
         }),
     ];
+
+    /// <summary>A scene with an editor behind the page, as the window has: the menu then lists Edit... and Send to soundboard....</summary>
+    private static (string Name, Action<SettingsScreen> Act) Scene(string name, Action<SettingsScreen> act) =>
+        (name, s =>
+        {
+            s.SetEditor(new SampleEditor());
+            act(s);
+        });
 
     /// <summary>A right click on a row on screen, towards its middle, where a user would make it.</summary>
     private static void RightClickRow(SettingsScreen s, int slot)
@@ -54,5 +65,35 @@ internal static class DumpScenesLibrary
     {
         s.TabTo(SettingsScreen.ClipListId);
         s.Key(vk, 0);
+    }
+
+    /// <summary>An editor that does nothing: the scenes of this page never open it.</summary>
+    private sealed class SampleEditor : IEditorPanel
+    {
+        public void Load(ClipGroup clip)
+        {
+        }
+
+        public long EstimateBytes(EditRequest request) => 0;
+
+        public void Play(EditRequest request)
+        {
+        }
+
+        public void StopPlaying()
+        {
+        }
+
+        public void Save(EditRequest request, EditSave save)
+        {
+        }
+
+        public void HandToDiscord(string path)
+        {
+        }
+
+        public void Close()
+        {
+        }
     }
 }

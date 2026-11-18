@@ -327,13 +327,18 @@ internal sealed partial class SettingsScreen
 
     /// <summary>
     /// A double click on a row plays it. The first press of it has already chosen the row; a press on the star, the scroll bar or
-    /// below the rows plays nothing.
+    /// below the rows plays nothing. A list, a menu or a box open by now was opened by that first press: the second one is not for
+    /// it, a new box asks for a new press.
     /// </summary>
     public void MouseDoubleClick(float x, float y)
     {
-        var overlay = PopupOpen || BoxOpen;
+        if (PopupOpen || BoxOpen)
+        {
+            return;
+        }
+
         MouseDown(x, y);
-        if (overlay || BoxOpen || Section != Section.Library || _pressedId != ClipListId || ClipList is not { } list)
+        if (BoxOpen || Section != Section.Library || _pressedId != ClipListId || ClipList is not { } list)
         {
             return;
         }
@@ -583,7 +588,9 @@ internal sealed partial class SettingsScreen
         }
 
         var chosen = ChosenClip;
-        if (_lineNotice is { } notice && !string.Equals(notice.Clip, chosen?.Main.Path, Library.PathRules.Comparison))
+        // A sentence said for the clip a reading is still to bring stays until it comes: only another clip, chosen, takes it off.
+        if (_lineNotice is { } notice && !string.Equals(notice.Clip, chosen?.Main.Path, Library.PathRules.Comparison)
+            && !(_wantedClip is not null && string.Equals(notice.Clip, _wantedClip, Library.PathRules.Comparison)))
         {
             _lineNotice = null;
         }

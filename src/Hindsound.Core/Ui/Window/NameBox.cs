@@ -320,10 +320,10 @@ internal static class NameBox
         var isDelete = state.IsQuestion;
         var inner = box.W - 2 * Inset;
 
-        // The extension of a clip is not part of the name typed: it stands to the right of the field, out of the native box's way.
+        // The extension of a clip is not part of the name typed: it stands in grey at the right of the field, out of the native box's way.
         var extension = state.Kind == NameBoxKind.RenameClip ? Path.GetExtension(state.Clip!.Main.Path) : string.Empty;
         var extensionWidth = extension.Length > 0 ? MathF.Ceiling(c.Measure(extension, Face.Body, TextSize)) + ExtensionGap : 0;
-        var field = new Box(box.X + Inset, box.Y + FieldTop, inner - extensionWidth, FieldHeight);
+        var field = new Box(box.X + Inset, box.Y + FieldTop, inner, FieldHeight);
         widgets.Add(new Painted((canvas, _) =>
         {
             canvas.Dim(DimOpacity);
@@ -344,10 +344,6 @@ internal static class NameBox
             {
                 canvas.TextMid(state.Title, Face.Title, 22, box.X + Inset, box.Y + 30, Theme.Text);
                 canvas.TextMid(state.FieldLabel, Face.Body, 13, box.X + Inset, box.Y + 58, Theme.Muted);
-                if (extension.Length > 0)
-                {
-                    canvas.TextRight(extension, Face.Body, TextSize, box.Right - Inset, field.MidY, Theme.Faded);
-                }
             }
         }));
 
@@ -359,6 +355,8 @@ internal static class NameBox
                 Face = Face.Body,
                 Size = TextSize,
                 Enabled = !state.Waiting,
+                Suffix = extension.Length > 0 ? extension : null,
+                SuffixWidth = extensionWidth,
                 Bounds = field,
             });
         }
