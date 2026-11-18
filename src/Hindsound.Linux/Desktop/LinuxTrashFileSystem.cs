@@ -81,15 +81,27 @@ internal sealed partial class LinuxTrashFileSystem : ITrashFileSystem
 
     public int CreateFile(string path, string content)
     {
+        // The open comes first, on its own: when it fails (a file that exists, no right to write) this call made nothing, and
+        // nothing is deleted. Only a file this call made, and failed to write, is taken away.
+        FileStream file;
         try
         {
-            using (var file = new FileStream(path, new FileStreamOptions
+            file = new FileStream(path, new FileStreamOptions
             {
                 Mode = FileMode.CreateNew,
                 Access = FileAccess.Write,
                 Share = FileShare.None,
                 UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite,
-            }))
+            });
+        }
+        catch (Exception ex)
+        {
+            return ErrorOf(ex);
+        }
+
+        try
+        {
+            using (file)
             {
                 file.Write(new UTF8Encoding(false).GetBytes(content));
             }
@@ -98,14 +110,8 @@ internal sealed partial class LinuxTrashFileSystem : ITrashFileSystem
         }
         catch (Exception ex)
         {
-            // A file that exists is the one answer the caller acts on; a half-written one of ours is taken away.
-            var error = ErrorOf(ex);
-            if (error != Errno.Exists)
-            {
-                Delete(path);
-            }
-
-            return error;
+            Delete(path);
+            return ErrorOf(ex);
         }
     }
 

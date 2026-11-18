@@ -397,6 +397,35 @@ public sealed class FreedesktopTrashOnLinuxTests : IDisposable
     }
 
     [Fact]
+    public void CreateFileInAFolderThatCannotBeWrittenAnswersExistsForAFileThereAndKeepsIt()
+    {
+        var folder = Path.Combine(_root, "info");
+        Directory.CreateDirectory(folder);
+        var theirs = Path.Combine(folder, "a.wav.trashinfo");
+        File.WriteAllText(theirs, "theirs");
+        File.SetUnixFileMode(folder, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        try
+        {
+            // A user that is root writes into any folder: nothing to look at then.
+            if (Environment.UserName == "root")
+            {
+                return;
+            }
+
+            // The file exists: the answer is Exists, not a refusal to write, and the file of another is not removed.
+            Assert.Equal(Errno.Exists, _files.CreateFile(theirs, "ours"));
+            Assert.Equal(Errno.Access, _files.CreateFile(Path.Combine(folder, "b.wav.trashinfo"), "ours"));
+
+            Assert.Equal("theirs", File.ReadAllText(theirs));
+            Assert.Equal(["a.wav.trashinfo"], Directory.GetFiles(folder).Select(Path.GetFileName));
+        }
+        finally
+        {
+            File.SetUnixFileMode(folder, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
+    [Fact]
     public void RenameNeverReplacesWhatIsAtTheDestination()
     {
         var from = Clip("from.wav", "from");
