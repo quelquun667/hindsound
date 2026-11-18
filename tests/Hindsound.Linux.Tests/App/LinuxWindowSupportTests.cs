@@ -28,6 +28,34 @@ public sealed class LinuxWindowSupportTests
         Assert.DoesNotContain("/", line, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void The_reason_SDL_did_not_load_keeps_the_words_of_the_loader_and_drops_every_folder()
+    {
+        var reason = LinuxWindowSupport.Reason(
+            "libSDL3.so.0 was not found: /home/you/app/libSDL3.so.0 (Unable to load shared library '/home/you/app/libSDL3.so.0'.\n"
+            + "/home/you/app/libSDL3.so.0: version `GLIBC_2.34' not found (required by /home/you/app/libSDL3.so.0)); libSDL3.so.0 (cannot open)");
+
+        Assert.Equal(
+            "libSDL3.so.0 was not found: libSDL3.so.0 (Unable to load shared library 'libSDL3.so.0'. "
+            + "libSDL3.so.0: version `GLIBC_2.34' not found (required by libSDL3.so.0)); libSDL3.so.0 (cannot open)",
+            reason);
+        Assert.DoesNotContain("/", reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_system_without_sdl_says_why_in_a_second_line_when_the_loader_gave_a_reason()
+    {
+        var lines = LinuxWindowSupport.NoSdlLines(true, "libSDL3.so.0 was not found: /home/you/app/libSDL3.so.0 (version `GLIBC_2.34' not found)").ToList();
+
+        Assert.Equal(
+            [
+                "window: none, the libSDL3.so.0 next to the program cannot be loaded, nor one of the system",
+                "window: libSDL3.so.0 was not found: libSDL3.so.0 (version `GLIBC_2.34' not found)",
+            ],
+            lines);
+        Assert.Equal([LinuxWindowSupport.NoSdlLine(false)], LinuxWindowSupport.NoSdlLines(false, null));
+    }
+
     [Theory]
     [InlineData(true, "window: none, the libSDL3.so.0 next to the program cannot be loaded, nor one of the system")]
     [InlineData(false, "window: none, libSDL3.so.0 is not next to the program and cannot be loaded from the system")]
