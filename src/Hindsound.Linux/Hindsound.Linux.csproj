@@ -38,6 +38,8 @@
   <ItemGroup>
     <!-- MIT, no reflection, trimmable. -->
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.95.2" />
+    <!-- MIT, managed code only, no reflection: the mp3 decoder of the clips (Library). -->
+    <PackageReference Include="NLayer" Version="3.0.1" />
   </ItemGroup>
 
   <ItemGroup>
