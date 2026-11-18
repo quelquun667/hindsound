@@ -15,6 +15,9 @@ internal delegate void SdlEventHandler(in SdlNative.Event e);
 [SupportedOSPlatform("linux")]
 internal sealed unsafe class SdlPump : ILoopPump
 {
+    /// <summary>The most events one wait hands out; the rest are for the next wait, which returns at once.</summary>
+    internal const int MaxBurst = 64;
+
     private readonly uint _wakeType;
 
     // 1 while a wake event is in the queue: no second one is pushed until the wait takes it.
@@ -44,12 +47,16 @@ internal sealed unsafe class SdlPump : ILoopPump
             return;
         }
 
-        // Everything already queued goes out in one turn, so a burst of mouse motion does not cost a turn of the loop each.
-        do
+        // What is already queued goes out in one turn, so a burst of mouse motion does not cost a turn of the loop each. The
+        // turn ends at the wake, which says the loop has posted work to run, or after a burst's worth: a flood of events (a
+        // slider dragged with a fast mouse) does not keep the posted work and the timers waiting until the queue is empty.
+        for (var handed = 0; handed < MaxBurst; handed++)
         {
-            Dispatch(ref e);
+            if (Dispatch(ref e) || !SdlNative.PollEvent(&e))
+            {
+                return;
+            }
         }
-        while (SdlNative.PollEvent(&e));
     }
 
     public void Wake()
@@ -68,15 +75,17 @@ internal sealed unsafe class SdlPump : ILoopPump
         }
     }
 
-    private void Dispatch(ref SdlNative.Event e)
+    // True for the wake, which no handler sees.
+    private bool Dispatch(ref SdlNative.Event e)
     {
         if (e.Type == _wakeType)
         {
             // Cleared before the loop looks at its queue again: a post made after this pushes a new wake.
             Volatile.Write(ref _wakePending, 0);
-            return;
+            return true;
         }
 
         Handler?.Invoke(in e);
+        return false;
     }
 }

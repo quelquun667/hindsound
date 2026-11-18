@@ -59,6 +59,7 @@ public sealed unsafe class SdlOffscreenOnLinuxTests
 
                 DrawsOurPixels(window);
                 ThePumpWakesTheLoop();
+                ThePumpHandsOutOneBurstPerWait();
             }
             finally
             {
@@ -155,5 +156,48 @@ public sealed unsafe class SdlOffscreenOnLinuxTests
         Assert.True(posted);
         Assert.DoesNotContain(handled, h => h.Type == pump.WakeType);
         Assert.Contains((ownType, 7, true), handled);
+    }
+
+    // A flood of events does not hold the loop for as long as the queue is not empty: a wait hands out one burst at most, and
+    // stops at the wake, which says posted work is waiting.
+    private static void ThePumpHandsOutOneBurstPerWait()
+    {
+        // What an earlier pump left in the queue (its last wake) is not part of the count.
+        SdlNative.Event old;
+        while (SdlNative.PollEvent(&old))
+        {
+        }
+
+        var pump = new SdlPump();
+        var ownType = SdlNative.RegisterEvents(1);
+        Assert.NotEqual(0u, ownType);
+        var handled = 0;
+        pump.Handler = (in SdlNative.Event e) => handled++;
+
+        PushOwn(ownType, SdlPump.MaxBurst * 3);
+        pump.Wait(1000);
+        Assert.Equal(SdlPump.MaxBurst, handled);
+        pump.Wait(1000);
+        pump.Wait(1000);
+        Assert.Equal(SdlPump.MaxBurst * 3, handled);
+
+        // The wake first, then a flood: the wait ends at the wake, and the flood waits for the next one.
+        handled = 0;
+        pump.Wake();
+        PushOwn(ownType, 10);
+        pump.Wait(1000);
+        Assert.Equal(0, handled);
+        pump.Wait(1000);
+        Assert.Equal(10, handled);
+    }
+
+    private static void PushOwn(uint type, int count)
+    {
+        for (var i = 0; i < count; i++)
+        {
+            var e = default(SdlNative.Event);
+            e.User.Type = type;
+            Assert.True(SdlNative.PushEvent(&e), SdlNative.Error());
+        }
     }
 }
