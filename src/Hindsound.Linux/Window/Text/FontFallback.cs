@@ -14,9 +14,10 @@ internal sealed unsafe class FontFallback : IDisposable
     private nint _config;
     private bool _started;
 
-    /// <summary>The file and the face index of a font with outlines that has <paramref name="codePoint"/>, or null.</summary>
+    /// <summary>The file and the face index of a font with outlines that has <paramref name="codePoint"/>, or null. The file
+    /// is fontconfig's bytes ended by a zero, kept as they are: a name that is not valid UTF-8 still opens.</summary>
     /// <param name="weight">fontconfig's weight: 80 regular, 180 semibold.</param>
-    public (string Path, int Index)? Find(int codePoint, int weight)
+    public (byte[] Path, int Index)? Find(int codePoint, int weight)
     {
         if (!_started)
         {
@@ -69,7 +70,10 @@ internal sealed unsafe class FontFallback : IDisposable
                     }
 
                     var index = FcPatternGetInteger(font, "index", 0, out var i2) == FcResultMatch ? i2 : 0;
-                    return (Marshal.PtrToStringUTF8((nint)file)!, index);
+                    var name = MemoryMarshal.CreateReadOnlySpanFromNullTerminated(file);
+                    var path = new byte[name.Length + 1];
+                    name.CopyTo(path);
+                    return (path, index);
                 }
 
                 return null;

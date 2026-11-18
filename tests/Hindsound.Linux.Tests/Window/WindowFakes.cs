@@ -203,7 +203,10 @@ internal sealed unsafe class FakeVideo : ISdlVideo
         return Folder;
     }
 
-    public ILoopPump NewPump(SdlEventHandler handler) => new FakePump(this, handler);
+    /// <summary>Thrown by <see cref="NewPump"/> when set, as SDL with no event type left.</summary>
+    public Exception? NewPumpFails { get; set; }
+
+    public ILoopPump NewPump(SdlEventHandler handler) => NewPumpFails is { } fails ? throw fails : new FakePump(this, handler);
 
     public bool Push(in SdlNative.Event e)
     {

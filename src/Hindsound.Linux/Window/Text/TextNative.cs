@@ -95,8 +95,9 @@ internal static unsafe partial class TextNative
     [LibraryImport(FreeType)]
     public static partial int FT_Done_FreeType(nint library);
 
-    [LibraryImport(FreeType, StringMarshalling = StringMarshalling.Utf8)]
-    public static partial int FT_New_Face(nint library, string path, nint faceIndex, out nint face);
+    // The path is the system's bytes, ended by a zero: a name that is not valid UTF-8 reaches the file as it is.
+    [LibraryImport(FreeType)]
+    public static partial int FT_New_Face(nint library, byte* path, nint faceIndex, out nint face);
 
     [LibraryImport(FreeType)]
     public static partial int FT_Done_Face(nint face);
@@ -121,8 +122,8 @@ internal static unsafe partial class TextNative
     [LibraryImport(HarfBuzz)]
     public static partial byte* hb_version_string();
 
-    [LibraryImport(HarfBuzz, StringMarshalling = StringMarshalling.Utf8)]
-    public static partial nint hb_blob_create_from_file(string path);
+    [LibraryImport(HarfBuzz)]
+    public static partial nint hb_blob_create_from_file(byte* path);
 
     [LibraryImport(HarfBuzz)]
     public static partial uint hb_blob_get_length(nint blob);

@@ -104,19 +104,27 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
             }
 
             _canvas = NewCanvas(out _bits, out _width, out _height);
+            _field = new LinuxTextField(_video.ClipboardText, _video.SetClipboardText) { Repaint = FieldRepaint };
+            _pump = _video.NewPump(Handle);
+            _loop.Pump = _pump;
+            Screen = new SettingsScreen(request.Settings, request.Backend, this, _canvas, request.FirstRun);
+            _field.Changed = Screen.EditChanged;
         }
         catch
         {
+            // A window that failed to open leaves nothing: not the loop's wait, the window, SDL's video nor the bitmap.
+            if (_pump is not null && ReferenceEquals(_loop.Pump, _pump))
+            {
+                _loop.Pump = null;
+            }
+
             _video.Close();
+            _canvas?.Dispose();
+            FreeBitmap(_bits);
             throw;
         }
 
         Interlocked.Increment(ref s_windows);
-        _field = new LinuxTextField(_video.ClipboardText, _video.SetClipboardText) { Repaint = FieldRepaint };
-        _pump = _video.NewPump(Handle);
-        _loop.Pump = _pump;
-        Screen = new SettingsScreen(request.Settings, request.Backend, this, _canvas, request.FirstRun);
-        _field.Changed = Screen.EditChanged;
     }
 
     /// <summary>Opens a window on SDL itself.</summary>

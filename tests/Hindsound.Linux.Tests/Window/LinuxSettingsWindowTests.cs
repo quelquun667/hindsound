@@ -1,5 +1,8 @@
 using System.Runtime.Versioning;
+using Hindsound.App;
+using Hindsound.Linux.App;
 using Hindsound.Linux.Window;
+using Hindsound.Settings;
 using Hindsound.Ui;
 using Hindsound.Ui.Window;
 
@@ -139,6 +142,59 @@ public sealed unsafe class LinuxSettingsWindowTests
         rig.Window.MeterWanted(true);
         rig.RunFor(250);
         Assert.Equal(5, rig.MicReads);
+    }
+
+    [Fact]
+    public void A_window_that_fails_to_make_its_pump_leaves_no_window_bitmap_nor_video()
+    {
+        var video = new FakeVideo { NewPumpFails = new InvalidOperationException("no event type left") };
+        using var loop = new LinuxLoop(() => video.Clock);
+        var windows = LinuxSettingsWindow.OpenWindows;
+        var bitmaps = LinuxSettingsWindow.LiveBitmaps;
+        var closed = 0;
+
+        var error = Assert.Throws<InvalidOperationException>(() => OpenOn(video, loop, () => closed++));
+
+        Assert.Equal("no event type left", error.Message);
+        Assert.Equal(1, video.Closes);
+        Assert.Null(loop.Pump);
+        Assert.Equal(windows, LinuxSettingsWindow.OpenWindows);
+        Assert.Equal(bitmaps, LinuxSettingsWindow.LiveBitmaps);
+        Assert.Equal(0, closed);
+    }
+
+    [Fact]
+    public void A_window_that_fails_after_taking_the_loops_wait_gives_it_back()
+    {
+        var video = new FakeVideo();
+        using var loop = new LinuxLoop(() => video.Clock);
+
+        // The wait the loop had before throws when the window's pump replaces it: the window has taken the loop's wait by then.
+        loop.Pump = new FailingWakePump();
+        var windows = LinuxSettingsWindow.OpenWindows;
+        var bitmaps = LinuxSettingsWindow.LiveBitmaps;
+
+        Assert.Throws<InvalidOperationException>(() => OpenOn(video, loop, () => { }));
+
+        Assert.Null(loop.Pump);
+        Assert.Equal(1, video.Closes);
+        Assert.Equal(windows, LinuxSettingsWindow.OpenWindows);
+        Assert.Equal(bitmaps, LinuxSettingsWindow.LiveBitmaps);
+    }
+
+    private static LinuxSettingsWindow OpenOn(FakeVideo video, LinuxLoop loop, Action closed)
+    {
+        var request = new SettingsWindowRequest(new AppSettings().Normalize(), new CountingBackend(), () => 0f, false, true, default, closed);
+        return new LinuxSettingsWindow(request, loop, () => new BlockText(), video);
+    }
+
+    private sealed class FailingWakePump : ILoopPump
+    {
+        public void Wait(int timeoutMs)
+        {
+        }
+
+        public void Wake() => throw new InvalidOperationException("the old wait failed to wake");
     }
 
     [Fact]
