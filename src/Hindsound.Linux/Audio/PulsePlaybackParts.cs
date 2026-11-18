@@ -24,7 +24,7 @@ internal interface IPulsePlaybackStream
     /// <summary>Uncorks the stream: it plays.</summary>
     void Start();
 
-    /// <summary>Corks the stream and drops what it has not played yet: the sound stops at once.</summary>
+    /// <summary>Corks the stream: the sound stops at once, and what it has not played yet waits for the next <see cref="Start"/>.</summary>
     void Pause();
 
     /// <summary>Ends the stream and what it plays. Once it has returned, the feed is called no more. Twice is once.</summary>
