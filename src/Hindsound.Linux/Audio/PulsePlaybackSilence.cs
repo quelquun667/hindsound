@@ -41,14 +41,24 @@ internal sealed class PulsePlaybackSilence
     /// <summary>Whether the capture of the PC's sound was silent <paramref name="millisecondsAgo"/> before now.</summary>
     public bool IsSilentAgo(long millisecondsAgo) => IsSilentAt(_nowMs() - Math.Max(millisecondsAgo, 0));
 
+    /// <summary>The time on this clock, the one <see cref="IsSilentDuring"/> is asked in.</summary>
+    public long NowMs => _nowMs();
+
     /// <summary>Whether the capture was silent at <paramref name="ms"/> on this clock. Before the oldest stretch kept, it was not.</summary>
-    public bool IsSilentAt(long ms)
+    public bool IsSilentAt(long ms) => IsSilentDuring(ms, ms);
+
+    /// <summary>
+    /// Whether the capture was silent at any moment from <paramref name="fromMs"/> to <paramref name="toMs"/>, both included, on
+    /// this clock: a packet captured across the start or the end of a silent stretch carries some of the preview.
+    /// </summary>
+    public bool IsSilentDuring(long fromMs, long toMs)
     {
         var now = _nowMs();
+        toMs = Math.Max(toMs, fromMs);
         lock (_gate)
         {
             _holds.RemoveAll(hold => hold.EndMs < now - HistoryMs);
-            return _holds.Exists(hold => hold.StartMs <= ms && ms < hold.EndMs);
+            return _holds.Exists(hold => hold.StartMs <= toMs && fromMs < hold.EndMs);
         }
     }
 

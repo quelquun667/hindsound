@@ -18,6 +18,7 @@ internal sealed unsafe class PulseCaptureSource : ICaptureSource
     private readonly TaskCompletionSource<bool> _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly int _blockAlign;
     private readonly PulsePlaybackSilence? _silence;
+    private readonly PulseCaptureTimeline? _timeline;
     private GCHandle _self;
     private IntPtr _stream;
     private int _ended;
@@ -32,6 +33,7 @@ internal sealed unsafe class PulseCaptureSource : ICaptureSource
         _connection = connection;
         _silence = PulseCaptureRules.SilenceOf(flow, silence);
         Format = PulseFormats.WaveFormatFor(flow);
+        _timeline = _silence is null ? null : new PulseCaptureTimeline(Format.SampleRate);
         _blockAlign = Format.BlockAlign;
         DeviceName = deviceName;
     }
@@ -223,7 +225,7 @@ internal sealed unsafe class PulseCaptureSource : ICaptureSource
             }
 
             // Judged for each packet, by when its sound was captured: a thread that was late must not read the end of a preview as real audio.
-            var flags = PulseFormats.FlagsOf(hole, IsSilenced(stream, bytes));
+            var flags = PulseFormats.FlagsOf(hole, IsSilenced(bytes / _blockAlign));
             try
             {
                 PacketAvailable?.Invoke(packet, flags, _position, 0);
@@ -242,17 +244,18 @@ internal sealed unsafe class PulseCaptureSource : ICaptureSource
         }
     }
 
-    // Whether the packet just peeked, of this many bytes, was captured while the preview silenced the PC's sound: read now, less
-    // the audio the stream still holds behind it.
-    private bool IsSilenced(IntPtr stream, int packetBytes)
+    // Whether the frames of the packet just peeked were captured, any of them, while the preview silenced the PC's sound. Judged
+    // by when they were captured, from the frames counted since the stream started: when the capture's thread is held, the
+    // audio waits in the socket or the server, where the stream cannot say how much there is.
+    private bool IsSilenced(int frames)
     {
-        if (_silence is null)
+        if (_silence is null || _timeline is null)
         {
             return false;
         }
 
-        var backlog = PulseCaptureRules.BacklogMs(PulseNative.StreamReadableSize(stream), packetBytes, Format.AverageBytesPerSecond);
-        return _silence.IsSilentAgo(backlog);
+        var (fromMs, toMs) = _timeline.Place(_silence.NowMs, _position, _position + frames);
+        return _silence.IsSilentDuring(fromMs, toMs);
     }
 
     // The callbacks below run on the loop's thread, called by C: nothing may be thrown out of them.
