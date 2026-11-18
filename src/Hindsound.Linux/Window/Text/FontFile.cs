@@ -41,7 +41,27 @@ internal sealed unsafe class FontFile : IDisposable
 
     /// <summary>The font at <paramref name="path"/> (face <paramref name="index"/> of a collection), or null if FreeType or
     /// HarfBuzz cannot read it or it has no outlines.</summary>
-    public static FontFile? Open(nint library, int id, string path, int index)
+    public static FontFile? Open(nint library, int id, string path, int index) => Open(library, id, PathBytes(path), index);
+
+    /// <summary>The font at <paramref name="path"/>, the file's name as the system's bytes ended by a zero, as fontconfig
+    /// gives it: a name that is not valid UTF-8 is never turned into a string and back.</summary>
+    public static FontFile? Open(nint library, int id, byte[] path, int index)
+    {
+        fixed (byte* file = path)
+        {
+            return Open(library, id, file, index);
+        }
+    }
+
+    /// <summary>A path as the bytes <see cref="Open(nint, int, byte[], int)"/> takes: UTF-8, ended by a zero.</summary>
+    public static byte[] PathBytes(string path)
+    {
+        var bytes = new byte[System.Text.Encoding.UTF8.GetByteCount(path) + 1];
+        System.Text.Encoding.UTF8.GetBytes(path, bytes);
+        return bytes;
+    }
+
+    private static FontFile? Open(nint library, int id, byte* path, int index)
     {
         if (FT_New_Face(library, path, index, out var ftFace) != 0 || ftFace == 0)
         {
@@ -67,7 +87,8 @@ internal sealed unsafe class FontFile : IDisposable
         var hbFont = hb_font_create(hbFace);
         hb_ot_font_set_funcs(hbFont);
         hb_font_set_scale(hbFont, metrics.UnitsPerEm, metrics.UnitsPerEm);
-        return new FontFile(id, System.IO.Path.GetFileName(path), ftFace, blob, hbFace, hbFont, metrics);
+        var name = System.IO.Path.GetFileName(System.Text.Encoding.UTF8.GetString(System.Runtime.InteropServices.MemoryMarshal.CreateReadOnlySpanFromNullTerminated(path)));
+        return new FontFile(id, name, ftFace, blob, hbFace, hbFont, metrics);
     }
 
     /// <summary>Whether the font has a glyph of its own for this code point.</summary>
