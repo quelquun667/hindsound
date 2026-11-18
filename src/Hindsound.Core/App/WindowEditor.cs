@@ -60,6 +60,9 @@ internal sealed class WindowEditor(
     private Task _tail = Task.CompletedTask;
     private CancellationTokenSource _cancel = new();
 
+    // Cancels the selections asked to play so far: a Stop that comes while one is written is not lost.
+    private CancellationTokenSource _stopPreview = new();
+
     // The WAVs of the selection not yet removed, and the one handed to the player last, which stays while it may play.
     private readonly List<string> _previewFiles = [];
     private string? _previewPlaying;
@@ -174,8 +177,16 @@ internal sealed class WindowEditor(
         _post(() => TellPreview(session, PreviewState.Opening));
         var export = Snapshot();
         var path = Path.Combine(_tempFolder, string.Create(CultureInfo.InvariantCulture, $"Hindsound-preview-{Environment.ProcessId}-{Interlocked.Increment(ref s_lastPreview)}.wav"));
-        Queue("preview", cancel =>
+        CancellationToken stop;
+        lock (_gate)
         {
+            stop = _stopPreview.Token;
+        }
+
+        Queue("preview", left =>
+        {
+            using var both = CancellationTokenSource.CreateLinkedTokenSource(left, stop);
+            var cancel = both.Token;
             try
             {
                 _files.WritePreview(clip, request, path, export, cancel);
@@ -213,10 +224,17 @@ internal sealed class WindowEditor(
     {
         lock (_gate)
         {
+            // In the lock a written WAV is taken in, as for Close: one still being written is removed, never played.
+            _stopPreview.Cancel();
+            _stopPreview = new CancellationTokenSource();
             _previewPlaying = null;
         }
 
         _preview?.Stop();
+
+        // Told at once: a selection stopped while its WAV was written never reaches the player, which would tell nothing.
+        var session = _session;
+        _post(() => TellPreview(session, PreviewState.Stopped));
 
         // A file the player still holds goes when the player says it has stopped.
         DeletePreviewFiles();
@@ -232,9 +250,10 @@ internal sealed class WindowEditor(
         }
 
         var export = Snapshot();
-        Queue("save", cancel =>
+        Queue("save", _ =>
         {
-            var result = _files.Save(clip, request, save, export, cancel);
+            // Never cancelled by leaving the page: a save asked goes to its end, and its answer is told all the same.
+            var result = _files.Save(clip, request, save, export, CancellationToken.None);
             _post(() => TellSaved(session, result));
         });
     }
@@ -329,15 +348,18 @@ internal sealed class WindowEditor(
         }
     }
 
+    // The screen takes the answer of a save with its page closed too. A page opened since is another edit, which never
+    // takes it for its own.
     private void TellSaved(int session, EditSaveResult result)
     {
-        if (session == _session)
-        {
-            _screen.EditorSaved(result);
-        }
-        else if (result.Outcome == EditSaveOutcome.Saved)
+        if (session != _session && result.Outcome is EditSaveOutcome.Saved or EditSaveOutcome.SavedAside)
         {
             _journal("editor: saved after the page was left");
+        }
+
+        if (session == _session || _clip is null)
+        {
+            _screen.EditorSaved(result);
         }
     }
 

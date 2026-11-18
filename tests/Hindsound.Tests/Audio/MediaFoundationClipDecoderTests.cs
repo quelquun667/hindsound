@@ -3,6 +3,8 @@ using System.Text;
 using Hindsound.Audio;
 using Hindsound.Export;
 using Hindsound.Library;
+using NAudio.Lame;
+using NAudio.Wave;
 
 namespace Hindsound.Tests.Audio;
 
@@ -227,6 +229,50 @@ public sealed class MediaFoundationClipDecoderTests : IDisposable
         AssertSine(after, 2, 1.5, 480, 0.02);
     }
 
+    [Theory]
+    [InlineData(128, 0.2)]
+    [InlineData(128, 0.15)]
+    [InlineData(192, 0.2)]
+    [InlineData(192, 0.15)]
+    public void A_seek_near_the_end_of_an_mp3_gives_its_last_frames_and_all_of_them(int kbps, double back)
+    {
+        // The shortest selection, at the very end of the clip: the first packet after the seek is then close to the last.
+        var path = Path.Combine(_folder, $"end-{kbps}-{back * 100}.mp3");
+        Encoders.WriteMp3(path, Sine(Rate, 2), 2, kbps);
+
+        using var whole = _decoder.Open(path);
+        var all = ReadAll(whole);
+
+        using var stream = _decoder.Open(path);
+        stream.Seek(TimeSpan.FromSeconds(Seconds - back));
+        var tail = ReadAll(stream);
+
+        var from = (int)Math.Round((Seconds - back) * Rate) * 2;
+        Assert.Equal(all.Length - from, tail.Length);
+        for (var i = 0; i < tail.Length; i++) Assert.Equal(all[from + i], tail[i], 0.01);
+    }
+
+    [Theory]
+    [InlineData(1.0)]
+    [InlineData(1.5)]
+    [InlineData(2.9)]
+    public void A_seek_in_an_mp3_at_44_1_kHz_gives_the_same_frames_as_reading_up_to_there(double at)
+    {
+        var path = Path.Combine(_folder, $"cd-{at * 10}.mp3");
+        WriteMp3(path, 44100, Sine(44100, 2), 192);
+
+        using var whole = _decoder.Open(path);
+        var all = ReadAll(whole);
+
+        using var stream = _decoder.Open(path);
+        stream.Seek(TimeSpan.FromSeconds(at));
+        var after = ReadSome(stream, 2 * 480);
+
+        // One frame off at 48 kHz would be 0.065 away on this sine.
+        var from = (int)Math.Round(at * Rate) * 2;
+        for (var i = 0; i < after.Length; i++) Assert.Equal(all[from + i], after[i], 0.01);
+    }
+
     [Fact]
     public void A_seek_back_to_the_start_reads_the_file_again()
     {
@@ -347,6 +393,18 @@ public sealed class MediaFoundationClipDecoderTests : IDisposable
 
         Assert.InRange(peak, Amplitude * 0.95, Amplitude * 1.05);
         Assert.InRange(crossings, 1990, 1998);
+    }
+
+    /// <summary>A constant-bitrate mp3 at any rate, with its LAME tag (the app's own writer is fixed at 48 kHz).</summary>
+    private static void WriteMp3(string path, int rate, float[] stereo, int kbps)
+    {
+        var data = new byte[stereo.Length * 2];
+        Encoders.ToPcm16(stereo, data);
+
+        // Opened for reading too, so that LAME writes its tag back into the first frame when it closes.
+        using var file = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None);
+        using var writer = new LameMP3FileWriter(file, new WaveFormat(rate, 16, 2), kbps);
+        writer.Write(data, 0, data.Length);
     }
 
     /// <summary>A 16-bit PCM wav at any rate and channel count (the app's own writer is fixed at 48 kHz).</summary>
