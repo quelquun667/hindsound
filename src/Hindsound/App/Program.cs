@@ -58,7 +58,8 @@ internal static class Program
         {
             try
             {
-                return Ui.Window.SettingsDump.Write(options.DumpSettingsFolder, options.DumpScale);
+                Ui.Window.SettingsDump.Write(options.DumpSettingsFolder, options.DumpScale, (width, height, scale) => new Ui.Window.GdiCanvas(width, height, scale));
+                return Ui.Window.FolderPicker.SelfCheck() ? 0 : 3;
             }
             catch (Exception ex)
             {

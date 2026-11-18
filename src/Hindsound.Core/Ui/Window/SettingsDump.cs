@@ -241,14 +241,17 @@ internal static unsafe class SettingsDump
     internal static Audio.AudioEngineStatus PausedStatus(Audio.AudioEngineStatus open) =>
         open with { Activity = Audio.CaptureActivity.Paused, SystemCapturing = false, MicCapturing = false };
 
-    public static int Write(string folder, double scale)
+    /// <summary>Draws every scene into <paramref name="folder"/>, one PNG each, named after the scene and the scale.</summary>
+    /// <param name="newCanvas">Makes the canvas the pages are drawn on, from its width and height in physical pixels and the scale;
+    /// the dump disposes it. On Windows, a GdiCanvas.</param>
+    public static void Write(string folder, double scale, Func<int, int, double, PixelCanvas> newCanvas)
     {
         Directory.CreateDirectory(folder);
         var host = new QuietHost();
         var suffix = "@" + (int)Math.Round(scale * 100);
         var width = (int)Math.Round(SettingsScreen.WindowWidth * scale);
         var height = (int)Math.Round(SettingsScreen.WindowHeight * scale);
-        using var canvas = new GdiCanvas(width, height, scale);
+        using var canvas = newCanvas(width, height, scale);
         var sampleStatus = new Audio.AudioEngineStatus(Audio.CaptureActivity.Capturing, true, true, true, "Speakers", "Headset", true, TimeSpan.FromMinutes(5), 86_688_000);
 
         void Shot(string name, Action<SettingsScreen, SampleBackend>? prepare = null, bool firstRun = false, bool focus = false)
@@ -731,7 +734,5 @@ internal static unsafe class SettingsDump
                 set(s);
             }, focus: true);
         }
-
-        return FolderPicker.SelfCheck() ? 0 : 3;
     }
 }
