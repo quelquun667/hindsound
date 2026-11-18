@@ -150,6 +150,19 @@ public sealed class SettingsWindowTests : IDisposable
     }
 
     [Fact]
+    public void The_wheel_just_left_of_the_edge_of_the_side_bar_leaves_the_page_at_the_zoom_of_the_window()
+    {
+        Screen.ShowSection(Section.General);
+        _window.ZoomChanged(120);
+        Assert.Equal(120, _window.AppliedZoom);
+
+        // At 120% a point 6 design pixels inside the side bar is 7 pixels short of its edge: the DPI alone would put it on the page.
+        WheelAt(-120, SettingsScreen.NavWidth - 6, ScreenRig.PageY);
+
+        Assert.Equal(0, Screen.Scroll);
+    }
+
+    [Fact]
     public void Text_set_in_the_real_box_reaches_the_settings()
     {
         Screen.ShowSection(Section.Export);
