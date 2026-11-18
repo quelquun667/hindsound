@@ -282,20 +282,4 @@ public sealed class LinuxLoopPumpTests
 
         Assert.Equal(["posted", "after quit"], ran);
     }
-
-    [Fact]
-    public void An_exception_in_a_window_event_leaves_run()
-    {
-        using var loop = new LinuxLoop();
-        var pump = new FakePump();
-        loop.Pump = pump;
-        pump.Raise(() => throw new InvalidOperationException("from a window event"));
-
-        // A loop that did not wait through its pump would never see the event: the guard ends it, and nothing is thrown.
-        using var guard = new Timer(_ => loop.Quit(), null, GuardMs, Timeout.Infinite);
-        var thrown = Assert.Throws<InvalidOperationException>(loop.Run);
-
-        Assert.Equal("from a window event", thrown.Message);
-        Assert.False(loop.OnLoopThread);
-    }
 }

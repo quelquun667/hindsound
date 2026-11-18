@@ -1,4 +1,5 @@
 using Hindsound.App;
+using Hindsound.Ui;
 
 namespace Hindsound.Linux.App;
 
@@ -12,8 +13,9 @@ namespace Hindsound.Linux.App;
 /// <see cref="After"/>, <see cref="Quit"/> and <see cref="Dispose"/> wake it from any thread. Every guarantee above holds
 /// with or without a pump.
 /// </summary>
-/// <remarks>An exception thrown by an action, or by a window event the pump hands out, leaves <see cref="Run"/>, as one
-/// thrown in a window procedure ends the app on Windows.</remarks>
+/// <remarks>An exception thrown by an action, a timer or a window event the pump hands out is reported through
+/// <see cref="UiErrors"/> and the loop goes on, as the Windows loop does: one failed piece of work must not end the app,
+/// and the buffer with it.</remarks>
 internal sealed class LinuxLoop : IAppLoop
 {
     private readonly object _gate = new();
@@ -126,7 +128,7 @@ internal sealed class LinuxLoop : IAppLoop
         {
             while (Next() is { } action)
             {
-                action();
+                RunGuarded(action);
             }
         }
         finally
@@ -217,7 +219,28 @@ internal sealed class LinuxLoop : IAppLoop
 
             // Outside the lock: the pump hands the window's events out here, on the loop thread, and they may post. A wake
             // that comes between the lock and this wait is not lost, since a pump keeps it for its next wait.
-            pump.Wait(wait);
+            try
+            {
+                pump.Wait(wait);
+            }
+            catch (Exception ex)
+            {
+                // A handler of the window threw: the events it left stay in the queue of the pump, for the next wait.
+                UiErrors.Report(ex);
+            }
+        }
+    }
+
+    // One failed piece of work must not take the rest of the queue with it.
+    private static void RunGuarded(Action action)
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception ex)
+        {
+            UiErrors.Report(ex);
         }
     }
 }
