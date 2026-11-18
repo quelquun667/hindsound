@@ -30,7 +30,7 @@ internal sealed unsafe class PulseCaptureSource : ICaptureSource
     private PulseCaptureSource(PulseConnection connection, AudioFlow flow, string? deviceName, PulsePlaybackSilence? silence)
     {
         _connection = connection;
-        _silence = silence;
+        _silence = PulseCaptureRules.SilenceOf(flow, silence);
         Format = PulseFormats.WaveFormatFor(flow);
         _blockAlign = Format.BlockAlign;
         DeviceName = deviceName;

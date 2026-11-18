@@ -94,6 +94,8 @@ internal static class PulseCaptureRules
     /// </summary>
     public static PulsePlaybackSilence? SilenceFor(CaptureRequest request, PulsePlaybackSilence? silence) =>
         request.Flow == AudioFlow.System && request.ExcludeOwnProcess && request.TargetProcessId is null ? silence : null;
+    /// <summary>The silence a capture of this flow reads: the PC's sound only, whoever opens it. The microphone keeps what it hears.</summary>
+    public static PulsePlaybackSilence? SilenceOf(AudioFlow flow, PulsePlaybackSilence? silence) => flow == AudioFlow.System ? silence : null;
 
     /// <summary>
     /// How long ago the sound of the packet being read was captured, at most: the audio still queued behind it, which the

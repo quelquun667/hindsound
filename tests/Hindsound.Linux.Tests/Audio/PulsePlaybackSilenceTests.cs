@@ -120,6 +120,16 @@ public sealed class PulsePlaybackSilenceTests
     }
 
     [Fact]
+    public void A_capture_of_the_microphone_never_keeps_the_silence_whoever_opens_it()
+    {
+        var silence = new PulsePlaybackSilence();
+
+        Assert.Same(silence, PulseCaptureRules.SilenceOf(AudioFlow.System, silence));
+        Assert.Null(PulseCaptureRules.SilenceOf(AudioFlow.Mic, silence));
+        Assert.Null(PulseCaptureRules.SilenceOf(AudioFlow.System, null));
+    }
+
+    [Fact]
     public void While_silenced_a_packet_says_it_is_silent_and_keeps_the_other_flags()
     {
         Assert.Equal(PacketFlags.TimestampError, PulseFormats.FlagsOf(hole: false, silenced: false));
