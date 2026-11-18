@@ -485,6 +485,13 @@ internal static unsafe partial class SdlNative
     [LibraryImport(Library, EntryPoint = "SDL_GetModState")]
     public static partial ushort GetModState();
 
+    /// <summary>
+    /// The keycode a scancode types on the layout with these modifiers applied (Shift, Caps Lock): '!' for the key 1 with
+    /// Shift on a US layout. <c>key_event</c> false, as the keycode of a key event has no modifier applied.
+    /// </summary>
+    [LibraryImport(Library, EntryPoint = "SDL_GetKeyFromScancode")]
+    public static partial uint GetKeyFromScancode(uint scancode, ushort modstate, [MarshalAs(UnmanagedType.U1)] bool keyEvent);
+
     // SDL_video.h: what a window needs to fit its screen.
 
     /// <summary>SDL_Point.</summary>

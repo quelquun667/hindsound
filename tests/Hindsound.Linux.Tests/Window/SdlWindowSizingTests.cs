@@ -74,6 +74,22 @@ public sealed class SdlWindowSizingTests
         Assert.Equal(text, SdlWindowSizing.TypedText(keycode, modifiers));
 
     [Theory]
+    [InlineData(0x31u, 0x21u, "!")]
+    [InlineData(0x26u, 0x31u, "1")]
+    [InlineData(0x61u, 0x41u, "A")]
+    [InlineData(0xE9u, 0xC9u, "É")]
+    public void With_Shift_a_key_types_what_the_layout_gives_it(uint own, uint layout, string text) =>
+        Assert.Equal(text, SdlWindowSizing.TypedText(own, HotkeyGesture.ModShift, layout));
+
+    [Fact]
+    public void A_layout_character_does_not_open_the_way_to_a_key_with_Ctrl_or_a_key_without_character()
+    {
+        Assert.Null(SdlWindowSizing.TypedText('1', HotkeyGesture.ModControl | HotkeyGesture.ModShift, '!'));
+        Assert.Null(SdlWindowSizing.TypedText(0x40000050u, HotkeyGesture.ModShift, '!'));
+        Assert.Equal("1", SdlWindowSizing.TypedText('1', HotkeyGesture.ModShift, 0x7F));
+    }
+
+    [Theory]
     [InlineData(Vk.Tab)]
     [InlineData(Vk.Enter)]
     [InlineData(Vk.Escape)]

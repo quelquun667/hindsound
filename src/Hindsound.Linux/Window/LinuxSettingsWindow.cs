@@ -467,7 +467,11 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
 
         // This key brought a scrolled-away field back. Text input was off when it went down, so SDL sent no text for it:
         // the field gets the character of the key, as the box gets its WM_CHAR on Windows.
-        if (!used && fieldWasHidden && _field.Visible && SdlWindowSizing.TypedText(key.Key, modifiers) is { } text)
+        // With Shift or Caps Lock on, the layout says what the key types ('!' for Shift and 1): not the key's own character.
+        var layoutKey = (key.Mod & (SdlKeys.ModLShift | SdlKeys.ModRShift | SdlKeys.ModCaps)) != 0
+            ? _video.KeyFromScancode((uint)key.Scancode, key.Mod)
+            : 0u;
+        if (!used && fieldWasHidden && _field.Visible && SdlWindowSizing.TypedText(key.Key, modifiers, layoutKey) is { } text)
         {
             var hadFocus = _field.Focused;
             _field.Focus();

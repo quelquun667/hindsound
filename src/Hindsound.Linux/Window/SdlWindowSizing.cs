@@ -90,13 +90,20 @@ internal static class SdlWindowSizing
     /// </summary>
     /// <param name="keycode">The SDL keycode: the character of the key on the layout, unshifted, for a key that types one.</param>
     /// <param name="modifiers">The <c>HotkeyGesture</c> flags.</param>
-    public static string? TypedText(uint keycode, uint modifiers)
+    /// <param name="layoutKeycode">What the layout types with Shift or Caps Lock on (SDL_GetKeyFromScancode); 0 when not known:
+    /// the character is then the key's own, in capitals when Shift is down.</param>
+    public static string? TypedText(uint keycode, uint modifiers, uint layoutKeycode = 0)
     {
         const uint scancodeMask = 1u << 30;
         if ((modifiers & ~Hindsound.Input.HotkeyGesture.ModShift) != 0 || (keycode & scancodeMask) != 0 || keycode < 0x20 || keycode == 0x7F
             || keycode > 0x10FFFF || keycode is >= 0xD800 and <= 0xDFFF)
         {
             return null;
+        }
+
+        if (layoutKeycode is >= 0x20 and <= 0x10FFFF and not 0x7F and not (>= 0xD800 and <= 0xDFFF))
+        {
+            return char.ConvertFromUtf32((int)layoutKeycode);
         }
 
         var text = char.ConvertFromUtf32((int)keycode);
