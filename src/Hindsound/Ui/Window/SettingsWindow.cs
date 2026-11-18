@@ -30,6 +30,14 @@ internal static unsafe partial class WindowNative
         public fixed byte Reserved[32];
     }
 
+    public const uint WM_GETMINMAXINFO = 0x0024;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MINMAXINFO
+    {
+        public Native.POINT Reserved, MaxSize, MaxPosition, MinTrackSize, MaxTrackSize;
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     public struct TRACKMOUSEEVENT
     {
@@ -914,12 +922,24 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
         }
     }
 
+    /// <summary>The largest side an off-screen window may take, in pixels: more than any zoom of the window at any DPI.</summary>
+    private const int OffscreenMaxSide = 8000;
+
     [UnmanagedCallersOnly]
     private static nint WndProc(nint hwnd, uint message, nuint wParam, nint lParam)
     {
         // An exception crossing this boundary would end the process, and the buffer with it.
         try
         {
+            // Off screen, the window stands for one on a screen of any size, so Windows must not cut it down to the screens of the
+            // PC it runs on: a CI runner has a screen 1024 wide, narrower than the window at 140 %. Asked during CreateWindow too.
+            if (message == WindowNative.WM_GETMINMAXINFO && _current is { _offscreen: true })
+            {
+                var limits = (WindowNative.MINMAXINFO*)lParam;
+                limits->MaxTrackSize = new Native.POINT { X = OffscreenMaxSide, Y = OffscreenMaxSide };
+                return 0;
+            }
+
             // Messages sent during CreateWindow arrive before the screen exists.
             return _current is { } window && window._hwnd == hwnd && window.Screen is not null
                 ? window.Handle(hwnd, message, wParam, lParam)

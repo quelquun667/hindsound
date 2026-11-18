@@ -22,6 +22,29 @@ public sealed class WindowZoomTests : IDisposable
     [DllImport("user32.dll")]
     private static extern uint GetDpiForSystem();
 
+    [DllImport("user32.dll")]
+    private static extern int SetWindowPos(nint hwnd, nint after, int x, int y, int w, int h, uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int index);
+
+    private const int VirtualScreenWidth = 78, VirtualScreenHeight = 79;
+    private const uint KeepPlaceOrderAndFocus = 0x0002 | 0x0004 | 0x0010;
+
+    [Fact]
+    public void An_off_screen_window_keeps_a_size_wider_and_taller_than_all_the_screens_of_the_PC()
+    {
+        // A CI runner has a screen 1024 wide, narrower than the window at 140 %: Windows must not cut the window down to it.
+        var window = Open(100);
+        var width = GetSystemMetrics(VirtualScreenWidth) + 500;
+        var height = GetSystemMetrics(VirtualScreenHeight) + 500;
+
+        Assert.NotEqual(0, SetWindowPos(window.Hwnd, 0, 0, 0, width, height, KeepPlaceOrderAndFocus));
+
+        Assert.NotEqual(0, GetWindowRect(window.Hwnd, out var rect));
+        Assert.Equal((width, height), (rect.Right - rect.Left, rect.Bottom - rect.Top));
+    }
+
     public void Dispose()
     {
         _window?.Dispose();
