@@ -120,6 +120,56 @@ public sealed class PulsePreviewOnLinuxTests
         await engine.StopAsync();
     }
 
+    [Fact]
+    public async Task A_capture_whose_thread_is_late_still_silences_the_packets_that_carry_the_preview()
+    {
+        var module = Pactl("load-module", "module-null-sink", "sink_name=" + Sink);
+        try
+        {
+            var silence = new PulsePlaybackSilence();
+            var gated = new Recorder();
+            var plain = new Recorder();
+            var stall = 0;
+            using var gatedSource = PulseCaptureSource.Open(AudioFlow.System, Sink + ".monitor", "Test gated", null, silence);
+            using var plainSource = PulseCaptureSource.Open(AudioFlow.System, Sink + ".monitor", "Test plain", null);
+            gatedSource.PacketAvailable += (packet, flags, position, qpc) =>
+            {
+                // Once the preview plays, the capture's thread is held for longer than the preview and the silence's tail together.
+                if (Volatile.Read(ref stall) == 1 && Interlocked.Exchange(ref stall, 2) == 1)
+                {
+                    Thread.Sleep(1_800);
+                }
+
+                gated.Take(packet, flags, position, qpc);
+            };
+            plainSource.PacketAvailable += plain.Take;
+            gatedSource.Start();
+            plainSource.Start();
+            await Task.Delay(300);
+
+            using (var player = new PulsePreviewPlayer(new ToneDecoder(PreviewHz, seconds: 0.5), silence, () => PulsePlaybackOutput.Connect(Sink)))
+            {
+                Assert.Equal(0, player.Open("/nonexistent/tone.wav", "hindsound_preview_1"));
+                Volatile.Write(ref stall, 1);
+                Assert.Equal(0, player.Play("hindsound_preview_1"));
+                await Task.Delay(2_600);
+                Assert.Equal(0, player.Close("hindsound_preview_1"));
+            }
+
+            await Task.Delay(500);
+            gatedSource.Stop();
+            plainSource.Stop();
+
+            Assert.True(Peak(plain.Samples(), PreviewHz) > 0.1, "the plain capture did not hear the preview: it did not play");
+            Assert.True(gated.SilentPackets > 0, "no packet of the gated capture was silenced");
+            Assert.True(Peak(gated.Samples(), PreviewHz) < 0.01, $"the late reader let the preview into the gated capture at {Peak(gated.Samples(), PreviewHz):0.000}");
+        }
+        finally
+        {
+            Pactl("unload-module", module);
+        }
+    }
+
     // The largest amplitude of one frequency over blocks of 100 ms, on the first channel.
     private static double Peak(float[] interleaved, double hz)
     {
