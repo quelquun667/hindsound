@@ -82,12 +82,12 @@ jobs:
           if-no-files-found: error
           overwrite: true
 
-  # The Linux app, published as the users get it: one self-contained, trimmed file, with its MP3 encoder, made into an
-  # AppImage and a tar.gz. Built on the oldest Ubuntu the runners offer, so that it runs on the newer ones; both packages
-  # are started once (--prove-mp3).
+  # The Linux app, published as the users get it: one self-contained, trimmed file, with its MP3 encoder, its window library
+  # and its fonts, made into an AppImage and a tar.gz. Built on the oldest Ubuntu the runners offer, so that it runs on the
+  # newer ones; the program of both packages is started (--prove-mp3, then --dump-settings).
   linux:
     runs-on: ubuntu-22.04
-    timeout-minutes: 25
+    timeout-minutes: 35
     env:
       HINDSOUND_VERSION: ${{ inputs.version }}
     steps:
@@ -115,21 +115,64 @@ jobs:
           sudo apt-get install -y --no-install-recommends build-essential curl file binutils
           bash tools/release/build-lame-linux.sh "$RUNNER_TEMP/lame-work" "$RUNNER_TEMP/lame"
 
-      - name: Install the checker of desktop entries
+      # A release builds SDL3 and fetches the fonts afresh, each checked against the pins of its script. Elsewhere (the
+      # rehearsal of every pull request) they come from a cache keyed by the system and the script when there is one.
+      - name: Name the system for the caches
+        id: system
+        run: echo "id=$(. /etc/os-release && echo "$ID-$VERSION_ID")" >> "$GITHUB_OUTPUT"
+
+      - name: Restore SDL3
+        id: sdl3-cache
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/sdl3
+          key: sdl3-${{ steps.system.outputs.id }}-${{ hashFiles('tools/linux/build-sdl3.sh') }}
+
+      # SDL 3.2.30 from its source, which the script verifies, with X11, Wayland, the input methods and nothing of SDL's
+      # audio: Ubuntu 22.04 and 24.04 have no SDL3 package.
+      - name: Build the window library
+        if: steps.sdl3-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get install -y --no-install-recommends $(bash tools/linux/build-sdl3.sh --packages)
+          bash tools/linux/build-sdl3.sh "$RUNNER_TEMP/sdl3-work" "$RUNNER_TEMP/sdl3"
+
+      - name: Check the window library
+        run: bash tools/linux/build-sdl3.sh --check "$RUNNER_TEMP/sdl3"
+
+      - name: Restore the fonts of the window
+        id: fonts-cache
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/fonts
+          key: fonts-${{ hashFiles('tools/linux/fetch-fonts.sh') }}
+
+      - name: Fetch the fonts of the window
+        if: steps.fonts-cache.outputs.cache-hit != 'true'
+        run: bash tools/linux/fetch-fonts.sh "$RUNNER_TEMP/fonts-work" "$RUNNER_TEMP/fonts"
+
+      - name: Check the fonts of the window
+        run: bash tools/linux/fetch-fonts.sh --check "$RUNNER_TEMP/fonts"
+
+      # The checker of desktop entries, and the text libraries the window takes from the system, for the check of the
+      # packages: they are not shipped.
+      - name: Install the checker of desktop entries and the text libraries
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends desktop-file-utils
+          sudo apt-get install -y --no-install-recommends desktop-file-utils libfreetype6 libharfbuzz0b libfontconfig1
 
       - name: Make the AppImage and the tar.gz
         run: >-
           bash packaging/linux/build-packages.sh "$RUNNER_TEMP/hindsound-linux-x64" "$RUNNER_TEMP/lame/libmp3lame.so.0"
-          "$HINDSOUND_VERSION" "$RUNNER_TEMP/packages"
+          "$RUNNER_TEMP/sdl3/libSDL3.so.0" "$RUNNER_TEMP/fonts" "$HINDSOUND_VERSION" "$RUNNER_TEMP/packages"
 
       - name: Check the packages
         run: bash packaging/linux/check-packages.sh "$RUNNER_TEMP/packages" "$HINDSOUND_VERSION"
 
       # The packages ship libmp3lame.so.0 under the LGPL: its source goes with them, the archive the encoder was built from,
-      # which build-lame-linux.sh verified against the SHA-256 of the notices.
+      # which build-lame-linux.sh verified against the SHA-256 of the notices. SDL3 (zlib licence) and the fonts (SIL Open
+      # Font License) ask for no source to go with them: their licence texts are in the packages.
       - name: Add the LAME source
         run: cp -- "$RUNNER_TEMP/lame-work/lame-3.100.tar.gz" "$RUNNER_TEMP/packages/"
 

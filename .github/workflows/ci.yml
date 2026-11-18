@@ -46,7 +46,7 @@ jobs:
   # whose default output is a null sink: the tests marked Category=Linux run only here.
   core-on-linux:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -81,17 +81,72 @@ jobs:
           ./tools/release/build-lame-linux.sh "$RUNNER_TEMP/lame-work" "$RUNNER_TEMP/lame-linux"
           echo "HINDSOUND_LAME_DIR=$RUNNER_TEMP/lame-linux" >> "$GITHUB_ENV"
 
+      # window steps
+      # The text of the window takes FreeType, HarfBuzz and fontconfig from the system, as on a desktop. fonts-droid-fallback
+      # is a small font with Chinese, Japanese and Korean glyphs: a character the shipped fonts lack is found through it.
+      - name: Install the text libraries of the window
+        run: |
+          sudo apt-get install -y --no-install-recommends libfreetype6 libharfbuzz0b libfontconfig1 fontconfig fonts-droid-fallback
+          fc-list :lang=ja family | grep .
+
+      - name: Name the system for the caches
+        id: system
+        run: echo "id=$(. /etc/os-release && echo "$ID-$VERSION_ID")" >> "$GITHUB_OUTPUT"
+
+      # SDL3 has no package on Ubuntu: built from its pinned source by the script the release uses, and kept in a cache
+      # keyed by the system and the script, which holds the version, the hash and every option.
+      - name: Restore SDL3
+        id: sdl3-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/sdl3
+          key: sdl3-${{ steps.system.outputs.id }}-${{ hashFiles('tools/linux/build-sdl3.sh') }}
+
+      - name: Build SDL3
+        if: steps.sdl3-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get install -y --no-install-recommends $(bash tools/linux/build-sdl3.sh --packages)
+          bash tools/linux/build-sdl3.sh "$RUNNER_TEMP/sdl3-work" "$RUNNER_TEMP/sdl3"
+
+      # The app looks for libSDL3.so.0 next to itself, then asks the system: the tests find it in the system's search path.
+      - name: Make SDL3 loadable by the tests
+        run: |
+          bash tools/linux/build-sdl3.sh --check "$RUNNER_TEMP/sdl3"
+          sudo install -m 644 "$RUNNER_TEMP/sdl3/libSDL3.so.0" /usr/local/lib/libSDL3.so.0
+          sudo ldconfig
+          ldconfig -p | grep -F 'libSDL3.so.0'
+
+      - name: Restore the fonts of the window
+        id: fonts-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/fonts
+          key: fonts-${{ hashFiles('tools/linux/fetch-fonts.sh') }}
+
+      - name: Fetch the fonts of the window
+        if: steps.fonts-cache.outputs.cache-hit != 'true'
+        run: bash tools/linux/fetch-fonts.sh "$RUNNER_TEMP/fonts-work" "$RUNNER_TEMP/fonts"
+
+      - name: Point the tests at the fonts
+        run: |
+          bash tools/linux/fetch-fonts.sh --check "$RUNNER_TEMP/fonts"
+          echo "HINDSOUND_FONT_DIR=$RUNNER_TEMP/fonts" >> "$GITHUB_ENV"
+
       - name: Build
         run: |
+          dotnet build src/Hindsound.Linux/Hindsound.Linux.csproj -c Release
           dotnet build tests/Hindsound.Core.Tests/Hindsound.Core.Tests.csproj -c Release
           dotnet build tests/Hindsound.Linux.Tests/Hindsound.Linux.Tests.csproj -c Release
 
       # One session bus and one sound server for both projects. No "set -e": a failing project must not hide the other, so
       # each result is kept and the step fails at the end if either failed. The sound server writes its log to a file, kept
       # as an artifact when the step fails.
+      # Then the app itself, in the same session: it draws every page of its window into PNG files (--dump-settings), kept
+      # as the artifact linux-dump, and opens its window on SDL's offscreen driver (--settings-probe); see dump-window.sh.
       - name: Test the portable code and the Linux app
         env:
           PULSE_LOG: ${{ runner.temp }}/pulseaudio.log
+          DUMP_DIR: ${{ runner.temp }}/linux-dump
         run: |
           dbus-run-session -- bash -uc '
             failed=0
@@ -104,6 +159,10 @@ jobs:
               dotnet test "tests/$project/$project.csproj" -c Release --no-build --filter "Category!=Device" || failed=1
               echo "::endgroup::"
             done
+            echo "::group::The window of the app"
+            bash tools/linux/dump-window.sh "$DUMP_DIR" "$RUNNER_TEMP/linux-dump-work" \
+              src/Hindsound.Linux/bin/Release/net10.0/hindsound || failed=1
+            echo "::endgroup::"
             exit $failed
           '
 
@@ -113,6 +172,15 @@ jobs:
         with:
           name: pulseaudio-log
           path: ${{ runner.temp }}/pulseaudio.log
+          if-no-files-found: warn
+
+      # The pages as the Linux app draws them, with the logs of both runs, to compare with those of Windows.
+      - name: Keep the pages of the window
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux-dump
+          path: ${{ runner.temp }}/linux-dump/
           if-no-files-found: warn
 
   # Until a release builds them, the files of the rehearsal below carry the version of the latest release in the changelog.
