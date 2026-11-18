@@ -334,6 +334,39 @@ public sealed unsafe class LinuxSettingsWindowTests
     }
 
     [Fact]
+    public void A_window_the_desktop_hides_without_minimizing_it_stops_painting_until_it_is_exposed()
+    {
+        using var rig = new WindowRig();
+        rig.Window.Show();
+        rig.Drain();
+
+        rig.Send(rig.WindowEvent(SdlNative.EventWindowOccluded));
+        Assert.True(rig.Window.Screen.Minimized);
+        var presents = rig.Video.Presents.Count;
+        rig.Window.Invalidate();
+        rig.Drain();
+        Assert.Equal(presents, rig.Video.Presents.Count);
+
+        rig.Send(rig.WindowEvent(SdlNative.EventWindowExposed));
+        rig.Drain();
+        Assert.False(rig.Window.Screen.Minimized);
+        Assert.True(rig.Video.Presents.Count > presents);
+    }
+
+    [Fact]
+    public void An_exposed_window_that_was_minimized_by_the_app_is_still_minimized()
+    {
+        using var rig = new WindowRig();
+        rig.Window.Show();
+        rig.Drain();
+
+        rig.Send(rig.WindowEvent(SdlNative.EventWindowMinimized));
+        rig.Send(rig.WindowEvent(SdlNative.EventWindowExposed));
+
+        Assert.True(rig.Window.Screen.Minimized);
+    }
+
+    [Fact]
     public void Events_of_another_window_are_not_ours()
     {
         using var rig = new WindowRig();

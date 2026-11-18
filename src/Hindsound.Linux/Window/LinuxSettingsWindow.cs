@@ -63,6 +63,7 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
     private bool _capturing;
     private bool _picking;
     private bool _closeAfterPick;
+    private bool _hiddenByDesktop;
     private bool _closed;
 
     /// <summary>Opens SDL's video and makes the window, hidden until <see cref="Show"/>.</summary>
@@ -356,7 +357,22 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
         {
             case SdlNative.EventWindowShown:
             case SdlNative.EventWindowExposed:
+                // Back from what the desktop hid it for: the paints and the timers go on.
+                if (_hiddenByDesktop)
+                {
+                    _hiddenByDesktop = false;
+                    Screen.WindowMinimized(false);
+                }
+
                 PresentAll();
+                break;
+
+            // Wayland has no minimized state: a minimized window is only told it is suspended, which SDL reports as occluded.
+            // Nobody sees the window then, as when it is minimized: no paint, no wave, no meter.
+            case SdlNative.EventWindowOccluded:
+            case SdlNative.EventWindowHidden:
+                _hiddenByDesktop = true;
+                Screen.WindowMinimized(true);
                 break;
 
             case SdlNative.EventWindowMinimized:
