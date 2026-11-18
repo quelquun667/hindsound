@@ -64,10 +64,11 @@ internal sealed unsafe class SdlPump : ILoopPump
 
         // What is already queued goes out in one turn, so a burst of mouse motion does not cost a turn of the loop each. The
         // turn ends at the wake, which says the loop has posted work to run, or after a burst's worth: a flood of events (a
-        // slider dragged with a fast mouse) does not keep the posted work and the timers waiting until the queue is empty.
-        for (var handed = 0; handed < MaxBurst; handed++)
+        // slider dragged with a fast mouse) does not keep the posted work and the timers waiting until the queue is empty. The
+        // next event is taken out of the queue only if this wait hands it out: one polled past the burst would be lost.
+        for (var handed = 1; ; handed++)
         {
-            if (Dispatch(ref e) || !SdlNative.PollEvent(&e))
+            if (Dispatch(ref e) || handed == MaxBurst || !SdlNative.PollEvent(&e))
             {
                 return;
             }

@@ -14,13 +14,19 @@ internal static class Mp3ReadBack
     /// <summary>The MP3 was written but does not read back as the second of 440 Hz the proof wrote.</summary>
     public const int ExitDoesNotReadBack = 5;
 
-    /// <summary>Reads back the newest MP3 of <paramref name="folder"/>: 0, or <see cref="ExitDoesNotReadBack"/>.</summary>
-    public static int Check(string folder, IClipDecoder decoder, Action<string> log) => Check(folder, decoder, log, seconds: 1, hz: 440, amplitude: 0.25);
+    /// <summary>
+    /// Reads back the newest MP3 of <paramref name="folder"/>: 0, or <see cref="ExitDoesNotReadBack"/>. The proof's clip is
+    /// saved as a real clip is, normalized to the loudness of the export: its level is the normalizer's, not the 0.25 of the
+    /// sine written, so what is checked is that the sound is the sine of 440 Hz and nothing else.
+    /// </summary>
+    public static int Check(string folder, IClipDecoder decoder, Action<string> log) => Check(folder, decoder, log, seconds: 1, hz: 440, amplitude: null);
 
     /// <param name="seconds">How long the sine is.</param>
     /// <param name="hz">Its pitch.</param>
-    /// <param name="amplitude">Its peak, on the first channel.</param>
-    internal static int Check(string folder, IClipDecoder decoder, Action<string> log, double seconds, double hz, double amplitude)
+    /// <param name="amplitude">
+    /// Its peak, on the first channel; null for any peak, as long as the sine at <paramref name="hz"/> is the whole sound.
+    /// </param>
+    internal static int Check(string folder, IClipDecoder decoder, Action<string> log, double seconds, double hz, double? amplitude)
     {
         try
         {
@@ -43,8 +49,12 @@ internal static class Mp3ReadBack
             var frames = samples.Count / stream.Channels;
             var length = (double)frames / InternalFormat.SampleRate;
             var level = Level(samples, stream.Channels, frames, hz);
-            log(string.Create(CultureInfo.InvariantCulture, $"prove-mp3: read back {length:0.000} s, {hz:0} Hz at {level:0.000}"));
-            var right = Math.Abs(length - seconds) < 0.1 && Math.Abs(level - amplitude) < amplitude * 0.2;
+            var whole = Peak(samples, stream.Channels, frames);
+            log(string.Create(CultureInfo.InvariantCulture, $"prove-mp3: read back {length:0.000} s, {hz:0} Hz at {level:0.000} of a sound of {whole:0.000}"));
+
+            // A sine's peak from its power: the sine at `hz` alone has it all. Another pitch, noise or silence does not.
+            var expected = amplitude ?? whole;
+            var right = Math.Abs(length - seconds) < 0.1 && Math.Abs(level - expected) < expected * 0.2;
             return right ? 0 : ExitDoesNotReadBack;
         }
         catch (Exception ex)
@@ -76,5 +86,25 @@ internal static class Mp3ReadBack
 
         var power = (previous * previous) + (beforePrevious * beforePrevious) - (coefficient * previous * beforePrevious);
         return 2 * Math.Sqrt(Math.Max(power, 0)) / block;
+    }
+
+    // The peak a sine would have with the power of the whole sound on the first channel, over the same middle half.
+    private static double Peak(List<float> samples, int channels, int frames)
+    {
+        var block = frames / 2;
+        if (block == 0)
+        {
+            return 0;
+        }
+
+        var start = frames / 4;
+        var sum = 0.0;
+        for (var i = 0; i < block; i++)
+        {
+            double sample = samples[(start + i) * channels];
+            sum += sample * sample;
+        }
+
+        return Math.Sqrt(2 * sum / block);
     }
 }
