@@ -20,8 +20,11 @@ internal sealed unsafe class SdlTextInput
 
     /// <summary>Follows the field: call it after each key, text and paint. Calls SDL only when something changed.</summary>
     /// <param name="wanted">A field is shown and has the keyboard (<see cref="LinuxTextField.WantsTextInput"/>).</param>
-    /// <param name="x">The field's box in the window, in physical pixels.</param>
-    /// <param name="cursor">The caret, in physical pixels from the left of the box.</param>
+    /// <param name="x">
+    /// The field's box in window coordinates, the unit of SDL_SetTextInputArea: the physical pixels of
+    /// <see cref="LinuxTextField.InputArea"/> divided by the pixel density of the window, as the window does.
+    /// </param>
+    /// <param name="cursor">The caret, in window coordinates from the left of the box.</param>
     public void Update(bool wanted, int x, int y, int w, int h, int cursor)
     {
         if (wanted && (x, y, w, h, cursor) != _area)
