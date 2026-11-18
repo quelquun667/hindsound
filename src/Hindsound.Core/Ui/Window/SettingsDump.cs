@@ -1,3 +1,4 @@
+using Hindsound.App;
 using Hindsound.Input;
 using Hindsound.Settings;
 
@@ -244,10 +245,10 @@ internal static unsafe class SettingsDump
     /// <summary>Draws every scene into <paramref name="folder"/>, one PNG each, named after the scene and the scale.</summary>
     /// <param name="newCanvas">Makes the canvas the pages are drawn on, from its width and height in physical pixels and the scale;
     /// the dump disposes it. On Windows, a GdiCanvas.</param>
-    public static void Write(string folder, double scale, Func<int, int, double, PixelCanvas> newCanvas)
+    public static void Write(string folder, double scale, Func<int, int, double, PixelCanvas> newCanvas, PlatformFeatures? features = null)
     {
         Directory.CreateDirectory(folder);
-        Render(scale, newCanvas, (name, canvas) => PngFile.Write(Path.Combine(folder, name + ".png"), canvas.Bits, canvas.Width, canvas.Height));
+        Render(scale, newCanvas, (name, canvas) => PngFile.Write(Path.Combine(folder, name + ".png"), canvas.Bits, canvas.Width, canvas.Height), features);
     }
 
     /// <summary>
@@ -255,7 +256,7 @@ internal static unsafe class SettingsDump
     /// its name and scale, as <c>audio@100</c>: the name of its picture, less the extension.
     /// </summary>
     /// <param name="newCanvas">Makes the canvas, as for <see cref="Write"/>.</param>
-    public static void Render(double scale, Func<int, int, double, PixelCanvas> newCanvas, Action<string, PixelCanvas> drawn)
+    public static void Render(double scale, Func<int, int, double, PixelCanvas> newCanvas, Action<string, PixelCanvas> drawn, PlatformFeatures? features = null)
     {
         var host = new QuietHost();
         var suffix = "@" + (int)Math.Round(scale * 100);
@@ -268,12 +269,19 @@ internal static unsafe class SettingsDump
         {
             var backend = new SampleBackend();
             var settings = new AppSettings().Normalize();
-            var screen = new SettingsScreen(settings, backend, host, canvas, firstRun)
+            var screen = new SettingsScreen(settings, backend, host, canvas, firstRun, features)
             {
                 ShowFocus = focus,
                 NoNativeEdit = true,
                 Clock = () => new DateTime(2026, 11, 6, 14, 32, 5),
             };
+
+            // Where the desktop binds the keys, it has answered: each action holds the key the settings proposed.
+            if (screen.Features.Shortcuts() == ShortcutMode.Portal)
+            {
+                screen.SetHotkeyResults([.. Enum.GetValues<HotkeyAction>().Select(a => screen.Editor.GestureOf(a) is { } gesture ? new HotkeyResult(a, gesture, HotkeyStatus.Registered, null) : new HotkeyResult(a, null, HotkeyStatus.NotSet, null))]);
+            }
+
             screen.UpdateStatus(sampleStatus);
             screen.SetLastClip(new LastClipInfo(TimeSpan.FromSeconds(30), new DateTime(2026, 11, 6, 14, 32, 0), 720_000));
             screen.SetChoices(

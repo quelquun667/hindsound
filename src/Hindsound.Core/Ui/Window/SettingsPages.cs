@@ -1,3 +1,4 @@
+using Hindsound.App;
 using Hindsound.Input;
 using Hindsound.Settings;
 using Hindsound.Updates;
@@ -13,6 +14,9 @@ internal sealed partial class SettingsScreen
     public const string GitHubNote = "Once a day, Hindsound asks GitHub for the latest version. GitHub sees your IP address and the time, nothing else.";
     public const string FirstRunUpdatesNote = "Hindsound checks GitHub for updates once a day. GitHub sees your IP address. Change it in Settings > General.";
     public const string ClipBusyNote = "A clip is still being saved";
+    public const string DesktopKeysNote = "Your desktop sets these keys. To change one, use the shortcut settings of your desktop.";
+    public const string CommandIntro = "This desktop has no global shortcut for apps. In its keyboard settings, bind this command to a key:";
+    public const string CommandNote = "The key then saves a clip, as the Save button does.";
     public const string FirstRunUpdatesId = "run.updates";
     private const string CardPrefix = "card.";
 
@@ -24,6 +28,7 @@ internal sealed partial class SettingsScreen
     private readonly FieldState _templateField;
     private bool _customClipOpen;
     private bool _customAccentOpen;
+    private bool _commandCopied;
     private string? _folderMessage;
     private int _firstRunStep;
     private bool _firstRunClipDone;
@@ -67,7 +72,10 @@ internal sealed partial class SettingsScreen
     {
         var band = StatusText.From(_status, Editor.Settings.BufferSeconds);
         var saveLabel = StatusText.SaveLabel(Editor.Settings.ClipSeconds);
-        var saveGesture = Editor.Settings.Hotkeys.SaveDefault ?? string.Empty;
+        var capture = Features.Shortcuts() == ShortcutMode.Capture;
+
+        // Where the desktop binds the keys, the button names the key it chose, and none at all when it did not.
+        var saveGesture = (capture ? Editor.Settings.Hotkeys.SaveDefault : ShownKey(HotkeyAction.SaveDefault)) ?? string.Empty;
         var saveBox = SaveBox(_canvas, saveLabel, saveGesture);
         var pauseWidth = Button.WidthFor(_canvas, "Resume", icon: true);
         var pauseLeft = BandPauseLeft(_canvas, saveLabel, saveGesture);
@@ -83,7 +91,7 @@ internal sealed partial class SettingsScreen
         {
             Id = "band.save",
             Accented = true,
-            SubLabel = saveGesture,
+            SubLabel = capture || saveGesture.Length > 0 ? saveGesture : null,
             FontSize = 16,
             Enabled = band.SaveEnabled,
             Bounds = saveBox,
@@ -318,8 +326,41 @@ internal sealed partial class SettingsScreen
 
     // ---------------------------------------------------------------- hotkeys
 
+    /// <summary>The ids of what only the desktop's own shortcuts show, so that a test reads them by name.</summary>
+    internal const string HotkeyCommandId = "hotkey.command", HotkeyCopyId = "hotkey.copycommand", HotkeyNoteId = "hotkey.note", HotkeyShownPrefix = "hotkey.shown.";
+
+    /// <summary>The key the desktop bound for an action, in its words. Null while it has not answered, or when it bound none.</summary>
+    private string? ShownKey(HotkeyAction action) =>
+        _hotkeyResults.FirstOrDefault(r => r.Action == action) is { Status: HotkeyStatus.Registered, Gesture: { Length: > 0 } text } ? text : null;
+
+    /// <summary>What a desktop that binds the keys itself shows in place of the field of an action.</summary>
+    private string ShownKeyText(HotkeyAction action)
+    {
+        if (ShownKey(action) is { } text)
+        {
+            return text;
+        }
+
+        return _hotkeyResults.FirstOrDefault(r => r.Action == action)?.Status switch
+        {
+            null or HotkeyStatus.Suspended => "Waiting for your desktop",
+            HotkeyStatus.NotSet => "Not set",
+            _ => "Not bound by your desktop",
+        };
+    }
+
     private void BuildHotkeys()
     {
+        switch (Features.Shortcuts())
+        {
+            case ShortcutMode.Portal:
+                BuildDesktopHotkeys();
+                return;
+            case ShortcutMode.Command:
+                BuildCommandHotkeys();
+                return;
+        }
+
         const float pitch = 37, fieldWidth = 280, fieldHeight = 32;
         var y = BandHeight + 18;
         Heading("Hotkeys", y);
@@ -340,6 +381,88 @@ internal sealed partial class SettingsScreen
         var width = Button.WidthFor(_canvas, "Reset to defaults");
         Add(new Button("Reset to defaults", ResetHotkeys) { Id = "hotkey.reset", Bounds = new Box(Right - width, y, width, 34) });
         _contentBottom = y + 34;
+    }
+
+    /// <summary>
+    /// The Hotkeys page where the desktop binds the keys: each action shows the key the desktop gave it, in the desktop's words,
+    /// and there is nothing to type in. The desktop is where the keys change.
+    /// </summary>
+    private void BuildDesktopHotkeys()
+    {
+        const float pitch = 37, fieldWidth = 280, fieldHeight = 32;
+        var y = BandHeight + 18;
+        Heading("Hotkeys", y);
+        y += 36;
+        foreach (var (action, label) in SettingsEditor.HotkeyRows)
+        {
+            RowLabel(label, y, fieldHeight);
+            var box = new Box(Right - fieldWidth, y, fieldWidth, fieldHeight);
+            var bound = ShownKey(action);
+            var text = ShownKeyText(action);
+            var asKeys = bound is not null && HotkeyGesture.TryParse(bound, out _);
+            Add(new Painted((c, _) =>
+            {
+                c.Frame(box, 4, Theme.Raised, Theme.Control);
+                if (asKeys)
+                {
+                    c.Keycaps(bound!, box.X + 8, box.MidY);
+                }
+                else
+                {
+                    c.TextMid(c.Fit(text, Face.Body, 13, box.W - 16), Face.Body, 13, box.X + 8, box.MidY, bound is null ? Theme.Muted : Theme.Text);
+                }
+            })
+            {
+                Id = HotkeyShownPrefix + action,
+                Bounds = box,
+            });
+            y += pitch;
+        }
+
+        y += 6;
+        var noteTop = y;
+        Add(new Painted((c, _) => c.Wrapped(DesktopKeysNote, Face.Body, 13, Left, noteTop, Width, Theme.Muted)) { Id = HotkeyNoteId });
+        _contentBottom = y + WrapLines(_canvas, DesktopKeysNote, Face.Body, 13, Width).Count * _canvas.LineHeight(Face.Body, 13);
+    }
+
+    /// <summary>
+    /// The Hotkeys page where nothing can grab a key: the command a key of the desktop's own keyboard settings must run, and the
+    /// button that copies it.
+    /// </summary>
+    private void BuildCommandHotkeys()
+    {
+        var command = Features.SaveCommand();
+        var y = BandHeight + 18;
+        Heading("Hotkeys", y);
+        y += 36;
+        var introTop = y;
+        Add(new Painted((c, _) => c.Wrapped(CommandIntro, Face.Body, 14, Left, introTop, Width, Theme.Text)) { Id = HotkeyNoteId });
+        y += WrapLines(_canvas, CommandIntro, Face.Body, 14, Width).Count * _canvas.LineHeight(Face.Body, 14) + 14;
+
+        var copyLabel = _commandCopied ? "Copied" : "Copy";
+        var copyWidth = Button.WidthFor(_canvas, "Copied");
+        var box = new Box(Left, y, Width - copyWidth - 12, 34);
+        Add(new Painted((c, _) =>
+        {
+            c.Frame(box, 4, Theme.Raised, Theme.Control);
+            c.TextMid(c.Fit(command, Face.Mono, 13, box.W - 20), Face.Mono, 13, box.X + 10, box.MidY, Theme.Text);
+        })
+        {
+            Id = HotkeyCommandId,
+            Bounds = box,
+        });
+        Add(new Button(copyLabel, CopyCommand) { Id = HotkeyCopyId, Bounds = new Box(Right - copyWidth, y, copyWidth, 34) });
+        y += 34 + 14;
+        var noteTop = y;
+        Add(new Painted((c, _) => c.Wrapped(CommandNote, Face.Body, 13, Left, noteTop, Width, Theme.Muted)));
+        _contentBottom = y + WrapLines(_canvas, CommandNote, Face.Body, 13, Width).Count * _canvas.LineHeight(Face.Body, 13);
+    }
+
+    private void CopyCommand()
+    {
+        _host.CopyText(Features.SaveCommand());
+        _commandCopied = true;
+        Refresh();
     }
 
     // ---------------------------------------------------------------- durations
@@ -430,10 +553,15 @@ internal sealed partial class SettingsScreen
         var y = BandHeight + 18;
         Heading("Audio", y);
         y += 36;
-        Row("Record", "audio.record", y, () => SettingsEditor.RecordChoices(_apps, Editor.Settings.Audio.SourceApp, _status is { SourceApp: not null, SourceAppMissing: false }), () => Editor.Settings.Audio.SourceApp ?? string.Empty, Editor.SetSourceApp);
-        y += pitch;
-        // One application is captured wherever it plays, so the output has no say.
-        Row("Output", "audio.output", y, () => SettingsEditor.OutputChoices(_outputs, Editor.Settings.Audio.OutputDeviceId), () => Editor.Settings.Audio.OutputDeviceId, Editor.SetOutput, audio.SourceApp is null);
+        if (Features.SingleApp)
+        {
+            Row("Record", "audio.record", y, () => SettingsEditor.RecordChoices(_apps, Editor.Settings.Audio.SourceApp, _status is { SourceApp: not null, SourceAppMissing: false }), () => Editor.Settings.Audio.SourceApp ?? string.Empty, Editor.SetSourceApp);
+            y += pitch;
+        }
+
+        // One application is captured wherever it plays, so the output has no say. Where one application cannot be chosen, a name
+        // left in the file by hand changes nothing, and the output stays the choice.
+        Row("Output", "audio.output", y, () => SettingsEditor.OutputChoices(_outputs, Editor.Settings.Audio.OutputDeviceId), () => Editor.Settings.Audio.OutputDeviceId, Editor.SetOutput, audio.SourceApp is null || !Features.SingleApp);
         y += pitch;
         Row("Microphone", "audio.mic", y, () => SettingsEditor.MicChoices(_mics, Editor.Settings.Audio.MicDeviceId), () => Editor.Settings.Audio.MicDeviceId, Editor.SetMic);
         y += pitch;
@@ -577,16 +705,21 @@ internal sealed partial class SettingsScreen
             y += RowHeight + TextField.MessageHeight + 6;
         }
 
-        var accent = Editor.AccentRgb;
-        var previewTop = y;
-        var leftEdge = general.NotificationPosition == "left";
-        Add(new Painted((c, _) => c.Notification(SampleClip.Notification(accent), Left, previewTop, accent, leftEdge)));
-        y += 64 + 14;
+        // The notification of the desktop has no look of ours to preview.
+        if (Features.NotificationLook)
+        {
+            var accent = Editor.AccentRgb;
+            var previewTop = y;
+            var leftEdge = general.NotificationPosition == "left";
+            Add(new Painted((c, _) => c.Notification(SampleClip.Notification(accent), Left, previewTop, accent, leftEdge)));
+            y += 64 + 14;
+        }
+
         var divider = y - 7;
         Add(new Painted((c, _) => c.FillRect(new Box(Left, divider, Width, 1), Theme.Line)));
         y += 4;
 
-        ToggleRow("Start with Windows", "general.startup", y, () => Editor.Settings.General.StartWithWindows, Editor.SetStartWithWindows);
+        ToggleRow(Features.StartupLabel, "general.startup", y, () => Editor.Settings.General.StartWithWindows, Editor.SetStartWithWindows);
         y += pitch;
         SegmentRow("Window size", "general.size", y, GeneralSettings.WindowZooms.Select(zoom => $"{zoom}%").ToList(), () => Math.Max(0, Array.IndexOf(GeneralSettings.WindowZooms, Editor.Settings.General.WindowZoom)), i => Editor.SetWindowZoom(GeneralSettings.WindowZooms[i]));
         y += pitch;
@@ -599,17 +732,32 @@ internal sealed partial class SettingsScreen
 
         ToggleRow("Save notifications", "general.notifications", y, () => Editor.Settings.General.Notifications, Editor.SetNotifications);
         y += pitch;
-        SegmentRow("Notification position", "general.position", y, ["Right edge", "Left edge"], () => Editor.Settings.General.NotificationPosition == "left" ? 1 : 0, i => Editor.SetNotificationPosition(i == 1 ? "left" : "right"));
-        y += pitch;
+        if (Features.NotificationLook)
+        {
+            SegmentRow("Notification position", "general.position", y, ["Right edge", "Left edge"], () => Editor.Settings.General.NotificationPosition == "left" ? 1 : 0, i => Editor.SetNotificationPosition(i == 1 ? "left" : "right"));
+            y += pitch;
+        }
+
         Row("In fullscreen games", "general.fullscreen", y, () => FullscreenChoices, () => Editor.Settings.General.FullscreenGames, Editor.SetFullscreenGames);
-        y += pitch;
-        Row("Confirmation sound", "general.sound", y, () => SoundChoices, () => Editor.Settings.General.ConfirmSound, Editor.SetConfirmSound);
-        y += RowHeight + 12;
-        Note(SoundHelp, y);
-        y += 20;
-        var testWidth = Button.WidthFor(_canvas, "Show test notification");
-        Add(new Button("Show test notification", _backend.ShowTestNotification) { Id = "general.test", Bounds = new Box(Left, y, testWidth, 34) });
-        y += 34 + 14;
+        if (Features.ConfirmSound)
+        {
+            y += pitch;
+            Row("Confirmation sound", "general.sound", y, () => SoundChoices, () => Editor.Settings.General.ConfirmSound, Editor.SetConfirmSound);
+            y += RowHeight + 12;
+            Note(SoundHelp, y);
+            y += 20;
+        }
+        else
+        {
+            y += RowHeight + 12;
+        }
+
+        if (Features.TestNotification)
+        {
+            var testWidth = Button.WidthFor(_canvas, "Show test notification");
+            Add(new Button("Show test notification", _backend.ShowTestNotification) { Id = "general.test", Bounds = new Box(Left, y, testWidth, 34) });
+            y += 34 + 14;
+        }
         if (_updates is { } updates)
         {
             y = BuildUpdates(updates.View, y);
@@ -836,6 +984,7 @@ internal sealed partial class SettingsScreen
     // The app has only just started: a clip made at once would hold next to nothing.
     internal const string FirstRunWait = "Wait a few seconds.";
     internal const string FirstRunSay = "Say something, then press your hotkey.";
+    internal const string FirstRunSayCommand = "Say something, then press the Save button.";
     internal const float FirstRunNoteGap = 4;
 
     /// <summary>The room of a line in the panel of the card: nothing cuts a note that goes past it.</summary>
@@ -850,6 +999,7 @@ internal sealed partial class SettingsScreen
         const float x = 40, panelLeft = 260, panelRight = panelLeft + FirstRunTextWidth + 40;
         var step = _firstRunStep;
         var done = _firstRunClipDone;
+        var mode = Features.Shortcuts();
         Add(new Painted((c, ui) =>
         {
             c.Text("Welcome to Hindsound", Face.Title, 22, x, BandHeight + 14, Theme.Text);
@@ -891,13 +1041,25 @@ internal sealed partial class SettingsScreen
         {
             case 0:
                 FirstRunNote(StatusText.FirstRunHotkeyNote(Editor.Settings.ClipSeconds), inner, top);
-                Add(
-                    new HotkeyField(HotkeyAction.SaveDefault, () => ViewOf(HotkeyAction.SaveDefault), BeginCapture)
-                    {
-                        Id = "hotkey." + HotkeyAction.SaveDefault,
-                        Bounds = new Box(inner, top + 26, 280, 34),
-                    },
-                    scrolls: false);
+                switch (mode)
+                {
+                    case ShortcutMode.Portal:
+                        FirstRunDesktopKey(inner, top + 26, width);
+                        break;
+                    case ShortcutMode.Command:
+                        FirstRunCommand(inner, top + 26, width);
+                        break;
+                    default:
+                        Add(
+                            new HotkeyField(HotkeyAction.SaveDefault, () => ViewOf(HotkeyAction.SaveDefault), BeginCapture)
+                            {
+                                Id = "hotkey." + HotkeyAction.SaveDefault,
+                                Bounds = new Box(inner, top + 26, 280, 34),
+                            },
+                            scrolls: false);
+                        break;
+                }
+
                 break;
             case 1:
                 FirstRunNote("Speak: the bar should move. Off if you only want the PC sound.", inner, top);
@@ -911,10 +1073,31 @@ internal sealed partial class SettingsScreen
                 Add(new MeterBar(() => _meter.Level, MeterCaption) { Bounds = new Box(inner, top + 74, width, 12) }, scrolls: false);
                 break;
             default:
-                var gesture = Editor.Settings.Hotkeys.SaveDefault ?? string.Empty;
+                var gesture = (mode == ShortcutMode.Capture ? Editor.Settings.Hotkeys.SaveDefault : ShownKey(HotkeyAction.SaveDefault)) ?? string.Empty;
+                var say = mode == ShortcutMode.Command ? FirstRunSayCommand : FirstRunSay;
                 FirstRunNote(FirstRunWait, inner, top);
-                Add(new Painted((c, _) => c.TextMid(FirstRunSay, Face.Body, 14, inner + c.Measure(FirstRunWait, Face.Body, 14) + FirstRunNoteGap, top + 8, Theme.Muted)), scrolls: false);
-                Add(new Painted((c, _) => c.Keycaps(gesture, inner, top + 42)), scrolls: false);
+                Add(new Painted((c, _) => c.TextMid(say, Face.Body, 14, inner + c.Measure(FirstRunWait, Face.Body, 14) + FirstRunNoteGap, top + 8, Theme.Muted)), scrolls: false);
+                if (mode == ShortcutMode.Capture)
+                {
+                    Add(new Painted((c, _) => c.Keycaps(gesture, inner, top + 42)), scrolls: false);
+                }
+                else if (gesture.Length > 0)
+                {
+                    // A desktop words its key as it likes: drawn as keys only when the app can read it back as some.
+                    var asKeys = HotkeyGesture.TryParse(gesture, out _);
+                    Add(new Painted((c, _) =>
+                    {
+                        if (asKeys)
+                        {
+                            c.Keycaps(gesture, inner, top + 42);
+                        }
+                        else
+                        {
+                            c.TextMid(c.Fit(gesture, Face.Body, 14, width), Face.Body, 14, inner, top + 42, Theme.Text);
+                        }
+                    }), scrolls: false);
+                }
+
                 if (done && _lastClip is { } clip)
                 {
                     if (clip.Notice is { } notice && !NotificationStates.SaysPaste(notice))
@@ -939,7 +1122,7 @@ internal sealed partial class SettingsScreen
         var rowY = lineY + 8;
         Add(new Painted((c, _) =>
         {
-            c.TextMid("Start with Windows", Face.Body, 14, x, rowY + 15, Theme.Text);
+            c.TextMid(Features.StartupLabel, Face.Body, 14, x, rowY + 15, Theme.Text);
             c.Wrapped(LegalNote, Face.Body, 13, x, rowY + 38, 420, Theme.Muted);
         }), scrolls: false);
         Add(new Toggle(() => Editor.Settings.General.StartWithWindows, Editor.SetStartWithWindows) { Id = "run.startup", Bounds = new Box(x + 160, rowY + 4, 40, 22) }, scrolls: false);
@@ -985,6 +1168,57 @@ internal sealed partial class SettingsScreen
 
         Add(new Button(nextLabel, FirstRunNext) { Id = "run.next", Accented = true, Bounds = new Box(panelRight - nextWidth, buttonY, nextWidth, 34) }, scrolls: false);
         _contentBottom = WindowHeight;
+    }
+
+    /// <summary>The key the desktop chose for Save, in a first step where the user has none to type.</summary>
+    private void FirstRunDesktopKey(float x, float y, float width)
+    {
+        var box = new Box(x, y, 280, 34);
+        var bound = ShownKey(HotkeyAction.SaveDefault);
+        var text = ShownKeyText(HotkeyAction.SaveDefault);
+        var asKeys = bound is not null && HotkeyGesture.TryParse(bound, out _);
+        Add(
+            new Painted((c, _) =>
+            {
+                c.Frame(box, 4, Theme.Raised, Theme.Control);
+                if (asKeys)
+                {
+                    c.Keycaps(bound!, box.X + 8, box.MidY);
+                }
+                else
+                {
+                    c.TextMid(c.Fit(text, Face.Body, 13, box.W - 16), Face.Body, 13, box.X + 8, box.MidY, bound is null ? Theme.Muted : Theme.Text);
+                }
+            })
+            {
+                Id = HotkeyShownPrefix + HotkeyAction.SaveDefault,
+                Bounds = box,
+            },
+            scrolls: false);
+        var noteTop = y + 34 + 12;
+        Add(new Painted((c, _) => c.Wrapped(DesktopKeysNote, Face.Body, 13, x, noteTop, width, Theme.Muted)) { Id = HotkeyNoteId }, scrolls: false);
+    }
+
+    /// <summary>The command to bind, with its Copy button, in a first step where nothing can grab a key.</summary>
+    private void FirstRunCommand(float x, float y, float width)
+    {
+        var command = Features.SaveCommand();
+        Add(new Painted((c, _) => c.Wrapped(CommandIntro, Face.Body, 13, x, y, width, Theme.Muted)) { Id = HotkeyNoteId }, scrolls: false);
+        var fieldTop = y + WrapLines(_canvas, CommandIntro, Face.Body, 13, width).Count * _canvas.LineHeight(Face.Body, 13) + 8;
+        var copyWidth = Button.WidthFor(_canvas, "Copied");
+        var box = new Box(x, fieldTop, width - copyWidth - 12, 34);
+        Add(
+            new Painted((c, _) =>
+            {
+                c.Frame(box, 4, Theme.Raised, Theme.Control);
+                c.TextMid(c.Fit(command, Face.Mono, 13, box.W - 20), Face.Mono, 13, box.X + 10, box.MidY, Theme.Text);
+            })
+            {
+                Id = HotkeyCommandId,
+                Bounds = box,
+            },
+            scrolls: false);
+        Add(new Button(_commandCopied ? "Copied" : "Copy", CopyCommand) { Id = HotkeyCopyId, Bounds = new Box(x + width - copyWidth, fieldTop, copyWidth, 34) }, scrolls: false);
     }
 
     private void FirstRunNote(string text, float x, float y) =>

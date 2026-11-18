@@ -1,3 +1,4 @@
+using Hindsound.App;
 using Hindsound.Audio;
 using Hindsound.Input;
 using Hindsound.Settings;
@@ -93,6 +94,11 @@ internal interface IWindowHost
     string? PickFolder(string startFolder);
 
     void CloseWindow();
+
+    /// <summary>Puts text on the clipboard, for the command a page asks to copy. A host with no text clipboard does nothing.</summary>
+    void CopyText(string text)
+    {
+    }
 }
 
 /// <summary>
@@ -112,6 +118,7 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
     private readonly MicMeter _meter = new();
     private readonly Dictionary<HotkeyAction, (string Gesture, string Message)> _attempts = [];
     private readonly Dictionary<HotkeyAction, string> _hotkeyProblems = [];
+    private IReadOnlyList<HotkeyResult> _hotkeyResults = [];
     private readonly List<Widget> _chrome = [];
     private readonly List<Widget> _page = [];
     private readonly List<Widget> _stops = [];
@@ -139,8 +146,9 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
     private ListPopup? _popup;
     private (string Id, double Value, Action<double> Keep)? _sliding;
 
-    public SettingsScreen(AppSettings settings, ISettingsBackend backend, IWindowHost host, ICanvas canvas, bool firstRun = false)
+    public SettingsScreen(AppSettings settings, ISettingsBackend backend, IWindowHost host, ICanvas canvas, bool firstRun = false, PlatformFeatures? features = null)
     {
+        Features = features ?? PlatformDefaults.Features ?? PlatformFeatures.Windows;
         Editor = new SettingsEditor(settings, OnSettingChanged);
         _backend = backend;
         _host = host;
@@ -152,9 +160,12 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
         _customClipOpen = Editor.ClipSegment == SettingsEditor.CustomClip;
         _customAccentOpen = AccentColors.PresetOf(Editor.AccentHex) == AccentPreset.Custom;
         Rebuild();
-        _focusId = firstRun ? "hotkey." + HotkeyAction.SaveDefault : NavId;
+        _focusId = firstRun ? (Features.Shortcuts() == ShortcutMode.Capture ? "hotkey." + HotkeyAction.SaveDefault : "run.next") : NavId;
         Refresh();
     }
+
+    /// <summary>What the system offers the pages, and its words. Fixed for the life of the screen.</summary>
+    public PlatformFeatures Features { get; }
 
     public SettingsEditor Editor { get; }
 
@@ -235,6 +246,7 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
 
     public void SetHotkeyResults(IReadOnlyList<HotkeyResult> results)
     {
+        _hotkeyResults = results;
         _hotkeyProblems.Clear();
         foreach (var result in results)
         {
@@ -292,6 +304,7 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
         _popup = null;
         DropLibraryOverlays();
         var leftCard = Section == Section.UpdateCard;
+        _commandCopied = false;
         Section = section;
         WakeWave();
         if (section == Section.Now)

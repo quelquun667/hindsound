@@ -1,3 +1,4 @@
+using Hindsound.App;
 using Hindsound.Library;
 
 namespace Hindsound.Ui.Window;
@@ -13,19 +14,24 @@ internal sealed class EditorSaveDialogState(ClipGroup clip)
 
     public ClipGroup Clip => clip;
 
+    /// <summary>The words of the system the dialog is shown on.</summary>
+    public PlatformFeatures Features { get; init; } = PlatformFeatures.Windows;
+
     public FieldState Name { get; } = new(ClipNames.EditableName(clip) + EditLimits.CutSuffix);
 
     /// <summary>Why the copy can't take this name, or null. Another file of that name never counts: the save makes the name unique.</summary>
-    public string? Refusal(string typed) => ClipNames.Refusal(clip, typed, _ => false) is { } outcome ? MessageOf(outcome) : null;
+    public string? Refusal(string typed) => ClipNames.Refusal(clip, typed, _ => false) is { } outcome ? MessageOf(outcome, Features) : null;
 
     /// <summary>What Save as a copy sends, or null while the name of the copy is refused.</summary>
     public EditSave? Copy() => Refusal(Name.Draft) is null ? new EditSave(EditSaveChoice.Copy, Name.Draft) : null;
 
-    public static string MessageOf(ClipRenameOutcome outcome) => outcome switch
+    public static string MessageOf(ClipRenameOutcome outcome) => MessageOf(outcome, PlatformFeatures.Windows);
+
+    public static string MessageOf(ClipRenameOutcome outcome, PlatformFeatures features) => outcome switch
     {
         ClipRenameOutcome.Empty => "Type a name.",
         ClipRenameOutcome.BadCharacters => "A name can't hold \\ / : * ? \" < > |",
-        ClipRenameOutcome.Reserved => "Windows keeps this name for itself.",
+        ClipRenameOutcome.Reserved => features.ReservedNameText + ".",
         ClipRenameOutcome.TrailingDotOrSpace => "A name can't end with a dot or a space.",
         ClipRenameOutcome.TooLong => "This name is too long.",
         ClipRenameOutcome.TrackSuffix => ClipNames.TrackSuffixText,
