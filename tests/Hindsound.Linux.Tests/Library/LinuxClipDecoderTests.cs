@@ -339,6 +339,40 @@ public sealed class LinuxClipDecoderTests : IDisposable
     }
 
     [Fact]
+    public void A_file_of_false_frame_headers_is_refused_without_using_up_the_stack()
+    {
+        // Every 4th byte starts a header whose frame is never followed by another one: the search for a frame meets one candidate after another.
+        var bytes = new byte[2 << 20];
+        for (var i = 0; i < bytes.Length; i += 4)
+        {
+            bytes[i] = 0xFF;
+            bytes[i + 1] = 0xFB;
+            bytes[i + 2] = 0x90;
+            bytes[i + 3] = 0x64;
+        }
+
+        var path = Fixture("headers.mp3", bytes);
+        Exception? caught = null;
+
+        // The stack of the thread that plays a clip, not the bigger one of the test runner.
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                using var stream = _decoder.Open(path);
+            }
+            catch (Exception e)
+            {
+                caught = e;
+            }
+        }, 1536 * 1024);
+        thread.Start();
+
+        Assert.True(thread.Join(TimeSpan.FromSeconds(30)));
+        Assert.IsType<ClipDecodeException>(caught);
+    }
+
+    [Fact]
     public void A_missing_file_and_a_folder_are_refused_without_their_names_in_the_message()
     {
         var gone = Assert.Throws<ClipDecodeException>(() => _decoder.Open(_folder.Combine("gone.mp3")));
