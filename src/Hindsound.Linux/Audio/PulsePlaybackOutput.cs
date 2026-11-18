@@ -22,11 +22,13 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
     public const string RoleValue = "preview";
 
     private readonly PulseConnection _connection;
+    private readonly string? _sink;
     private volatile bool _lost;
 
-    private PulsePlaybackOutput(PulseConnection connection)
+    private PulsePlaybackOutput(PulseConnection connection, string? sink)
     {
         _connection = connection;
+        _sink = sink;
         _connection.Lost += () => _lost = true;
     }
 
@@ -46,10 +48,13 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
         }
     }
 
-    /// <summary>Connects to the server of the session, or throws.</summary>
-    public static PulsePlaybackOutput Connect() => new(PulseConnection.Open());
+    /// <summary>Connects to the server of the session, or throws. The streams play on the default output.</summary>
+    public static PulsePlaybackOutput Connect() => new(PulseConnection.Open(), null);
 
-    public IPulsePlaybackStream Open(int channels, IPulsePlaybackFeed feed) => PulsePlaybackStream.Open(_connection, channels, feed);
+    /// <summary>The same, with the streams on the output <paramref name="sink"/>: a test's own, so it does not move the default.</summary>
+    internal static PulsePlaybackOutput Connect(string sink) => new(PulseConnection.Open(), sink);
+
+    public IPulsePlaybackStream Open(int channels, IPulsePlaybackFeed feed) => PulsePlaybackStream.Open(_connection, _sink, channels, feed);
 
     public void Dispose() => _connection.Dispose();
 
@@ -78,7 +83,7 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
             _feed = feed;
         }
 
-        public static PulsePlaybackStream Open(PulseConnection connection, int channels, IPulsePlaybackFeed feed)
+        public static PulsePlaybackStream Open(PulseConnection connection, string? sink, int channels, IPulsePlaybackFeed feed)
         {
             if (channels is < 1 or > 2)
             {
@@ -88,7 +93,7 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
             var stream = new PulsePlaybackStream(connection, channels, feed);
             try
             {
-                stream.Connect();
+                stream.Connect(sink);
                 return stream;
             }
             catch
@@ -159,7 +164,7 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
             }
         }
 
-        private void Connect()
+        private void Connect(string? sink)
         {
             _self = GCHandle.Alloc(this);
             var userData = GCHandle.ToIntPtr(_self);
@@ -195,7 +200,7 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
                 PulseNative.StreamSetStateCallback(_stream, (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, IntPtr, void>)&OnState, userData);
                 PulseNative.StreamSetWriteCallback(_stream, (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, nuint, IntPtr, void>)&OnWrite, userData);
                 var attributes = PulseFormats.PlaybackBufferAttrFor(_channels);
-                if (PulseNative.StreamConnectPlayback(_stream, IntPtr.Zero, &attributes, PulseFormats.StartCorked, IntPtr.Zero, IntPtr.Zero) < 0)
+                if (PulseNative.StreamConnectPlayback(_stream, sink, &attributes, PulseFormats.StartCorked, IntPtr.Zero, IntPtr.Zero) < 0)
                 {
                     throw new IOException("The sound server refused to play: " + PulseNative.ErrorOf(context));
                 }

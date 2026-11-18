@@ -139,8 +139,8 @@ internal static unsafe partial class PulseNative
     [LibraryImport(Library, EntryPoint = "pa_stream_set_write_callback")]
     public static partial void StreamSetWriteCallback(IntPtr stream, IntPtr callback, IntPtr userData);
 
-    [LibraryImport(Library, EntryPoint = "pa_stream_connect_playback")]
-    public static partial int StreamConnectPlayback(IntPtr stream, IntPtr device, PaBufferAttr* attributes, uint flags, IntPtr volume, IntPtr syncStream);
+    [LibraryImport(Library, EntryPoint = "pa_stream_connect_playback", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int StreamConnectPlayback(IntPtr stream, string? device, PaBufferAttr* attributes, uint flags, IntPtr volume, IntPtr syncStream);
 
     [LibraryImport(Library, EntryPoint = "pa_stream_write")]
     public static partial int StreamWrite(IntPtr stream, void* data, nuint length, IntPtr freeCallback, long offset, int seek);
