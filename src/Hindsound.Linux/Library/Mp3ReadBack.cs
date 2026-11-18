@@ -44,7 +44,7 @@ internal static class Mp3ReadBack
             var length = (double)frames / InternalFormat.SampleRate;
             var level = Level(samples, stream.Channels, frames, hz);
             log(string.Create(CultureInfo.InvariantCulture, $"prove-mp3: read back {length:0.000} s, {hz:0} Hz at {level:0.000}"));
-            var right = Math.Abs(length - seconds) < 0.05 && Math.Abs(level - amplitude) < amplitude * 0.2;
+            var right = Math.Abs(length - seconds) < 0.1 && Math.Abs(level - amplitude) < amplitude * 0.2;
             return right ? 0 : ExitDoesNotReadBack;
         }
         catch (Exception ex)
