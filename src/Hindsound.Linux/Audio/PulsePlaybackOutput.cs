@@ -64,6 +64,9 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
         // A second of audio at most per call: the server asks for its target length, a tenth of that.
         private const int MostFramesPerWrite = Hindsound.Audio.InternalFormat.SampleRate;
 
+        // The longest wait for the sink to play what it holds after the drain: past it, the track ends anyway.
+        private const int LongestPlayOutMilliseconds = 2000;
+
         private readonly IPulsePlaybackFeed _feed;
         private readonly int _channels;
         private readonly TaskCompletionSource<bool> _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -74,6 +77,13 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
         private float[] _buffer = [];
         private IntPtr _drain;
         private bool _draining;
+
+        // After the drain: the server's answer on how long the sink still holds, then the wait for it to play.
+        private IntPtr _timing;
+        private Timer? _playedOut;
+
+        // Counts the drains given up: a wait of one given up does not end the track.
+        private int _drainTurn;
         private bool _endReached;
         private bool _closed;
 
@@ -128,6 +138,7 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
 
         public void Close()
         {
+            Timer? playedOut = null;
             if (_stream != IntPtr.Zero)
             {
                 Locked(() =>
@@ -138,12 +149,25 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
                     }
 
                     _closed = true;
+                    playedOut = _playedOut;
+                    _playedOut = null;
                     CancelDrain();
                     PulseNative.StreamSetWriteCallback(_stream, IntPtr.Zero, IntPtr.Zero);
                     PulseNative.StreamSetStateCallback(_stream, IntPtr.Zero, IntPtr.Zero);
                     PulseNative.StreamDisconnect(_stream);
                     PulseNative.StreamUnref(_stream);
                 });
+            }
+
+            // A wait for the end to play that had already fired takes the loop's lock, and finds the stream closed: it is
+            // waited for outside that lock, so the feed is called no more once this returns.
+            if (playedOut is not null)
+            {
+                using var done = new ManualResetEvent(false);
+                if (playedOut.Dispose(done))
+                {
+                    done.WaitOne();
+                }
             }
 
             // Under the loop's lock no callback was running, and none is set any more, nor any drain left to answer.
@@ -234,7 +258,68 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
                 _drain = IntPtr.Zero;
             }
 
+            if (_timing != IntPtr.Zero)
+            {
+                PulseNative.OperationCancel(_timing);
+                PulseNative.OperationUnref(_timing);
+                _timing = IntPtr.Zero;
+            }
+
+            _playedOut?.Dispose();
+            _playedOut = null;
+            _drainTurn++;
             _draining = false;
+        }
+
+        // Holding the loop's lock, once the drain has answered. The server answers a drain once it has mixed the last sample
+        // into the sink, not once it was heard: the sink still holds up to its latency ahead. A track that said it ended
+        // then would be closed at once, and the server takes off a closed stream's sound what the sink has not played yet:
+        // the end of the file would never be heard. So the end waits for what the sink holds, which the server says.
+        private void AwaitPlayedOut(IntPtr stream)
+        {
+            _timing = PulseNative.StreamUpdateTimingInfo(stream, (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, int, IntPtr, void>)&OnTiming, GCHandle.ToIntPtr(_self));
+            if (_timing == IntPtr.Zero)
+            {
+                // The server can't say: ends now, as the drain said.
+                _feed.Drained(true);
+            }
+        }
+
+        // Holding the loop's lock: ends the track once `microseconds` have played.
+        private void EndAfter(ulong microseconds)
+        {
+            var milliseconds = (long)Math.Min((microseconds + 999) / 1000, (ulong)LongestPlayOutMilliseconds);
+            if (milliseconds == 0)
+            {
+                _feed.Drained(true);
+                return;
+            }
+
+            var turn = _drainTurn;
+            _playedOut = new Timer(_ => PlayedOut(turn), null, milliseconds, Timeout.Infinite);
+        }
+
+        // On a thread of the pool.
+        private void PlayedOut(int turn)
+        {
+            try
+            {
+                _connection.Locked(() =>
+                {
+                    if (_closed || turn != _drainTurn)
+                    {
+                        return;
+                    }
+
+                    _playedOut?.Dispose();
+                    _playedOut = null;
+                    _feed.Drained(true);
+                });
+            }
+            catch (Exception)
+            {
+                // The track then ends with the hold's own deadline.
+            }
         }
 
         // On the loop's thread.
@@ -368,7 +453,42 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
                     self._drain = IntPtr.Zero;
                 }
 
-                self._feed.Drained(success != 0);
+                if (success == 0)
+                {
+                    self._feed.Drained(false);
+                    return;
+                }
+
+                self.AwaitPlayedOut(stream);
+            }
+            catch (Exception)
+            {
+                // The track then ends with the hold's own deadline.
+            }
+        }
+
+        [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+        private static void OnTiming(IntPtr stream, int success, IntPtr userData)
+        {
+            try
+            {
+                if (GCHandle.FromIntPtr(userData).Target is not PulsePlaybackStream self || self._closed || self._timing == IntPtr.Zero)
+                {
+                    return;
+                }
+
+                PulseNative.OperationUnref(self._timing);
+                self._timing = IntPtr.Zero;
+
+                // From the last sample written to the speaker: after the drain, what the sink still holds. Unknown: ends now.
+                ulong left = 0;
+                int negative = 0;
+                if (success == 0 || PulseNative.StreamGetLatency(stream, &left, &negative) != 0 || negative != 0)
+                {
+                    left = 0;
+                }
+
+                self.EndAfter(left);
             }
             catch (Exception)
             {
