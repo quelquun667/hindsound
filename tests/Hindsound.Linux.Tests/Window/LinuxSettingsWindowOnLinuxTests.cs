@@ -34,7 +34,9 @@ public sealed unsafe class LinuxSettingsWindowOnLinuxTests
 
     private static LinuxSettingsWindow Open(LinuxLoop loop, Action closed)
     {
+        // The first size follows the zoom of the settings, 120 % by default as on Windows: the test states 100 %, the design size.
         var settings = new AppSettings().Normalize();
+        settings.General.WindowZoom = 100;
         var request = new SettingsWindowRequest(settings, new CountingBackend(), () => 0f, false, true, default, closed);
         return LinuxSettingsWindow.Open(request, loop, () => new BlockText());
     }
@@ -70,7 +72,7 @@ public sealed unsafe class LinuxSettingsWindowOnLinuxTests
             window.SetIcon(0x22C55E);
             window.Show();
             Turn(loop);
-            Assert.Equal((760, 488), window.BitmapSize);
+            Assert.True((760, 488) == window.BitmapSize, $"bitmap {window.BitmapSize}, zoom {window.AppliedZoom}, scale {window.Scale}");
             Assert.Equal("760x488, bitmap 760x488", window.ClientSizeText());
 
             var path = Path.Combine(folder.FullName, "probe.png");
