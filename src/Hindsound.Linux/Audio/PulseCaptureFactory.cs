@@ -19,6 +19,7 @@ internal sealed class PulseCaptureFactory : ICaptureSourceFactory
 
     private readonly Action<string> _log;
     private readonly Func<PulseServerState> _readServer;
+    private readonly PulsePlaybackSilence? _silence;
     private readonly Lock _gate = new();
     private PulseServerState _last = PulseServerState.Empty;
     private string? _lastProblem;
@@ -28,12 +29,27 @@ internal sealed class PulseCaptureFactory : ICaptureSourceFactory
     {
     }
 
+    /// <summary>
+    /// A factory that leaves the preview out of the PC's sound: asked to leave this app's sounds out, which the engine asks of
+    /// the default output only, it captures that output's monitor with <paramref name="silence"/>, which the preview's player
+    /// holds while it plays. The engine then reports the app's sounds as left out, and the pages do not warn that a preview
+    /// can end up in the next clip. On an output chosen by name it captures without it, as Windows does.
+    /// </summary>
+    /// <param name="log">The log of the run.</param>
+    /// <param name="silence">The silence the preview's player holds while it plays.</param>
+    public PulseCaptureFactory(Action<string> log, PulsePlaybackSilence silence)
+        : this(log, ReadServer, silence)
+    {
+    }
+
     /// <param name="log">The log of the run.</param>
     /// <param name="readServer">Reads what the server has. Tests pass their own.</param>
-    internal PulseCaptureFactory(Action<string> log, Func<PulseServerState> readServer)
+    /// <param name="silence">The silence of the preview; null for a factory that cannot leave the app's sounds out.</param>
+    internal PulseCaptureFactory(Action<string> log, Func<PulseServerState> readServer, PulsePlaybackSilence? silence = null)
     {
         _log = log;
         _readServer = readServer;
+        _silence = silence;
     }
 
     /// <summary>
@@ -71,7 +87,7 @@ internal sealed class PulseCaptureFactory : ICaptureSourceFactory
 
     public Task<ICaptureSource> OpenAsync(CaptureRequest request)
     {
-        if (PulseCaptureRules.Refuse(request) is { } refusal)
+        if (PulseCaptureRules.Refuse(request, canSilence: _silence is not null) is { } refusal)
         {
             return Task.FromException<ICaptureSource>(refusal);
         }
@@ -89,12 +105,12 @@ internal sealed class PulseCaptureFactory : ICaptureSourceFactory
 
         var name = state.DisplayNameOf(request.Flow, request.DeviceId) ?? request.DeviceId;
         var streamName = request.Flow == AudioFlow.System ? SystemStreamName : MicStreamName;
-        return OpenOnServer(request, streamName, name);
+        return OpenOnServer(request, streamName, name, PulseCaptureRules.SilenceFor(request, _silence));
     }
 
     [SupportedOSPlatform("linux")]
-    private static Task<ICaptureSource> OpenOnServer(CaptureRequest request, string streamName, string name) =>
-        Task.Run<ICaptureSource>(() => PulseCaptureSource.Open(request.Flow, request.DeviceId, streamName, name));
+    private static Task<ICaptureSource> OpenOnServer(CaptureRequest request, string streamName, string name, PulsePlaybackSilence? silence) =>
+        Task.Run<ICaptureSource>(() => PulseCaptureSource.Open(request.Flow, request.DeviceId, streamName, name, silence));
 
     private static PulseServerState ReadServer() => OperatingSystem.IsLinux()
         ? PulseConnection.ReadServer()

@@ -17,6 +17,7 @@ internal sealed unsafe class PulseCaptureSource : ICaptureSource
     private readonly PulseConnection _connection;
     private readonly TaskCompletionSource<bool> _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly int _blockAlign;
+    private readonly PulsePlaybackSilence? _silence;
     private GCHandle _self;
     private IntPtr _stream;
     private int _ended;
@@ -26,9 +27,10 @@ internal sealed unsafe class PulseCaptureSource : ICaptureSource
     private long _position;
     private string? _failure;
 
-    private PulseCaptureSource(PulseConnection connection, AudioFlow flow, string? deviceName)
+    private PulseCaptureSource(PulseConnection connection, AudioFlow flow, string? deviceName, PulsePlaybackSilence? silence)
     {
         _connection = connection;
+        _silence = PulseCaptureRules.SilenceOf(flow, silence);
         Format = PulseFormats.WaveFormatFor(flow);
         _blockAlign = Format.BlockAlign;
         DeviceName = deviceName;
@@ -47,10 +49,11 @@ internal sealed unsafe class PulseCaptureSource : ICaptureSource
     /// <param name="sourceName">The source to record: a monitor for the PC's sound, an input for the microphone.</param>
     /// <param name="streamName">The name the desktop's sound settings show for this stream.</param>
     /// <param name="deviceName">The name to show the user.</param>
-    public static PulseCaptureSource Open(AudioFlow flow, string sourceName, string streamName, string? deviceName)
+    /// <param name="silence">For the PC's sound only: while it holds, the packets say they are silent. Null for none.</param>
+    public static PulseCaptureSource Open(AudioFlow flow, string sourceName, string streamName, string? deviceName, PulsePlaybackSilence? silence = null)
     {
         var connection = PulseConnection.Open();
-        var source = new PulseCaptureSource(connection, flow, deviceName);
+        var source = new PulseCaptureSource(connection, flow, deviceName, silence);
         try
         {
             source.Connect(flow, sourceName, streamName);
@@ -219,7 +222,8 @@ internal sealed unsafe class PulseCaptureSource : ICaptureSource
                 packet = new ReadOnlySpan<byte>((void*)data, bytes);
             }
 
-            var flags = PulseFormats.FlagsOf(hole);
+            // Judged for each packet, by when its sound was captured: a thread that was late must not read the end of a preview as real audio.
+            var flags = PulseFormats.FlagsOf(hole, IsSilenced(stream, bytes));
             try
             {
                 PacketAvailable?.Invoke(packet, flags, _position, 0);
@@ -236,6 +240,19 @@ internal sealed unsafe class PulseCaptureSource : ICaptureSource
                 return;
             }
         }
+    }
+
+    // Whether the packet just peeked, of this many bytes, was captured while the preview silenced the PC's sound: read now, less
+    // the audio the stream still holds behind it.
+    private bool IsSilenced(IntPtr stream, int packetBytes)
+    {
+        if (_silence is null)
+        {
+            return false;
+        }
+
+        var backlog = PulseCaptureRules.BacklogMs(PulseNative.StreamReadableSize(stream), packetBytes, Format.AverageBytesPerSecond);
+        return _silence.IsSilentAgo(backlog);
     }
 
     // The callbacks below run on the loop's thread, called by C: nothing may be thrown out of them.
