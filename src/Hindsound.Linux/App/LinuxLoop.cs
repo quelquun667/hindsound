@@ -151,7 +151,11 @@ internal sealed class LinuxLoop : IAppLoop
         pump?.Wake();
     }
 
-    /// <summary>The Linux app has no window of its own to be in front.</summary>
+    /// <summary>
+    /// Never: on Windows this is the hidden window a closed menu of the icon leaves active, so the last click on the icon
+    /// still speaks for the user (TrayClick.StandingIn). The menu of the Linux icon is the desktop's and leaves nothing of
+    /// the app active; the settings window having the focus is not that case, so it does not count either.
+    /// </summary>
     public bool InFront() => false;
 
     public void Dispose()
