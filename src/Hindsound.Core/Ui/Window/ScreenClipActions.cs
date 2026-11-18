@@ -177,9 +177,9 @@ internal sealed partial class SettingsScreen
                 CloseClipMenu();
                 return true;
             case Vk.Tab:
-                CloseClipMenu();
-                MoveFocus((modifiers & HotkeyGesture.ModShift) == 0);
-                return true;
+                // The keyboard stays in the menu, as in a menu of Windows: Tab goes round its lines.
+                menu.Move((modifiers & HotkeyGesture.ModShift) == 0 ? 1 : -1);
+                break;
             case Vk.Up:
                 menu.Move(-1);
                 break;
@@ -252,10 +252,10 @@ internal sealed partial class SettingsScreen
                 OpenBox(NameBoxState.ForClipDelete(line, from));
                 break;
             case ClipMenuItem.Edit:
-                OpenEditor(line, EditorMode.Normal);
+                OpenEditor(line, EditorMode.Normal, from);
                 break;
             case ClipMenuItem.Soundboard:
-                OpenEditor(line, EditorMode.Soundboard);
+                OpenEditor(line, EditorMode.Soundboard, from);
                 break;
             case ClipMenuItem.Copy:
                 ClipGestureOn(line, p => p.Copy);

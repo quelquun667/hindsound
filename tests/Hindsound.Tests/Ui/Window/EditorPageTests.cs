@@ -235,6 +235,29 @@ public sealed class EditorPageTests : IDisposable
         Assert.DoesNotContain(Soundboard.TooLongText, drawn);
     }
 
+    [Theory]
+    [InlineData(59_960, "1:00.0")]
+    [InlineData(119_970, "2:00.0")]
+    [InlineData(59_940, "0:59.9")]
+    [InlineData(3_200, "0:03.2")]
+    public void The_clock_carries_the_rounded_seconds_over_to_the_minute(long ms, string shown)
+    {
+        Assert.Equal(shown, SettingsScreen.EditClock(ms));
+    }
+
+    [Fact]
+    public void The_page_is_titled_after_what_it_was_opened_for()
+    {
+        Open();
+        Assert.Contains(SettingsScreen.EditorTitle, Painted());
+        Assert.DoesNotContain(SettingsScreen.EditorSoundboardTitle, Painted());
+
+        Screen.CloseEditor();
+        Open(EditorMode.Soundboard);
+        Assert.Contains(SettingsScreen.EditorSoundboardTitle, Painted());
+        Assert.DoesNotContain(SettingsScreen.EditorTitle, Painted());
+    }
+
     [Fact]
     public void The_size_comes_from_the_estimate_of_the_app()
     {
@@ -286,13 +309,27 @@ public sealed class EditorPageTests : IDisposable
     }
 
     [Fact]
+    public void Back_from_another_page_the_keys_go_to_the_dialog_again()
+    {
+        Open();
+        Click(SettingsScreen.EditorSaveId);
+        Screen.ShowSection(Section.Now);
+        Screen.ShowSection(Section.Library);
+
+        _rig.Press(Vk.Down);
+        Assert.Equal(Section.Library, Screen.Section);
+        Assert.NotNull(Screen.EditorDialog);
+        Assert.Equal(EditorSaveDialogState.NameId, Screen.FocusId);
+    }
+
+    [Fact]
     public void The_dialog_saves_a_copy_named_after_the_clip_by_default()
     {
         Open();
         Click(SettingsScreen.EditorSaveId);
         Assert.Contains(EditorSaveDialogState.CopyHelp, Painted());
-        Assert.Contains(EditorSaveDialogState.ReplaceHelp, Painted());
-        Click(EditorSaveDialogState.SaveId);
+        Assert.True(((Button)Screen.WidgetById(EditorSaveDialogState.CopyId)!).Accented);
+        Click(EditorSaveDialogState.CopyId);
 
         var (request, save) = Assert.Single(_panel.Saves);
         Assert.Equal(new EditSave(EditSaveChoice.Copy, Name + " (cut)"), save);
@@ -307,14 +344,31 @@ public sealed class EditorPageTests : IDisposable
         Open();
         Click(SettingsScreen.EditorSaveId);
         Screen.EditChanged("   ");
-        Assert.False(((Button)Screen.WidgetById(EditorSaveDialogState.SaveId)!).Enabled);
+        Assert.False(((Button)Screen.WidgetById(EditorSaveDialogState.CopyId)!).Enabled);
         _rig.Press(Vk.Enter);
         Assert.Empty(_panel.Saves);
         Assert.NotNull(Screen.EditorDialog);
 
         Click(EditorSaveDialogState.ReplaceId);
-        Click(EditorSaveDialogState.SaveId);
         Assert.Equal(new EditSave(EditSaveChoice.Replace, null), Assert.Single(_panel.Saves).Save);
+    }
+
+    [Fact]
+    public void The_dialog_has_the_name_of_the_copy_then_Cancel_Replace_the_original_and_Save_as_a_copy()
+    {
+        Open();
+        Click(SettingsScreen.EditorSaveId);
+        var drawn = Painted();
+        Assert.Contains(EditorSaveDialogState.NameCaption, drawn);
+        Assert.Contains(EditorSaveDialogState.CopyHelp, drawn);
+        var stops = Screen.StopIds().Where(id => id.StartsWith(EditorSaveDialogState.Prefix, StringComparison.Ordinal));
+        Assert.Equal([EditorSaveDialogState.NameId, EditorSaveDialogState.CancelId, EditorSaveDialogState.ReplaceId, EditorSaveDialogState.CopyId], stops);
+        Assert.Contains(EditorSaveDialogState.ReplaceLabel, drawn);
+        Assert.Contains(EditorSaveDialogState.CopyLabel, drawn);
+
+        // Enter in the name saves the copy, as the button in accent does.
+        _rig.Press(Vk.Enter);
+        Assert.Equal(new EditSave(EditSaveChoice.Copy, Name + " (cut)"), Assert.Single(_panel.Saves).Save);
     }
 
     [Fact]
@@ -322,7 +376,7 @@ public sealed class EditorPageTests : IDisposable
     {
         Open();
         Click(SettingsScreen.EditorSaveId);
-        Click(EditorSaveDialogState.SaveId);
+        Click(EditorSaveDialogState.CopyId);
         Screen.EditorSaved(new EditSaveResult(EditSaveOutcome.Saved, [@"C:\Clips\clip0003.mp3"]));
 
         Assert.False(Screen.EditorOpen);
@@ -364,6 +418,84 @@ public sealed class EditorPageTests : IDisposable
         Assert.DoesNotContain(SettingsScreen.EditorNothingChanges, Painted());
         Assert.Empty(_panel.Discord);
         Assert.True(((Button)Screen.WidgetById(SettingsScreen.EditorSaveId)!).Enabled);
+    }
+
+    [Fact]
+    public void While_the_save_runs_Escape_Cancel_and_Save_do_nothing_and_the_foot_says_so()
+    {
+        Open(EditorMode.Soundboard);
+        Click(SettingsScreen.EditorSaveId);
+        Assert.Contains(SettingsScreen.EditorSaving, Painted());
+        Assert.False(((Button)Screen.WidgetById(SettingsScreen.EditorCancelId)!).Enabled);
+        Assert.False(((Button)Screen.WidgetById(SettingsScreen.EditorSaveId)!).Enabled);
+
+        _rig.Press(Vk.Escape);
+        Click(SettingsScreen.EditorCancelId);
+        Assert.True(Screen.EditorOpen);
+        Assert.Equal(0, _panel.Closes);
+        Assert.Equal(SettingsScreen.EditorPlayId, Screen.FocusId);
+
+        Screen.EditorSaved(new EditSaveResult(EditSaveOutcome.Saved, [@"C:\Clips\clip0002.mp3"]));
+        Assert.Equal([@"C:\Clips\clip0002.mp3"], _panel.Discord);
+        Assert.False(Screen.EditorOpen);
+    }
+
+    [Fact]
+    public void A_soundboard_copy_written_after_the_editor_closed_still_goes_to_Discord()
+    {
+        Open(EditorMode.Soundboard);
+        Click(SettingsScreen.EditorSaveId);
+        Screen.SetEditor(_panel);
+        Assert.False(Screen.EditorOpen);
+
+        Screen.EditorSaved(new EditSaveResult(EditSaveOutcome.Saved, [@"C:\Clips\clip0002.mp3"]));
+        Assert.Equal([@"C:\Clips\clip0002.mp3"], _panel.Discord);
+        Assert.Contains(Soundboard.UploadHint, Painted());
+    }
+
+    [Theory]
+    [InlineData(EditSaveOutcome.CannotRecycle, SettingsScreen.EditorCantRecycle)]
+    [InlineData(EditSaveOutcome.Failed, SettingsScreen.EditorFailed)]
+    public void A_save_that_fails_after_the_editor_closed_is_said_on_the_line_of_the_Library(EditSaveOutcome outcome, string text)
+    {
+        Open();
+        Click(SettingsScreen.EditorSaveId);
+        Click(EditorSaveDialogState.ReplaceId);
+        Screen.SetEditor(_panel);
+
+        Screen.EditorSaved(new EditSaveResult(outcome, []));
+        Assert.False(Screen.EditorOpen);
+        Assert.Contains(text, string.Join(" ", Painted()));
+        Assert.Empty(_panel.Discord);
+    }
+
+    [Fact]
+    public void A_replacement_kept_aside_closes_the_editor_chooses_the_edit_and_says_where_the_original_is()
+    {
+        Open();
+        Click(SettingsScreen.EditorSaveId);
+        Click(EditorSaveDialogState.ReplaceId);
+        Screen.EditorSaved(new EditSaveResult(EditSaveOutcome.SavedAside, [@"C:\Clips\clip0002.mp3"]));
+
+        Assert.False(Screen.EditorOpen);
+        Assert.Equal(1, _panel.Closes);
+        Assert.Equal(@"C:\Clips\clip0002.mp3", Screen.EditorChosenPath);
+        var drawn = string.Join(" ", Painted());
+        Assert.Contains(SettingsScreen.EditorSavedAside, drawn);
+        Assert.DoesNotContain(SettingsScreen.EditorFailed, drawn);
+        Assert.Empty(_panel.Discord);
+    }
+
+    [Fact]
+    public void A_replacement_whose_edit_could_not_be_kept_says_the_original_is_in_the_Recycle_Bin()
+    {
+        Open();
+        Click(SettingsScreen.EditorSaveId);
+        Click(EditorSaveDialogState.ReplaceId);
+        Screen.EditorSaved(new EditSaveResult(EditSaveOutcome.SavedAside, []));
+
+        Assert.False(Screen.EditorOpen);
+        Assert.Contains(SettingsScreen.EditorAsideLost, string.Join(" ", Painted()));
     }
 
     [Theory]

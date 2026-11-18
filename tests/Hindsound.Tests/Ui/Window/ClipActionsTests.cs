@@ -1,3 +1,4 @@
+using Hindsound.Input;
 using Hindsound.Library;
 using Hindsound.Ui;
 using Hindsound.Ui.Window;
@@ -272,6 +273,22 @@ public sealed class ClipActionsTests : IDisposable
     }
 
     [Fact]
+    public void Tab_stays_in_the_menu_and_goes_round_its_lines()
+    {
+        Open();
+        Screen.SelectClip(FakeLibrary.PathOf(1));
+        Assert.True(Screen.TabTo(SettingsScreen.ClipMoreId));
+        Screen.Key(Vk.Enter, 0);
+
+        Screen.Key(Vk.Tab, 0);
+        Assert.Equal(ClipMenuItem.Copy, Screen.OpenClipMenu!.Current);
+        Screen.Key(Vk.Tab, HotkeyGesture.ModShift);
+        Screen.Key(Vk.Tab, HotkeyGesture.ModShift);
+        Assert.Equal(ClipMenuItem.Delete, Screen.OpenClipMenu!.Current);
+        Assert.Equal(SettingsScreen.ClipMoreId, Screen.FocusId);
+    }
+
+    [Fact]
     public void Escape_a_press_outside_and_the_window_losing_the_keyboard_close_it_and_do_nothing_else()
     {
         var library = Open();
@@ -322,6 +339,23 @@ public sealed class ClipActionsTests : IDisposable
         Assert.True(Screen.EditorOpen);
         Assert.Equal(FakeLibrary.PathOf(2), Screen.Editing!.Value.Clip.Main.Path);
         Assert.Equal(soundboard ? EditorMode.Soundboard : EditorMode.Normal, Screen.Editing!.Value.Mode);
+    }
+
+    [Fact]
+    public void Closing_the_editor_gives_the_focus_back_to_the_dots_that_opened_it()
+    {
+        Open(editor: true);
+        Screen.SelectClip(FakeLibrary.PathOf(1));
+        Assert.True(Screen.TabTo(SettingsScreen.ClipMoreId));
+        Screen.Key(Vk.Enter, 0);
+        Screen.Key(Vk.Down, 0);
+        Assert.Equal(ClipMenuItem.Edit, Screen.OpenClipMenu!.Current);
+        Screen.Key(Vk.Enter, 0);
+        Assert.True(Screen.EditorOpen);
+
+        Screen.Key(Vk.Escape, 0);
+        Assert.False(Screen.EditorOpen);
+        Assert.Equal(SettingsScreen.ClipMoreId, Screen.FocusId);
     }
 
     // ---------------------------------------------------------------- F2 and renaming
