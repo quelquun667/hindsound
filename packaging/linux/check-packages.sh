@@ -131,7 +131,7 @@ check_layout() {
     for licence in AppImage-type2-runtime-LICENSE.txt musl-COPYRIGHT.txt libfuse-LGPL2.txt libfuse-LICENSE.txt \
         squashfuse-LICENSE.txt zstd-LICENSE.txt zlib-LICENSE.txt mimalloc-LICENSE.txt Tmds.DBus.Protocol-COPYING.txt \
         SDL3-LICENSE.txt SDL3-yuv2rgb-LICENSE.txt Selawik-LICENSE.txt Barlow-OFL.txt CascadiaCode-LICENSE.txt \
-        NLayer-LICENSE.txt; do
+        NLayer-LICENSE.txt SDL3-x11-edid-LICENSE.txt SDL3-x11-xsettings-LICENSE.txt; do
         has "$doc/licenses/linux/$licence"
     done
     if command -v desktop-file-validate > /dev/null; then
