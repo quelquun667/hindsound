@@ -53,7 +53,7 @@ internal sealed class FreedesktopTrash : IRecycleBin
         }
         catch (Exception ex)
         {
-            _journal(string.Create(CultureInfo.InvariantCulture, $"recycle bin: failed ({ex.GetType().Name}, 0x{ex.HResult:X8})"));
+            _journal(Failure(ex));
             return RecycleOutcome.Failed;
         }
     }
@@ -116,18 +116,27 @@ internal sealed class FreedesktopTrash : IRecycleBin
 
         var date = _now();
         var moved = new List<Moved>();
-        foreach (var plan in plans)
+        try
         {
-            var step = Move(plan, date, out var error);
-            if (step is { } done)
+            foreach (var plan in plans)
             {
-                moved.Add(done);
-                continue;
-            }
+                var step = Move(plan, date, out var error);
+                if (step is { } done)
+                {
+                    moved.Add(done);
+                    continue;
+                }
 
-            var back = PutBack(moved);
-            _journal(string.Create(CultureInfo.InvariantCulture, $"recycle bin: not done ({error.Step}, errno {error.Code})"));
-            return back ? RecycleOutcome.CannotRecycle : RecycleOutcome.Failed;
+                var back = PutBack(moved);
+                _journal(string.Create(CultureInfo.InvariantCulture, $"recycle bin: not done ({error.Step}, errno {error.Code})"));
+                return back ? RecycleOutcome.CannotRecycle : RecycleOutcome.Failed;
+            }
+        }
+        catch (Exception ex)
+        {
+            // An exception between two moves must not leave the clip split: what is in the trash goes back first.
+            _journal(Failure(ex));
+            return PutBack(moved) ? RecycleOutcome.CannotRecycle : RecycleOutcome.Failed;
         }
 
         return RecycleOutcome.Recycled;
@@ -204,6 +213,9 @@ internal sealed class FreedesktopTrash : IRecycleBin
 
         return all;
     }
+
+    private static string Failure(Exception ex) =>
+        string.Create(CultureInfo.InvariantCulture, $"recycle bin: failed ({ex.GetType().Name}, 0x{ex.HResult:X8})");
 
     private RecycleOutcome NotDone(string step, int error)
     {

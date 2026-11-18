@@ -393,6 +393,24 @@ public sealed class FreedesktopTrashTests
         Assert.Empty(_journal);
     }
 
+    [Fact]
+    public void AnExceptionAfterAFileWasMovedPutsItBackAndLeavesTheOthers()
+    {
+        _fs.File("/home/u/clips/a.wav");
+        _fs.File("/home/u/clips/b.wav");
+        _fs.StatThrows = path => path == Trash + "/files/b.wav";
+
+        var outcome = Recycle("/home/u/clips/a.wav", "/home/u/clips/b.wav");
+
+        Assert.Equal(RecycleOutcome.CannotRecycle, outcome);
+        Assert.True(_fs.Exists("/home/u/clips/a.wav"));
+        Assert.True(_fs.Exists("/home/u/clips/b.wav"));
+        Assert.False(_fs.Exists(Trash + "/files/a.wav"));
+        Assert.False(_fs.Exists(Trash + "/info/a.wav.trashinfo"));
+        Assert.Single(_journal);
+        Assert.StartsWith("recycle bin: failed (IOException, 0x", _journal[0]);
+    }
+
     // The top directory trash of another file system.
 
     private void Usb()
