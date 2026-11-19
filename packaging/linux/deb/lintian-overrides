@@ -5,10 +5,6 @@
 hindsound: no-manual-page
 
 # The .NET runtime inside the single-file program carries its own zlib, as every self-contained .NET app does: the
-# program is the same file as in the AppImage and the tar.gz.
-hindsound: embedded-library
-
-# The package is made from the release, not from a Debian source package: its version is that of the release, with no
-# Debian revision, so that its file name matches the release. The changelog keeps the name changelog.Debian.gz all the
-# same: it is the changelog of the packaging, and the notes of the release are on its page.
-hindsound: wrong-name-for-changelog-of-native-package
+# program is the same file as in the AppImage and the tar.gz. Only that file, and only zlib: another embedded library,
+# or zlib in another file, is reported.
+hindsound: embedded-library zlib usr/lib/hindsound/hindsound
