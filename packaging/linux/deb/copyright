@@ -30,7 +30,7 @@ Comment: LAME 3.100, built from lame-3.100.tar.gz, which each release offers nex
  licenses/LAME-COPYING.txt, licenses/LAME-LICENSE.txt and licenses/LAME-README.txt.
 
 Files: usr/lib/hindsound/libSDL3.so.0
-Copyright: 1997-2025 Sam Lantinga <slouken@libsdl.org>
+Copyright: 1997-2025 Sam Lantinga
 License: Zlib
 Comment: SDL 3.2.30. The code compiled in under other permissive terms is listed with its texts in
  licenses/linux/SDL3-yuv2rgb-LICENSE.txt, licenses/linux/SDL3-x11-edid-LICENSE.txt,
