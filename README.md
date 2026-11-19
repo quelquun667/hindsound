@@ -225,7 +225,8 @@ settings window edits it; without the window, edit it by hand while Hindsound is
 From the releases after 0.7.0, a launch or a click on the icon opens the same window as on Windows: `Now`, `Library` and
 the settings. The packages bring SDL 3.2, which draws it, and its fonts: Selawik, Barlow Semi Condensed and Cascadia
 Mono. FreeType, HarfBuzz and fontconfig come from the system, as on any desktop. If one of them is missing, Hindsound runs
-without the window, as before, and its log says why.
+without the window, as before, and its log says why. The window's SDL needs glibc 2.34 or later, which Ubuntu 22.04 and
+the later systems Hindsound is made for already have.
 
 - Listening to a clip: while it plays, the capture of the PC's sound records silence, so the clip does not end up in the
   next one. The microphone keeps recording.
