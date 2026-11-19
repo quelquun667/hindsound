@@ -36,6 +36,7 @@ $downloads = @"
 | ``Hindsound-$Version-Setup.exe`` | Windows, 64-bit: installs Hindsound for your user and keeps it up to date. Start here on Windows. |
 | ``Hindsound-$Version-win-x64-portable.zip`` | Windows, 64-bit, without installing anything: unzip it and start ``Hindsound.exe``. It does not update itself: it tells you when a new version is out, with a link to its release. |
 | ``hindsound-$Version-linux-x64.AppImage`` | Linux, 64-bit: one file to make executable and run. Start here on Linux. |
+| ``hindsound_${Version}_amd64.deb`` | Ubuntu 22.04 and later, Debian 12 and later, 64-bit: install it with ``sudo apt install ./hindsound_${Version}_amd64.deb``, and Hindsound is in the list of applications; ``sudo apt remove hindsound`` takes it away. It does not update itself: it tells you when a new version is out, with a link to its release. |
 | ``hindsound-$Version-linux-x64.tar.gz`` | Linux, 64-bit, where the AppImage does not run: a folder to unpack, with a ``README.txt`` that says how to install it. |
 | ``hindsound-update-win-x64.json``, ``hindsound-update-win-x64-portable.json``, ``hindsound-update-linux-x64.json`` | Read by Hindsound to learn that this version is out. Nothing to download. |
 | ``lame-3.100.tar.gz`` | The source of LAME, the MP3 encoder that every download above carries, under the LGPL. |

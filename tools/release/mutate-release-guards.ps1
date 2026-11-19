@@ -187,6 +187,14 @@ $mutations = @(
 
     # The clip must be in the folder itself, not in the rescue folder
     @($setup, 'if ($mp3[0].DirectoryName -ne $root) {', 'if ($false) {')
+
+    # The .deb: in the release, checked as a Debian package, and installed before the release gathers its files
+    @($assets, '$zipName, "hindsound-$Version-linux-x64.AppImage", "hindsound-$Version-linux-x64.tar.gz", $debName,', '$zipName, "hindsound-$Version-linux-x64.AppImage", "hindsound-$Version-linux-x64.tar.gz",')
+    @($assets, 'if (-not $debHead.StartsWith("!<arch>`ndebian-binary") -or $debHead.Substring(68, 4) -cne "2.0`n") {', 'if ($false) {')
+    @('tools/release/assemble-release.ps1', ', "hindsound_${Version}_amd64.deb")', ')')
+    @($release, ' "$env:RUNNER_TEMP/out/hindsound_${env:VERSION}_amd64.deb"', '')
+    @('.github/workflows/release-files.yml', 'needs: [windows, linux, deb]', 'needs: [windows, linux]')
+    @('.github/workflows/release-files.yml', "image: ['ubuntu:22.04', 'ubuntu:24.04', 'debian:12']", "image: ['ubuntu:24.04']")
 )
 
 $repository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).ProviderPath

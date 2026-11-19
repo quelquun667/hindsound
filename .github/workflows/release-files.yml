@@ -149,6 +149,21 @@ jobs:
       - name: Check the packages
         run: bash packaging/linux/check-packages.sh "$RUNNER_TEMP/packages" "$HINDSOUND_VERSION"
 
+      # The Debian package, from the same inputs, made a second time elsewhere: the same commit gives the same bytes. It adds
+      # its line to the SHA256SUMS of the other two.
+      - name: Make the .deb
+        run: |
+          bash packaging/linux/build-deb.sh "$RUNNER_TEMP/hindsound-linux-x64" "$RUNNER_TEMP/lame/libmp3lame.so.0" "$RUNNER_TEMP/sdl3/libSDL3.so.0" "$RUNNER_TEMP/fonts" "$HINDSOUND_VERSION" "$RUNNER_TEMP/packages"
+          bash packaging/linux/build-deb.sh "$RUNNER_TEMP/hindsound-linux-x64" "$RUNNER_TEMP/lame/libmp3lame.so.0" "$RUNNER_TEMP/sdl3/libSDL3.so.0" "$RUNNER_TEMP/fonts" "$HINDSOUND_VERSION" "$RUNNER_TEMP/deb-again"
+          cmp -- "$RUNNER_TEMP/packages/hindsound_${HINDSOUND_VERSION}_amd64.deb" "$RUNNER_TEMP/deb-again/hindsound_${HINDSOUND_VERSION}_amd64.deb"
+          (cd "$RUNNER_TEMP/packages" && sha256sum --check --strict SHA256SUMS)
+
+      # Its fields, its files, what its programs link against its Depends, and lintian, without error or unexplained warning.
+      - name: Check the .deb
+        run: |
+          sudo apt-get install -y --no-install-recommends lintian
+          bash packaging/linux/check-deb.sh "$RUNNER_TEMP/packages" "$HINDSOUND_VERSION"
+
       # The packages ship libmp3lame.so.0 under the LGPL: its source goes with them, the archive the encoder was built from,
       # which build-lame-linux.sh verified against the SHA-256 of the notices. SDL3 (zlib licence) and the fonts (SIL Open
       # Font License) ask for no source to go with them: their licence texts are in the packages.
@@ -171,10 +186,41 @@ jobs:
           if-no-files-found: error
           overwrite: true
 
+  # The .deb installed by apt in clean containers of the systems it is for, with its Depends alone, then started by
+  # /usr/bin/hindsound (--prove-mp3, then --dump-settings) and removed. The files of the release wait for it: a .deb that
+  # does not install on one of them stops the release.
+  deb:
+    needs: linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['ubuntu:22.04', 'ubuntu:24.04', 'debian:12']
+    container:
+      image: ${{ matrix.image }}
+    env:
+      HINDSOUND_VERSION: ${{ inputs.version }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # A path in the workspace: inside a container, runner.temp names a folder of the host.
+      - name: Take the Linux files
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: hindsound-linux-x64
+          path: linux-files
+
+      - name: Install, run and remove the .deb
+        run: bash packaging/linux/try-deb.sh linux-files "$HINDSOUND_VERSION"
+
   # The files of the release, together: the two announce manifests and one SHA256SUMS are written here, then everything is
   # checked as the release job checks the files it downloads back from the draft.
   assemble:
-    needs: [windows, linux]
+    needs: [windows, linux, deb]
     runs-on: windows-latest
     timeout-minutes: 15
     env:

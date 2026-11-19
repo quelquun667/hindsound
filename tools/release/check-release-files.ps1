@@ -6,12 +6,13 @@
     An immutable release takes no change once published, so a file damaged on its way up, or one left by an earlier run,
     would reach the users. The folder must hold exactly the files of the release:
       Hindsound-<v>-Setup.exe, Hindsound-<v>-win-x64-portable.zip, hindsound-<v>-linux-x64.AppImage,
-      hindsound-<v>-linux-x64.tar.gz, hindsound-update-win-x64.json, hindsound-update-win-x64-portable.json,
+      hindsound-<v>-linux-x64.tar.gz, hindsound_<v>_amd64.deb, hindsound-update-win-x64.json, hindsound-update-win-x64-portable.json,
       hindsound-update-linux-x64.json, lame-3.100.tar.gz, fuse-3.15.0.tar.xz, type2-runtime-20251108-source.tar.gz,
       type2-runtime-20251108-libraries-source.tar.gz and SHA256SUMS.
     The Setup manifest must give this version, the address of this Setup on the release of the tag, and the size and
     SHA-256 of the Setup in the folder. The two announce manifests must give this version and exactly the page of the
-    release, and nothing else. The portable zip must hold portable.txt next to Hindsound.exe. The LAME source must have the
+    release, and nothing else. The portable zip must hold portable.txt next to Hindsound.exe. The .deb must be a Debian
+    package: an ar archive whose first member is debian-binary, holding 2.0. The LAME source must have the
     SHA-256 given in THIRD-PARTY-NOTICES.md. fuse-3.15.0.tar.xz must have the SHA-256 that fetch-runtime-sources.sh pins,
     read from that script, and the source of the runtime must be a gzip archive: that script checked what it holds. The
     source of the libraries linked into the runtime must be a gzip archive of a tar that holds README.txt and exactly the
@@ -78,6 +79,7 @@ function Read-Manifest([string]$Name) {
 
 $setupName = "Hindsound-$Version-Setup.exe"
 $zipName = "Hindsound-$Version-win-x64-portable.zip"
+$debName = "hindsound_${Version}_amd64.deb"
 $manifestName = 'hindsound-update-win-x64.json'
 $announceNames = @('hindsound-update-win-x64-portable.json', 'hindsound-update-linux-x64.json')
 $lameName = 'lame-3.100.tar.gz'
@@ -87,7 +89,7 @@ $librariesSourceName = 'type2-runtime-20251108-libraries-source.tar.gz'
 $sumsName = 'SHA256SUMS'
 
 [string[]]$expectedNames = @(
-    $setupName, $zipName, "hindsound-$Version-linux-x64.AppImage", "hindsound-$Version-linux-x64.tar.gz",
+    $setupName, $zipName, "hindsound-$Version-linux-x64.AppImage", "hindsound-$Version-linux-x64.tar.gz", $debName,
     $manifestName, $announceNames[0], $announceNames[1], $lameName, $fuseName, $runtimeSourceName, $librariesSourceName,
     $sumsName
 )
@@ -144,6 +146,13 @@ foreach ($entry in "$top/Hindsound.exe", "$top/libmp3lame.64.dll", "$top/portabl
     if ($entries -cnotcontains $entry) {
         throw "$zipName on the release has no $entry."
     }
+}
+
+# The .deb: an ar archive whose first member, debian-binary, gives the format 2.0, as dpkg-deb writes it.
+$debBytes = [IO.File]::ReadAllBytes((Join-Path $Folder $debName))
+$debHead = if ($debBytes.Length -ge 72) { [Text.Encoding]::ASCII.GetString($debBytes, 0, 72) } else { '' }
+if (-not $debHead.StartsWith("!<arch>`ndebian-binary") -or $debHead.Substring(68, 4) -cne "2.0`n") {
+    throw "$debName on the release is not a Debian package."
 }
 
 $lameActual = Get-Sha256 (Join-Path $Folder $lameName)

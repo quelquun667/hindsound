@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- On Linux, a `.deb` package for Ubuntu 22.04 and later and Debian 12 and later: `sudo apt install ./hindsound_X.Y.Z_amd64.deb` installs Hindsound in `/usr/lib/hindsound`, with `/usr/bin/hindsound`, its entry in the list of applications and its icons, and `sudo apt remove hindsound` takes it away. Like the AppImage, it does not update itself: a notification says when a new version is out, with the link to its release.
+
+### Fixed
+
+- On Linux, the `Hotkeys` page no longer shows and copies `hindsound --save` when the path of the program has a character it cannot write in a command: nothing puts an AppImage on the PATH, so that command found no program. The page now says in words what to bind, with no `Copy` button, as the notice does.
+
 ## [0.8.0] - 2026-11-19
 
 The window on Linux, with the Library, its tools and listening to a clip. On Windows, Hindsound works as in 0.7.0.

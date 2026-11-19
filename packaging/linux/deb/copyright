@@ -1,0 +1,57 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: Hindsound
+Upstream-Contact: https://github.com/quelquun667/hindsound/issues
+Source: https://github.com/quelquun667/hindsound
+Comment: The licence texts of every component, unchanged, are in /usr/share/doc/hindsound/licenses, and
+ /usr/share/doc/hindsound/THIRD-PARTY-NOTICES.md says where each one comes from. This package carries the components
+ of the Linux app only: those of the Windows build and of the runtime of the AppImage are not in it.
+
+Files: *
+Copyright: 2026 quelquun667
+License: Expat
+Comment: Hindsound itself: /usr/lib/hindsound/hindsound, the desktop entry and the icons.
+
+Files: usr/lib/hindsound/hindsound
+Copyright: .NET Foundation and Contributors
+ 2008-2026 Mark Heath
+ 2013-2019 Corey Murtagh
+ 2006 Alp Toker, 2010 Other Contributors, 2016 Tom Deseyn
+ 2018 Mark Heath, Andrew Ward & Contributors
+ 2026 quelquun667
+License: Expat
+Comment: One self-contained file: Hindsound, the .NET runtime 10 (with the third-party notices of
+ licenses/dotnet-runtime-THIRD-PARTY-NOTICES.txt), NAudio.Core 3.3.0, NAudio.Lame 2.1.0 (NAudio.Lame.dll only),
+ Tmds.DBus.Protocol 0.95.2 and NLayer 3.0.1, all under the MIT licence.
+
+Files: usr/lib/hindsound/libmp3lame.so.0
+Copyright: The LAME authors, as named in the source of LAME 3.100
+License: LGPL-2+
+Comment: LAME 3.100, built from lame-3.100.tar.gz, which each release offers next to this package. The texts are
+ licenses/LAME-COPYING.txt, licenses/LAME-LICENSE.txt and licenses/LAME-README.txt.
+
+Files: usr/lib/hindsound/libSDL3.so.0
+Copyright: 1997-2025 Sam Lantinga <slouken@libsdl.org>
+License: Zlib
+Comment: SDL 3.2.30. The code compiled in under other permissive terms is listed with its texts in
+ licenses/linux/SDL3-yuv2rgb-LICENSE.txt, licenses/linux/SDL3-x11-edid-LICENSE.txt,
+ licenses/linux/SDL3-x11-xsettings-LICENSE.txt and licenses/linux/SDL3-wayland-protocols-NOTICES.txt.
+
+Files: usr/lib/hindsound/fonts/Selawik-Regular.ttf usr/lib/hindsound/fonts/Selawik-Semibold.ttf
+Copyright: 2015 Microsoft Corporation (www.microsoft.com), with Reserved Font Name Selawik
+License: OFL-1.1
+
+Files: usr/lib/hindsound/fonts/BarlowSemiCondensed-SemiBold.ttf
+Copyright: 2017 The Barlow Project Authors (https://github.com/jpt/barlow)
+License: OFL-1.1
+
+Files: usr/lib/hindsound/fonts/CascadiaMono-Regular.ttf
+Copyright: 2019 - Present, Microsoft Corporation, with Reserved Font Name Cascadia Code
+License: OFL-1.1
+
+License: LGPL-2+
+ This library is free software; you can redistribute it and/or modify it under the terms of the GNU Library General
+ Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option)
+ any later version.
+ .
+ On Debian systems, the complete text of the GNU Library General Public License version 2 can be found in
+ /usr/share/common-licenses/LGPL-2.

@@ -347,7 +347,7 @@ try {
     & $writeNotes -Version '1.2.3' -ChangelogFile $changelogPart -OutFile $releaseNotes
     $releaseNotesText = [IO.File]::ReadAllText($releaseNotes)
     Report 'the notes start with the changelog' ($releaseNotesText.StartsWith("### Added`n`n- Something new.`n`n## Downloads`n"))
-    foreach ($name in 'Hindsound-1.2.3-Setup.exe', 'Hindsound-1.2.3-win-x64-portable.zip', 'hindsound-1.2.3-linux-x64.AppImage', 'hindsound-1.2.3-linux-x64.tar.gz', 'hindsound-update-win-x64.json', 'hindsound-update-win-x64-portable.json', 'hindsound-update-linux-x64.json', 'lame-3.100.tar.gz', 'fuse-3.15.0.tar.xz', 'type2-runtime-20251108-source.tar.gz', 'type2-runtime-20251108-libraries-source.tar.gz', 'SHA256SUMS') {
+    foreach ($name in 'Hindsound-1.2.3-Setup.exe', 'Hindsound-1.2.3-win-x64-portable.zip', 'hindsound-1.2.3-linux-x64.AppImage', 'hindsound-1.2.3-linux-x64.tar.gz', 'hindsound_1.2.3_amd64.deb', 'hindsound-update-win-x64.json', 'hindsound-update-win-x64-portable.json', 'hindsound-update-linux-x64.json', 'lame-3.100.tar.gz', 'fuse-3.15.0.tar.xz', 'type2-runtime-20251108-source.tar.gz', 'type2-runtime-20251108-libraries-source.tar.gz', 'SHA256SUMS') {
         Report "the notes say whom $name is for" ($releaseNotesText -cmatch "(?m)^\| [^\n]*``$([regex]::Escape($name))``[^\n]*\| [^|\n]+\. \|$")
     }
     Report 'the notes have no BOM and no carriage return' (([IO.File]::ReadAllBytes($releaseNotes)[0] -eq [byte][char]'#') -and -not $releaseNotesText.Contains("`r"))
@@ -436,6 +436,11 @@ try {
     function Write-FakeLibrariesSource([string]$Path, [string[]]$Names = $fakeLibraryNames, [string[]]$Texts = $fakeLibraryTexts, [char]$Type = '0') {
         Write-FakeTarGz $Path @($Names | ForEach-Object { $librariesPrefix + $_ }) $Texts $Type
     }
+    # A .deb as dpkg-deb begins it: the ar magic, then the member debian-binary, which holds the format.
+    function Write-FakeDeb([string]$Path, [string]$Format = "2.0`n") {
+        $member = 'debian-binary'.PadRight(16) + '0'.PadRight(12) + '0'.PadRight(6) + '0'.PadRight(6) + '100644'.PadRight(8) + "$($Format.Length)".PadRight(10) + [char]0x60 + "`n"
+        [IO.File]::WriteAllText($Path, "!<arch>`n" + $member + $Format + 'fake control and data', (New-Object Text.UTF8Encoding $false))
+    }
     # The folders of the two jobs, as their artifacts hold them.
     function New-JobFiles([string]$ManifestVersion = '1.2.3', [string]$Repository = 'owner/name') {
         $script:filesNumber++
@@ -450,7 +455,8 @@ try {
         [IO.File]::WriteAllText((Join-Path $windows 'lame-3.100.tar.gz'), 'fake source')
         [IO.File]::WriteAllText((Join-Path $linux 'hindsound-1.2.3-linux-x64.AppImage'), 'fake AppImage')
         [IO.File]::WriteAllText((Join-Path $linux 'hindsound-1.2.3-linux-x64.tar.gz'), 'fake archive')
-        Write-Sums $linux @('hindsound-1.2.3-linux-x64.AppImage', 'hindsound-1.2.3-linux-x64.tar.gz')
+        Write-FakeDeb (Join-Path $linux 'hindsound_1.2.3_amd64.deb')
+        Write-Sums $linux @('hindsound-1.2.3-linux-x64.AppImage', 'hindsound-1.2.3-linux-x64.tar.gz', 'hindsound_1.2.3_amd64.deb')
         [IO.File]::WriteAllText((Join-Path $linux 'lame-3.100.tar.gz'), 'fake source')
         [IO.File]::WriteAllText((Join-Path $linux 'fuse-3.15.0.tar.xz'), 'fake libfuse source')
         [IO.File]::WriteAllBytes((Join-Path $linux 'type2-runtime-20251108-source.tar.gz'), [byte[]](0x1F, 0x8B, 0x08, 0x00, 1, 2, 3))
@@ -471,7 +477,7 @@ try {
     function Test-ReleaseFiles([string]$Folder, [string]$Expected = '') {
         & $checkFiles -Folder $Folder -Version '1.2.3' -Repository 'owner/name' -LameSha256 $fakeLameSha256 -FuseSha256 $fakeFuseSha256 -LibraryFiles $fakeLibraryFiles -Expected $Expected
     }
-    $allNames = @('Hindsound-1.2.3-Setup.exe', 'Hindsound-1.2.3-win-x64-portable.zip', 'SHA256SUMS', 'fuse-3.15.0.tar.xz', 'hindsound-1.2.3-linux-x64.AppImage', 'hindsound-1.2.3-linux-x64.tar.gz', 'hindsound-update-linux-x64.json', 'hindsound-update-win-x64-portable.json', 'hindsound-update-win-x64.json', 'lame-3.100.tar.gz', 'type2-runtime-20251108-libraries-source.tar.gz', 'type2-runtime-20251108-source.tar.gz')
+    $allNames = @('Hindsound-1.2.3-Setup.exe', 'Hindsound-1.2.3-win-x64-portable.zip', 'SHA256SUMS', 'fuse-3.15.0.tar.xz', 'hindsound-1.2.3-linux-x64.AppImage', 'hindsound-1.2.3-linux-x64.tar.gz', 'hindsound-update-linux-x64.json', 'hindsound-update-win-x64-portable.json', 'hindsound-update-win-x64.json', 'hindsound_1.2.3_amd64.deb', 'lame-3.100.tar.gz', 'type2-runtime-20251108-libraries-source.tar.gz', 'type2-runtime-20251108-source.tar.gz')
     Assert-Equal 'the release gathers the files of both jobs, the announce manifests and SHA256SUMS' ($allNames -join ' ') ((Get-OrdinalNames $releaseFiles) -join ' ')
     Assert-Accepted 'the files of the release pass' { Test-ReleaseFiles $releaseFiles }
     $sumsBytes = [IO.File]::ReadAllBytes((Join-Path $releaseFiles 'SHA256SUMS'))
@@ -485,6 +491,16 @@ try {
     $jobFiles = New-JobFiles
     [IO.File]::WriteAllText((Join-Path $jobFiles 'linux\hindsound-1.2.3-linux-x64.AppImage'), 'damaged AppImage')
     Assert-Refused 'a Linux package that does not match its SHA256SUMS refused' { Invoke-Assemble $jobFiles } 'the Linux SHA256SUMS gives'
+    $jobFiles = New-JobFiles
+    Remove-Item -LiteralPath (Join-Path $jobFiles 'linux\hindsound_1.2.3_amd64.deb')
+    Write-Sums (Join-Path $jobFiles 'linux') @('hindsound-1.2.3-linux-x64.AppImage', 'hindsound-1.2.3-linux-x64.tar.gz')
+    Assert-Refused 'Linux packages without the .deb refused' { Invoke-Assemble $jobFiles } 'The Linux files are'
+    $jobFiles = New-JobFiles
+    Write-Sums (Join-Path $jobFiles 'linux') @('hindsound-1.2.3-linux-x64.AppImage', 'hindsound-1.2.3-linux-x64.tar.gz')
+    Assert-Refused 'a Linux SHA256SUMS that does not list the .deb refused' { Invoke-Assemble $jobFiles } 'does not list hindsound_1.2.3_amd64.deb'
+    $jobFiles = New-JobFiles
+    [IO.File]::AppendAllText((Join-Path $jobFiles 'linux\hindsound_1.2.3_amd64.deb'), 'x')
+    Assert-Refused 'a .deb that does not match the Linux SHA256SUMS refused' { Invoke-Assemble $jobFiles } 'the Linux SHA256SUMS gives'
     $jobFiles = New-JobFiles
     [IO.File]::WriteAllText((Join-Path $jobFiles 'linux\lame-3.100.tar.gz'), 'another source')
     Assert-Refused 'two different LAME sources refused' { Invoke-Assemble $jobFiles } 'differs between the jobs'
@@ -515,6 +531,20 @@ try {
     $releaseFiles = New-ReleaseFiles
     Remove-Item -LiteralPath (Join-Path $releaseFiles 'hindsound-1.2.3-linux-x64.AppImage')
     Assert-Refused 'a release without the AppImage refused' { Test-ReleaseFiles $releaseFiles } 'expected'
+    $releaseFiles = New-ReleaseFiles
+    Remove-Item -LiteralPath (Join-Path $releaseFiles 'hindsound_1.2.3_amd64.deb')
+    Assert-Refused 'a release without the .deb refused' { Test-ReleaseFiles $releaseFiles } 'expected'
+    foreach ($case in @(
+        @{ Name = 'a .deb that is not an ar archive refused'; Text = 'PK not a package' },
+        @{ Name = 'a .deb of another format refused'; Format = "3.0`n" },
+        @{ Name = 'a .deb cut short refused'; Text = "!<arch>`ndebian-binary" }
+    )) {
+        $releaseFiles = New-ReleaseFiles
+        $debPath = Join-Path $releaseFiles 'hindsound_1.2.3_amd64.deb'
+        if ($case.ContainsKey('Format')) { Write-FakeDeb $debPath $case.Format } else { [IO.File]::WriteAllText($debPath, $case.Text) }
+        Write-Sums $releaseFiles (Get-OrdinalNames $releaseFiles | Where-Object { $_ -cne 'SHA256SUMS' })
+        Assert-Refused $case.Name { Test-ReleaseFiles $releaseFiles } 'hindsound_1.2.3_amd64.deb on the release is not a Debian package'
+    }
     foreach ($runtimeSource in 'fuse-3.15.0.tar.xz', 'type2-runtime-20251108-source.tar.gz', 'type2-runtime-20251108-libraries-source.tar.gz') {
         $releaseFiles = New-ReleaseFiles
         Remove-Item -LiteralPath (Join-Path $releaseFiles $runtimeSource)
@@ -1030,7 +1060,8 @@ try {
     $filesStepOrder = @(
         'Check out', 'Set up .NET', 'Build the tests', 'Publish the app', 'Build LAME', 'Replace the DLL in the published folder', 'Prove the encoding with the compiled DLL', 'Build the Setup', 'Check the Setup',
         'Write the update manifest', 'Make the portable zip', 'Add the LAME source', 'Keep the Windows files',
-        'Check out', 'Set up .NET', 'Publish the Linux app', 'Build the MP3 encoder', 'Build the window library', 'Check the window library', 'Fetch the fonts of the window', 'Check the fonts of the window', 'Install the checker of desktop entries and the text libraries', 'Make the AppImage and the tar.gz', 'Check the packages', 'Add the LAME source', 'Add the source of the AppImage runtime', 'Keep the packages',
+        'Check out', 'Set up .NET', 'Publish the Linux app', 'Build the MP3 encoder', 'Build the window library', 'Check the window library', 'Fetch the fonts of the window', 'Check the fonts of the window', 'Install the checker of desktop entries and the text libraries', 'Make the AppImage and the tar.gz', 'Check the packages', 'Make the .deb', 'Check the .deb', 'Add the LAME source', 'Add the source of the AppImage runtime', 'Keep the packages',
+        'Check out', 'Take the Linux files', 'Install, run and remove the .deb',
         'Check out', 'Take the Windows files', 'Take the Linux files', 'Gather the files of the release', 'Check the files of the release', 'Keep the files of the release'
     )
     $filesSteps = @($files | ForEach-Object { if ($_ -match '^\s+- name: (.+)$') { $Matches[1] } })
@@ -1043,6 +1074,8 @@ try {
     Report 'the fonts are fetched by fetch-fonts.sh, into the folder the packages take them from' ($filesText -cmatch '- name: Fetch the fonts of the window\n\s+run: bash tools/linux/fetch-fonts\.sh "\$RUNNER_TEMP/fonts-work" "\$RUNNER_TEMP/fonts"\n')
     Report 'the fonts are checked against the pins of fetch-fonts.sh' ($filesText -cmatch '- name: Check the fonts of the window\n\s+run: bash tools/linux/fetch-fonts\.sh --check "\$RUNNER_TEMP/fonts"\n')
     Report 'the packages are made from the window library and the fonts that were checked' ($filesText -cmatch '- name: Make the AppImage and the tar\.gz\n\s+run: >-\n[^\n]+\n\s+"\$RUNNER_TEMP/sdl3/libSDL3\.so\.0" "\$RUNNER_TEMP/fonts" ')
+    Report 'the .deb is made by build-deb.sh from the inputs of the other packages, twice to the same bytes, then checked by check-deb.sh' ($filesText -cmatch '- name: Make the \.deb\n\s+run: \|\n\s+bash packaging/linux/build-deb\.sh "\$RUNNER_TEMP/hindsound-linux-x64" "\$RUNNER_TEMP/lame/libmp3lame\.so\.0" "\$RUNNER_TEMP/sdl3/libSDL3\.so\.0" "\$RUNNER_TEMP/fonts" "\$HINDSOUND_VERSION" "\$RUNNER_TEMP/packages"\n\s+bash packaging/linux/build-deb\.sh [^\n]+ "\$RUNNER_TEMP/deb-again"\n\s+cmp -- [^\n]+\n[^\n]+sha256sum --check --strict SHA256SUMS\)\n' -and $filesText -cmatch '- name: Check the \.deb\n\s+run: \|\n\s+sudo apt-get install -y --no-install-recommends lintian\n\s+bash packaging/linux/check-deb\.sh "\$RUNNER_TEMP/packages" "\$HINDSOUND_VERSION"\n')
+    Report 'the .deb is installed, run and removed in clean Ubuntu 22.04, Ubuntu 24.04 and Debian 12' ($filesText -cmatch "\n  deb:\n    needs: linux\n    runs-on: ubuntu-24\.04\n    timeout-minutes: \d+\n    strategy:\n      fail-fast: false\n      matrix:\n        image: \['ubuntu:22\.04', 'ubuntu:24\.04', 'debian:12'\]\n    container:\n      image: \`$\{\{ matrix\.image \}\}\n" -and $filesText -cmatch '- name: Install, run and remove the \.deb\n\s+run: bash packaging/linux/try-deb\.sh linux-files "\$HINDSOUND_VERSION"\n')
     Report 'release-files has no cache of the window library or the fonts' (-not ($filesText -match 'actions/cache|cache-hit'))
     Report 'the tests the proof of the encoding runs are built first' ($filesText -cmatch '- name: Build the tests\n\s+run: dotnet build tests/Hindsound\.Tests/Hindsound\.Tests\.csproj -c Release\n')
     Report 'the compiled DLL replaces the one in the published folder' ($filesText -cmatch '- name: Replace the DLL in the published folder\n\s+run: Copy-Item -LiteralPath "\$env:RUNNER_TEMP/lame/libmp3lame\.64\.dll" -Destination "\$env:RUNNER_TEMP/publish/libmp3lame\.64\.dll" -Force')
@@ -1054,7 +1087,7 @@ try {
     Report 'the release attaches the Setup, the manifest and the LAME source' ($releaseText -cmatch 'gh release upload [^\n]*Setup\.exe[^\n]*hindsound-update-win-x64\.json[^\n]*lame-3\.100\.tar\.gz')
     $uploadLine = @($release | Where-Object { $_ -cmatch 'gh release upload ' })
     Assert-Equal 'the release uploads in one command' 1 $uploadLine.Count
-    foreach ($name in 'Hindsound-$env:VERSION-Setup.exe', 'Hindsound-$env:VERSION-win-x64-portable.zip', 'hindsound-$env:VERSION-linux-x64.AppImage', 'hindsound-$env:VERSION-linux-x64.tar.gz', 'hindsound-update-win-x64.json', 'hindsound-update-win-x64-portable.json', 'hindsound-update-linux-x64.json', 'lame-3.100.tar.gz', 'fuse-3.15.0.tar.xz', 'type2-runtime-20251108-source.tar.gz', 'type2-runtime-20251108-libraries-source.tar.gz', 'SHA256SUMS') {
+    foreach ($name in 'Hindsound-$env:VERSION-Setup.exe', 'Hindsound-$env:VERSION-win-x64-portable.zip', 'hindsound-$env:VERSION-linux-x64.AppImage', 'hindsound-$env:VERSION-linux-x64.tar.gz', 'hindsound_${env:VERSION}_amd64.deb', 'hindsound-update-win-x64.json', 'hindsound-update-win-x64-portable.json', 'hindsound-update-linux-x64.json', 'lame-3.100.tar.gz', 'fuse-3.15.0.tar.xz', 'type2-runtime-20251108-source.tar.gz', 'type2-runtime-20251108-libraries-source.tar.gz', 'SHA256SUMS') {
         Report "the release attaches $name" ($uploadLine[0].Contains("`"`$env:RUNNER_TEMP/out/$name`""))
     }
     Report 'the release downloads its files back and checks them against those sent, before publishing' ($releaseText -cmatch '--clobber\n\s+if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}\n\s+gh release download \$env:TAG --dir "\$env:RUNNER_TEMP/verify"\n\s+if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}\n\s+\./tools/release/check-release-files\.ps1 -Folder "\$env:RUNNER_TEMP/verify" -Version \$env:VERSION -Repository \$env:GITHUB_REPOSITORY -Expected "\$env:RUNNER_TEMP/out"\n\n\s+# A rerun')
@@ -1078,7 +1111,7 @@ try {
     Report 'the release runs the tests' ($releaseText -cmatch '- name: Test\n\s+run: dotnet test Hindsound\.slnx -c Release --filter "Category!=Device&Category!=Linux"')
     Report 'the release tests its scripts' ($releaseText -cmatch '- name: Test the release scripts\n\s+run: \./tools/release/test-release-scripts\.ps1')
     Report 'the release waits for the checks and for the files of Windows and Linux' (($releaseText -cmatch '\n  release:\n    needs: \[check, files\]\n') -and ($releaseText -cmatch '\n  files:\n    needs: check\n    permissions:\n      contents: read\n    uses: \./\.github/workflows/release-files\.yml\n    with:\n      version: \$\{\{ needs\.check\.outputs\.version \}\}\n'))
-    Report 'the files of the release wait for the Windows and the Linux jobs' (($filesText -cmatch '\n  assemble:\n    needs: \[windows, linux\]\n') -and ($filesText -cmatch '\n  linux:\n    runs-on: ubuntu-22\.04\n'))
+    Report 'the files of the release wait for the Windows and the Linux jobs, and for the install of the .deb' (($filesText -cmatch '\n  assemble:\n    needs: \[windows, linux, deb\]\n') -and ($filesText -cmatch '\n  linux:\n    runs-on: ubuntu-22\.04\n'))
     Report 'release-files is called only, reads only, and publishes nothing' (($filesText -cmatch '\non:\n  workflow_call:\n') -and ($filesText -match '(?m)^permissions:\n  contents: read$') -and -not ($filesText -match 'contents: write|GH_TOKEN|github\.token|gh release|secrets\.'))
     Report 'the CI rehearses the release with the same workflow, and publishes nothing' (($ciText -cmatch '\n    uses: \./\.github/workflows/release-files\.yml\n') -and ($ciText -match '(?m)^permissions:\n  contents: read$') -and -not ($ciText -match 'contents: write|GH_TOKEN|github\.token|gh release|secrets\.'))
     Report 'the release starts as a verified draft' ($releaseText.Contains('gh release create $env:TAG --draft --verify-tag '))

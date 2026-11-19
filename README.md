@@ -80,6 +80,7 @@ release holds:
 | `Hindsound-X.Y.Z-win-x64-portable.zip` | Windows, without installing anything. See [The portable zip](#the-portable-zip). |
 | `hindsound-X.Y.Z-linux-x64.AppImage` | Linux: one file to run. See [Linux](#linux). |
 | `hindsound-X.Y.Z-linux-x64.tar.gz` | Linux, where the AppImage does not run: a folder to unpack. See [Linux](#linux). |
+| `hindsound_X.Y.Z_amd64.deb` | Ubuntu 22.04 and later, Debian 12 and later: a package to install with `apt`. See [Linux](#linux). |
 | `SHA256SUMS` | The SHA-256 of every file of the release. |
 
 The portable zip and the Linux packages come with the releases after 0.5.0. The `.json` files of a release are read by
@@ -171,7 +172,7 @@ allows it. A click on the notification of a clip shows the clip in its folder.
 **Download.** From the [latest release](https://github.com/quelquun667/hindsound/releases/latest), from the release after
 0.5.0 on. Between releases, the CI builds the same files on every change: open a recent run of the
 [CI workflow](https://github.com/quelquun667/hindsound/actions/workflows/ci.yml) on `main`, and download the
-`hindsound-linux-x64` artifact (GitHub asks you to sign in). Either way the program comes twice; take one:
+`hindsound-linux-x64` artifact (GitHub asks you to sign in). Either way the program comes three times; take one:
 
 - `hindsound-<version>-linux-x64.AppImage`, one file. A download does not keep its executable bit, so give it back.
   Give it a name that stays before the first run, as the shortcut below and `Start with the session` point to it:
@@ -191,8 +192,19 @@ allows it. A click on the notification of a clip shows the clip in its folder.
   ./hindsound-*-linux-x64/hindsound
   ```
 
-Both bring what the window needs that a desktop may lack: SDL 3 and the fonts. The rest, FreeType, HarfBuzz and
-fontconfig, comes with every desktop install, so neither asks you to install anything more.
+- `hindsound_<version>_amd64.deb`, a package for Ubuntu 22.04 and later and Debian 12 and later. Install it from the
+  folder where you downloaded it (the `./` tells `apt` it is a file), then start Hindsound from the list of applications,
+  or run `hindsound`:
+
+  ```sh
+  sudo apt install ./hindsound_*_amd64.deb
+  ```
+
+  It puts the program in `/usr/lib/hindsound`, with its MP3 encoder, SDL 3 and the fonts, and `/usr/bin/hindsound`, a
+  link to it. `apt` installs what it needs from the system: the sound library, FreeType, HarfBuzz, fontconfig and OpenSSL.
+
+All three bring what the window needs that a desktop may lack: SDL 3 and the fonts. The rest, FreeType, HarfBuzz and
+fontconfig, comes with every desktop install, so the AppImage and the tar.gz ask you to install nothing more.
 
 `SHA256SUMS`, next to them, has their checksums: run `sha256sum --check --ignore-missing SHA256SUMS` in the folder where
 you downloaded them.
@@ -206,12 +218,14 @@ run.
 to the list of applications: it writes `~/.local/share/applications/io.github.quelquun667.Hindsound.desktop`, which starts
 the file you launched, and its icon in `~/.local/share/icons/hicolor/<size>/apps/`. The shortcut portal knows an app only
 by this entry. A launch from elsewhere writes it again; an entry installed by a package of the system is never covered. To
-take it away, delete the entry and the icons.
+take it away, delete the entry and the icons. The .deb installs its own entry and icons in `/usr/share`, and Hindsound
+then writes none in `~/.local`.
 
 **Save from a key.** On X11, and on Wayland where the desktop offers global shortcuts (GNOME 48 and later, so Ubuntu
 26.04, and KDE), Hindsound uses its hotkey. Ubuntu 24.04 on Wayland has no such shortcuts: open Settings > Keyboard >
 View and Customize Shortcuts > Custom Shortcuts, add one, and set its command to the full path of the program followed by
-`--save`, for example `/home/you/Applications/Hindsound.AppImage --save`.
+`--save`, for example `/home/you/Applications/Hindsound.AppImage --save`, or `/usr/lib/hindsound/hindsound --save` for the
+.deb.
 
 **The icon** sits next to the clock, through StatusNotifierItem. On GNOME it needs the AppIndicator extension, which
 Ubuntu has already. Its menu saves a clip, pauses or resumes, opens the folder of the clips, turns `Start with the
@@ -237,7 +251,9 @@ the later systems Hindsound is made for already have.
   confirmation sound.
 
 **Updates.** When a new version is out, a notification says so, with the link to its release. Nothing installs itself:
-replace the file.
+replace the file. For the .deb, download the new one from that release and install it the same way, with
+`sudo apt install ./hindsound_<version>_amd64.deb`: it replaces the old version. `apt upgrade` does not see it, as no
+repository serves it.
 
 **Not there yet:** recording one application, and any processor other than x64.
 
@@ -254,6 +270,15 @@ is gone at each login. Then delete the program. Hindsound leaves these, and you 
   icons, written at its first launch.
 
 If you installed the tar.gz into `~/.local`, its `README.txt` lists the files to remove.
+
+For the .deb, turn `Start with the session` off first too: the entry in `~/.config/autostart` starts
+`/usr/lib/hindsound/hindsound`, which `apt` removes. Then:
+
+```sh
+sudo apt remove hindsound
+```
+
+It removes everything the package installed. Your clips, the settings, the log and the files in your home folder above stay.
 
 **Build it.** With the .NET 10 SDK, on Linux or Windows:
 
@@ -523,8 +548,10 @@ Hindsound has only run on one Windows 11 PC so far. These have not been tried fo
 - Windows 10
 - the windows of the Setup and its uninstaller, and the uninstaller deleting or keeping `library.json`
 
-The [Linux version](#linux) has not run on a real desktop yet. The CI builds both packages and starts each twice, with no
-sound server, no desktop and no FUSE: once to write a test MP3, once to draw every page of the window off screen. Not tried for real:
+The [Linux version](#linux) has not run on a real desktop yet. The CI builds the three packages and starts the program of
+each twice, with no sound server, no desktop and no FUSE: once to write a test MP3, once to draw every page of the window
+off screen. It also installs the .deb with `apt` in clean Ubuntu 22.04, Ubuntu 24.04 and Debian 12 containers, runs it
+the same two ways, and removes it. Not tried for real:
 
 - capturing a real PC and a real microphone, through PipeWire or PulseAudio
 - the hotkey through the shortcut portal (GNOME 48 and later, KDE) and on X11
@@ -535,6 +562,8 @@ sound server, no desktop and no FUSE: once to write a test MP3, once to draw eve
 - the icon and its menu, on GNOME with AppIndicator and on KDE
 - `Start with the session`
 - the AppImage mounted through FUSE on a PC without libfuse2, and the tar.gz installed in `~/.local`
+- the .deb on a real desktop: installed with `apt`, its entry and its icon in the list of applications, an update over an
+  older version, and `apt remove`
 - Ubuntu 22.04, 24.04 and 26.04, and any other distribution
 - the window on X11 and on Wayland, at each display scale, with its keyboard, its input methods and its folder dialog
 - listening to a clip, and the PC's sound recorded as silence meanwhile
