@@ -177,6 +177,18 @@ public sealed class ApplicationEntryTests : IDisposable
     }
 
     [Fact]
+    public void The_copy_of_the_deb_package_leaves_the_menu_to_its_package()
+    {
+        // The .deb lays out /usr/lib/hindsound/hindsound and its entry in /usr/share/applications, which the package owns:
+        // the program finds no share of its own, and adds no entry of its own to the menu.
+        string[] packaged = ["/usr/lib/hindsound/hindsound", "/usr/bin/hindsound", "/usr/share/applications/" + ApplicationEntry.FileName];
+        bool InPackage(string path) => packaged.Contains(path.Replace('\\', '/'), StringComparer.Ordinal);
+
+        Assert.Null(EntryRules.PackageShare(_ => null, "/usr/lib/hindsound/", InPackage));
+        Assert.Null(EntryRules.PackageShare(_ => null, "/usr/lib/hindsound", InPackage));
+    }
+
+    [Fact]
     public void The_folders_of_the_system_follow_xdg_data_dirs_or_its_default()
     {
         Assert.Equal(["/usr/local/share/", "/usr/share/"], EntryRules.SystemDataFolders(null));

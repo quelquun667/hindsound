@@ -31,8 +31,11 @@ internal sealed record PlatformFeatures
     /// choose), nothing plays a confirmation sound, and the words are those of the desktop.
     /// </summary>
     /// <param name="shortcuts">How the shortcuts are set now. Read at each build of a page: the portal answers after the window opens.</param>
-    /// <param name="saveCommand">The command to bind in the keyboard settings, when <paramref name="shortcuts"/> says <see cref="ShortcutMode.Command"/>.</param>
-    public static PlatformFeatures Linux(Func<ShortcutMode> shortcuts, Func<string>? saveCommand = null) => new()
+    /// <param name="saveCommand">
+    /// The command to bind in the keyboard settings, when <paramref name="shortcuts"/> says <see cref="ShortcutMode.Command"/>;
+    /// it may give null, when the path of the program cannot be written as a command.
+    /// </param>
+    public static PlatformFeatures Linux(Func<ShortcutMode> shortcuts, Func<string?>? saveCommand = null) => new()
     {
         SingleApp = false,
         NotificationLook = false,
@@ -71,8 +74,11 @@ internal sealed record PlatformFeatures
     /// <summary>How the shortcuts are set. A function: a system may only know after the window is open.</summary>
     public Func<ShortcutMode> Shortcuts { get; init; } = static () => ShortcutMode.Capture;
 
-    /// <summary>The command to bind to a key, in <see cref="ShortcutMode.Command"/>.</summary>
-    public Func<string> SaveCommand { get; init; } = static () => DefaultSaveCommand;
+    /// <summary>
+    /// The command to bind to a key, in <see cref="ShortcutMode.Command"/>. Null when no command can be written for this copy:
+    /// the pages then say in words what to bind, with nothing to copy.
+    /// </summary>
+    public Func<string?> SaveCommand { get; init; } = static () => DefaultSaveCommand;
 
     /// <summary>A sentence written with the Windows words, in the words of this system: the Recycle Bin is its own name for the place.</summary>
     public string Words(string windowsText) =>

@@ -413,6 +413,31 @@ public sealed unsafe class PlatformPagesTests
     }
 
     [Fact]
+    public void A_program_that_cannot_be_named_in_a_command_gets_the_words_and_nothing_to_copy()
+    {
+        var unnamed = PlatformFeatures.Linux(() => ShortcutMode.Command, () => null);
+        using var rig = new Rig(unnamed);
+        rig.Screen.ShowSection(Section.Hotkeys);
+        var texts = rig.Texts();
+        var all = string.Join(' ', texts);
+        Assert.Contains(SettingsScreen.CommandGenericIntro, all);
+        Assert.DoesNotContain(SettingsScreen.CommandIntro, all);
+        Assert.Contains(SettingsScreen.CommandNote, all);
+        Assert.DoesNotContain("--save", texts);
+        Assert.DoesNotContain("hindsound --save", all);
+        // The band of the last clip has a Copy button of its own: the one of the command is told by its id.
+        Assert.False(rig.Has(SettingsScreen.HotkeyCommandId) || rig.Has(SettingsScreen.HotkeyCopyId));
+        Assert.Empty(rig.Host.Copied);
+
+        // The first launch says the same, with nothing to copy either.
+        using var first = new Rig(unnamed, firstRun: true);
+        var firstTexts = first.Texts();
+        Assert.Contains(SettingsScreen.CommandGenericIntro, string.Join(' ', firstTexts));
+        Assert.DoesNotContain("hindsound --save", string.Join(' ', firstTexts));
+        Assert.False(first.Has(SettingsScreen.HotkeyCommandId) || first.Has(SettingsScreen.HotkeyCopyId));
+    }
+
+    [Fact]
     public void The_copy_button_works_from_the_keyboard()
     {
         using var rig = new Rig(Command);

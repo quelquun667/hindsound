@@ -17,6 +17,7 @@ internal sealed partial class SettingsScreen
     public const string DesktopKeysNote = "Your desktop sets these keys. To change one, use the shortcut settings of your desktop.";
     public const string CommandIntro = "This desktop has no global shortcut for apps. In its keyboard settings, bind this command to a key:";
     public const string CommandNote = "The key then saves a clip, as the Save button does.";
+    public const string CommandGenericIntro = "This desktop has no global shortcut for apps. In its keyboard settings, bind the full path of the Hindsound program followed by --save to a key.";
     public const string FirstRunUpdatesId = "run.updates";
     private const string CardPrefix = "card.";
 
@@ -436,8 +437,18 @@ internal sealed partial class SettingsScreen
         Heading("Hotkeys", y);
         y += 36;
         var introTop = y;
-        Add(new Painted((c, _) => c.Wrapped(CommandIntro, Face.Body, 14, Left, introTop, Width, Theme.Text)) { Id = HotkeyNoteId });
-        y += WrapLines(_canvas, CommandIntro, Face.Body, 14, Width).Count * _canvas.LineHeight(Face.Body, 14) + 14;
+        // A program whose path cannot be written as a command (the notice falls back to words too): the words alone, nothing
+        // to copy. A bare "hindsound --save" would be wrong where nothing put the program on the PATH, as with an AppImage.
+        var intro = command is null ? CommandGenericIntro : CommandIntro;
+        Add(new Painted((c, _) => c.Wrapped(intro, Face.Body, 14, Left, introTop, Width, Theme.Text)) { Id = HotkeyNoteId });
+        y += WrapLines(_canvas, intro, Face.Body, 14, Width).Count * _canvas.LineHeight(Face.Body, 14) + 14;
+        if (command is null)
+        {
+            var genericNoteTop = y;
+            Add(new Painted((c, _) => c.Wrapped(CommandNote, Face.Body, 13, Left, genericNoteTop, Width, Theme.Muted)));
+            _contentBottom = y + WrapLines(_canvas, CommandNote, Face.Body, 13, Width).Count * _canvas.LineHeight(Face.Body, 13);
+            return;
+        }
 
         var copyLabel = _commandCopied ? "Copied" : "Copy";
         var copyWidth = Button.WidthFor(_canvas, "Copied");
@@ -460,7 +471,12 @@ internal sealed partial class SettingsScreen
 
     private void CopyCommand()
     {
-        _host.CopyText(Features.SaveCommand());
+        if (Features.SaveCommand() is not { } command)
+        {
+            return;
+        }
+
+        _host.CopyText(command);
         _commandCopied = true;
         Refresh();
     }
@@ -1203,6 +1219,12 @@ internal sealed partial class SettingsScreen
     private void FirstRunCommand(float x, float y, float width)
     {
         var command = Features.SaveCommand();
+        if (command is null)
+        {
+            Add(new Painted((c, _) => c.Wrapped(CommandGenericIntro, Face.Body, 13, x, y, width, Theme.Muted)) { Id = HotkeyNoteId }, scrolls: false);
+            return;
+        }
+
         Add(new Painted((c, _) => c.Wrapped(CommandIntro, Face.Body, 13, x, y, width, Theme.Muted)) { Id = HotkeyNoteId }, scrolls: false);
         var fieldTop = y + WrapLines(_canvas, CommandIntro, Face.Body, 13, width).Count * _canvas.LineHeight(Face.Body, 13) + 8;
         var copyWidth = Button.WidthFor(_canvas, "Copied");

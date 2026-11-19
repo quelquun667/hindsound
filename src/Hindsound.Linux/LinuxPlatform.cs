@@ -86,7 +86,7 @@ internal static class LinuxPlatform
                 Volatile.Write(ref _hotkeys, hotkeys);
                 return hotkeys;
             };
-            PlatformDefaults.Features = PlatformFeatures.Linux(ShortcutModeNow, SaveCommand);
+            PlatformDefaults.Features = PlatformFeatures.Linux(ShortcutModeNow, () => SaveCommand(LaunchPaths.Current()));
             PlatformDefaults.UpdateNetwork = () => new LinuxHttpTransport(log);
             PlatformDefaults.UpdateChannel = Hindsound.Updates.UpdateChannel.LinuxAnnounce;
             PlatformDefaults.Mp3Encoder = LameMp3Encoder.Open;
@@ -104,7 +104,12 @@ internal static class LinuxPlatform
     private static ShortcutMode ShortcutModeNow() =>
         Volatile.Read(ref _hotkeys) is { } hotkeys ? HotkeyChoice.ModeOf(hotkeys.Layer, hotkeys.Pending) : ShortcutMode.Command;
 
-    private static string SaveCommand() => HotkeyChoice.SaveCommandFor(LaunchPaths.Current()) ?? "hindsound " + LinuxLaunch.SaveOption;
+    /// <summary>
+    /// The command the Hotkeys page shows and copies for <paramref name="program"/>, the file launched: the one the notice
+    /// names, or null where the notice falls back to words. Never a bare "hindsound --save": nothing puts an AppImage on the
+    /// PATH. A .deb is started by /usr/bin/hindsound, a link to /usr/lib/hindsound/hindsound, and names that real program.
+    /// </summary>
+    internal static string? SaveCommand(string? program) => HotkeyChoice.SaveCommandFor(program);
 
     // Read when the bus is first needed, not at start: a test sets its own session before that.
     private static string? SessionAddress()
