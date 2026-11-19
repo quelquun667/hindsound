@@ -196,7 +196,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: ['ubuntu:22.04', 'ubuntu:24.04', 'debian:12']
+        image: ['ubuntu:22.04', 'ubuntu:24.04', 'debian:12', 'debian:13']
     container:
       image: ${{ matrix.image }}
     env:
