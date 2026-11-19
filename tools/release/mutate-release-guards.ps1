@@ -221,8 +221,8 @@ for ($index = $From; $index -le $last; $index++) {
             New-Item -ItemType Directory -Force -Path $target | Out-Null
             Copy-Item -Path (Join-Path $repository "$folder/*") -Destination $target
         }
-        foreach ($file in 'LICENSE', 'THIRD-PARTY-NOTICES.md') {
-            Copy-Item -LiteralPath (Join-Path $repository $file) -Destination (Join-Path $copy $file)
+        foreach ($shared in 'LICENSE', 'THIRD-PARTY-NOTICES.md') {
+            Copy-Item -LiteralPath (Join-Path $repository $shared) -Destination (Join-Path $copy $shared)
         }
 
         $path = Join-Path $copy $file
