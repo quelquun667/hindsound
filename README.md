@@ -228,11 +228,11 @@ take it away, delete the entry and the icons. The .deb installs its own entry an
 then writes none in `~/.local`.
 
 **From the AppImage to the .deb.** The entry the AppImage or the tar.gz wrote in `~/.local` has the name of the .deb's,
-and goes before it: until it is gone, the list of applications still starts the old copy. So after installing the .deb,
-run `hindsound` once in a terminal. That launch removes the entry the other copy wrote, and those of its icons that are
-the same as the package's, and says so in its log. It leaves an entry you changed or hid, and then you delete it
-yourself. An AppImage started after the .deb is installed writes no entry. `Start with the session` stays with the copy
-that turned it on: the .deb shows it off, so turn it on there, and the session starts the .deb from then on.
+and goes before it. So once the .deb is installed, the next launch of Hindsound, from the list of applications or from
+anywhere else, removes that entry and those of its icons that are the same as the package's, and says so in its log.
+That launch may still be the old copy; the ones after it start the .deb, and an AppImage started then writes no entry.
+An entry you changed or hid stays: delete it yourself. `Start with the session` stays with the copy that turned it on:
+the .deb shows it off, so turn it on there, and the session starts the .deb from then on.
 
 **Save from a key.** On X11, and on Wayland where the desktop offers global shortcuts (GNOME 48 and later, so Ubuntu
 26.04, and KDE), Hindsound uses its hotkey. Ubuntu 24.04 on Wayland has no such shortcuts: open Settings > Keyboard >
