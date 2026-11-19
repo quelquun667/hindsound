@@ -4,7 +4,7 @@
 .DESCRIPTION
     Each entry replaces one piece of text, found exactly once, in a new copy of what test-release-scripts.ps1 reads: tools/release,
     .github/workflows, licenses, LICENSE, THIRD-PARTY-NOTICES.md, packaging/windows/portable.txt and README.txt, and
-    installer/Hindsound.iss. It then runs test-release-scripts.ps1 from that copy. Nothing in the repository changes. Each entry
+    installer/Hindsound.iss, in a git repository of one empty commit (the date of the zip). It then runs test-release-scripts.ps1 from that copy. Nothing in the repository changes. Each entry
     takes about 20 to 60 s, depending on the load of the PC.
 .PARAMETER WorkFolder
     Where the copies are made, one at a time and removed after each entry. By default, the temporary folder of the user.
@@ -224,6 +224,11 @@ for ($index = $From; $index -le $last; $index++) {
         foreach ($shared in 'LICENSE', 'THIRD-PARTY-NOTICES.md') {
             Copy-Item -LiteralPath (Join-Path $repository $shared) -Destination (Join-Path $copy $shared)
         }
+
+        # The test of the portable zip takes the date of the commit of the repository it runs in: the copy is one, with an empty commit.
+        & git -C $copy init -q
+        & git -C $copy -c user.name=mutation -c user.email=mutation@example.invalid commit -q --allow-empty -m copy
+        if ($LASTEXITCODE -ne 0) { throw 'git could not make the commit of the copy.' }
 
         $path = Join-Path $copy $file
         $text = [IO.File]::ReadAllText($path)
