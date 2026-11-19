@@ -187,8 +187,8 @@ jobs:
           overwrite: true
 
   # The .deb installed by apt in clean containers of the systems it is for, with its Depends alone, then started by
-  # /usr/bin/hindsound (--prove-mp3, then --dump-settings) and removed. The files of the release wait for it: a .deb that
-  # does not install on one of them stops the release.
+  # /usr/bin/hindsound (--prove-mp3, then --dump-settings) and removed. The release job of release.yml waits for every job
+  # of this workflow: a .deb that does not install on one of them stops the release.
   deb:
     needs: linux
     runs-on: ubuntu-24.04
@@ -220,7 +220,7 @@ jobs:
   # The files of the release, together: the two announce manifests and one SHA256SUMS are written here, then everything is
   # checked as the release job checks the files it downloads back from the draft.
   assemble:
-    needs: [windows, linux, deb]
+    needs: [windows, linux]
     runs-on: windows-latest
     timeout-minutes: 15
     env:

@@ -548,9 +548,9 @@ Hindsound has only run on one Windows 11 PC so far. These have not been tried fo
 - Windows 10
 - the windows of the Setup and its uninstaller, and the uninstaller deleting or keeping `library.json`
 
-The [Linux version](#linux) has not run on a real desktop yet. The CI builds the three packages and starts the program of
-each twice, with no sound server, no desktop and no FUSE: once to write a test MP3, once to draw every page of the window
-off screen. It also installs the .deb with `apt` in clean Ubuntu 22.04, Ubuntu 24.04 and Debian 12 containers, runs it
+The [Linux version](#linux) has not run on a real desktop yet. The CI builds the three packages. Of the AppImage and the
+tar.gz, it starts each twice, with no sound server, no desktop and no FUSE: once to write a test MP3, once to draw every
+page of the window off screen. It installs the .deb with `apt` in clean Ubuntu 22.04, Ubuntu 24.04 and Debian 12 containers, runs it
 the same two ways, and removes it. Not tried for real:
 
 - capturing a real PC and a real microphone, through PipeWire or PulseAudio

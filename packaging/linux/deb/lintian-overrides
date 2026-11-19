@@ -3,12 +3,12 @@
 
 # The app has no manual page: its options are for scripts and tests, and the README says what a person needs.
 hindsound: no-manual-page
-hindsound: binary-without-manpage
 
-# /usr/lib/hindsound/hindsound is a self-contained, single-file .NET program: the bundle is appended to the ELF file,
-# and strip would cut it off. The encoder and the window library are the files of the other packages, unchanged.
-hindsound: unstripped-binary-or-object
-
-# The encoder and the window library are private copies, next to the program, where the app looks for them first:
-# Ubuntu 22.04 and 24.04 have no SDL3 package, and the encoder is built with the options the app was checked with.
+# The .NET runtime inside the single-file program carries its own zlib, as every self-contained .NET app does: the
+# program is the same file as in the AppImage and the tar.gz.
 hindsound: embedded-library
+
+# The package is made from the release, not from a Debian source package: its version is that of the release, with no
+# Debian revision, so that its file name matches the release. The changelog keeps the name changelog.Debian.gz all the
+# same: it is the changelog of the packaging, and the notes of the release are on its page.
+hindsound: wrong-name-for-changelog-of-native-package

@@ -193,7 +193,7 @@ $mutations = @(
     @($assets, 'if (-not $debHead.StartsWith("!<arch>`ndebian-binary") -or $debHead.Substring(68, 4) -cne "2.0`n") {', 'if ($false) {')
     @('tools/release/assemble-release.ps1', ', "hindsound_${Version}_amd64.deb")', ')')
     @($release, ' "$env:RUNNER_TEMP/out/hindsound_${env:VERSION}_amd64.deb"', '')
-    @('.github/workflows/release-files.yml', 'needs: [windows, linux, deb]', 'needs: [windows, linux]')
+    @('.github/workflows/release-files.yml', 'run: bash packaging/linux/try-deb.sh linux-files', 'run: echo packaging/linux/try-deb.sh linux-files')
     @('.github/workflows/release-files.yml', "image: ['ubuntu:22.04', 'ubuntu:24.04', 'debian:12']", "image: ['ubuntu:24.04']")
 )
 

@@ -542,7 +542,7 @@ try {
         $releaseFiles = New-ReleaseFiles
         $debPath = Join-Path $releaseFiles 'hindsound_1.2.3_amd64.deb'
         if ($case.ContainsKey('Format')) { Write-FakeDeb $debPath $case.Format } else { [IO.File]::WriteAllText($debPath, $case.Text) }
-        Write-Sums $releaseFiles (Get-OrdinalNames $releaseFiles | Where-Object { $_ -cne 'SHA256SUMS' })
+        Write-Sums $releaseFiles @($allNames | Where-Object { $_ -cne 'SHA256SUMS' })
         Assert-Refused $case.Name { Test-ReleaseFiles $releaseFiles } 'hindsound_1.2.3_amd64.deb on the release is not a Debian package'
     }
     foreach ($runtimeSource in 'fuse-3.15.0.tar.xz', 'type2-runtime-20251108-source.tar.gz', 'type2-runtime-20251108-libraries-source.tar.gz') {
@@ -1111,7 +1111,7 @@ try {
     Report 'the release runs the tests' ($releaseText -cmatch '- name: Test\n\s+run: dotnet test Hindsound\.slnx -c Release --filter "Category!=Device&Category!=Linux"')
     Report 'the release tests its scripts' ($releaseText -cmatch '- name: Test the release scripts\n\s+run: \./tools/release/test-release-scripts\.ps1')
     Report 'the release waits for the checks and for the files of Windows and Linux' (($releaseText -cmatch '\n  release:\n    needs: \[check, files\]\n') -and ($releaseText -cmatch '\n  files:\n    needs: check\n    permissions:\n      contents: read\n    uses: \./\.github/workflows/release-files\.yml\n    with:\n      version: \$\{\{ needs\.check\.outputs\.version \}\}\n'))
-    Report 'the files of the release wait for the Windows and the Linux jobs, and for the install of the .deb' (($filesText -cmatch '\n  assemble:\n    needs: \[windows, linux, deb\]\n') -and ($filesText -cmatch '\n  linux:\n    runs-on: ubuntu-22\.04\n'))
+    Report 'the files of the release wait for the Windows and the Linux jobs' (($filesText -cmatch '\n  assemble:\n    needs: \[windows, linux\]\n') -and ($filesText -cmatch '\n  linux:\n    runs-on: ubuntu-22\.04\n'))
     Report 'release-files is called only, reads only, and publishes nothing' (($filesText -cmatch '\non:\n  workflow_call:\n') -and ($filesText -match '(?m)^permissions:\n  contents: read$') -and -not ($filesText -match 'contents: write|GH_TOKEN|github\.token|gh release|secrets\.'))
     Report 'the CI rehearses the release with the same workflow, and publishes nothing' (($ciText -cmatch '\n    uses: \./\.github/workflows/release-files\.yml\n') -and ($ciText -match '(?m)^permissions:\n  contents: read$') -and -not ($ciText -match 'contents: write|GH_TOKEN|github\.token|gh release|secrets\.'))
     Report 'the release starts as a verified draft' ($releaseText.Contains('gh release create $env:TAG --draft --verify-tag '))
