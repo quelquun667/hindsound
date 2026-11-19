@@ -209,6 +209,7 @@ $entries = [int]($mutations.Count / 3)
 $last = [Math]::Min($To, $entries)
 $totalFailures = 0
 $missed = @()
+$stale = @()
 
 for ($index = $From; $index -le $last; $index++) {
     $file, $find, $replace = $mutations[(3 * ($index - 1))..(3 * $index - 1)]
@@ -233,8 +234,22 @@ for ($index = $From; $index -le $last; $index++) {
         $path = Join-Path $copy $file
         $text = [IO.File]::ReadAllText($path)
         $count = ($text.Length - $text.Replace($find, '').Length) / $find.Length
+        # The steps of the release moved from release.yml to release-files.yml: an entry whose text is no longer in the first
+        # is looked for in the second.
+        if ($count -ne 1 -and $file -eq $release) {
+            $moved = Join-Path $copy '.github/workflows/release-files.yml'
+            $movedText = [IO.File]::ReadAllText($moved)
+            if (($movedText.Length - $movedText.Replace($find, '').Length) / $find.Length -eq 1) {
+                $file = '.github/workflows/release-files.yml'
+                $path = $moved
+                $text = $movedText
+                $count = 1
+            }
+        }
         if ($count -ne 1) {
-            throw "Entry $index is out of date: its text is found $count times in ${file}: $find"
+            Write-Output ('{0,3} STALE  {1}: its text is found {2} times: {3}' -f $index, (Split-Path -Leaf $file), $count, $find.Replace("`n", ' '))
+            $stale += $index
+            continue
         }
         [IO.File]::WriteAllText($path, $text.Replace($find, $replace))
 
@@ -263,7 +278,10 @@ for ($index = $From; $index -le $last; $index++) {
     }
 }
 
-Write-Output "Entries $From to $last of ${entries}: $totalFailures failure(s) in all, missed: $($missed.Count)."
+Write-Output "Entries $From to $last of ${entries}: $totalFailures failure(s) in all, missed: $($missed.Count), out of date: $($stale.Count)."
+if ($stale.Count -gt 0) {
+    throw "Entries out of date, their text is no longer in the file: $($stale -join ', ')."
+}
 if ($missed.Count -gt 0) {
     throw "Guards undone without a failing test: entries $($missed -join ', ')."
 }
