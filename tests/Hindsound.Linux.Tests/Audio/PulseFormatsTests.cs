@@ -88,4 +88,60 @@ public sealed class PulseFormatsTests
     {
         Assert.Equal(counts, PulseFormats.IsDeviceChange(eventType));
     }
+
+    private const int StereoFrame = 2 * sizeof(float);
+
+    [Fact]
+    public void A_stop_goes_on_from_what_the_server_took_less_what_the_sink_still_held()
+    {
+        // 0.6 s written ahead of 0.5 s taken by the server, of which 60 ms were on their way to the speaker: 0.44 s was heard.
+        var frame = PulseFormats.HeardFrame(0, 0, 28_800 * StereoFrame, 24_000 * StereoFrame, 60_000, 48_000, 2);
+        Assert.Equal(21_120, frame);
+
+        // The same, one channel: the indexes count the stream's own frames.
+        Assert.Equal(21_120, PulseFormats.HeardFrame(0, 0, 28_800 * sizeof(float), 24_000 * sizeof(float), 60_000, 48_000, 1));
+    }
+
+    [Fact]
+    public void A_second_stop_counts_from_where_the_first_one_sent_the_file()
+    {
+        // The file went back to frame 21 120 at the stream's byte of frame 24 000; 0.2 s taken since, 50 ms of it still held.
+        var start = 24_000L * StereoFrame;
+        var frame = PulseFormats.HeardFrame(21_120, start, start + (48_000L * StereoFrame), start + (9_600L * StereoFrame), 50_000, 48_000, 2);
+        Assert.Equal(21_120 + 9_600 - 2_400, frame);
+    }
+
+    [Theory]
+    [InlineData(20)] // 0.96 frame: rounds to one.
+    [InlineData(10)] // 0.48 frame: rounds to none.
+    public void The_held_time_is_rounded_to_the_nearest_frame(ulong microseconds)
+    {
+        var frame = PulseFormats.HeardFrame(0, 0, 1_000 * StereoFrame, 1_000 * StereoFrame, microseconds, 48_000, 2);
+        Assert.Equal(microseconds == 20 ? 999 : 1_000, frame);
+    }
+
+    [Fact]
+    public void The_place_is_never_before_the_last_one_nor_past_what_the_file_gave()
+    {
+        // Stopped 10 ms after a play, with 60 ms held by the sink: what came before the play was heard already.
+        Assert.Equal(5_000, PulseFormats.HeardFrame(5_000, 800, 800 + (4_800 * StereoFrame), 800 + (480 * StereoFrame), 60_000, 48_000, 2));
+
+        // A read index past the writes, or a broken latency, keep the place within what was written.
+        Assert.Equal(4_800, PulseFormats.HeardFrame(0, 0, 4_800 * StereoFrame, 9_600 * StereoFrame, 0, 48_000, 2));
+        Assert.Equal(0, PulseFormats.HeardFrame(0, 0, 4_800 * StereoFrame, 4_800 * StereoFrame, ulong.MaxValue, 48_000, 2));
+        Assert.Equal(0, PulseFormats.HeardFrame(-3, 100, 0, -500, 0, 48_000, 2));
+    }
+
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(1L)]
+    [InlineData(21_121L)]
+    [InlineData(72_000L)]
+    [InlineData(47_999L * 3_600)]
+    public void The_time_of_a_frame_turns_back_into_the_same_frame_rounded_down_or_to_the_nearest(long frame)
+    {
+        var at = PulseFormats.TimeOfFrame(frame, 48_000);
+        Assert.Equal(frame, (long)(at.TotalSeconds * 48_000));
+        Assert.Equal(frame, (long)Math.Round(at.TotalSeconds * 48_000));
+    }
 }

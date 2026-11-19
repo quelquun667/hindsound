@@ -24,7 +24,10 @@ internal interface IPulsePlaybackStream
     /// <summary>Uncorks the stream: it plays.</summary>
     void Start();
 
-    /// <summary>Corks the stream: the sound stops at once, and what it has not played yet waits for the next <see cref="Start"/>.</summary>
+    /// <summary>
+    /// Corks the stream: the sound stops at once, and the next <see cref="Start"/> goes on from what was heard, whether the
+    /// output plays out or takes back what it held.
+    /// </summary>
     void Pause();
 
     /// <summary>Ends the stream and what it plays. Once it has returned, the feed is called no more. Twice is once.</summary>
@@ -46,4 +49,13 @@ internal interface IPulsePlaybackFeed
 
     /// <summary>The stream ended by itself: the server stopped, or refused it.</summary>
     void Failed(string reason);
+
+    /// <summary>
+    /// The next <see cref="Fill"/> reads from <paramref name="at"/> in the file: a stopped stream goes on from what was heard.
+    /// False if the file can't seek, or is closed; the stream then keeps what it holds.
+    /// </summary>
+    bool Seek(TimeSpan at);
+
+    /// <summary>A line for the log of the run: what the stream did instead, never a path.</summary>
+    void Note(string line);
 }

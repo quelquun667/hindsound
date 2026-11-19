@@ -158,6 +158,10 @@ internal static unsafe partial class PulseNative
     [LibraryImport(Library, EntryPoint = "pa_stream_get_latency")]
     public static partial int StreamGetLatency(IntPtr stream, ulong* microseconds, int* negative);
 
+    /// <summary>The last timing the server gave, owned by the stream; null if none came yet.</summary>
+    [LibraryImport(Library, EntryPoint = "pa_stream_get_timing_info")]
+    public static partial PaTimingInfo* StreamGetTimingInfo(IntPtr stream);
+
     [LibraryImport(Library, EntryPoint = "pa_stream_flush")]
     public static partial IntPtr StreamFlush(IntPtr stream, IntPtr callback, IntPtr userData);
 

@@ -409,6 +409,42 @@ internal sealed class PulsePreviewPlayer : IPreviewPlayer, IDisposable
             }
         }
 
+        public bool Seek(TimeSpan at)
+        {
+            // Under the lock Fill reads with: the next read starts at the new place, and nothing read before it is kept, since
+            // Fill hands all it reads to the stream at once.
+            lock (_decoderGate)
+            {
+                if (_decoderDisposed)
+                {
+                    return false;
+                }
+
+                try
+                {
+                    decoded.Seek(at);
+                    return true;
+                }
+                catch (Exception exception)
+                {
+                    Note("preview: a stop goes on from what the stream held (the file can't seek: " + exception.GetType().Name + ")");
+                    return false;
+                }
+            }
+        }
+
+        public void Note(string line)
+        {
+            try
+            {
+                log(line);
+            }
+            catch (Exception)
+            {
+                // Called on the server's thread: nothing may be thrown out of it.
+            }
+        }
+
         public void Failed(string reason)
         {
             bool first;

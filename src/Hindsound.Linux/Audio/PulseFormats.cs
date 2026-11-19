@@ -95,6 +95,34 @@ internal static class PulseFormats
         FragmentSize = ServerDefault,
     };
 
+    /// <summary>
+    /// The frame of the file a stopped preview stream goes on from: the last one the listener hears. The stream wrote the
+    /// file's frame <paramref name="startFrame"/> at its byte <paramref name="startIndex"/> and has written up to
+    /// <paramref name="writtenIndex"/>; once corked, the server has taken up to <paramref name="readIndex"/> from it, of
+    /// which the last <paramref name="sinkMicroseconds"/> were still on their way to the speaker. Those were heard if the
+    /// sink plays them out, or dropped if it took them back without giving them to the stream again: the server says
+    /// neither, and a sound lost at a stop is worse than a few milliseconds heard twice, so they are played again.
+    /// The frame is never before <paramref name="startFrame"/>, which was heard already, nor past what the file gave.
+    /// </summary>
+    public static long HeardFrame(long startFrame, long startIndex, long writtenIndex, long readIndex, ulong sinkMicroseconds, int rate, int channels)
+    {
+        var frameBytes = (long)channels * sizeof(float);
+        var given = Math.Max(0, writtenIndex - startIndex) / frameBytes;
+        var taken = Math.Max(0, readIndex - startIndex) / frameBytes;
+
+        // Rounded to the nearest frame; a sink latency of an hour is a broken answer, and holds the whole of any clip anyway.
+        var held = (long)((Math.Min(sinkMicroseconds, 3_600_000_000UL) * (ulong)rate + 500_000) / 1_000_000);
+        var heard = Math.Clamp(taken - held, 0, given);
+        return Math.Max(0, startFrame) + heard;
+    }
+
+    /// <summary>
+    /// The time of the file's frame <paramref name="frame"/>, the first tick after its exact time: a decoder that turns it back
+    /// into a frame, in floating point, rounding down or to the nearest, finds the same frame (a tick is a twentieth of one).
+    /// </summary>
+    public static TimeSpan TimeOfFrame(long frame, int rate) =>
+        TimeSpan.FromTicks((long)((Int128)Math.Max(0, frame) * TimeSpan.TicksPerSecond / rate) + 1);
+
     /// <summary>The format of the preview's stream: what the decoder reads, 32-bit float at the engine's rate.</summary>
     public static PaSampleSpec PlaybackSpecFor(int channels) =>
         new() { Format = Float32Le, Rate = InternalFormat.SampleRate, Channels = (byte)channels };

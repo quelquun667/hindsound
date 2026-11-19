@@ -399,6 +399,29 @@ public sealed class PulsePreviewPlayerTests
         Assert.True(_decoder.AllDisposed);
     }
 
+    [Fact]
+    public void A_stopped_track_sent_back_to_a_frame_reads_its_file_from_that_frame_and_not_once_closed()
+    {
+        _decoder.FramesInFile = InternalFormat.SampleRate / 10;
+        using var player = NewPlayer();
+        player.Open(FilePath, Track);
+        player.Play(Track);
+        var stream = _outputs.Last.Stream(0);
+        var buffer = new float[2 * InternalFormat.SampleRate];
+        Assert.Equal(2 * _decoder.FramesInFile, stream.Feed.Fill(buffer));
+        Assert.Equal(0, player.Stop(Track));
+
+        // The stream sends the file back to the last frame heard: the rest of it is read again, from there.
+        Assert.True(stream.Feed.Seek(PulseFormats.TimeOfFrame(_decoder.FramesInFile - 1001, InternalFormat.SampleRate)));
+        Assert.Equal(2 * 1001, stream.Feed.Fill(buffer));
+
+        stream.Feed.Note("a line of the stream");
+        Assert.Contains("a line of the stream", _log);
+
+        Assert.Equal(0, player.Close(Track));
+        Assert.False(stream.Feed.Seek(TimeSpan.Zero), "a closed file is not read again");
+    }
+
     private PulsePreviewPlayer NewPlayer() => new(_decoder, _silence, _outputs.Connect, line => { lock (_log) { _log.Add(line); } });
 
     private sealed class Clock
