@@ -50,12 +50,13 @@ dpkg-query --listfiles hindsound > "$work/files"
 [ "$(readlink -f /usr/bin/hindsound)" = /usr/lib/hindsound/hindsound ] || fail "/usr/bin/hindsound does not lead to /usr/lib/hindsound/hindsound"
 
 # The libraries loaded are those of /usr/lib/hindsound, found next to the real program though it was started by the link.
+# The one named must have been loaded; the other, if it was.
 loaded_from_package() {
-    local label=$1 trace=$2 library
+    local label=$1 trace=$2 required=$3 library
     for library in libmp3lame.so.0 libSDL3.so.0; do
         local paths
         paths=$(grep -h -E "calling init: .*/${library//./\\.}\$" "$trace"/trace.* | sed 's/.*calling init: //' | sort -u || true)
-        if [ "$library" = libmp3lame.so.0 ] || [ -n "$paths" ]; then
+        if [ "$library" = "$required" ] || [ -n "$paths" ]; then
             [ "$paths" = "/usr/lib/hindsound/$library" ] || fail "$label: $library was loaded from '${paths:-nowhere}', not from /usr/lib/hindsound"
             echo "try-deb: $label loaded /usr/lib/hindsound/$library"
         fi
@@ -73,7 +74,7 @@ mp3=$(find "$run/proof" -maxdepth 1 -name '*.mp3' -print -quit)
 [ -n "$mp3" ] || fail "no MP3 in $run/proof"
 head=$(od -An -tx1 -N3 -- "$mp3" | tr -d ' \n')
 [[ $head == 494433 || $head =~ ^ff[e-f] ]] || fail "$mp3 starts with $head, not with an MP3 header"
-loaded_from_package prove "$run/ld"
+loaded_from_package prove "$run/ld" libmp3lame.so.0
 echo "try-deb: --prove-mp3 wrote $(basename -- "$mp3"), $(stat -c %s -- "$mp3") bytes"
 
 # The pages of the window, off screen, with the microphone, the clipboard and the shortcuts off.
@@ -89,7 +90,7 @@ count=$(find "$run/png" -name '*.png' | wc -l)
 [ "$count" -eq "$PAGES" ] || fail "--dump-settings drew $count pages, expected $PAGES"
 grep -q -F 'window: SDL next to the program, fonts next to the program' -- "$run/settings.log" \
     || fail "the window did not take the libSDL3.so.0 and the fonts of /usr/lib/hindsound"
-loaded_from_package dump "$run/ld"
+loaded_from_package dump "$run/ld" libSDL3.so.0
 echo "try-deb: --dump-settings drew $count pages"
 
 # The copy of the package adds no entry of its own to the menu: the package has one.
