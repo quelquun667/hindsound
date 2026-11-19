@@ -6,7 +6,7 @@ namespace Hindsound.Linux.Tests.Desktop;
 
 /// <summary>
 /// The entry an AppImage or the archive wrote in the user's menu, once the .deb is installed: under the same name, it goes
-/// before the one of the package, and the menu would keep starting the old copy. The copy of the package removes it, and the
+/// before the one of the package, and the menu would keep starting the old copy. Any launch removes it, and the
 /// icons the old copy put there, when they are the app's and nobody changed them. The folders are the test's own.
 /// </summary>
 public sealed class ApplicationEntryLeftBehindTests : IDisposable
@@ -79,7 +79,7 @@ public sealed class ApplicationEntryLeftBehindTests : IDisposable
 
         var line = Entry().RemoveLeftBehind(PackageProgram);
 
-        Assert.Equal("desktop entry: removed the one another copy of the app wrote, as a package of the system has one, with 1 icon", line);
+        Assert.Equal("desktop entry: removed the one an earlier launch wrote, as a package of the system has one, with 1 icon", line);
         Assert.DoesNotContain(_root, line, StringComparison.Ordinal);
         Assert.False(File.Exists(Entry().FilePath));
         Assert.False(File.Exists(IconIn(DataHome, "48x48")));
@@ -113,15 +113,16 @@ public sealed class ApplicationEntryLeftBehindTests : IDisposable
     }
 
     [Fact]
-    public void The_appimage_run_after_the_package_keeps_its_own_entry_and_writes_nothing()
+    public void The_appimage_run_after_the_package_removes_its_own_entry_and_writes_nothing()
     {
+        // The menu still starts the AppImage once: that launch takes its entry away, and the next ones start the package.
         FirstLaunchOfTheAppImage();
-        var before = File.ReadAllBytes(Entry().FilePath);
 
-        Assert.Null(Entry().RemoveLeftBehind(AppImage));
+        Assert.NotNull(Entry().RemoveLeftBehind(AppImage));
         Assert.Equal("desktop entry: a package of the system has one, nothing written", Entry().Apply(Share, AppImage));
-        Assert.Equal(before, File.ReadAllBytes(Entry().FilePath));
-        Assert.True(File.Exists(IconIn(DataHome, "48x48")));
+        Assert.False(File.Exists(Entry().FilePath));
+        Assert.False(File.Exists(IconIn(DataHome, "48x48")));
+        Assert.Equal(File.ReadAllBytes(PackagedEntryPath), File.ReadAllBytes(SystemEntry));
     }
 
     [Theory]
@@ -133,15 +134,6 @@ public sealed class ApplicationEntryLeftBehindTests : IDisposable
         var system = File.ReadAllText(PackagedEntryPath).Replace("\r\n", "\n", StringComparison.Ordinal) + key + "\n";
         File.WriteAllText(SystemEntry, system);
         WriteUserEntry(EntryRules.Text(system, AppImage));
-
-        Assert.Null(Entry().RemoveLeftBehind(PackageProgram));
-        Assert.True(File.Exists(Entry().FilePath));
-    }
-
-    [Fact]
-    public void An_entry_that_starts_this_program_is_never_removed()
-    {
-        WriteUserEntry(EntryRules.Text(File.ReadAllText(SystemEntry), PackageProgram));
 
         Assert.Null(Entry().RemoveLeftBehind(PackageProgram));
         Assert.True(File.Exists(Entry().FilePath));
@@ -211,7 +203,7 @@ public sealed class ApplicationEntryLeftBehindTests : IDisposable
 
         var line = Entry().RemoveLeftBehind(PackageProgram);
 
-        Assert.StartsWith("desktop entry: the one another copy of the app wrote, not removed (", line, StringComparison.Ordinal);
+        Assert.StartsWith("desktop entry: the one an earlier launch wrote, not removed (", line, StringComparison.Ordinal);
         Assert.DoesNotContain(_root, line, StringComparison.Ordinal);
         Assert.True(Directory.Exists(Entry().FilePath));
     }

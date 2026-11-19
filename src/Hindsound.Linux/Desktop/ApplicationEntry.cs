@@ -128,13 +128,14 @@ internal sealed class ApplicationEntry
     }
 
     /// <summary>
-    /// Removes the entry another copy of the app wrote, the AppImage or the archive run before a package of the system
-    /// brought its own: under the same name, the user's goes before the system's, and the menu would keep starting the old
-    /// copy. Only an entry this app wrote and nobody changed since (<see cref="EntryRules.LeftBehind"/>), and only the icons
+    /// Removes the entry an AppImage or the archive wrote, this copy or another, once a package of the system brought its
+    /// own: under the same name, the user's goes before the system's, and the menu would keep starting the AppImage. Only an
+    /// entry this app wrote and nobody changed since (<see cref="EntryRules.LeftBehind"/>), and only the icons
     /// equal, byte for byte, to those of the system. Answers the line for the log, with no path; null when nothing was to go.
     /// </summary>
     public string? RemoveLeftBehind(string? program)
     {
+        // A launch that does not know its program changes nothing in the menu, as in Decide.
         if (program is null || !Path.IsPathFullyQualified(_dataHome))
         {
             return null;
@@ -163,7 +164,7 @@ internal sealed class ApplicationEntry
                     }
                 }
 
-                if (EntryRules.LeftBehind(user, File.ReadAllText(system), program))
+                if (EntryRules.LeftBehind(user, File.ReadAllText(system)))
                 {
                     // The entry first: an entry left with no icon would show with none.
                     File.Delete(FilePath);
@@ -175,7 +176,7 @@ internal sealed class ApplicationEntry
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return $"desktop entry: the one another copy of the app wrote, not removed ({ex.GetType().Name})";
+            return $"desktop entry: the one an earlier launch wrote, not removed ({ex.GetType().Name})";
         }
     }
 
@@ -308,13 +309,13 @@ internal static class EntryRules
     }
 
     /// <summary>
-    /// Whether the user's entry is one another copy of the app wrote from <paramref name="system"/>, the entry of a package
-    /// of the system, and is left for <paramref name="program"/> to remove. The proof it is the app's: its text is, to the
+    /// Whether the user's entry is one a copy of the app wrote from <paramref name="system"/>, the entry of a package of the
+    /// system, that copy being this one or another: it only hides the system's, as SystemHasOne says. The proof it is the app's: its text is, to the
     /// byte, what <see cref="Text"/> writes from the system's entry for the program it starts. The entries of 0.6.0 to 0.8.0
     /// carry no mark, and the packaged entry has not changed since; a mark added now would prove nothing more, as it would
-    /// stay in an entry the user then changed. Never an entry the user hid, nor one that starts this program.
+    /// stay in an entry the user then changed. Never an entry the user hid.
     /// </summary>
-    public static bool LeftBehind(string user, string system, string program)
+    public static bool LeftBehind(string user, string system)
     {
         var (hidden, exec) = Read(user);
         if (hidden)
@@ -323,7 +324,7 @@ internal static class EntryRules
         }
 
         var started = exec is null ? null : AutostartFile.ProgramOf(exec);
-        if (started is null || started == program)
+        if (started is null)
         {
             return false;
         }
@@ -432,5 +433,5 @@ internal static class EntryRules
 
     /// <summary>The line of a launch that removed the entry another copy wrote, with <paramref name="icons"/> of its icons.</summary>
     public static string RemovedLine(int icons) =>
-        $"desktop entry: removed the one another copy of the app wrote, as a package of the system has one, with {icons} icon{(icons == 1 ? "" : "s")}";
+        $"desktop entry: removed the one an earlier launch wrote, as a package of the system has one, with {icons} icon{(icons == 1 ? "" : "s")}";
 }
