@@ -85,6 +85,16 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
         // Waits given up while their callback may already be on its way to the loop's lock: Close waits for them too.
         private readonly List<Timer> _givenUp = [];
 
+        // At a stop: the server's answer on how far it took the stream, and the stop waiting for it.
+        private IntPtr _placing;
+        private TaskCompletionSource<bool>? _placed;
+
+        // Where the file is in the stream: its frame _startFrame went at the stream's byte _startIndex, and _written bytes
+        // went in all, counted as the server counts its write index.
+        private long _startFrame;
+        private long _startIndex;
+        private long _written;
+
         // Counts the drains given up: a wait of one given up does not end the track.
         private int _drainTurn;
         private bool _endReached;
@@ -131,15 +141,44 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
             }
         });
 
-        public void Pause() => Locked(() =>
+        public void Pause()
         {
-            ThrowIfGone();
+            TaskCompletionSource<bool>? placed = null;
+            Locked(() =>
+            {
+                ThrowIfGone();
 
-            // A drain under way is dropped: Start drains again once the file's end was reached. What the server holds is kept
-            // and plays at the next Start, so a stop then a play goes on where it stopped, as MCI does: the file is already past it.
-            CancelDrain();
-            PulseNative.Release(PulseNative.StreamCork(_stream, 1, IntPtr.Zero, IntPtr.Zero));
-        });
+                // A drain under way is dropped: Start drains again once the file's end was reached.
+                CancelDrain();
+                CancelPlacing();
+                PulseNative.Release(PulseNative.StreamCork(_stream, 1, IntPtr.Zero, IntPtr.Zero));
+
+                // Then the server says how far it took the stream, asked after the cork so the answer counts it. A stop then a
+                // play goes on where the listener stopped hearing, as MCI does, whatever the output did with what it held.
+                _placing = PulseNative.StreamUpdateTimingInfo(_stream, (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, int, IntPtr, void>)&OnStopTiming, GCHandle.ToIntPtr(_self));
+                if (_placing == IntPtr.Zero)
+                {
+                    // What the server holds is kept and plays at the next Start, as before.
+                    _feed.Note("preview: a stop goes on from what the stream held (no timing, error " + PulseNative.ContextErrno(_connection.Context) + ")");
+                    return;
+                }
+
+                _placed = placed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            });
+
+            // Outside the loop's lock, which the answer needs. A Start before it would play from the old place for a moment.
+            if (placed is not null && !placed.Task.Wait(PulseConnection.Patience))
+            {
+                Locked(() =>
+                {
+                    if (_placed == placed)
+                    {
+                        CancelPlacing();
+                        _feed.Note("preview: a stop goes on from what the stream held (no timing in time)");
+                    }
+                });
+            }
+        }
 
         public void Close()
         {
@@ -155,6 +194,7 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
 
                     _closed = true;
                     CancelDrain();
+                    CancelPlacing();
                     waits.AddRange(_givenUp);
                     _givenUp.Clear();
                     PulseNative.StreamSetWriteCallback(_stream, IntPtr.Zero, IntPtr.Zero);
@@ -284,6 +324,52 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
             _draining = false;
         }
 
+        // Holding the loop's lock.
+        private void CancelPlacing()
+        {
+            if (_placing != IntPtr.Zero)
+            {
+                PulseNative.OperationCancel(_placing);
+                PulseNative.OperationUnref(_placing);
+                _placing = IntPtr.Zero;
+            }
+
+            _placed?.TrySetResult(false);
+            _placed = null;
+        }
+
+        // Holding the loop's lock, once the server has said how far it took the corked stream. What it took and the sink still
+        // held is played out by some outputs and dropped by others, without a word: see PulseFormats.HeardFrame. The file
+        // goes back to the last frame heard and what the stream holds is flushed, so the next Start refills from there.
+        private void PlaceAfterStop(IntPtr stream, bool answered)
+        {
+            var timing = answered ? PulseNative.StreamGetTimingInfo(stream) : null;
+            if (timing is null || timing->ReadIndexCorrupt != 0)
+            {
+                _feed.Note(answered
+                    ? "preview: a stop goes on from what the stream held (no read index)"
+                    : "preview: a stop goes on from what the stream held (no timing, error " + PulseNative.ContextErrno(_connection.Context) + ")");
+                return;
+            }
+
+            var readIndex = timing->ReadIndex;
+            var frame = PulseFormats.HeardFrame(_startFrame, _startIndex, _written, readIndex, timing->SinkUsec, Hindsound.Audio.InternalFormat.SampleRate, _channels);
+
+            // The file goes back first: one that can't keeps what the stream holds, as before.
+            if (!_feed.Seek(PulseFormats.TimeOfFrame(frame, Hindsound.Audio.InternalFormat.SampleRate)))
+            {
+                return;
+            }
+
+            // The server sets its write index back to its read index: what is written next follows what it took.
+            PulseNative.Release(PulseNative.StreamFlush(stream, IntPtr.Zero, IntPtr.Zero));
+            _startFrame = frame;
+            _startIndex = _written = readIndex;
+
+            // The end of the file is behind the new place, unless all of it was heard: the writes find it again either way.
+            _endReached = false;
+        }
+
         // Holding the loop's lock, once the drain has answered. The server answers a drain once it has mixed the last sample
         // into the sink, not once it was heard: the sink still holds up to its latency ahead. A track that said it ended
         // then would be closed at once, and the server takes off a closed stream's sound what the sink has not played yet:
@@ -380,6 +466,8 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
                         return false;
                     }
                 }
+
+                _written += (long)filled * sizeof(float);
             }
 
             // Fill reads until the file ends or the buffer is full: less than asked is the end of the file.
@@ -477,6 +565,34 @@ internal sealed class PulsePlaybackOutput : IPulsePlaybackOutput
             catch (Exception)
             {
                 // The track then ends with the hold's own deadline.
+            }
+        }
+
+        [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+        private static void OnStopTiming(IntPtr stream, int success, IntPtr userData)
+        {
+            TaskCompletionSource<bool>? placed = null;
+            try
+            {
+                if (GCHandle.FromIntPtr(userData).Target is not PulsePlaybackStream self || self._closed || self._placing == IntPtr.Zero)
+                {
+                    return;
+                }
+
+                PulseNative.OperationUnref(self._placing);
+                self._placing = IntPtr.Zero;
+                placed = self._placed;
+                self._placed = null;
+                self.PlaceAfterStop(stream, success != 0);
+            }
+            catch (Exception)
+            {
+                // The stream keeps what it holds, as when the server gives no timing.
+            }
+            finally
+            {
+                // The stop waiting for this goes on.
+                placed?.TrySetResult(true);
             }
         }
 

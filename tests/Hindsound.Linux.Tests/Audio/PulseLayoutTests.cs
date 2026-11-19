@@ -52,4 +52,19 @@ public sealed unsafe class PulseLayoutTests
         Assert.Equal(308, OffsetOf(ref info, ref info.MonitorOfSink));
         Assert.Equal(312, OffsetOf(ref info, ref info.MonitorOfSinkName));
     }
+
+    [Fact]
+    public void The_timing_info_gives_the_sink_latency_and_the_read_index_where_libpulse_writes_them()
+    {
+        // struct timeval on 16 bytes, an int and its padding, three pa_usec_t, two ints, then each int64_t index after an int.
+        var info = default(PaTimingInfo);
+        Assert.Equal(16, OffsetOf(ref info, ref info.SynchronizedClocks));
+        Assert.Equal(24, OffsetOf(ref info, ref info.SinkUsec));
+        Assert.Equal(40, OffsetOf(ref info, ref info.TransportUsec));
+        Assert.Equal(48, OffsetOf(ref info, ref info.Playing));
+        Assert.Equal(56, OffsetOf(ref info, ref info.WriteIndex));
+        Assert.Equal(64, OffsetOf(ref info, ref info.ReadIndexCorrupt));
+        Assert.Equal(72, OffsetOf(ref info, ref info.ReadIndex));
+        Assert.Equal(80, sizeof(PaTimingInfo));
+    }
 }

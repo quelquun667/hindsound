@@ -72,6 +72,23 @@ internal struct PaSinkInfo
     public IntPtr MonitorSourceName;
 }
 
+/// <summary>The start of pa_timing_info (pulse/def.h), up to read_index.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct PaTimingInfo
+{
+    public long TimestampSeconds;
+    public long TimestampMicroseconds;
+    public int SynchronizedClocks;
+    public ulong SinkUsec;
+    public ulong SourceUsec;
+    public ulong TransportUsec;
+    public int Playing;
+    public int WriteIndexCorrupt;
+    public long WriteIndex;
+    public int ReadIndexCorrupt;
+    public long ReadIndex;
+}
+
 /// <summary>The start of pa_source_info, up to monitor_of_sink_name.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct PaSourceInfo
