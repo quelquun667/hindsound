@@ -60,6 +60,12 @@ internal sealed class ApplicationEntry
             return;
         }
 
+        // Before what the launch decides: the copy of a package of the system is no AppImage, and would stop at NotPackaged.
+        if (entry.RemoveLeftBehind(program) is { } removed)
+        {
+            log(removed);
+        }
+
         var share = EntryRules.PackageShare(Environment.GetEnvironmentVariable, AppContext.BaseDirectory, File.Exists);
         log(entry.Apply(share, program));
     }
@@ -119,6 +125,88 @@ internal sealed class ApplicationEntry
         }
 
         return EntryRules.Judge(text, program);
+    }
+
+    /// <summary>
+    /// Removes the entry another copy of the app wrote, the AppImage or the archive run before a package of the system
+    /// brought its own: under the same name, the user's goes before the system's, and the menu would keep starting the old
+    /// copy. Only an entry this app wrote and nobody changed since (<see cref="EntryRules.LeftBehind"/>), and only the icons
+    /// equal, byte for byte, to those of the system. Answers the line for the log, with no path; null when nothing was to go.
+    /// </summary>
+    public string? RemoveLeftBehind(string? program)
+    {
+        if (program is null || !Path.IsPathFullyQualified(_dataHome))
+        {
+            return null;
+        }
+
+        try
+        {
+            string? user = null;
+            foreach (var folder in _systemData)
+            {
+                var system = Path.Combine(folder, "applications", FileName);
+                if (!File.Exists(system))
+                {
+                    continue;
+                }
+
+                if (user is null)
+                {
+                    try
+                    {
+                        user = File.ReadAllText(FilePath);
+                    }
+                    catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+                    {
+                        return null;
+                    }
+                }
+
+                if (EntryRules.LeftBehind(user, File.ReadAllText(system), program))
+                {
+                    // The entry first: an entry left with no icon would show with none.
+                    File.Delete(FilePath);
+                    return EntryRules.RemovedLine(RemoveIcons(folder));
+                }
+            }
+
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return $"desktop entry: the one another copy of the app wrote, not removed ({ex.GetType().Name})";
+        }
+    }
+
+    /// <summary>The icons of the user's theme equal to those of <paramref name="systemFolder"/>, size for size, removed: how many.</summary>
+    private int RemoveIcons(string systemFolder)
+    {
+        var theme = Path.Combine(_dataHome, "icons", "hicolor");
+        if (!Directory.Exists(theme))
+        {
+            return 0;
+        }
+
+        var removed = 0;
+        foreach (var size in Directory.EnumerateDirectories(theme))
+        {
+            var icon = Path.Combine(size, "apps", IconName);
+            var system = Path.Combine(systemFolder, "icons", "hicolor", Path.GetFileName(size), "apps", IconName);
+            if (File.Exists(icon) && File.Exists(system) && File.ReadAllBytes(icon).AsSpan().SequenceEqual(File.ReadAllBytes(system)))
+            {
+                File.Delete(icon);
+                removed++;
+            }
+        }
+
+        // As Install does: the icon caches look at the time the top-level folder of the theme changed.
+        if (removed > 0)
+        {
+            Directory.SetLastWriteTimeUtc(theme, DateTime.UtcNow);
+        }
+
+        return removed;
     }
 
     private void Install(string share, string program)
@@ -210,6 +298,50 @@ internal static class EntryRules
     /// </summary>
     public static EntryOutcome Judge(string text, string program)
     {
+        var (hidden, exec) = Read(text);
+        if (hidden)
+        {
+            return EntryOutcome.Hidden;
+        }
+
+        return exec is not null && AutostartFile.ProgramOf(exec) == program ? EntryOutcome.AlreadyThere : EntryOutcome.Install;
+    }
+
+    /// <summary>
+    /// Whether the user's entry is one another copy of the app wrote from <paramref name="system"/>, the entry of a package
+    /// of the system, and is left for <paramref name="program"/> to remove. The proof it is the app's: its text is, to the
+    /// byte, what <see cref="Text"/> writes from the system's entry for the program it starts. The entries of 0.6.0 to 0.8.0
+    /// carry no mark, and the packaged entry has not changed since; a mark added now would prove nothing more, as it would
+    /// stay in an entry the user then changed. Never an entry the user hid, nor one that starts this program.
+    /// </summary>
+    public static bool LeftBehind(string user, string system, string program)
+    {
+        var (hidden, exec) = Read(user);
+        if (hidden)
+        {
+            return false;
+        }
+
+        var started = exec is null ? null : AutostartFile.ProgramOf(exec);
+        if (started is null || started == program)
+        {
+            return false;
+        }
+
+        try
+        {
+            return string.Equals(user, Text(system, started), StringComparison.Ordinal);
+        }
+        catch (IOException)
+        {
+            // A path the app could not have written, or a system entry with no group: not the app's.
+            return false;
+        }
+    }
+
+    /// <summary>The keys of the [Desktop Entry] group the rules read: Hidden or NoDisplay at true, and the last Exec.</summary>
+    private static (bool Hidden, string? Exec) Read(string text)
+    {
         var inGroup = false;
         string? exec = null;
         foreach (var raw in text.Split('\n'))
@@ -231,7 +363,7 @@ internal static class EntryRules
             var value = line[(equals + 1)..].Trim();
             if ((key is "Hidden" or "NoDisplay") && value == "true")
             {
-                return EntryOutcome.Hidden;
+                return (true, exec);
             }
 
             if (key == "Exec")
@@ -240,7 +372,7 @@ internal static class EntryRules
             }
         }
 
-        return exec is not null && AutostartFile.ProgramOf(exec) == program ? EntryOutcome.AlreadyThere : EntryOutcome.Install;
+        return (false, exec);
     }
 
     /// <summary>
@@ -297,4 +429,8 @@ internal static class EntryRules
         EntryOutcome.Hidden => "desktop entry: hidden by the user, left alone",
         _ => "desktop entry: not run from an AppImage or the folder of the archive, nothing written",
     };
+
+    /// <summary>The line of a launch that removed the entry another copy wrote, with <paramref name="icons"/> of its icons.</summary>
+    public static string RemovedLine(int icons) =>
+        $"desktop entry: removed the one another copy of the app wrote, as a package of the system has one, with {icons} icon{(icons == 1 ? "" : "s")}";
 }
