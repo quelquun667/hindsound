@@ -9,9 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - On Linux, a `.deb` package for Ubuntu 22.04 and later and Debian 12 and later: `sudo apt install ./hindsound_X.Y.Z_amd64.deb` installs Hindsound in `/usr/lib/hindsound`, with `/usr/bin/hindsound`, its entry in the list of applications and its icons, and `sudo apt remove hindsound` takes it away. Like the AppImage, it does not update itself: a notification says when a new version is out, with the link to its release.
+- On Linux, the first launch of the `.deb` copy removes the entry of the list of applications that an AppImage or the tar.gz wrote in `~/.local/share/applications`, with the icons it copied that are the same as the package's: under the same name, that entry went before the one of the package, and the list kept starting the old copy: run `hindsound` once after installing the `.deb`. An entry you changed or hid stays, and an AppImage started after the `.deb` is installed writes none.
 
 ### Fixed
 
+- On Linux, the session skips the entry of `Start with the session` once its program is gone, after `sudo apt remove hindsound` or an AppImage deleted, instead of trying to start it at each login. This holds for an entry turned on from this version on.
 - On Linux, the `Hotkeys` page no longer shows and copies `hindsound --save` when the path of the program has a character it cannot write in a command: nothing puts an AppImage on the PATH, so that command found no program. The page now says in words what to bind, with no `Copy` button, as the notice does.
 
 ## [0.8.0] - 2026-11-19
