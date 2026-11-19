@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-19
+
+The window on Linux, with the Library, its tools and listening to a clip. On Windows, Hindsound works as in 0.7.0.
+
 ### Added
 
 - On Linux, the window: `Now`, `Library` and the settings, drawn by the same pages as on Windows. The AppImage and the tar.gz ship SDL 3.2 and the fonts of the window (Selawik, Barlow Semi Condensed and Cascadia Mono); FreeType, HarfBuzz and fontconfig come from the system, and a character the fonts lack, a Japanese clip name for example, comes from a font of the system. Without one of these, Hindsound runs without the window, as before, and its log says why.
