@@ -111,7 +111,7 @@ public sealed unsafe class PulseAppRulesTests
         ];
         PulsePlaybackStream[] streams =
         [
-            new(1, 0, 4002, "chrome", "Chromium"),
+            new(1, 0, 4002, "chrome", "Google Chrome"),
             new(2, 0, 6001, "firefox", "Firefox"),
             new(3, 0, 6001, "firefox", "Firefox"),
             new(4, 0, Own, "hindsound", "Hindsound"),
@@ -126,8 +126,44 @@ public sealed unsafe class PulseAppRulesTests
         Assert.Equal(6000, sessions[1].ProcessId);
         Assert.Equal(0, sessions[4].ProcessId);
         Assert.Equal(
-            [new AudioAppInfo("chrome", "Chromium"), new AudioAppInfo("firefox", "Firefox")],
+            [new AudioAppInfo("chrome", "Google Chrome"), new AudioAppInfo("firefox", "Firefox")],
             apps.OrderBy(app => app.ExeName, StringComparer.Ordinal).ToArray());
+    }
+
+    [Fact]
+    public void The_name_a_stream_gives_is_kept_only_when_it_holds_the_process_s_name_else_the_list_shows_the_process_s_name()
+    {
+        ProcessEntry[] processes =
+        [
+            new(1, 0, "systemd"),
+            new(10, 1, "firefox"),
+            new(20, 1, "chrome"),
+            new(30, 1, "Discord"),
+            new(40, 1, "code"),
+            new(50, 1, "paplay"),
+        ];
+        PulsePlaybackStream[] streams =
+        [
+            new(1, 0, 10, "firefox", "Firefox"),
+            new(2, 0, 20, "chrome", "Google Chrome"),
+            new(3, 0, 30, "Discord", "WEBRTC VoiceEngine"),
+            new(4, 0, 40, "code", "Chromium"),
+            new(5, 0, 50, "paplay", null),
+        ];
+
+        var apps = AudioAppList.Build(PulseAppRules.Sessions(streams, processes), processes, Own)
+            .OrderBy(app => app.ExeName, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(
+            [
+                new AudioAppInfo("Discord", "Discord"),
+                new AudioAppInfo("chrome", "Google Chrome"),
+                new AudioAppInfo("code", "code"),
+                new AudioAppInfo("firefox", "Firefox"),
+                new AudioAppInfo("paplay", "paplay"),
+            ],
+            apps);
     }
 
     [Fact]

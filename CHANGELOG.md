@@ -9,6 +9,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - On Linux, `Record` can follow one application and its child processes instead of the whole PC, as on Windows, through PulseAudio or PipeWire. The list shows the applications while they play sound.
+- On Linux with PulseAudio (Ubuntu 22.04), the first 2 seconds after you choose the application, or after Hindsound starts, may be missing from the memory. PipeWire does not have this gap.
+- On Linux, the list shows the name an application gives its sound stream only when it holds the name of its process, else the name of the process (`Discord`, not `WEBRTC VoiceEngine`).
+- On Linux, an application in a Flatpak or Snap sandbox has not been tried.
 
 ## [0.9.0] - 2026-11-20
 
