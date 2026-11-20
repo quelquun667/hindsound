@@ -138,6 +138,57 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
     }
 
     [Fact]
+    public void The_application_is_recorded_again_when_the_output_it_plays_on_goes_away_while_it_plays()
+    {
+        // An output of its own, unloaded while the application plays on it, as a headset unplugged: the server moves the stream
+        // to another output, and the capture records it there, once.
+        const string Gone = "hindsound_app_gone";
+        var module = Pactl("load-module", "module-null-sink", "sink_name=" + Gone);
+        var unloaded = false;
+        try
+        {
+            var app = StartApp("hsappsix", $"paplay --device={Gone} '{Tone("long.wav", AppHz, 14)}'; true");
+            WaitFor(() => StreamsOn(Gone) >= 1, "the tone playing");
+            var log = new Log();
+            var recorder = new Recorder();
+            using var source = PulseAppCaptureSource.Open(app.Id, "hsappsix", new ProcProcessSnapshot(), log.Write);
+            source.PacketAvailable += recorder.OnPacket;
+            source.Start();
+            Thread.Sleep(OpeningGap);
+            WaitFor(() => source.RecordedStreams == 1, "the application recorded");
+
+            Pactl("unload-module", module);
+            unloaded = true;
+
+            // Long enough for two tries again (one second, then two), then two seconds measured.
+            Thread.Sleep(4000);
+            var from = recorder.Frames;
+            Thread.Sleep(2000);
+            var levels = Blocks(recorder.Samples()[(from * Channels)..], AppHz);
+            var (held, recorded, onServer) = (source.HeldStreams, source.RecordedStreams, RecordingsOnServer(PulseAppCaptureSource.StreamName));
+            var playing = !app.HasExited;
+            source.Stop();
+
+            _output.WriteLine($"output gone: held={held} recorded={recorded} onServer={onServer} level={levels.DefaultIfEmpty().Min():0.000} to {levels.DefaultIfEmpty().Max():0.000}, log: {log}");
+            Assert.True(playing, "the application stopped playing too early to mean anything");
+            Assert.True(levels.Length >= 15, $"only {levels.Length} blocks measured");
+
+            // Each block at the tone's level, played at 0.5: never cut, and never two recordings of it added.
+            Assert.All(levels, level => Assert.InRange(level, 0.4, 0.6));
+            Assert.Equal(1, held);
+            Assert.Equal(1, recorded);
+            Assert.Equal(1, onServer);
+        }
+        finally
+        {
+            if (!unloaded)
+            {
+                Pactl("unload-module", module);
+            }
+        }
+    }
+
+    [Fact]
     public void The_first_sound_of_a_stream_that_starts_arrives_quickly()
     {
         var log = new Log();
@@ -361,6 +412,17 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
         public TimeSpan? FirstTone { get; private set; }
 
         public int Discontinuities { get; private set; }
+
+        public int Frames
+        {
+            get
+            {
+                lock (_samples)
+                {
+                    return _samples.Count / Channels;
+                }
+            }
+        }
 
         public void OnPacket(ReadOnlySpan<byte> buffer, PacketFlags flags, long devicePosition, long qpcPosition)
         {
