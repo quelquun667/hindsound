@@ -47,9 +47,9 @@ play() { # name file rate channels
 stop_players() { pkill pacat 2>/dev/null; pkill paplay 2>/dev/null; pkill parecord 2>/dev/null; sleep 0.7; }
 rec_stream() { # idx out [device]
   if [ -n "${3:-}" ]; then
-    timeout -k 3 -s INT 2.5 parecord -d "$3" --monitor-stream="$1" --format=float32le --rate=48000 --channels=2 --raw "$2" 2>"$2.err"
+    timeout -k 3 -s INT 5 parecord -d "$3" --monitor-stream="$1" --format=float32le --rate=48000 --channels=2 --raw "$2" 2>"$2.err"
   else
-    timeout -k 3 -s INT 2.5 parecord --monitor-stream="$1" --format=float32le --rate=48000 --channels=2 --raw "$2" 2>"$2.err"
+    timeout -k 3 -s INT 5 parecord --monitor-stream="$1" --format=float32le --rate=48000 --channels=2 --raw "$2" 2>"$2.err"
   fi
 }
 
@@ -61,9 +61,9 @@ if [ "$SERVER" = pulse ]; then
     -L "module-null-sink sink_name=probe" -L module-native-protocol-unix
 else
   pipewire >$W/pw.log 2>&1 &
-  sleep 1
+  sleep 2
   wireplumber >$W/wp.log 2>&1 &
-  sleep 1
+  sleep 2
   pipewire-pulse >$W/pp.log 2>&1 &
 fi
 if ! wait_ready; then
@@ -71,7 +71,7 @@ if ! wait_ready; then
   emit setup fail "server did not start"; exit 2
 fi
 [ "$SERVER" = pipewire ] && pactl load-module module-null-sink sink_name=probe >/dev/null
-sleep 1
+sleep 2
 pactl set-default-sink probe
 echo "== pactl info"
 pactl info | grep -E 'Server (Name|Version)|Default Sink|Sample'
@@ -82,8 +82,8 @@ echo "== T1"
 play probeA A48.raw 48000 2; play probeB B48.raw 48000 2
 ia=$(wait_idx probeA); ib=$(wait_idx probeB)
 echo "indices A=$ia B=$ib"
-sleep 1
-timeout -k 3 -s INT 2.5 parecord -d probe.monitor --format=float32le --rate=48000 --channels=2 --raw wit.raw 2>wit.err
+sleep 2
+timeout -k 3 -s INT 5 parecord -d probe.monitor --format=float32le --rate=48000 --channels=2 --raw wit.raw 2>wit.err
 check T1witness wit.raw both
 DEV=""; t1=0
 rec_stream "$ia" t1.raw; cat t1.raw.err
@@ -97,7 +97,7 @@ stop_players
 # ---- T2 ----
 echo "== T2"
 play probeA A44m.raw 44100 1
-ia=$(wait_idx probeA); sleep 1
+ia=$(wait_idx probeA); sleep 2
 rec_stream "$ia" t2.raw "$DEV"; cat t2.raw.err
 check T2 t2.raw f440
 stop_players
@@ -105,9 +105,9 @@ stop_players
 # ---- T3 ----
 echo "== T3"
 play probeA A48.raw 48000 2
-ia=$(wait_idx probeA); sleep 1
+ia=$(wait_idx probeA); sleep 2
 ( s=$(date +%s.%N)
-  timeout -k 3 -s INT 8 parecord ${DEV:+-d $DEV} --monitor-stream="$ia" --format=float32le --rate=48000 --channels=2 --raw t3.raw 2>t3.err
+  timeout -k 3 -s INT 10 parecord ${DEV:+-d $DEV} --monitor-stream="$ia" --format=float32le --rate=48000 --channels=2 --raw t3.raw 2>t3.err
   echo "$? $(echo "$(date +%s.%N) - $s" | bc 2>/dev/null || date +%s.%N)" >t3.rc ) &
 rp=$!
 sleep 1.5
@@ -115,13 +115,13 @@ pkill -f -- "--stream-name=probeA"
 wait $rp
 bytes=$(stat -c %s t3.raw)
 echo "parecord stderr:"; cat t3.err
-emit T3 info "rc_and_elapsed=$(cat t3.rc) (rc 124 = still running after 8 s timeout) bytes=$bytes (384000 per second of float32 stereo 48k) err=$(tr '\n' '|' <t3.err)"
+emit T3 info "rc_and_elapsed=$(cat t3.rc) (rc 124 = still running after 10 s timeout) bytes=$bytes (384000 per second of float32 stereo 48k) err=$(tr '\n' '|' <t3.err)"
 stop_players
 
 # ---- T4 ----
 echo "== T4"
 play probeA A48.raw 48000 2; play probeB B48.raw 48000 2
-ia=$(wait_idx probeA); ib=$(wait_idx probeB); sleep 1
+ia=$(wait_idx probeA); ib=$(wait_idx probeB); sleep 2
 rec_stream "$ia" t4a.raw "$DEV" & p1=$!
 rec_stream "$ib" t4b.raw "$DEV" & p2=$!
 wait $p1 $p2
@@ -153,7 +153,7 @@ stop_players
 if [ "$SERVER" = pipewire ]; then
   echo "== T6"
   play probeA A48.raw 48000 2
-  ia=$(wait_idx probeA); sleep 1
+  ia=$(wait_idx probeA); sleep 2
   read nid nserial < <(pw-dump | python3 -I /probe/pwnode.py probeA)
   echo "node id=$nid serial=$nserial"
   ok6=fail
