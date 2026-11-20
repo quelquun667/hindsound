@@ -27,8 +27,8 @@ internal sealed record PlatformFeatures
     public static PlatformFeatures Windows { get; } = new();
 
     /// <summary>
-    /// A Linux desktop. One app cannot be captured alone yet, the notification is the desktop's own (no look and no position to
-    /// choose), nothing plays a confirmation sound, and the words are those of the desktop.
+    /// A Linux desktop. The notification is the desktop's own (no look and no position to choose), nothing plays a confirmation
+    /// sound, and the words are those of the desktop. One application can be captured alone, as on Windows.
     /// </summary>
     /// <param name="shortcuts">How the shortcuts are set now. Read at each build of a page: the portal answers after the window opens.</param>
     /// <param name="saveCommand">
@@ -37,7 +37,6 @@ internal sealed record PlatformFeatures
     /// </param>
     public static PlatformFeatures Linux(Func<ShortcutMode> shortcuts, Func<string?>? saveCommand = null) => new()
     {
-        SingleApp = false,
         NotificationLook = false,
         ConfirmSound = false,
         StartupLabel = "Start with the session",

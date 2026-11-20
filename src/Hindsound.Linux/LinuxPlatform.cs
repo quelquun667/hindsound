@@ -18,7 +18,8 @@ namespace Hindsound.Linux;
 //             PulsePreviewPlayer.cs      listening to a clip, through a playback stream (LinuxShell)
 //             PulseDeviceWatcher.cs      a change of the default output or of the microphone
 //             ProcProcessSnapshot.cs     the process list, read from /proc
-//             PulseAudioChoices.cs       the devices the settings would offer (LinuxShell)
+//             PulseAudioChoices.cs       the devices and the applications the settings offer (LinuxShell)
+//             PulseAppCaptureSource.cs   capture: one application and its children (PulseAppRules.cs, PulseAppMixer.cs)
 //   Export/   LameMp3Encoder.cs          the MP3, through the libmp3lame.so.0 shipped with the app
 //   App/      LinuxLoop.cs               the loop of the app: done
 //             LinuxInstanceChannel.cs    one instance at a time, and what "hindsound" or "hindsound --save" tells it (Program)

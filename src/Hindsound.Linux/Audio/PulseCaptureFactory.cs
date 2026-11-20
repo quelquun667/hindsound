@@ -5,8 +5,9 @@ namespace Hindsound.Linux.Audio;
 
 /// <summary>
 /// The capture through the sound server (PulseAudio, or PipeWire through its PulseAudio side): the monitor of the default
-/// output for the PC's sound, and the default input, or the one set, for the microphone. Each capture is one record stream
-/// on a connection of its own; each lookup reads the server afresh, so a server that restarts is simply found again.
+/// output for the PC's sound, the default input, or the one set, for the microphone, and the streams of one application and
+/// its children when the settings choose one (PulseAppCaptureSource). Each capture is on a connection of its own; each
+/// lookup reads the server afresh, so a server that restarts is simply found again.
 /// Its choices are made before any call to the server, so they are tested on every system.
 /// </summary>
 internal sealed class PulseCaptureFactory : ICaptureSourceFactory
@@ -20,6 +21,7 @@ internal sealed class PulseCaptureFactory : ICaptureSourceFactory
     private readonly Action<string> _log;
     private readonly Func<PulseServerState> _readServer;
     private readonly PulsePlaybackSilence? _silence;
+    private readonly IProcessSnapshot _processes;
     private readonly Lock _gate = new();
     private PulseServerState _last = PulseServerState.Empty;
     private string? _lastProblem;
@@ -45,11 +47,13 @@ internal sealed class PulseCaptureFactory : ICaptureSourceFactory
     /// <param name="log">The log of the run.</param>
     /// <param name="readServer">Reads what the server has. Tests pass their own.</param>
     /// <param name="silence">The silence of the preview; null for a factory that cannot leave the app's sounds out.</param>
-    internal PulseCaptureFactory(Action<string> log, Func<PulseServerState> readServer, PulsePlaybackSilence? silence = null)
+    /// <param name="processes">The process list an application's children are found in; /proc if null.</param>
+    internal PulseCaptureFactory(Action<string> log, Func<PulseServerState> readServer, PulsePlaybackSilence? silence = null, IProcessSnapshot? processes = null)
     {
         _log = log;
         _readServer = readServer;
         _silence = silence;
+        _processes = processes ?? new ProcProcessSnapshot();
     }
 
     /// <summary>
@@ -103,6 +107,12 @@ internal sealed class PulseCaptureFactory : ICaptureSourceFactory
             return Task.FromException<ICaptureSource>(new PlatformNotSupportedException("The sound server is reached on Linux only."));
         }
 
+        // One application: its streams, wherever they play. The device id is the engine's own name for it, not the server's.
+        if (request.TargetProcessId is { } target)
+        {
+            return OpenApp(target, request.TargetName, _processes, _log);
+        }
+
         var name = state.DisplayNameOf(request.Flow, request.DeviceId) ?? request.DeviceId;
         var streamName = request.Flow == AudioFlow.System ? SystemStreamName : MicStreamName;
         return OpenOnServer(request, streamName, name, PulseCaptureRules.SilenceFor(request, _silence));
@@ -111,6 +121,10 @@ internal sealed class PulseCaptureFactory : ICaptureSourceFactory
     [SupportedOSPlatform("linux")]
     private static Task<ICaptureSource> OpenOnServer(CaptureRequest request, string streamName, string name, PulsePlaybackSilence? silence) =>
         Task.Run<ICaptureSource>(() => PulseCaptureSource.Open(request.Flow, request.DeviceId, streamName, name, silence));
+
+    [SupportedOSPlatform("linux")]
+    private static Task<ICaptureSource> OpenApp(int target, string? name, IProcessSnapshot processes, Action<string> log) =>
+        Task.Run<ICaptureSource>(() => PulseAppCaptureSource.Open(target, name, processes, log));
 
     private static PulseServerState ReadServer() => OperatingSystem.IsLinux()
         ? PulseConnection.ReadServer()

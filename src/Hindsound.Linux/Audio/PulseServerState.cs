@@ -70,14 +70,22 @@ internal static class PulseCaptureRules
     /// <summary>
     /// Why a request cannot be opened, or null. With <paramref name="canSilence"/>, the app's sounds can be left out of the PC's
     /// sound: its only sound is the preview, and the capture writes silence while it plays. The microphone has nothing to
-    /// leave out.
+    /// leave out. One application is captured as the PC's sound, as the engine asks it, and never holds this app's sounds:
+    /// there is nothing to leave out of it, and the engine never asks to.
     /// </summary>
     public static Exception? Refuse(CaptureRequest request, bool canSilence)
     {
         ArgumentNullException.ThrowIfNull(request);
         if (request.TargetProcessId is not null)
         {
-            return new PlatformNotSupportedException("Capturing one application is not in the Linux version.");
+            if (request.Flow != AudioFlow.System)
+            {
+                return new PlatformNotSupportedException("An application is captured as the PC's sound, not as a microphone.");
+            }
+
+            return request.ExcludeOwnProcess
+                ? new PlatformNotSupportedException("The capture of one application has none of this app's sounds to leave out.")
+                : null;
         }
 
         if (request.ExcludeOwnProcess && !(canSilence && request.Flow == AudioFlow.System))
