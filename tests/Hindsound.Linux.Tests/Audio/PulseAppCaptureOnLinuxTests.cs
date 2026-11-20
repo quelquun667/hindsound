@@ -519,12 +519,10 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
     }
 
     private static int OutputsOnServer() =>
-        Pactl("list", "short", "sinks").Split('
-').Count(line => line.Split('	').Length > 1);
+        Pactl("list", "short", "sinks").Split('\n').Count(line => line.Split('\t').Length > 1);
 
     private static bool OnPipeWire() =>
-        Pactl("info").Split('
-').Any(line => line.StartsWith("Server Name", StringComparison.Ordinal) && line.Contains("on PipeWire", StringComparison.Ordinal));
+        Pactl("info").Split('\n').Any(line => line.StartsWith("Server Name", StringComparison.Ordinal) && line.Contains("on PipeWire", StringComparison.Ordinal));
 
     // Ends a recording on the server itself, as if the server had dropped it: pactl has no command for that. PulseAudio does it
     // by the index of the recording (pacmd, its command line); PipeWire by destroying the node with the recording's media.name.
@@ -539,8 +537,7 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
         var line = $"media.name = \"{name}\"";
         string? node = null;
         var found = new List<string>();
-        foreach (var raw in Run("pw-cli", "ls", "Node").Split('
-'))
+        foreach (var raw in Run("pw-cli", "ls", "Node").Split('\n'))
         {
             var entry = raw.Trim();
             if (entry.StartsWith("id ", StringComparison.Ordinal))
