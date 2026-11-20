@@ -87,13 +87,18 @@ internal static class AutostartFile
 {
     private const string Group = "[Desktop Entry]";
 
-    /// <summary>The entry that starts <paramref name="program"/>. A path with a control character cannot be written in one: that throws.</summary>
+    /// <summary>
+    /// The entry that starts <paramref name="program"/>. A path with a control character cannot be written in one: that throws.
+    /// TryExec names the program too: once it is gone, an AppImage deleted or a package removed, the Autostart specification
+    /// has the session skip the entry instead of trying to start it at each login.
+    /// </summary>
     public static string Text(string program) =>
         string.Join('\n',
             Group,
             "Type=Application",
             "Name=Hindsound",
             "Exec=" + ExecOf(program),
+            "TryExec=" + StringOf(program),
             "Icon=" + DBusNames.AppId,
             "Terminal=false",
             "NoDisplay=true",
@@ -124,6 +129,32 @@ internal static class AutostartFile
 
         quoted.Append('"');
         return quoted.ToString().Replace("\\", "\\\\", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <paramref name="path"/> as a string value, which TryExec is: no quotes, unlike Exec. A backslash is doubled, and a space
+    /// at either end written \s, as a reader trims the spaces around a value. A control character throws, as in Exec.
+    /// </summary>
+    public static string StringOf(string path)
+    {
+        if (path.Any(char.IsControl))
+        {
+            throw new IOException("the path of the program cannot be written in a desktop entry");
+        }
+
+        var value = new StringBuilder(path.Length);
+        for (var i = 0; i < path.Length; i++)
+        {
+            var c = path[i];
+            value.Append(c switch
+            {
+                '\\' => "\\\\",
+                ' ' when i == 0 || i == path.Length - 1 => "\\s",
+                _ => c.ToString(),
+            });
+        }
+
+        return value.ToString();
     }
 
     /// <summary>

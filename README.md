@@ -83,8 +83,9 @@ release holds:
 | `hindsound_X.Y.Z_amd64.deb` | Ubuntu 22.04 and later, Debian 12 and later: a package to install with `apt`. See [Linux](#linux). |
 | `SHA256SUMS` | The SHA-256 of every file of the release. |
 
-The portable zip and the Linux packages come with the releases after 0.5.0. The `.json` files of a release are read by
-Hindsound to learn about a new version, and `lame-3.100.tar.gz` is the source of its MP3 encoder.
+The portable zip, the AppImage and the tar.gz come with the releases after 0.5.0, and the `.deb` with the releases after
+0.8.0. The `.json` files of a release are read by Hindsound to learn about a new version, and `lame-3.100.tar.gz` is the
+source of its MP3 encoder.
 
 ### Build from source
 
@@ -169,10 +170,12 @@ start it captures the sound of the whole PC, and the microphone if your settings
 on `hindsound --save` or from the menu of its icon, says so with a notification, and copies the clip when the desktop
 allows it. A click on the notification of a clip shows the clip in its folder.
 
-**Download.** From the [latest release](https://github.com/quelquun667/hindsound/releases/latest), from the release after
-0.5.0 on. Between releases, the CI builds the same files on every change: open a recent run of the
+**Download.** From the [latest release](https://github.com/quelquun667/hindsound/releases/latest): the AppImage and the
+tar.gz come with the releases after 0.5.0, the .deb with the releases after 0.8.0. Between releases, the CI builds the
+same files on every change: open a recent run of the
 [CI workflow](https://github.com/quelquun667/hindsound/actions/workflows/ci.yml) on `main`, and download the
-`hindsound-linux-x64` artifact (GitHub asks you to sign in). Either way the program comes three times; take one:
+`hindsound-linux-x64` artifact (GitHub asks you to sign in). A release after 0.8.0, like the artifact, has the program three
+times, and the releases from 0.6.0 to 0.8.0 the first two; take one:
 
 - `hindsound-<version>-linux-x64.AppImage`, one file. A download does not keep its executable bit, so give it back.
   Give it a name that stays before the first run, as the shortcut below and `Start with the session` point to it:
@@ -193,12 +196,15 @@ allows it. A click on the notification of a clip shows the clip in its folder.
   ```
 
 - `hindsound_<version>_amd64.deb`, a package for Ubuntu 22.04 and later and Debian 12 and later. Install it from the
-  folder where you downloaded it (the `./` tells `apt` it is a file), then start Hindsound from the list of applications,
-  or run `hindsound`:
+  folder where you downloaded it, with the version of the file in place of `X.Y.Z` (the `./` tells `apt` it is a file),
+  then start Hindsound from the list of applications, or run `hindsound`. On Ubuntu, `apt` may add a note that the
+  "Download is performed unsandboxed as root": for a file already on your PC, it changes nothing.
 
   ```sh
-  sudo apt install ./hindsound_*_amd64.deb
+  sudo apt install ./hindsound_X.Y.Z_amd64.deb
   ```
+
+  If you ran the AppImage or the tar.gz before, see **From the AppImage to the .deb** below.
 
   It puts the program in `/usr/lib/hindsound`, with its MP3 encoder, SDL 3 and the fonts, and `/usr/bin/hindsound`, a
   link to it. `apt` installs what it needs from the system: the sound library, FreeType, HarfBuzz, fontconfig and OpenSSL.
@@ -220,6 +226,13 @@ the file you launched, and its icon in `~/.local/share/icons/hicolor/<size>/apps
 by this entry. A launch from elsewhere writes it again; an entry installed by a package of the system is never covered. To
 take it away, delete the entry and the icons. The .deb installs its own entry and icons in `/usr/share`, and Hindsound
 then writes none in `~/.local`.
+
+**From the AppImage to the .deb.** The entry the AppImage or the tar.gz wrote in `~/.local` has the name of the .deb's,
+and goes before it. So once the .deb is installed, the next launch of Hindsound, from the list of applications or from
+anywhere else, removes that entry and those of its icons that are the same as the package's, and says so in its log.
+That launch may still be the old copy; the ones after it start the .deb, and an AppImage started then writes no entry.
+An entry you changed or hid stays: delete it yourself. `Start with the session` stays with the copy that turned it on:
+the .deb shows it off, so turn it on there, and the session starts the .deb from then on.
 
 **Save from a key.** On X11, and on Wayland where the desktop offers global shortcuts (GNOME 48 and later, so Ubuntu
 26.04, and KDE), Hindsound uses its hotkey. Ubuntu 24.04 on Wayland has no such shortcuts: open Settings > Keyboard >
@@ -271,8 +284,8 @@ is gone at each login. Then delete the program. Hindsound leaves these, and you 
 
 If you installed the tar.gz into `~/.local`, its `README.txt` lists the files to remove.
 
-For the .deb, turn `Start with the session` off first too: the entry in `~/.config/autostart` starts
-`/usr/lib/hindsound/hindsound`, which `apt` removes. Then:
+For the .deb, turn `Start with the session` off first too: the entry in `~/.config/autostart` names
+`/usr/lib/hindsound/hindsound`, which `apt` removes, and stays behind; the session then skips it. Then:
 
 ```sh
 sudo apt remove hindsound
