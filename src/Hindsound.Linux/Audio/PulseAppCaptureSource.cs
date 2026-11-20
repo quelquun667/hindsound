@@ -75,6 +75,83 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         }
     }
 
+    private static readonly bool DiagKeep = Environment.GetEnvironmentVariable("HINDSOUND_APP_KEEP") == "1";
+    private static readonly bool DiagKick = Environment.GetEnvironmentVariable("HINDSOUND_APP_KICK") == "1";
+    private static readonly float[] DiagSilence = new float[4800];
+    private readonly Dictionary<uint, IntPtr> _keepers = [];
+    private Dictionary<uint, string> _sinkNames = [];
+
+    // DIAG: a plain record stream on the monitor, low latency, whose data is dropped.
+    private void Keep(Dictionary<uint, string> monitors)
+    {
+        foreach (var (sink, monitor) in monitors)
+        {
+            if (_keepers.ContainsKey(sink))
+            {
+                continue;
+            }
+
+            var spec = PulseFormats.SampleSpecFor(AudioFlow.System);
+            var stream = PulseNative.StreamNew(_connection.Context, "diag keep", &spec, IntPtr.Zero);
+            PulseNative.StreamSetReadCallback(stream, (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, nuint, IntPtr, void>)&OnKeepRead, IntPtr.Zero);
+            var attributes = PulseFormats.BufferAttrFor(AudioFlow.System);
+            var result = PulseNative.StreamConnectRecord(stream, monitor, &attributes, PulseAppRules.RecordFlags);
+            Diag($"keep {monitor}: {result}");
+            _keepers[sink] = stream;
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnKeepRead(IntPtr stream, nuint length, IntPtr userData)
+    {
+        IntPtr data;
+        nuint size;
+        while (PulseNative.StreamPeek(stream, &data, &size) >= 0 && size > 0)
+        {
+            PulseNative.StreamDrop(stream);
+        }
+    }
+
+    // DIAG: a short silence played on the output, which makes the server render it again from now.
+    private void Kick(uint sink)
+    {
+        if (!_sinkNames.TryGetValue(sink, out var name))
+        {
+            Diag($"kick {sink}: no name");
+            return;
+        }
+
+        var spec = PulseFormats.SampleSpecFor(AudioFlow.System);
+        var stream = PulseNative.StreamNew(_connection.Context, "diag kick", &spec, IntPtr.Zero);
+        PulseNative.StreamSetStateCallback(stream, (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, IntPtr, void>)&OnKickState, IntPtr.Zero);
+        var attributes = new PaBufferAttr { MaxLength = uint.MaxValue, TargetLength = 4800 * 8, PreBuffer = 0, MinRequest = uint.MaxValue, FragmentSize = uint.MaxValue };
+        var result = PulseNative.StreamConnectPlayback(stream, name, &attributes, 0, IntPtr.Zero, IntPtr.Zero);
+        Diag($"kick {name}: {result}");
+        _ = Task.Delay(600).ContinueWith(_ => _connection.Locked(() =>
+        {
+            PulseNative.StreamSetStateCallback(stream, IntPtr.Zero, IntPtr.Zero);
+            if (PulseNative.StreamGetState(stream) == PulseNative.StreamReady)
+            {
+                PulseNative.StreamDisconnect(stream);
+            }
+
+            PulseNative.StreamUnref(stream);
+        }));
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnKickState(IntPtr stream, IntPtr userData)
+    {
+        if (PulseNative.StreamGetState(stream) == PulseNative.StreamReady)
+        {
+            fixed (float* data = DiagSilence)
+            {
+                var result = PulseNative.StreamWrite(stream, data, (nuint)(DiagSilence.Length * sizeof(float)), IntPtr.Zero, 0, 0);
+                Diag($"kick written: {result}");
+            }
+        }
+    }
+
     private PulseAppCaptureSource(PulseConnection connection, int target, string? name, IProcessSnapshot processes, Action<string> log)
     {
         _connection = connection;
@@ -197,6 +274,13 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
             foreach (var input in _inputs.Values.Concat(_closing).ToList())
             {
                 Release(input, now: true);
+            }
+
+            foreach (var keeper in _keepers.Values)
+            {
+                PulseNative.StreamSetReadCallback(keeper, IntPtr.Zero, IntPtr.Zero);
+                PulseNative.StreamDisconnect(keeper);
+                PulseNative.StreamUnref(keeper);
             }
 
             _inputs.Clear();
@@ -347,6 +431,12 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
 
     private void Follow(StreamLook look)
     {
+        _sinkNames = look.Names;
+        if (DiagKeep)
+        {
+            Keep(look.Monitors);
+        }
+
         var processes = _processes.Take();
         var mine = PulseAppRules.StreamsOf(look.Streams, processes, _target, Environment.ProcessId);
         var (open, close) = PulseAppRules.Changes(_inputs.Keys, mine, look.Monitors);
@@ -452,6 +542,11 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
             var state = PulseNative.StreamGetState(stream);
             var granted = state == PulseNative.StreamReady ? PulseNative.StreamGetBufferAttr(stream) : null;
             Diag($"stream {input.Key.SinkInput} state {state} closing {input.Closing}" + (granted is null ? "" : $" maxlength {granted->MaxLength} fragsize {granted->FragmentSize}"));
+            if (DiagKick && state == PulseNative.StreamReady && !input.Closing)
+            {
+                input.Owner.Kick(input.Key.Sink);
+            }
+
             if (input.Closing)
             {
                 if (state == PulseNative.StreamReady)
@@ -513,6 +608,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
             if (info != IntPtr.Zero && PulseNative.Text(sink->MonitorSourceName) is { } monitor)
             {
                 look.Monitors[sink->Index] = monitor;
+                look.Names[sink->Index] = PulseNative.Text(sink->Name) ?? "";
             }
         }
         catch (Exception)
@@ -566,6 +662,8 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         public bool Failed { get; private set; }
 
         public Dictionary<uint, string> Monitors { get; } = [];
+
+        public Dictionary<uint, string> Names { get; } = [];
 
         public List<PulsePlaybackStream> Streams { get; } = [];
 
@@ -641,6 +739,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
             var now = DiagClock.ElapsedMilliseconds;
             if (_diagSince < 0)
             {
+                Diag($"first data {Key.SinkInput}");
                 _diagSince = now;
             }
             else if (now - _diagSince >= 1000)

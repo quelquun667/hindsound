@@ -241,11 +241,13 @@ jobs:
             pactl info | grep -E "Server (Name|Version)"
             pactl load-module module-null-sink sink_name=hindsound_null
             pactl set-default-sink hindsound_null
-            bash .github/diag/app-probe.sh || true
             export HINDSOUND_APP_TRACE="$RUNNER_TEMP/app-trace.log"
-            dotnet test tests/Hindsound.Linux.Tests/Hindsound.Linux.Tests.csproj -c Release --no-build \
-              --filter "FullyQualifiedName~PulseAppCaptureOnLinuxTests" --logger "console;verbosity=detailed" \
-              || { tail -n 60 "$SERVER_LOGS"/*.log; sed "s/^/TRACE /" "$HINDSOUND_APP_TRACE"; exit 1; }
+            for combo in 00 10 01 11; do
+              export HINDSOUND_APP_KEEP=${combo:0:1} HINDSOUND_APP_KICK=${combo:1:1}
+              echo "COMBO keep=$HINDSOUND_APP_KEEP kick=$HINDSOUND_APP_KICK" | tee -a "$HINDSOUND_APP_TRACE"
+              dotnet test tests/Hindsound.Linux.Tests/Hindsound.Linux.Tests.csproj -c Release --no-build \
+                --filter "FullyQualifiedName~PulseAppCaptureOnLinuxTests" --logger "console;verbosity=detailed" || true
+            done
             sed "s/^/TRACE /" "$HINDSOUND_APP_TRACE"
           '
 
