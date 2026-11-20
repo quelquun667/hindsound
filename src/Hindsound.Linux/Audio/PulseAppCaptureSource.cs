@@ -493,6 +493,11 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
             }
             else if (pacer.Dead && WaitOf(pacer) == TimeSpan.Zero)
             {
+                if (pacer.WasReady)
+                {
+                    _log($"the short delay of an output ended while its output is there (try {pacer.Tries + 1} of {MaxRetries + 1}), kept again");
+                }
+
                 Release(pacer);
                 _pacers[sink] = OpenInput(pacer.Key, monitor, pace: true, tries: pacer.Tries + 1);
             }
@@ -623,11 +628,11 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
                 return;
             }
 
-            // PulseAudio ends a recording when the application's stream ends or moves, which is no failure: the next look lets
-            // it go, or records the stream on its new output. One that never started failed, and is told; the next look tries
-            // it again later while its stream lives.
+            // PulseAudio ends a recording when the application's stream ends or moves, and a pacer when its output goes away,
+            // which is no failure: the next look lets it go, or records the stream on its new output. One that never started
+            // failed, and is told; the next look tries it again later while its stream or its output lives.
             var owner = input.Owner;
-            if (input.Pace || !input.WasReady)
+            if (!input.WasReady)
             {
                 owner.LogFailure(input, PulseNative.ErrorOf(owner._connection.Context));
             }
