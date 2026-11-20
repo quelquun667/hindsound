@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- On Linux, `Record` can follow one application and its child processes instead of the whole PC, as on Windows, through PulseAudio or PipeWire. The list shows the applications while they play sound.
+
 ## [0.9.0] - 2026-11-20
 
 A `.deb` package for Ubuntu and Debian, and small fixes on Linux. On Windows, Hindsound works as in 0.8.0.

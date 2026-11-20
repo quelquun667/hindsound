@@ -7,7 +7,7 @@ its icon.
 
 The window (Now, Library and the settings) is drawn with libSDL3.so.0 and the fonts folder of this package, and with
 FreeType, HarfBuzz and fontconfig, which every desktop has. Without them Hindsound runs with its icon only, and its log
-says why. Recording a single app is not there yet.
+says why. "Record" can follow one application: it lists the applications while they play sound.
 Home page: https://github.com/quelquun667/hindsound
 
 

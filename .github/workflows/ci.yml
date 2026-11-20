@@ -183,6 +183,69 @@ jobs:
           path: ${{ runner.temp }}/linux-dump/
           if-no-files-found: warn
 
+  # The capture of one application, on each sound server a desktop runs: PulseAudio, and PipeWire through pipewire-pulse
+  # (Ubuntu 24.04: PipeWire 1.0). The job above runs these tests on PulseAudio among all the others; here they run alone, with
+  # their measures in the log. PipeWire is started by hand, with no desktop, as a session starts it: pipewire, wireplumber,
+  # then pipewire-pulse. Its logs are printed when a test fails.
+  app-capture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        server: [pulseaudio, pipewire]
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install the sound server and a session bus
+        env:
+          SERVER: ${{ matrix.server }}
+        run: |
+          sudo apt-get update
+          if [ "$SERVER" = pipewire ]; then
+            sudo apt-get install -y --no-install-recommends dbus pipewire pipewire-bin pipewire-pulse wireplumber pulseaudio-utils
+          else
+            sudo apt-get install -y --no-install-recommends dbus pulseaudio pulseaudio-utils
+          fi
+
+      - name: Build
+        run: dotnet build tests/Hindsound.Linux.Tests/Hindsound.Linux.Tests.csproj -c Release
+
+      - name: Test the capture of one application
+        env:
+          SERVER: ${{ matrix.server }}
+          SERVER_LOGS: ${{ runner.temp }}/server-logs
+        run: |
+          mkdir -p "$SERVER_LOGS"
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/xdg"
+          mkdir -p -m 700 "$XDG_RUNTIME_DIR"
+          dbus-run-session -- bash -uc '
+            if [ "$SERVER" = pipewire ]; then
+              pipewire > "$SERVER_LOGS/pipewire.log" 2>&1 &
+              sleep 2
+              wireplumber > "$SERVER_LOGS/wireplumber.log" 2>&1 &
+              sleep 2
+              pipewire-pulse > "$SERVER_LOGS/pipewire-pulse.log" 2>&1 &
+            else
+              pulseaudio --daemonize=yes --exit-idle-time=-1 --log-target="file:$SERVER_LOGS/pulseaudio.log"
+            fi
+            for attempt in $(seq 1 40); do pactl info > /dev/null 2>&1 && break; sleep 0.5; done
+            pactl info | grep -E "Server (Name|Version)"
+            pactl load-module module-null-sink sink_name=hindsound_null
+            pactl set-default-sink hindsound_null
+            dotnet test tests/Hindsound.Linux.Tests/Hindsound.Linux.Tests.csproj -c Release --no-build \
+              --filter "FullyQualifiedName~PulseAppCaptureOnLinuxTests" --logger "console;verbosity=detailed" \
+              || { tail -n 60 "$SERVER_LOGS"/*.log; exit 1; }
+          '
+
   # Until a release builds them, the files of the rehearsal below carry the version of the latest release in the changelog.
   release-version:
     runs-on: ubuntu-latest

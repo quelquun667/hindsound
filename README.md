@@ -263,6 +263,9 @@ the later systems Hindsound is made for already have.
 
 - Listening to a clip: while it plays, the capture of the PC's sound records silence, so the clip does not end up in the
   next one. The microphone keeps recording.
+- `Record` can follow one application and its child processes, as on Windows, through PulseAudio or PipeWire. An
+  application is in its list only while it plays sound: start a sound in it, then choose it. See
+  [Record one application](#record-one-application).
 - `Delete`, and an edit saved in place of its original, send the file to the Trash of the desktop.
 - The `Hotkeys` page shows keys typed in a field on X11, the keys the desktop chose under its shortcut portal (change them
   in the shortcut settings of the desktop), or, with neither, the command to bind to a key, with a `Copy` button.
@@ -274,7 +277,7 @@ replace the file. For the .deb, download the new one from that release and insta
 `sudo apt install ./hindsound_<version>_amd64.deb`: it replaces the old version. `apt upgrade` does not see it, as no
 repository serves it.
 
-**Not there yet:** recording one application, and any processor other than x64.
+**Not there yet:** any processor other than x64.
 
 **Remove it.** Before you delete the AppImage (or the program), turn `Start with the session` off in the menu of the icon,
 or delete `~/.config/autostart/io.github.quelquun667.Hindsound.desktop`: otherwise your session tries to start a file that
@@ -465,6 +468,10 @@ there too, next to the `Mic` lane: turned off, the microphone is not opened at a
 applications that have an audio session, so an application that has played nothing yet is not in it.
 
 - Hindsound remembers the application by the name of its exe.
+- On Linux, the list shows the applications that have a sound stream open now: an application is in it only while it
+  plays sound. Hindsound remembers it by its process name, as `/proc` gives it (its first 15 characters), and records the
+  sound streams of that process and of its children. An application in a Flatpak or Snap sandbox may give a process id
+  of its own sandbox: Hindsound then finds it by the name of its program, which has not been tried on a real sandbox.
 - If the application closes, the band says `Not running: Discord`, and the memory gets silence. The capture attaches again
   when the application comes back. None of this makes a notification.
 - `Output` is greyed out in this mode: the capture does not depend on an output.
@@ -587,10 +594,12 @@ the same two ways, and removes it. Not tried for real:
 - the window on X11 and on Wayland, at each display scale, with its keyboard, its input methods and its folder dialog
 - listening to a clip, and the PC's sound recorded as silence meanwhile
 - deleting a clip to the Trash of the desktop
+- recording one application (the CI records a player started from a shell, beside another one, on PulseAudio and on
+  PipeWire), with a real application such as a browser, a game or Discord, and in a Flatpak or Snap sandbox
 
 ## Roadmap
 
-- Recording one application on Linux, and a Mac version, with no date yet
+- A Mac version, with no date yet
 
 ## License
 
