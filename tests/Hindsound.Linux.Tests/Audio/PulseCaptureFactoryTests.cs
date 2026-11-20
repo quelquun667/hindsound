@@ -24,11 +24,11 @@ public sealed class PulseCaptureFactoryTests
     }
 
     [Fact]
-    public void Capturing_one_application_is_refused()
+    public void Capturing_one_application_is_accepted_as_the_pc_s_sound_and_refused_as_a_microphone()
     {
-        var refusal = PulseCaptureRules.Refuse(new CaptureRequest(AudioFlow.System, "speakers.monitor", false, TargetProcessId: 42, TargetName: "Game"));
-
-        Assert.IsType<PlatformNotSupportedException>(refusal);
+        Assert.Null(PulseCaptureRules.Refuse(new CaptureRequest(AudioFlow.System, "app:Game", false, TargetProcessId: 42, TargetName: "Game")));
+        Assert.Null(PulseCaptureRules.Refuse(new CaptureRequest(AudioFlow.System, "app:Game", false, TargetProcessId: 42, TargetName: "Game"), canSilence: true));
+        Assert.IsType<PlatformNotSupportedException>(PulseCaptureRules.Refuse(new CaptureRequest(AudioFlow.Mic, "app:Game", false, TargetProcessId: 42, TargetName: "Game")));
     }
 
     [Fact]
