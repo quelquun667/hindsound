@@ -1,0 +1,31 @@
+name: probe-app
+
+on:
+  push:
+    branches: [agent/probe-app]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: probe ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: ubuntu22-pulse, image: "ubuntu:22.04", server: pulse }
+          - { name: ubuntu24-pipewire, image: "ubuntu:24.04", server: pipewire }
+          - { name: ubuntu26-pipewire, image: "ubuntu:26.04", server: pipewire }
+          - { name: debian13-pipewire, image: "debian:13", server: pipewire }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run the probe in a container
+        run: |
+          docker run --rm -v "$PWD/.github/probe:/probe:ro" \
+            -e ENVNAME="${{ matrix.name }}" -e SERVER="${{ matrix.server }}" \
+            "${{ matrix.image }}" bash /probe/probe-app.sh
