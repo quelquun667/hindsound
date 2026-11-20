@@ -4,9 +4,16 @@ namespace Hindsound.Linux.Audio;
 /// Mixes the record streams of one application into one stream that never stops. Each stream writes its samples as the server
 /// gives them, on the server's thread; the capture's own clock takes as many frames as its time asks for, from every stream at
 /// once, and sums them. A stream starts to count once it holds <see cref="PrimeFrames"/>, so that a packet a little late does
-/// not cut its sound; one that runs dry waits for that much again. One that holds more than <see cref="MaxFrames"/> loses its
-/// oldest frames: the delay stays bounded when the server's clock runs a little faster than this one. With no stream, or
-/// none ready, the frames taken are silence, and time still goes on.
+/// not cut its sound; one that runs dry (its stream stopped) waits for that much again. One that holds more than
+/// <see cref="MaxFrames"/> loses its oldest frames. With no stream, or none ready, the frames taken are silence, and time
+/// still goes on.
+/// <para>
+/// The card's clock and this one never run at quite the same speed, and the engine dates the frames by this one. So each
+/// stream is kept near what it held when it started: while what it holds, on average, is more than
+/// <see cref="MarginFrames"/> above <see cref="PrimeFrames"/>, each read takes one frame more than it gives, and while it is
+/// that much below, one frame less, both over a short fade. A card a little faster then never fills the ring nor delays the
+/// application against the microphone, and a card a little slower never runs it dry.
+/// </para>
 /// <para>
 /// Nothing is allocated past <see cref="Add"/>, so hours of streams that come and go hold no more memory than those alive.
 /// Every call is safe from any thread.
@@ -34,6 +41,18 @@ internal sealed class PulseAppMixer
     public int PrimeFrames { get; }
 
     public int MaxFrames { get; }
+
+    /// <summary>How far from <see cref="PrimeFrames"/> what a stream holds, on average, may go before its reads are corrected.</summary>
+    public int MarginFrames => PrimeFrames / 4;
+
+    /// <summary>The frames a stream holds now, 0 for a stream not there.</summary>
+    public int Held(PulseMonitorKey key)
+    {
+        lock (_gate)
+        {
+            return _inputs.TryGetValue(key, out var input) ? input.Count / _channels : 0;
+        }
+    }
 
     /// <summary>The streams being mixed.</summary>
     public int Count
@@ -105,7 +124,7 @@ internal sealed class PulseAppMixer
         {
             foreach (var input in _inputs.Values)
             {
-                heard |= input.ReadInto(output[..(frames * _channels)], PrimeFrames * _channels);
+                heard |= input.ReadInto(output[..(frames * _channels)], _channels, PrimeFrames, MarginFrames);
             }
         }
 
@@ -115,9 +134,19 @@ internal sealed class PulseAppMixer
     /// <summary>One stream's queue: a ring of samples.</summary>
     private sealed class Input(float[] ring)
     {
+        // How many reads the average of what a stream holds follows: about two thirds of a second at a read each 10 ms, so
+        // that the packets of the server, which come by 20 ms, do not move it.
+        private const int AverageReads = 64;
+
+        // The fade over which a read gives one frame more or one less: 5 ms.
+        private const int FadeFrames = 240;
+
         private int _start;
         private int _count;
         private bool _ready;
+        private double _average;
+
+        public int Count => _count;
 
         public void Write(ReadOnlySpan<float> samples, bool isSilence)
         {
@@ -152,27 +181,61 @@ internal sealed class PulseAppMixer
         // The ring only gives a length here, as silence is not copied: a stretch longer than the ring is the same as its end.
         public void WriteSilence(int samples) => Write(new ReadOnlySpan<float>(ring, 0, Math.Min(samples, ring.Length)), isSilence: true);
 
-        // Adds the next samples to the mix. A stream not ready yet adds nothing; one that runs dry gives what it has.
-        public bool ReadInto(Span<float> output, int prime)
+        // Adds the next frames to the mix. A stream not ready yet adds nothing; one that runs dry gives what it has. One whose
+        // average is out of the margin around the target gives its frames over one more or one less, the last ones faded.
+        public bool ReadInto(Span<float> output, int channels, int target, int margin)
         {
+            var frames = output.Length / channels;
+            var held = _count / channels;
             if (!_ready)
             {
-                if (_count < Math.Max(prime, 1))
+                if (held < Math.Max(target, 1))
                 {
                     return false;
                 }
 
                 _ready = true;
+                _average = held;
+            }
+            else
+            {
+                _average += (held - _average) / AverageReads;
             }
 
-            var take = Math.Min(_count, output.Length);
-            for (var i = 0; i < take; i++)
+            // 1: one frame skipped, -1: one frame given twice, 0: as they are.
+            var shift = 0;
+            if (frames > 1 && _average > target + margin && held > frames)
+            {
+                shift = 1;
+            }
+            else if (frames > 1 && _average < target - margin && held >= frames)
+            {
+                shift = -1;
+            }
+
+            var take = shift == 0 ? Math.Min(held, frames) : frames + shift;
+            var fade = shift == 0 ? 0 : Math.Min(FadeFrames, frames - 1);
+            var plain = (shift == 0 ? take : frames - fade) * channels;
+            for (var i = 0; i < plain; i++)
             {
                 output[i] += ring[(_start + i) % ring.Length];
             }
 
-            Skip(take);
-            if (take < output.Length)
+            // Each faded frame slides from its own to the one after (or before) it, so the read ends one frame off, with no jump.
+            for (var frame = frames - fade; frame < frames; frame++)
+            {
+                var weight = (float)(frame - (frames - fade) + 1) / fade;
+                for (var channel = 0; channel < channels; channel++)
+                {
+                    var current = ring[(_start + frame * channels + channel) % ring.Length];
+                    var next = ring[(_start + (frame + shift) * channels + channel) % ring.Length];
+                    output[frame * channels + channel] += current + (next - current) * weight;
+                }
+            }
+
+            Skip(take * channels);
+            _average -= shift;
+            if (take < frames && shift == 0)
             {
                 _ready = false;
             }
