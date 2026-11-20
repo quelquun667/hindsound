@@ -352,7 +352,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         // A recording that failed keeps its place until its stream ends, without its stream.
         foreach (var input in _inputs.Values)
         {
-            if (input.Dead)
+            if (Environment.ProcessId < 0 && input.Dead)
             {
                 Release(input);
             }
