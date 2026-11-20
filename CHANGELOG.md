@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-20
+
+A `.deb` package for Ubuntu and Debian, and small fixes on Linux. On Windows, Hindsound works as in 0.8.0.
+
 ### Added
 
 - On Linux, a `.deb` package for Ubuntu 22.04 and later and Debian 12 and later: `sudo apt install ./hindsound_X.Y.Z_amd64.deb` installs Hindsound in `/usr/lib/hindsound`, with `/usr/bin/hindsound`, its entry in the list of applications and its icons, and `sudo apt remove hindsound` takes it away. Like the AppImage, it does not update itself: a notification says when a new version is out, with the link to its release.
