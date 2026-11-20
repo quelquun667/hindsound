@@ -217,7 +217,7 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
         var killed = Assert.Single(SourceOutputsNamed(PulseAppCaptureSource.StreamName));
 
         var clock = Stopwatch.StartNew();
-        Pactl("kill-source-output", killed);
+        KillOnServer(killed, PulseAppCaptureSource.StreamName);
         string? reopened = null;
         while (reopened is null && clock.Elapsed < TimeSpan.FromSeconds(5))
         {
@@ -260,12 +260,15 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
         using var source = PulseAppCaptureSource.Open(app.Id, "hsappnine", new ProcProcessSnapshot(), log.Write);
         source.Start();
         WaitFor(() => source.RecordedStreams == 1, "the application recorded");
-        WaitFor(() => SourceOutputsNamed(PulseAppCaptureSource.PaceName).Count >= 3, "a stream keeping each output quick");
+        // One pacer on each output, and each output has a monitor: the outputs the tests find on the server are the pacers to wait for.
+        WaitFor(
+            () => SourceOutputsNamed(PulseAppCaptureSource.PaceName).Count == OutputsOnServer(),
+            "a stream keeping each output quick");
         var before = SourceOutputsNamed(PulseAppCaptureSource.PaceName);
         var killed = before[0];
 
         var clock = Stopwatch.StartNew();
-        Pactl("kill-source-output", killed);
+        KillOnServer(killed, PulseAppCaptureSource.PaceName);
         List<string> after;
         do
         {
@@ -515,6 +518,44 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
         return found;
     }
 
+    private static int OutputsOnServer() =>
+        Pactl("list", "short", "sinks").Split('
+').Count(line => line.Split('	').Length > 1);
+
+    private static bool OnPipeWire() =>
+        Pactl("info").Split('
+').Any(line => line.StartsWith("Server Name", StringComparison.Ordinal) && line.Contains("on PipeWire", StringComparison.Ordinal));
+
+    // Ends a recording on the server itself, as if the server had dropped it: pactl has no command for that. PulseAudio does it
+    // by the index of the recording (pacmd, its command line); PipeWire by destroying the node with the recording's media.name.
+    private static void KillOnServer(string sourceOutput, string name)
+    {
+        if (!OnPipeWire())
+        {
+            Run("pacmd", "kill-source-output", sourceOutput);
+            return;
+        }
+
+        var line = $"media.name = \"{name}\"";
+        string? node = null;
+        var found = new List<string>();
+        foreach (var raw in Run("pw-cli", "ls", "Node").Split('
+'))
+        {
+            var entry = raw.Trim();
+            if (entry.StartsWith("id ", StringComparison.Ordinal))
+            {
+                node = entry[3..].Split(',')[0];
+            }
+            else if (entry == line && node is not null)
+            {
+                found.Add(node);
+            }
+        }
+
+        Run("pw-cli", "destroy", Assert.Single(found));
+    }
+
     // The index of the first playback stream on an output.
     private static string StreamOn(string sink)
     {
@@ -532,9 +573,11 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
         }
     }
 
-    private static string Pactl(params string[] arguments)
+    private static string Pactl(params string[] arguments) => Run("pactl", arguments);
+
+    private static string Run(string tool, params string[] arguments)
     {
-        var start = new ProcessStartInfo("pactl") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        var start = new ProcessStartInfo(tool) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
         foreach (var argument in arguments)
         {
             start.ArgumentList.Add(argument);
@@ -546,10 +589,10 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
         if (!process.WaitForExit(Guard))
         {
             process.Kill();
-            Assert.Fail("pactl " + string.Join(' ', arguments) + " did not end");
+            Assert.Fail(tool + " " + string.Join(' ', arguments) + " did not end");
         }
 
-        Assert.True(process.ExitCode == 0, "pactl " + string.Join(' ', arguments) + " failed: " + error.Result);
+        Assert.True(process.ExitCode == 0, tool + " " + string.Join(' ', arguments) + " failed: " + error.Result);
         return output.Result.Trim();
     }
 
