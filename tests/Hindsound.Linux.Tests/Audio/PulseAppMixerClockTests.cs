@@ -110,6 +110,49 @@ public sealed class PulseAppMixerClockTests
         Assert.True(Math.Abs(late - early) <= 2 * margin, summary);
     }
 
+    [Theory]
+    [InlineData(0, 0, 1)]
+    [InlineData(10, 3, 2)]
+    [InlineData(-10, 5, 3)]
+    [InlineData(7, 5, 4)]
+    [InlineData(10, 7, 5)]
+    [InlineData(-10, 10, 6)]
+    [InlineData(0, 10, 1)]
+    [InlineData(5, 10, 7)]
+    public void Equal_clocks_with_jitter_start_with_at_most_two_corrections(int phaseMilliseconds, int jitterMilliseconds, int seed)
+    {
+        // Packets of 20 ms, read by 10 ms, each packet up to 10 ms early or late and the first one up to 10 ms off the reads.
+        var mixer = new PulseAppMixer(Channels, Prime, Max);
+        mixer.Add(A);
+        var random = new Random(seed);
+        var packet = new float[Fragment * Channels];
+        Array.Fill(packet, 0.5f);
+        var output = new float[Rate / 100 * Channels];
+        var next = (phaseMilliseconds + 10) * Rate / 1000;
+        var arrival = next;
+        var holes = 0;
+        var started = false;
+        for (long now = 0; now < 60L * Rate; now += Rate / 100)
+        {
+            while (arrival <= now)
+            {
+                mixer.Write(A, packet);
+                next += Fragment;
+                var jitter = random.Next(-jitterMilliseconds * Rate / 1000, (jitterMilliseconds * Rate / 1000) + 1);
+                arrival = Math.Max(arrival + 1, next + jitter);
+            }
+
+            var heard = mixer.Mix(output);
+            started |= heard;
+            if (started && !heard)
+            {
+                holes++;
+            }
+        }
+
+        Assert.True(mixer.Corrections <= 2, $"{mixer.Corrections} corrections, {holes} reads without sound");
+    }
+
     [Fact]
     public void A_stream_on_time_is_given_as_it_is()
     {

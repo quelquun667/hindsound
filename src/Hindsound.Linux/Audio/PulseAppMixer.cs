@@ -9,10 +9,11 @@ namespace Hindsound.Linux.Audio;
 /// still goes on.
 /// <para>
 /// The card's clock and this one never run at quite the same speed, and the engine dates the frames by this one. So each
-/// stream is kept near what it held when it started: while what it holds, on average, is more than
-/// <see cref="MarginFrames"/> above <see cref="PrimeFrames"/>, each read takes one frame more than it gives, and while it is
-/// that much below, one frame less, both over a short fade. A card a little faster then never fills the ring nor delays the
-/// application against the microphone, and a card a little slower never runs it dry.
+/// stream is kept near what it held when it settled (the mean of its first reads, within <see cref="MarginFrames"/> of
+/// <see cref="PrimeFrames"/>): while what it holds, on average, is more than <see cref="MarginFrames"/> above that, each read
+/// takes one frame more than it gives, and while it is that much below, one frame less, both over a short fade. A card a
+/// little faster then never fills the ring nor delays the application against the microphone, and a card a little slower
+/// never runs it dry.
 /// </para>
 /// <para>
 /// Nothing is allocated past <see cref="Add"/>, so hours of streams that come and go hold no more memory than those alive.
@@ -24,6 +25,7 @@ internal sealed class PulseAppMixer
     private readonly Lock _gate = new();
     private readonly Dictionary<PulseMonitorKey, Input> _inputs = [];
     private readonly int _channels;
+    private long _corrections;
 
     /// <param name="channels">The channels of every stream, and of the mix.</param>
     /// <param name="primeFrames">How much a stream holds before it counts.</param>
@@ -44,6 +46,18 @@ internal sealed class PulseAppMixer
 
     /// <summary>How far from <see cref="PrimeFrames"/> what a stream holds, on average, may go before its reads are corrected.</summary>
     public int MarginFrames => PrimeFrames / 4;
+
+    /// <summary>How many reads, over all streams, gave one frame more or one less since the start. For the tests.</summary>
+    internal long Corrections
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _corrections;
+            }
+        }
+    }
 
     /// <summary>The frames a stream holds now, 0 for a stream not there.</summary>
     public int Held(PulseMonitorKey key)
@@ -124,7 +138,7 @@ internal sealed class PulseAppMixer
         {
             foreach (var input in _inputs.Values)
             {
-                heard |= input.ReadInto(output[..(frames * _channels)], _channels, PrimeFrames, MarginFrames);
+                heard |= input.ReadInto(output[..(frames * _channels)], _channels, PrimeFrames, MarginFrames, ref _corrections);
             }
         }
 
@@ -144,7 +158,9 @@ internal sealed class PulseAppMixer
         private int _start;
         private int _count;
         private bool _ready;
+        private int _reads;
         private double _average;
+        private double _reference;
 
         public int Count => _count;
 
@@ -183,7 +199,7 @@ internal sealed class PulseAppMixer
 
         // Adds the next frames to the mix. A stream not ready yet adds nothing; one that runs dry gives what it has. One whose
         // average is out of the margin around the target gives its frames over one more or one less, the last ones faded.
-        public bool ReadInto(Span<float> output, int channels, int target, int margin)
+        public bool ReadInto(Span<float> output, int channels, int target, int margin, ref long corrections)
         {
             var frames = output.Length / channels;
             var held = _count / channels;
@@ -194,8 +210,23 @@ internal sealed class PulseAppMixer
                     return false;
                 }
 
+                // For the first reads the average is a plain mean and nothing is corrected: the level a stream settles at is not
+                // the one it is first seen at (a packet or two above it, or the saw of 20 ms packets read by 10 ms), and a
+                // correction chasing the first one is a hundred of them for nothing.
                 _ready = true;
+                _reads = 1;
                 _average = held;
+                _reference = target;
+            }
+            else if (_reads < AverageReads)
+            {
+                _reads++;
+                _average += (held - _average) / _reads;
+                if (_reads == AverageReads)
+                {
+                    // The level it settled at is the one kept, within a margin of the target so that the delay cannot be far off.
+                    _reference = Math.Clamp(_average, target - margin, target + margin);
+                }
             }
             else
             {
@@ -204,13 +235,22 @@ internal sealed class PulseAppMixer
 
             // 1: one frame skipped, -1: one frame given twice, 0: as they are.
             var shift = 0;
-            if (frames > 1 && _average > target + margin && held > frames)
+            if (_reads < AverageReads)
+            {
+                // Still taking the mean.
+            }
+            else if (frames > 1 && _average > _reference + margin && held > frames)
             {
                 shift = 1;
             }
-            else if (frames > 1 && _average < target - margin && held >= frames)
+            else if (frames > 1 && _average < _reference - margin && held >= frames)
             {
                 shift = -1;
+            }
+
+            if (shift != 0)
+            {
+                corrections++;
             }
 
             var take = shift == 0 ? Math.Min(held, frames) : frames + shift;
