@@ -110,8 +110,10 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
             Thread.Sleep(20);
         }
 
-        // Its streams are let go once they end, on both servers: PulseAudio ends the record stream, PipeWire does not.
+        // Its streams are let go once they end, on both servers: PulseAudio ends the record stream, PipeWire does not. The
+        // server is asked too, for a recording this capture would no longer know of.
         WaitFor(() => source.HeldStreams == 0 && source.RecordedStreams == 0, "the streams of the application let go");
+        WaitFor(() => RecordingsOnServer(PulseAppCaptureSource.StreamName) == 0, "the recordings of the application gone from the server");
         Thread.Sleep(500);
         source.Stop();
         var elapsed = clock.Elapsed;
@@ -123,8 +125,9 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
         var pattern = string.Concat(blocks.Select(level => level > 0.1 ? '#' : level < 0.01 ? '.' : '-'));
         _output.WriteLine($"followed: {pattern} ({samples.Length / Channels} frames in {elapsed.TotalSeconds:0.00} s, at most {most} stream at once)");
 
-        // Tone, then a second and more of silence, then the tone again.
-        Assert.Matches(@"#{5,}[-.]*\.{10,}[-.]*#{5,}", pattern);
+        // Tone, then a second and more of silence, then the tone again: each tone of a second heard over 8 blocks of 100 ms at
+        // least, one at each end being shared with the silence.
+        Assert.Matches(@"#{8,}[-.]*\.{10,}[-.]*#{8,}", pattern);
         Assert.All(others, level => Assert.True(level < 0.01, $"the other process is heard at {level:0.0000}: {pattern}"));
         Assert.Equal(1, most);
 
@@ -132,6 +135,99 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
         var frames = samples.Length / Channels;
         Assert.InRange(frames, (elapsed.TotalSeconds - 0.1) * Rate, (elapsed.TotalSeconds + 0.05) * Rate);
         Assert.Equal(0, recorder.Discontinuities);
+    }
+
+    [Fact]
+    public void The_application_is_recorded_again_when_the_output_it_plays_on_goes_away_while_it_plays()
+    {
+        // An output of its own, unloaded while the application plays on it, as a headset unplugged: the server moves the stream
+        // to another output, and the capture records it there, once.
+        const string Gone = "hindsound_app_gone";
+        var module = Pactl("load-module", "module-null-sink", "sink_name=" + Gone);
+        var unloaded = false;
+        try
+        {
+            var app = StartApp("hsappsix", $"paplay --device={Gone} '{Tone("long.wav", AppHz, 14)}'; true");
+            WaitFor(() => StreamsOn(Gone) >= 1, "the tone playing");
+            var log = new Log();
+            var recorder = new Recorder();
+            using var source = PulseAppCaptureSource.Open(app.Id, "hsappsix", new ProcProcessSnapshot(), log.Write);
+            source.PacketAvailable += recorder.OnPacket;
+            source.Start();
+            Thread.Sleep(OpeningGap);
+            WaitFor(() => source.RecordedStreams == 1, "the application recorded");
+
+            // PipeWire has no need of the streams that keep each output quick; PulseAudio has one on each of the three outputs.
+            var pacers = RecordingsOnServer(PulseAppCaptureSource.PaceName);
+            var server = Pactl("info").Split('\n').FirstOrDefault(line => line.StartsWith("Server Name", StringComparison.Ordinal));
+            _output.WriteLine($"{server}: {pacers} streams keeping an output quick");
+            if (server?.Contains("on PipeWire", StringComparison.Ordinal) == true)
+            {
+                Assert.Equal(0, pacers);
+            }
+            else
+            {
+                Assert.True(pacers >= 3, $"{pacers} streams keep an output quick under {server}");
+            }
+
+            Pactl("unload-module", module);
+            unloaded = true;
+
+            // Long enough for two tries again (one second, then two), then two seconds measured.
+            Thread.Sleep(4000);
+            var from = recorder.Frames;
+            Thread.Sleep(2000);
+            var levels = Blocks(recorder.Samples()[(from * Channels)..], AppHz);
+            var (held, recorded, onServer) = (source.HeldStreams, source.RecordedStreams, RecordingsOnServer(PulseAppCaptureSource.StreamName));
+            var playing = !app.HasExited;
+            source.Stop();
+
+            _output.WriteLine($"output gone: held={held} recorded={recorded} onServer={onServer} level={levels.DefaultIfEmpty().Min():0.000} to {levels.DefaultIfEmpty().Max():0.000}, log: {log}");
+            Assert.True(playing, "the application stopped playing too early to mean anything");
+            Assert.True(levels.Length >= 15, $"only {levels.Length} blocks measured");
+
+            // Each block at the tone's level, played at 0.5: never cut, and never two recordings of it added.
+            Assert.All(levels, level => Assert.InRange(level, 0.4, 0.6));
+            Assert.Equal(1, held);
+            Assert.Equal(1, recorded);
+            Assert.Equal(1, onServer);
+        }
+        finally
+        {
+            if (!unloaded)
+            {
+                Pactl("unload-module", module);
+            }
+        }
+    }
+
+    [Fact]
+    public void A_change_of_volume_of_a_stream_already_seen_does_not_read_the_processes_again()
+    {
+        var app = StartApp("hsappseven", $"{Play(Tone("app.wav", AppHz, 8))}; true");
+        WaitFor(() => StreamsOn(Sink) >= 1, "the tone playing");
+        var index = StreamOn(Sink);
+        var processes = new CountingSnapshot();
+        var log = new Log();
+        using var source = PulseAppCaptureSource.Open(app.Id, "hsappseven", processes, log.Write);
+        source.Start();
+        WaitFor(() => source.RecordedStreams == 1, "the application recorded");
+        Thread.Sleep(300);
+
+        var before = processes.Takes;
+        for (var change = 0; change < 20; change++)
+        {
+            Pactl("set-sink-input-volume", index, change % 2 == 0 ? "90%" : "100%");
+        }
+
+        Thread.Sleep(500);
+        var reads = processes.Takes - before;
+        source.Stop();
+
+        // Other tests may start a stream meanwhile, which reads it once: a few readings, not one for each change.
+        _output.WriteLine($"volume: {reads} readings of /proc for 20 changes of volume");
+        Assert.True(reads < 5, $"/proc read {reads} times for 20 changes of volume. Log: {log}");
+        Assert.Equal(1, source.RecordedStreams);
     }
 
     [Fact]
@@ -161,7 +257,7 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
 
         // The player starts a second after the opening has passed; its tone is in the mix less than half a second after that.
         var late = recorder.FirstToneSince(started) - TimeSpan.FromSeconds(1) - OpeningGap;
-        _output.WriteLine($"first sound: stream recorded {recorded?.TotalMilliseconds:0} ms, tone heard {late.TotalMilliseconds + 1000:0} ms after the opening");
+        _output.WriteLine($"first sound: stream recorded {recorded?.TotalMilliseconds:0} ms, tone heard {late.TotalMilliseconds:0} ms after the player started");
         Assert.True(late < TimeSpan.FromMilliseconds(500), $"the first sound came {late.TotalMilliseconds:0} ms after the player started (stream recorded at {recorded?.TotalMilliseconds:0} ms). Log: {log}");
     }
 
@@ -310,6 +406,20 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
             : Pactl("list", "short", "sink-inputs").Split('\n').Select(line => line.Split('\t')).Count(parts => parts.Length > 1 && parts[1] == index);
     }
 
+    // The recordings on the server named so, by their media.name: those of every client, this capture's among them.
+    private static int RecordingsOnServer(string name)
+    {
+        var line = $"media.name = \"{name}\"";
+        return Pactl("list", "source-outputs").Split('\n').Count(entry => entry.Trim() == line);
+    }
+
+    // The index of the first playback stream on an output.
+    private static string StreamOn(string sink)
+    {
+        var index = Pactl("list", "short", "sinks").Split('\n').Select(line => line.Split('\t')).First(parts => parts.Length > 1 && parts[1] == sink)[0];
+        return Pactl("list", "short", "sink-inputs").Split('\n').Select(line => line.Split('\t')).First(parts => parts.Length > 1 && parts[1] == index)[0];
+    }
+
     private static void WaitFor(Func<bool> condition, string what)
     {
         var clock = Stopwatch.StartNew();
@@ -352,6 +462,17 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
 
         public int Discontinuities { get; private set; }
 
+        public int Frames
+        {
+            get
+            {
+                lock (_samples)
+                {
+                    return _samples.Count / Channels;
+                }
+            }
+        }
+
         public void OnPacket(ReadOnlySpan<byte> buffer, PacketFlags flags, long devicePosition, long qpcPosition)
         {
             var samples = MemoryMarshal.Cast<byte, float>(buffer);
@@ -380,6 +501,21 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
             {
                 return [.. _samples];
             }
+        }
+    }
+
+    /// <summary>The processes of /proc, counting how many times they are read.</summary>
+    private sealed class CountingSnapshot : IProcessSnapshot
+    {
+        private readonly ProcProcessSnapshot _proc = new();
+        private int _takes;
+
+        public int Takes => Volatile.Read(ref _takes);
+
+        public IReadOnlyList<ProcessEntry> Take()
+        {
+            Interlocked.Increment(ref _takes);
+            return _proc.Take();
         }
     }
 

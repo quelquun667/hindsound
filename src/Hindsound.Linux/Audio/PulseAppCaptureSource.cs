@@ -21,7 +21,9 @@ namespace Hindsound.Linux.Audio;
 /// stream on its monitor that asks for a short delay, and whose sound is dropped: the output then renders a few milliseconds
 /// ahead. What it had rendered before is played first, so for about two seconds after the capture is opened a sound of the
 /// application may still be missed: that is the server's, and the capture does not wait for it. PipeWire has no need of the
-/// pacers: there it is one more stream on each output, which costs little.
+/// pacers, and would keep each output awake for them, which costs a laptop its battery: there the capture opens none. It knows
+/// PipeWire by the name its server gives itself, "PulseAudio (on PipeWire x.y.z)", asked once when it opens; an output's driver
+/// would say it too, but only through each output, while the name is one answer that never changes for a connection.
 /// </para>
 /// <para>
 /// The mix runs on a thread of its own, which is the audio thread the engine expects: it gives the engine the frames its clock
@@ -46,6 +48,14 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     /// <summary>The name of the stream on each output that keeps its delay short.</summary>
     public const string PaceName = "Short delay for the chosen application";
 
+    /// <summary>
+    /// How long a recording that failed waits before it is tried again, doubled at each try, and how many times it is: a
+    /// stream the server moves because its output went away (a headset unplugged) may refuse a recording for a moment.
+    /// </summary>
+    public const int RetryMilliseconds = 1000;
+
+    public const int MaxRetries = 4;
+
     private const int MaxChunkFrames = InternalFormat.SampleRate / 10;
 
     // PA_STREAM_CREATING.
@@ -58,6 +68,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     private readonly int _channels;
     private readonly PulseAppMixer _mixer;
     private readonly TaskCompletionSource<bool> _firstLook = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly Timer _retry;
     private GCHandle _self;
     private Thread? _thread;
     private int _started;
@@ -68,8 +79,11 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     private readonly Dictionary<PulseMonitorKey, Input> _inputs = [];
     private readonly HashSet<Input> _closing = [];
     private readonly Dictionary<uint, Input> _pacers = [];
+    private readonly Dictionary<uint, (int? ProcessId, string? Binary, bool Mine)> _owners = [];
     private StreamLook? _look;
     private bool _lookAgain;
+    private bool _serverKnown;
+    private bool _paced = true;
 
     private PulseAppCaptureSource(PulseConnection connection, int target, string? name, IProcessSnapshot processes, Action<string> log)
     {
@@ -81,6 +95,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         Format = PulseFormats.WaveFormatFor(AudioFlow.System);
         _channels = Format.Channels;
         _mixer = new PulseAppMixer(_channels, InternalFormat.SampleRate * PrimeMilliseconds / 1000, InternalFormat.SampleRate * MaxMilliseconds / 1000);
+        _retry = new Timer(_ => Retry());
     }
 
     public WaveFormat Format { get; }
@@ -188,6 +203,16 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         }
 
         _thread?.Join(TimeSpan.FromSeconds(2));
+
+        // A try again under way ends before the connection: it would take the lock of a loop that is gone.
+        using (var idle = new ManualResetEvent(false))
+        {
+            if (_retry.Dispose(idle))
+            {
+                idle.WaitOne(PulseConnection.Patience);
+            }
+        }
+
         _connection.Locked(() =>
         {
             foreach (var input in _inputs.Values.Concat(_pacers.Values).Concat(_closing).ToList())
@@ -275,6 +300,36 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
 
     private void OnLost() => Fail(new IOException("The sound server went away."));
 
+    // On a thread of the pool, once, when a recording that failed is due to be tried again: one more look does it.
+    private void Retry()
+    {
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            _connection.Locked(Look);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            _log("a recording of the application could not be tried again: " + exception.GetType().Name + ": " + exception.Message);
+        }
+    }
+
+    // How long a recording that failed still waits before it is tried again; null once it has had all its tries.
+    private static TimeSpan? WaitOf(Input input)
+    {
+        if (input.Tries >= MaxRetries)
+        {
+            return null;
+        }
+
+        var wait = TimeSpan.FromMilliseconds(RetryMilliseconds << input.Tries) - Stopwatch.GetElapsedTime(input.DeadAt);
+        return wait > TimeSpan.Zero ? wait : TimeSpan.Zero;
+    }
+
     private void OnEvent(uint eventType)
     {
         if (PulseAppRules.IsStreamChange(eventType))
@@ -299,7 +354,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         }
 
         _lookAgain = false;
-        var look = new StreamLook(Looked);
+        var look = new StreamLook(Looked, askServer: !_serverKnown);
         _look = look;
         look.Issue(_connection.Context);
     }
@@ -337,11 +392,26 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         }
     }
 
+    /// <summary>Whether a server that gives itself this name is PipeWire, through pipewire-pulse.</summary>
+    internal static bool IsPipeWire(string? serverName) =>
+        serverName is not null && serverName.StartsWith("PulseAudio (on PipeWire ", StringComparison.Ordinal);
+
     private void Follow(StreamLook look)
     {
-        Pace(look.Monitors);
-        var processes = _processes.Take();
-        var mine = PulseAppRules.StreamsOf(look.Streams, processes, _target, Environment.ProcessId);
+        if (look.AskedServer && !_serverKnown)
+        {
+            // A server that did not say its name is taken for PulseAudio: its outputs are kept quick, as they must be there.
+            _serverKnown = true;
+            _paced = !IsPipeWire(look.ServerName);
+            _log($"sound server: {look.ServerName ?? "(no name)"}, " + (_paced ? "each output kept quick" : "no output kept quick"));
+        }
+
+        if (_paced)
+        {
+            Pace(look.Monitors);
+        }
+
+        var mine = Mine(look.Streams);
         var (open, close) = PulseAppRules.Changes(_inputs.Keys, mine, look.Monitors);
         foreach (var key in close)
         {
@@ -349,12 +419,24 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
             _inputs.Remove(key);
         }
 
-        // A recording that failed keeps its place until its stream ends, without its stream.
-        foreach (var input in _inputs.Values)
+        // A recording that failed keeps its place until its stream ends, without its stream, and is tried again a few times
+        // while its stream lives, later each time.
+        foreach (var (key, input) in _inputs.ToList())
         {
             if (input.Dead)
             {
                 Release(input);
+                if (WaitOf(input) == TimeSpan.Zero)
+                {
+                    // PipeWire starts the recording of a stream it moves off an output that went away, then ends it as the
+                    // move settles, saying nothing: told here, as it is tried again.
+                    if (input.WasReady)
+                    {
+                        _log($"a recording of the application ended while its stream plays (try {input.Tries + 1} of {MaxRetries + 1}), recorded again");
+                    }
+
+                    _inputs[key] = OpenInput(key, look.Monitors[key.Sink], tries: input.Tries + 1);
+                }
             }
         }
 
@@ -362,10 +444,46 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         {
             _inputs[key] = OpenInput(key, monitor);
         }
+
+        // One look again when the next try is due: once, never in a loop.
+        TimeSpan? next = null;
+        foreach (var input in _inputs.Values.Concat(_pacers.Values))
+        {
+            if (input.Dead && WaitOf(input) is { } wait && (next is null || wait < next))
+            {
+                next = wait;
+            }
+        }
+
+        if (next is { } due)
+        {
+            _retry.Change(due + TimeSpan.FromMilliseconds(20), Timeout.InfiniteTimeSpan);
+        }
     }
 
-    // One pacer on each output, opened once; it goes with its output. One that failed is not opened again while its output is
-    // there, so that an output that refuses it costs one try, not one per look.
+    // The application's streams among those of a look. /proc is read again only when a stream is new, or now says another
+    // program plays it: a stream's process and its place in the tree of the application do not change while it lives, so a
+    // change of its volume, of its properties or of its output costs no reading.
+    private List<PulsePlaybackStream> Mine(List<PulsePlaybackStream> streams)
+    {
+        var known = streams.TrueForAll(stream => _owners.TryGetValue(stream.Index, out var seen)
+            && seen.ProcessId == stream.ProcessId
+            && string.Equals(seen.Binary, stream.Binary, StringComparison.Ordinal));
+        if (!known)
+        {
+            var mine = PulseAppRules.StreamsOf(streams, _processes.Take(), _target, Environment.ProcessId).Select(stream => stream.Index).ToHashSet();
+            _owners.Clear();
+            foreach (var stream in streams)
+            {
+                _owners[stream.Index] = (stream.ProcessId, stream.Binary, mine.Contains(stream.Index));
+            }
+        }
+
+        return streams.FindAll(stream => _owners[stream.Index].Mine);
+    }
+
+    // One pacer on each output; it goes with its output. One that failed is tried again a few times, later each time, so that
+    // an output that refuses it costs a few tries, not one per look.
     private void Pace(Dictionary<uint, string> monitors)
     {
         foreach (var sink in _pacers.Keys.Where(sink => !monitors.ContainsKey(sink)).ToList())
@@ -376,23 +494,33 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
 
         foreach (var (sink, monitor) in monitors)
         {
-            if (!_pacers.ContainsKey(sink))
+            if (!_pacers.TryGetValue(sink, out var pacer))
             {
                 _pacers[sink] = OpenInput(new PulseMonitorKey(uint.MaxValue, sink), monitor, pace: true);
+            }
+            else if (pacer.Dead && WaitOf(pacer) == TimeSpan.Zero)
+            {
+                if (pacer.WasReady)
+                {
+                    _log($"the short delay of an output ended while its output is there (try {pacer.Tries + 1} of {MaxRetries + 1}), kept again");
+                }
+
+                Release(pacer);
+                _pacers[sink] = OpenInput(pacer.Key, monitor, pace: true, tries: pacer.Tries + 1);
             }
         }
     }
 
-    private Input OpenInput(PulseMonitorKey key, string monitor, bool pace = false)
+    private Input OpenInput(PulseMonitorKey key, string monitor, bool pace = false, int tries = 0)
     {
-        var input = new Input(this, key) { Pace = pace };
+        var input = new Input(this, key) { Pace = pace, Tries = tries };
         var spec = PulseFormats.SampleSpecFor(AudioFlow.System);
         var context = _connection.Context;
         var stream = PulseNative.StreamNew(context, pace ? PaceName : StreamName, &spec, IntPtr.Zero);
         if (stream == IntPtr.Zero)
         {
-            input.Dead = true;
-            _log("a stream of the application could not be recorded: " + PulseNative.ErrorOf(context));
+            input.Die();
+            LogFailure(input, PulseNative.ErrorOf(context));
             return input;
         }
 
@@ -401,18 +529,18 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         var userData = GCHandle.ToIntPtr(input.Handle);
         PulseNative.StreamSetStateCallback(stream, (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, IntPtr, void>)&OnState, userData);
         PulseNative.StreamSetReadCallback(stream, (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, nuint, IntPtr, void>)&OnRead, userData);
-        if (!pace)
-        {
-            _mixer.Add(key);
-        }
-
         var attributes = PulseFormats.BufferAttrFor(AudioFlow.System);
         if ((!pace && PulseNative.StreamSetMonitorStream(stream, key.SinkInput) < 0)
             || PulseNative.StreamConnectRecord(stream, monitor, &attributes, PulseAppRules.RecordFlags) < 0)
         {
-            _log("a stream of the application could not be recorded: " + PulseNative.ErrorOf(context));
+            LogFailure(input, PulseNative.ErrorOf(context));
             Release(input);
-            input.Dead = true;
+            input.Die();
+        }
+        else if (!pace)
+        {
+            // Under the loop's lock: no packet can come before it is in the mix.
+            _mixer.Add(key);
         }
 
         return input;
@@ -423,7 +551,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     // itself once it is ready (OnState), unless <paramref name="now"/> says the connection closes anyway.
     private void Release(Input input, bool now = false)
     {
-        _mixer.Remove(input.Key);
+        Unmix(input);
         var stream = input.Stream;
         if (stream != IntPtr.Zero && !now && PulseNative.StreamGetState(stream) == StreamCreating)
         {
@@ -449,6 +577,23 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         if (input.Handle.IsAllocated)
         {
             input.Handle.Free();
+        }
+    }
+
+    private void LogFailure(Input input, string error)
+    {
+        var what = input.Pace ? "the short delay of an output could not be kept" : "a stream of the application could not be recorded";
+        var next = input.Tries < MaxRetries ? $", tried again in {RetryMilliseconds << input.Tries} ms" : ", not tried again";
+        _log($"{what} (try {input.Tries + 1} of {MaxRetries + 1}{next}): {error}");
+    }
+
+    // Takes a recording out of the mix, unless a newer recording of the same stream holds its place there now: one let go
+    // while it was being created ends later, and must not take the sound of the one opened after it.
+    private void Unmix(Input input)
+    {
+        if (!input.Pace && (!_inputs.TryGetValue(input.Key, out var current) || ReferenceEquals(current, input)))
+        {
+            _mixer.Remove(input.Key);
         }
     }
 
@@ -479,23 +624,29 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
                 return;
             }
 
-            if (input.Pace)
+            if (state == PulseNative.StreamReady)
             {
-                if (state is PulseNative.StreamFailed or PulseNative.StreamTerminated)
-                {
-                    input.Dead = true;
-                }
-
+                input.WasReady = true;
                 return;
             }
 
-            if (state is PulseNative.StreamFailed or PulseNative.StreamTerminated && !input.Dead)
+            if (state is not (PulseNative.StreamFailed or PulseNative.StreamTerminated) || input.Dead)
             {
-                // PulseAudio ends it when the application's stream ends or moves: the next look lets it go, or records it again.
-                input.Dead = true;
-                input.Owner._mixer.Remove(input.Key);
-                input.Owner.Look();
+                return;
             }
+
+            // PulseAudio ends a recording when the application's stream ends or moves, and a pacer when its output goes away,
+            // which is no failure: the next look lets it go, or records the stream on its new output. One that never started
+            // failed, and is told; the next look tries it again later while its stream or its output lives.
+            var owner = input.Owner;
+            if (!input.WasReady)
+            {
+                owner.LogFailure(input, PulseNative.ErrorOf(owner._connection.Context));
+            }
+
+            input.Die();
+            owner.Unmix(input);
+            owner.Look();
         }
         catch (Exception)
         {
@@ -545,6 +696,34 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnServer(IntPtr context, IntPtr info, IntPtr userData)
+    {
+        StreamLook? look = null;
+        try
+        {
+            look = (StreamLook)GCHandle.FromIntPtr(userData).Target!;
+            if (info != IntPtr.Zero)
+            {
+                look.ServerName = PulseNative.Text(((PaServerInfo*)info)->ServerName);
+            }
+        }
+        catch (Exception)
+        {
+            // No name: the server is taken for PulseAudio.
+        }
+
+        try
+        {
+            // A name missing fails nothing: the look still has its streams.
+            look?.PartDone(true);
+        }
+        catch (Exception)
+        {
+            // The look's end is the source's to handle; nothing may leave a callback.
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnSinkInput(IntPtr context, IntPtr info, int endOfList, IntPtr userData)
     {
         try
@@ -578,15 +757,23 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     {
         private readonly Action<StreamLook> _done;
         private GCHandle _handle;
-        private int _left = 2;
+        private int _left;
 
-        public StreamLook(Action<StreamLook> done)
+        /// <param name="askServer">Whether to ask the server's name too.</param>
+        public StreamLook(Action<StreamLook> done, bool askServer = false)
         {
             _done = done;
+            AskedServer = askServer;
+            _left = askServer ? 3 : 2;
             _handle = GCHandle.Alloc(this);
         }
 
         public bool Failed { get; private set; }
+
+        public bool AskedServer { get; }
+
+        /// <summary>The name the server gives itself, if it was asked and said it.</summary>
+        public string? ServerName { get; set; }
 
         public Dictionary<uint, string> Monitors { get; } = [];
 
@@ -600,10 +787,17 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
             {
                 PulseNative.ContextGetSinkInfoList(context, (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, IntPtr, int, IntPtr, void>)&OnSink, userData),
                 PulseNative.ContextGetSinkInputInfoList(context, (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, IntPtr, int, IntPtr, void>)&OnSinkInput, userData),
+                AskedServer ? PulseNative.ContextGetServerInfo(context, (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, IntPtr, IntPtr, void>)&OnServer, userData) : -1,
             };
 
             foreach (var operation in operations)
             {
+                // -1: not asked.
+                if (operation == -1)
+                {
+                    continue;
+                }
+
                 // A call the server refused will never answer: it counts as answered, and failed.
                 if (operation == IntPtr.Zero)
                 {
@@ -644,13 +838,28 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
 
         public GCHandle Handle;
 
-        public bool Dead { get; set; }
+        public bool Dead { get; private set; }
+
+        /// <summary>When it failed, by <see cref="Stopwatch.GetTimestamp"/>.</summary>
+        public long DeadAt { get; private set; }
+
+        /// <summary>How many times it was tried before this one.</summary>
+        public int Tries { get; init; }
+
+        /// <summary>Whether the server started it: one that ends after that has not failed to start.</summary>
+        public bool WasReady { get; set; }
 
         /// <summary>Let go while it was being created: it closes itself once the server answers.</summary>
         public bool Closing { get; set; }
 
         /// <summary>The stream that keeps an output's delay short: its sound is dropped.</summary>
         public bool Pace { get; init; }
+
+        public void Die()
+        {
+            Dead = true;
+            DeadAt = Stopwatch.GetTimestamp();
+        }
 
         public void ReadAll(IntPtr stream)
         {
