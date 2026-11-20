@@ -58,6 +58,23 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     private StreamLook? _look;
     private bool _lookAgain;
 
+    // DIAG: lines for the CI, to a file named by HINDSOUND_APP_TRACE.
+    private static readonly string? DiagPath = Environment.GetEnvironmentVariable("HINDSOUND_APP_TRACE");
+    private static readonly Stopwatch DiagClock = Stopwatch.StartNew();
+
+    internal static void Diag(string line)
+    {
+        if (DiagPath is null)
+        {
+            return;
+        }
+
+        lock (DiagClock)
+        {
+            File.AppendAllText(DiagPath, $"{DiagClock.ElapsedMilliseconds,7} {line}\n");
+        }
+    }
+
     private PulseAppCaptureSource(PulseConnection connection, int target, string? name, IProcessSnapshot processes, Action<string> log)
     {
         _connection = connection;
@@ -247,6 +264,11 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
                     var heard = _mixer.Mix(samples);
                     var flags = heard ? PulseFormats.FlagsOf(hole: false) : PulseFormats.FlagsOf(hole: true);
                     PacketAvailable?.Invoke(MemoryMarshal.AsBytes(samples), flags, given, 0);
+                    if ((given + frames) / InternalFormat.SampleRate != given / InternalFormat.SampleRate)
+                    {
+                        Diag($"mix {given + frames}: {_mixer.DiagCounters()}");
+                    }
+
                     given += frames;
                     due -= frames;
                 }
@@ -369,6 +391,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         PulseNative.StreamSetReadCallback(stream, (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, nuint, IntPtr, void>)&OnRead, userData);
         _mixer.Add(key);
         var attributes = PulseFormats.BufferAttrFor(AudioFlow.System);
+        Diag($"open sink input {key.SinkInput} on {monitor}, fragsize {attributes.FragmentSize}");
         if (PulseNative.StreamSetMonitorStream(stream, key.SinkInput) < 0
             || PulseNative.StreamConnectRecord(stream, monitor, &attributes, PulseAppRules.RecordFlags) < 0)
         {
@@ -427,6 +450,8 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
             }
 
             var state = PulseNative.StreamGetState(stream);
+            var granted = state == PulseNative.StreamReady ? PulseNative.StreamGetBufferAttr(stream) : null;
+            Diag($"stream {input.Key.SinkInput} state {state} closing {input.Closing}" + (granted is null ? "" : $" maxlength {granted->MaxLength} fragsize {granted->FragmentSize}"));
             if (input.Closing)
             {
                 if (state == PulseNative.StreamReady)
@@ -601,9 +626,34 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         /// <summary>Let go while it was being created: it closes itself once the server answers.</summary>
         public bool Closing { get; set; }
 
+        // DIAG
+        private long _diagBytes;
+        private int _diagChunks;
+        private int _diagHoles;
+        private int _diagMin = int.MaxValue;
+        private int _diagMax;
+        private long _diagSince = -1;
+        private long _diagTotal;
+
         public void ReadAll(IntPtr stream)
         {
             var mixer = Owner._mixer;
+            var now = DiagClock.ElapsedMilliseconds;
+            if (_diagSince < 0)
+            {
+                _diagSince = now;
+            }
+            else if (now - _diagSince >= 1000)
+            {
+                Diag($"read {Key.SinkInput}: {_diagBytes / (Owner._channels * sizeof(float))} frames in {now - _diagSince} ms, total {_diagTotal / (Owner._channels * sizeof(float))}, {_diagChunks} chunks of {_diagMin}..{_diagMax} bytes, {_diagHoles} holes, readable {PulseNative.StreamReadableSize(stream)}");
+                _diagSince = now;
+                _diagBytes = 0;
+                _diagChunks = 0;
+                _diagHoles = 0;
+                _diagMin = int.MaxValue;
+                _diagMax = 0;
+            }
+
             var frameBytes = Owner._channels * sizeof(float);
             while (true)
             {
@@ -615,6 +665,16 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
                 }
 
                 var bytes = (int)length;
+                _diagBytes += bytes;
+                _diagTotal += bytes;
+                _diagChunks++;
+                _diagMin = Math.Min(_diagMin, bytes);
+                _diagMax = Math.Max(_diagMax, bytes);
+                if (data == IntPtr.Zero)
+                {
+                    _diagHoles++;
+                }
+
                 if (data == IntPtr.Zero)
                 {
                     // A hole: the server has no data for this stretch.

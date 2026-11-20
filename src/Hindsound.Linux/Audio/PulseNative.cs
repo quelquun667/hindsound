@@ -92,6 +92,9 @@ internal static unsafe partial class PulseNative
     [LibraryImport(Library, EntryPoint = "pa_stream_set_monitor_stream")]
     public static partial int StreamSetMonitorStream(IntPtr stream, uint sinkInputIndex);
 
+    [LibraryImport(Library, EntryPoint = "pa_stream_get_buffer_attr")]
+    public static partial PaBufferAttr* StreamGetBufferAttr(IntPtr stream);
+
     [LibraryImport(Library, EntryPoint = "pa_context_set_subscribe_callback")]
     public static partial void ContextSetSubscribeCallback(IntPtr context, IntPtr callback, IntPtr userData);
 

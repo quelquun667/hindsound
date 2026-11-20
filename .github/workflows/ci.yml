@@ -241,9 +241,12 @@ jobs:
             pactl info | grep -E "Server (Name|Version)"
             pactl load-module module-null-sink sink_name=hindsound_null
             pactl set-default-sink hindsound_null
+            bash .github/diag/app-probe.sh || true
+            export HINDSOUND_APP_TRACE="$RUNNER_TEMP/app-trace.log"
             dotnet test tests/Hindsound.Linux.Tests/Hindsound.Linux.Tests.csproj -c Release --no-build \
               --filter "FullyQualifiedName~PulseAppCaptureOnLinuxTests" --logger "console;verbosity=detailed" \
-              || { tail -n 60 "$SERVER_LOGS"/*.log; exit 1; }
+              || { tail -n 60 "$SERVER_LOGS"/*.log; sed "s/^/TRACE /" "$HINDSOUND_APP_TRACE"; exit 1; }
+            sed "s/^/TRACE /" "$HINDSOUND_APP_TRACE"
           '
 
   # Until a release builds them, the files of the rehearsal below carry the version of the latest release in the changelog.
