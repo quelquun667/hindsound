@@ -471,6 +471,7 @@ try {
         $null = Invoke-Assemble $root
         Join-Path $root 'release'
     }
+    Assert-Accepted 'the files of both jobs gather' { $null = Invoke-Assemble (New-JobFiles) }
     $releaseFiles = New-ReleaseFiles
     $fakeLameSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $releaseFiles 'lame-3.100.tar.gz')).Hash.ToLowerInvariant()
     $fakeFuseSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $releaseFiles 'fuse-3.15.0.tar.xz')).Hash.ToLowerInvariant()
@@ -609,6 +610,7 @@ try {
     $damagedBytes[0] = $damagedBytes[0] -bxor 0xFF
     [IO.File]::WriteAllBytes($damaged, $damagedBytes)
     Assert-Refused 'a Setup of the same size with other bytes refused' { Test-ReleaseFiles $releaseFiles } 'the SHA-256'
+    Assert-Refused 'a Setup of the same size with other bytes refused by the manifest, not only by SHA256SUMS' { Test-ReleaseFiles $releaseFiles } 'and the Setup there has'
     foreach ($announceName in 'hindsound-update-linux-x64.json', 'hindsound-update-win-x64-portable.json') {
         $releaseFiles = New-ReleaseFiles
         & $writeAnnounce -Version '1.2.3' -Repository 'other/name' -OutFile (Join-Path $releaseFiles $announceName)
@@ -1075,10 +1077,11 @@ try {
     Report 'the fonts are checked against the pins of fetch-fonts.sh' ($filesText -cmatch '- name: Check the fonts of the window\n\s+run: bash tools/linux/fetch-fonts\.sh --check "\$RUNNER_TEMP/fonts"\n')
     Report 'the packages are made from the window library and the fonts that were checked' ($filesText -cmatch '- name: Make the AppImage and the tar\.gz\n\s+run: >-\n[^\n]+\n\s+"\$RUNNER_TEMP/sdl3/libSDL3\.so\.0" "\$RUNNER_TEMP/fonts" ')
     Report 'the .deb is made by build-deb.sh from the inputs of the other packages, twice to the same bytes, then checked by check-deb.sh' ($filesText -cmatch '- name: Make the \.deb\n\s+run: \|\n\s+bash packaging/linux/build-deb\.sh "\$RUNNER_TEMP/hindsound-linux-x64" "\$RUNNER_TEMP/lame/libmp3lame\.so\.0" "\$RUNNER_TEMP/sdl3/libSDL3\.so\.0" "\$RUNNER_TEMP/fonts" "\$HINDSOUND_VERSION" "\$RUNNER_TEMP/packages"\n\s+bash packaging/linux/build-deb\.sh [^\n]+ "\$RUNNER_TEMP/deb-again"\n\s+cmp -- [^\n]+\n[^\n]+sha256sum --check --strict SHA256SUMS\)\n' -and $filesText -cmatch '- name: Check the \.deb\n\s+run: \|\n\s+sudo apt-get install -y --no-install-recommends lintian\n\s+bash packaging/linux/check-deb\.sh "\$RUNNER_TEMP/packages" "\$HINDSOUND_VERSION"\n')
-    Report 'the .deb is installed, run and removed in clean Ubuntu 22.04, Ubuntu 24.04 and Debian 12' ($filesText -cmatch "\n  deb:\n    needs: linux\n    runs-on: ubuntu-24\.04\n    timeout-minutes: \d+\n    strategy:\n      fail-fast: false\n      matrix:\n        image: \['ubuntu:22\.04', 'ubuntu:24\.04', 'debian:12'\]\n    container:\n      image: \`$\{\{ matrix\.image \}\}\n" -and $filesText -cmatch '- name: Install, run and remove the \.deb\n\s+run: bash packaging/linux/try-deb\.sh linux-files "\$HINDSOUND_VERSION"\n')
+    Report 'the .deb is installed, run and removed in clean Ubuntu 22.04, Ubuntu 24.04, Debian 12 and Debian 13' ($filesText -cmatch "\n  deb:\n    needs: linux\n    runs-on: ubuntu-24\.04\n    timeout-minutes: \d+\n    strategy:\n      fail-fast: false\n      matrix:\n        image: \['ubuntu:22\.04', 'ubuntu:24\.04', 'debian:12', 'debian:13'\]\n    container:\n      image: \`$\{\{ matrix\.image \}\}\n" -and $filesText -cmatch '- name: Install, run and remove the \.deb\n\s+run: bash packaging/linux/try-deb\.sh linux-files "\$HINDSOUND_VERSION"\n')
     Report 'release-files has no cache of the window library or the fonts' (-not ($filesText -match 'actions/cache|cache-hit'))
     Report 'the tests the proof of the encoding runs are built first' ($filesText -cmatch '- name: Build the tests\n\s+run: dotnet build tests/Hindsound\.Tests/Hindsound\.Tests\.csproj -c Release\n')
     Report 'the compiled DLL replaces the one in the published folder' ($filesText -cmatch '- name: Replace the DLL in the published folder\n\s+run: Copy-Item -LiteralPath "\$env:RUNNER_TEMP/lame/libmp3lame\.64\.dll" -Destination "\$env:RUNNER_TEMP/publish/libmp3lame\.64\.dll" -Force')
+    Report 'the LAME source is copied into the files of the Windows job, and into the packages of the Linux job' (($filesText -cmatch '- name: Add the LAME source\n\s+run: Copy-Item -LiteralPath "\$env:RUNNER_TEMP/lame/lame-3\.100\.tar\.gz" -Destination "\$env:RUNNER_TEMP/out/lame-3\.100\.tar\.gz"\n') -and ($filesText -cmatch '- name: Add the LAME source\n\s+run: cp -- "\$RUNNER_TEMP/lame-work/lame-3\.100\.tar\.gz" "\$RUNNER_TEMP/packages/"\n'))
     Report 'the zip is made from the folder the Setup is built from' (($filesText -cmatch '"/DPublishDir=\$env:RUNNER_TEMP/publish"') -and ($filesText -cmatch 'build-portable-zip\.ps1 -PublishDir "\$env:RUNNER_TEMP/publish" '))
     Report 'the lame workflow builds and proves' (($lameText -cmatch '\./tools/release/build-lame\.ps1 ') -and ($lameText -cmatch '\./tools/release/prove-encoding\.ps1 '))
     Report 'the release sees all the tags'($releaseText -match '(?m)^\s+fetch-depth: 0$')
@@ -1119,6 +1122,7 @@ try {
     Report 'a published release is refused' ($releaseText.Contains('if ($isDraft -eq ''false'') { throw "$env:TAG is already published." }'))
     Report 'a draft is reused' ($releaseText.Contains('if ($isDraft -eq ''true'') {'))
     Report 'the token stays out of git' ($releaseText -match '(?m)^\s+persist-credentials: false$')
+    Report 'every checkout of release.yml keeps the token out of git' (([regex]::Matches($releaseText, 'uses: actions/checkout@')).Count -eq ([regex]::Matches($releaseText, '(?m)^\s+persist-credentials: false$')).Count)
     Report 'the workflow starts with no permission' ($releaseText -match '(?m)^permissions: \{\}$')
     Report 'the version comes from check-tag' ($releaseText.Contains('"VERSION=$version" >> $env:GITHUB_ENV') -and $releaseText.Contains('"version=$version" >> $env:GITHUB_OUTPUT') -and $releaseText.Contains('version: ${{ steps.tag.outputs.version }}'))
     Report 'the releases run one at a time, none cancelled' ($releaseText -cmatch '(?m)^concurrency:\n  group: release\n  cancel-in-progress: false$')

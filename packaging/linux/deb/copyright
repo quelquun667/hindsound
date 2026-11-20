@@ -3,8 +3,9 @@ Upstream-Name: Hindsound
 Upstream-Contact: https://github.com/quelquun667/hindsound/issues
 Source: https://github.com/quelquun667/hindsound
 Comment: The licence texts of every component, unchanged, are in /usr/share/doc/hindsound/licenses, and
- /usr/share/doc/hindsound/THIRD-PARTY-NOTICES.md says where each one comes from. This package carries the components
- of the Linux app only: those of the Windows build and of the runtime of the AppImage are not in it.
+ /usr/share/doc/hindsound/THIRD-PARTY-NOTICES.md says where each one comes from. They are the texts of the tar.gz, and
+ cover the components of the other packages of the release too (the Windows build, the runtime of the AppImage): the
+ components of this package are the files named in the paragraphs below.
 
 Files: *
 Copyright: 2026 quelquun667

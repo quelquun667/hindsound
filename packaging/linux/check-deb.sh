@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Checks the package made by build-deb.sh on the machine that built it: its fields, the exact list of its files with
+# Checks the package made by build-deb.sh on the machine that built it: its fields, exactly (no other field, each value as
+# deb/control.sh gives it, the installed size worked out again from its files), the exact list of its files with
 # their owners and modes, that it carries the program, the libraries and the fonts of the tar.gz, what its ELF files link
 # against its Depends, and lintian, which must find no error and no warning that packaging/linux/deb/lintian-overrides
 # does not explain. try-deb.sh then installs it in clean systems.
@@ -19,32 +20,14 @@ fail() {
 [ $# -eq 2 ] || fail "usage: check-deb.sh <out folder> <version>"
 out=$(realpath -e -- "$1") || fail "no folder at $1"
 version=$2
-[[ $version =~ ^([0-9]+\.[0-9]+\.[0-9]+)(-([0-9A-Za-z.-]+))?$ ]] || fail "not a version: $version"
-debian_version=${BASH_REMATCH[1]}
-if [ -n "${BASH_REMATCH[3]}" ]; then
-    debian_version+="~${BASH_REMATCH[3]//-/.}"
-fi
-deb="$out/hindsound_${debian_version}_amd64.deb"
+[[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "not a version X.Y.Z: $version"
+deb="$out/hindsound_${version}_amd64.deb"
 [ -f "$deb" ] || fail "missing: $deb"
-repo=$(realpath -e -- "$(dirname -- "$(realpath -e -- "$0")")/../..")
+here=$(dirname -- "$(realpath -e -- "$0")")
+repo=$(realpath -e -- "$here/../..")
+. "$here/deb/control.sh"
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
-
-field() {
-    local name=$1 expected=$2 actual
-    actual=$(dpkg-deb --field "$deb" "$name")
-    [ "$actual" = "$expected" ] || fail "the field $name is '$actual', expected '$expected'"
-}
-field Package hindsound
-field Version "$debian_version"
-field Architecture amd64
-field Maintainer "Quelqu'un <87375238+quelquun667@users.noreply.github.com>"
-field Depends 'libc6 (>= 2.34), libgcc-s1, libstdc++6, libssl3 | libssl3t64, libpulse0, libfreetype6, libharfbuzz0b, libfontconfig1'
-field Recommends 'wl-clipboard | xclip | xsel'
-field Section sound
-field Priority optional
-[ -z "$(dpkg-deb --field "$deb" Pre-Depends Suggests Conflicts Breaks Provides Replaces Essential)" ] \
-    || fail "the package has a field it should not have"
 
 # No maintainer script: the triggers of desktop-file-utils and hicolor-icon-theme update the caches.
 dpkg-deb --ctrl-tarfile "$deb" | tar --list | sed -e 's|^\./||' -e '/^$/d' | LC_ALL=C sort > "$work/control"
@@ -72,7 +55,7 @@ diff -u "$work/control-expected" "$work/control" || fail "the control part holds
         echo "-rw-r--r-- root/root ./usr/lib/hindsound/fonts/$font"
     done
     echo "-rw-r--r-- root/root ./usr/share/applications/$APP_ID.desktop"
-    for file in copyright changelog.Debian.gz LICENSE THIRD-PARTY-NOTICES.md; do
+    for file in copyright changelog.gz LICENSE THIRD-PARTY-NOTICES.md; do
         echo "-rw-r--r-- root/root ./usr/share/doc/hindsound/$file"
     done
     for file in "$repo"/licenses/*.txt; do
@@ -95,6 +78,12 @@ dates=$(awk '{ print $4, $5 }' "$work/contents" | sort -u)
 mkdir -p -- "$work/root" "$work/tar"
 dpkg-deb --extract "$deb" "$work/root"
 lib="$work/root/usr/lib/hindsound"
+
+# The fields: exactly those of deb/control.sh, in that order, with the version, and the installed size worked out again
+# from the files of the package. A field more, a field less or another value shows in the difference.
+control_text "$version" "$(installed_size "$work/root")" > "$work/control-expected-fields"
+dpkg-deb --field "$deb" > "$work/control-fields"
+diff -u "$work/control-expected-fields" "$work/control-fields" || fail "the fields of the package are not the expected ones (-: expected, +: in the package)"
 tar --extract --gzip --file "$out/hindsound-$version-linux-x64.tar.gz" --directory "$work/tar"
 folder="$work/tar/hindsound-$version-linux-x64"
 for file in hindsound libmp3lame.so.0 libSDL3.so.0; do
@@ -126,11 +115,11 @@ glibc=$(for elf in "$lib/hindsound" "$lib/libmp3lame.so.0" "$lib/libSDL3.so.0"; 
 dpkg --compare-versions "$glibc" le 2.34 || fail "the files ask for GLIBC_$glibc, above the libc6 (>= 2.34) of Depends"
 echo "check-deb: the newest symbol of the C library asked for is GLIBC_$glibc"
 
-# The copyright file is machine-readable, and changelog.Debian.gz starts with this version.
+# The copyright file is machine-readable, and changelog.gz starts with this version.
 grep -q -x -F 'Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/' -- "$work/root/usr/share/doc/hindsound/copyright" \
     || fail "the copyright file is not in the DEP-5 format"
-zcat -- "$work/root/usr/share/doc/hindsound/changelog.Debian.gz" | head -n 1 | grep -q -x -F "hindsound ($debian_version) unstable; urgency=medium" \
-    || fail "changelog.Debian.gz does not start with the entry of $debian_version"
+zcat -- "$work/root/usr/share/doc/hindsound/changelog.gz" | head -n 1 | grep -q -x -F "hindsound ($version) unstable; urgency=medium" \
+    || fail "changelog.gz does not start with the entry of $version"
 
 # lintian: no error, and no warning that the overrides do not explain. The notes below the warnings are shown, not counted.
 lintian --version

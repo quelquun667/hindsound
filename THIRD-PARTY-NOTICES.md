@@ -2,7 +2,7 @@
 
 Hindsound itself is under the MIT licence: see [LICENSE](LICENSE).
 
-Hindsound contains or ships the components below. The last column, "In", says whether a component is in the Windows build, in the Linux packages (the AppImage and the tar.gz), or in both; it comes from the files of each trimmed publish, listed on 2026-11-10, and from what build-packages.sh adds to it for the Linux packages: `libmp3lame.so.0`, `libSDL3.so.0` and the four fonts of the window in both, and the runtime at the head of the AppImage, with the libraries built into it. The Windows build comes as the Setup and as the portable zip: a Windows component is in both, except Inno Setup, in the Setup only (the portable zip has no `unins000.exe`). Every file in [licenses/](licenses) is an unchanged copy of the upstream text; the table says where each one comes from. The texts of the AppImage runtime, of the libraries built into it, of SDL, of the fonts, and of Tmds.DBus.Protocol and NLayer, which only the Linux app references, are in [licenses/linux/](licenses/linux), which only the Linux packages carry: the Setup and the portable zip take the files at the top of [licenses/](licenses) only. This document records what the project checked on 2026-11-06, 2026-11-07, 2026-11-10 and 2026-11-18. It is not legal advice.
+Hindsound contains or ships the components below. The last column, "In", says whether a component is in the Windows build, in the Linux packages (the AppImage, the tar.gz and the .deb), or in both; it comes from the files of each trimmed publish, listed on 2026-11-10, and from what build-packages.sh adds to it for the Linux packages: `libmp3lame.so.0`, `libSDL3.so.0` and the four fonts of the window in all three, and the runtime at the head of the AppImage (the .deb has none), with the libraries built into it. The Windows build comes as the Setup and as the portable zip: a Windows component is in both, except Inno Setup, in the Setup only (the portable zip has no `unins000.exe`). Every file in [licenses/](licenses) is an unchanged copy of the upstream text; the table says where each one comes from. The texts of the AppImage runtime, of the libraries built into it, of SDL, of the fonts, and of Tmds.DBus.Protocol and NLayer, which only the Linux app references, are in [licenses/linux/](licenses/linux), which only the Linux packages carry: the Setup and the portable zip take the files at the top of [licenses/](licenses) only. This document records what the project checked on 2026-11-06, 2026-11-07, 2026-11-10 and 2026-11-18. It is not legal advice.
 
 | Component | Version | Licence | Copyright | Text | Copied from | In |
 |---|---|---|---|---|---|---|
@@ -76,7 +76,7 @@ The exact source of what is in the runtime:
 What section 6 of the licence asks of whoever distributes such a program (read in [libfuse-LGPL2.txt](licenses/linux/libfuse-LGPL2.txt)):
 
 - the terms of the program must permit modification for the user's own use and reverse engineering for debugging such modifications: the runtime's MIT licence does;
-- each copy must give prominent notice that the library is used in it and is covered by the licence, with a copy of the licence: this document and [licenses/](licenses), which both Linux packages carry;
+- each copy must give prominent notice that the library is used in it and is covered by the licence, with a copy of the licence: this document and [licenses/](licenses), which all three Linux packages carry;
 - and one of these: (a) the complete source of the library, with its changes, travels with the program, along with the program as object code or source, so that the user can change the library and relink; (c) a written offer, valid for at least three years, to give the same materials; (d) when the program is distributed by offering access to copy it from a designated place, the same materials can be copied from that same place; (e) the user has already received them. Point (b), a shared library, does not apply to a static program.
 
 Every release that hands out the AppImage attaches, next to it, as it attaches LAME's source, three files:
@@ -114,7 +114,7 @@ software is freely granted, provided that this notice
 is preserved.
 ```
 
-To use your own build of SDL 3, put it in the folder of the program as `libSDL3.so.0` (in the tar.gz; an AppImage is read-only), or remove the shipped one so that the system's copy is used.
+To use your own build of SDL 3, put it in the folder of the program as `libSDL3.so.0` (in the tar.gz; an AppImage is read-only; the folder of the .deb is `/usr/lib/hindsound`, which `apt` owns and refills at each install of the package), or remove the shipped one so that the system's copy is used.
 
 ### The fonts
 
@@ -124,7 +124,7 @@ Four TrueType files, unchanged and only renamed, in the folder `fonts` next to t
 - `CascadiaMono-Regular.ttf` is `ttf/static/CascadiaMono-Regular.ttf` of `CascadiaCode-2407.24.zip`, the asset of the release `v2407.24` of [microsoft/cascadia-code](https://github.com/microsoft/cascadia-code), SHA-256 `e67a68ee3386db63f48b9054bd196ea752bc6a4ebb4df35adce6733da50c8474`, the one the Homebrew casks `font-cascadia-mono` and `font-cascadia-code` publish for the same URL.
 - `BarlowSemiCondensed-SemiBold.ttf` is `fonts/ttf/BarlowSemiCondensed-SemiBold.ttf` of [jpt/barlow](https://github.com/jpt/barlow) at the commit of the tag `1.422`, `697600fcece1685b0ba409eb82868546def9a84e`; that release has no asset. The file is checked against its git blob id in that commit, `bac233a9249fc0e33ce5140e52723fce5bf601f4`, and its size, 168,500 bytes.
 
-The SIL Open Font License 1.1 lets the fonts be bundled with software and redistributed, provided that each copy carries the copyright notice and the licence, and that no font is sold by itself. Each text is in [licenses/linux/](licenses/linux), which both Linux packages carry. The fonts are not modified, so their Reserved Font Names do not come into play.
+The SIL Open Font License 1.1 lets the fonts be bundled with software and redistributed, provided that each copy carries the copyright notice and the licence, and that no font is sold by itself. Each text is in [licenses/linux/](licenses/linux), which all three Linux packages carry. The fonts are not modified, so their Reserved Font Names do not come into play.
 
 ### What the window takes from the system
 
@@ -193,13 +193,13 @@ What is not established about it:
 
 ### On Linux
 
-The Linux build (the AppImage and the tar.gz the CI makes) ships LAME as `libmp3lame.so.0`, a separate shared library next to the `hindsound` program, under the same licence.
+The Linux build (the AppImage, the tar.gz and the .deb the CI makes) ships LAME as `libmp3lame.so.0`, a separate shared library next to the `hindsound` program, under the same licence.
 
 - It is compiled by [tools/release/build-lame-linux.sh](tools/release/build-lame-linux.sh) from the same `lame-3.100.tar.gz`, after the same SHA-256 check, with the archive's own `configure` and no file changed: the script fails if the build changes one.
-- Hindsound looks for it first in the folder of the program, then asks the system for `libmp3lame.so.0`. To use your own build, put it in that folder under that name (in the tar.gz; an AppImage is read-only), or remove the shipped one so that the system's copy is used.
-- Both packages carry this document and [licenses/](licenses).
-- The CI artifact that holds the packages (`hindsound-linux-x64`) also holds that `lame-3.100.tar.gz`, unchanged, the archive the library of those packages was built from.
-- What has run: the CI builds it, then [packaging/linux/check-packages.sh](packaging/linux/check-packages.sh) starts the program of each package with `--prove-mp3`, which writes an MP3 through the `libmp3lame.so.0` of that package, and the dynamic loader (`LD_DEBUG=libs`) shows that file was the one loaded. Both packages passed it on 2026-11-11, on an `ubuntu-22.04` runner of GitHub, in the CI run 42931513159. It has not run on a Linux desktop yet.
+- Hindsound looks for it first in the folder of the program, then asks the system for `libmp3lame.so.0`. To use your own build, put it in that folder under that name (in the tar.gz; an AppImage is read-only; the folder of the .deb is `/usr/lib/hindsound`, which `apt` owns and refills at each install of the package), or remove the shipped one so that the system's copy is used.
+- All three packages carry this document and [licenses/](licenses); the .deb has them in `/usr/share/doc/hindsound`.
+- The CI artifact that holds the packages (`hindsound-linux-x64`) also holds that `lame-3.100.tar.gz`, unchanged, the archive the library of those packages was built from, and each release attaches it next to the .deb.
+- What has run: the CI builds it, then [packaging/linux/check-packages.sh](packaging/linux/check-packages.sh) starts the program of each package with `--prove-mp3`, which writes an MP3 through the `libmp3lame.so.0` of that package, and the dynamic loader (`LD_DEBUG=libs`) shows that file was the one loaded. Both packages passed it on 2026-11-11, on an `ubuntu-22.04` runner of GitHub, in the CI run 42931513159. [packaging/linux/try-deb.sh](packaging/linux/try-deb.sh) does the same for the .deb: it installs the package with `apt` in clean containers, starts `/usr/bin/hindsound --prove-mp3`, and the same trace shows that the file of `/usr/lib/hindsound` was the one loaded. It has not run on a Linux desktop yet.
 
 ### The decoder inside the DLL
 

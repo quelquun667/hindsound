@@ -5,12 +5,24 @@
 #                   libmp3lame.so.0 of /usr/lib/hindsound, the folder of the real program, not of the link;
 #   --dump-settings draws the 80 pages of the window off screen, with the libSDL3.so.0 and the fonts of /usr/lib/hindsound,
 #                   and the FreeType, HarfBuzz and fontconfig that Depends brought.
+# Before that, each library the code loads by name must be found on the system, and come from a package of Depends.
 # Then apt-get remove, and nothing of the package may stay in /usr.
 #
 # Usage: try-deb.sh <folder holding the .deb> <version>
 set -euo pipefail
 
 readonly PAGES=80
+# The libraries that the program loads by name from the system, which Depends must bring: each must be found by the loader
+# (ldconfig -p) and belong to a package of Depends or to one of its alternatives. Written here from the code, to be kept in
+# step with it:
+#   libpulse.so.0      src/Hindsound.Linux/Audio/PulseNative.cs
+#   libfreetype.so.6, libharfbuzz.so.0, libfontconfig.so.1   src/Hindsound.Linux/Window/Text/TextNative.cs
+#   libc.so.6          src/Hindsound.Linux/Desktop/LinuxTrashFileSystem.cs, src/Hindsound.Linux/Input/X11Native.cs
+#   libssl.so.3        loaded by the .NET runtime for the HTTPS of the update check (no file of src/ names it)
+# Not in the list: libmp3lame.so.0 and libSDL3.so.0, which the package ships in /usr/lib/hindsound and the runs below prove
+# loaded from there, and libX11.so.6 (src/Hindsound.Linux/Input/X11Native.cs), which only the shortcuts of an X11 session
+# use: the program catches its absence and goes without them, so no package of Depends brings it.
+readonly LOADED_LIBRARIES='libpulse.so.0 libssl.so.3 libfreetype.so.6 libharfbuzz.so.0 libfontconfig.so.1 libc.so.6'
 
 fail() {
     echo "try-deb: $*" >&2
@@ -21,12 +33,10 @@ fail() {
 [ "$(id -u)" -eq 0 ] || fail "run as root, in a container"
 folder=$(realpath -e -- "$1") || fail "no folder at $1"
 version=$2
-[[ $version =~ ^([0-9]+\.[0-9]+\.[0-9]+)(-([0-9A-Za-z.-]+))?$ ]] || fail "not a version: $version"
-debian_version=${BASH_REMATCH[1]}
-if [ -n "${BASH_REMATCH[3]}" ]; then
-    debian_version+="~${BASH_REMATCH[3]//-/.}"
-fi
-deb="$folder/hindsound_${debian_version}_amd64.deb"
+[[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "not a version X.Y.Z: $version"
+deb="$folder/hindsound_${version}_amd64.deb"
+here=$(dirname -- "$(realpath -e -- "$0")")
+. "$here/deb/control.sh"
 [ -f "$deb" ] || fail "missing: $deb"
 
 . /etc/os-release
@@ -41,13 +51,25 @@ cp -- "$deb" "$work/"
 chmod 755 -- "$work"
 chmod 644 -- "$work/$(basename -- "$deb")"
 apt-get install -y -q --no-install-recommends -- "$work/$(basename -- "$deb")"
-[ "$(dpkg-query --show --showformat='${Status} ${Version}' hindsound)" = "install ok installed $debian_version" ] \
-    || fail "hindsound $debian_version is not installed"
+[ "$(dpkg-query --show --showformat='${Status} ${Version}' hindsound)" = "install ok installed $version" ] \
+    || fail "hindsound $version is not installed"
 dpkg-query --listfiles hindsound > "$work/files"
 
 # The command a person types: on the PATH, a link to the real program.
 [ "$(command -v hindsound)" = /usr/bin/hindsound ] || fail "hindsound is not /usr/bin/hindsound on the PATH"
 [ "$(readlink -f /usr/bin/hindsound)" = /usr/lib/hindsound/hindsound ] || fail "/usr/bin/hindsound does not lead to /usr/lib/hindsound/hindsound"
+
+# The libraries loaded by name: found on this clean system, and brought by Depends, not by the image.
+depends_packages=$(printf '%s\n' "$DEPENDS" | tr ',|' '\n\n' | sed -e 's/(.*//' -e 's/[[:space:]]//g' -e '/^$/d')
+for library in $LOADED_LIBRARIES; do
+    ldconfig -p | awk -v name="$library" '$1 == name { found = 1 } END { exit !found }' \
+        || fail "$library is not found by the loader: no package of Depends brings it"
+    # The glob: the files are under /usr/lib or /lib, according to the system.
+    owners=$(dpkg -S "*/$library" 2> /dev/null | sed 's/: [^ ]*$//' | tr ',' '\n' | sed -e 's/^[[:space:]]*//' -e 's/:.*//' || true)
+    from=$(printf '%s\n' "$owners" | grep -x -F -f <(printf '%s\n' "$depends_packages") | head -n 1 || true)
+    [ -n "$from" ] || fail "$library is from ${owners:-no package}, none of the packages of Depends ($(echo $depends_packages))"
+    echo "try-deb: $library is found, from $from, a package of Depends"
+done
 
 # The libraries loaded are those of /usr/lib/hindsound, found next to the real program though it was started by the link.
 # The one named must have been loaded; the other, if it was.

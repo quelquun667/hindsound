@@ -2,9 +2,12 @@
 .SYNOPSIS
     Undoes the guards of the release scripts and workflows one at a time, on a copy, and fails if a test run does not notice.
 .DESCRIPTION
-    Each entry replaces one piece of text, found exactly once, in a new copy of tools/release and .github/workflows, then runs
-    test-release-scripts.ps1 from that copy. Nothing in the repository changes. Each entry takes about 20 to 60 s, depending
-    on the load of the PC.
+    Each entry replaces one piece of text, found exactly once, in a new copy of what test-release-scripts.ps1 reads: tools/release,
+    .github/workflows, licenses, LICENSE, THIRD-PARTY-NOTICES.md, packaging/windows/portable.txt and README.txt, and
+    installer/Hindsound.iss, in a git repository of one empty commit (the date of the zip). It then runs test-release-scripts.ps1 from that copy. Nothing in the repository changes. Each entry
+    takes about 20 to 60 s, depending on the load of the PC.
+.PARAMETER WorkFolder
+    Where the copies are made, one at a time and removed after each entry. By default, the temporary folder of the user.
 .PARAMETER From
     The first entry to run, from 1.
 .PARAMETER To
@@ -14,7 +17,8 @@
 #>
 param(
     [int]$From = 1,
-    [int]$To = [int]::MaxValue
+    [int]$To = [int]::MaxValue,
+    [string]$WorkFolder = [IO.Path]::GetTempPath()
 )
 
 $ErrorActionPreference = 'Stop'
@@ -127,7 +131,7 @@ $mutations = @(
     @($release, './tools/release/check-remote-tag.ps1 -Tag $env:TAG -Commit (git rev-parse HEAD)', 'Write-Output check')
 
     # The files of the draft, downloaded back
-    @($assets, 'if (($names -join '', '') -cne ($expected -join '', '')) {', 'if ($false) {')
+    @($assets, 'if (($names -join '', '') -cne ($expectedNames -join '', '')) {', 'if ($false) {')
     @($assets, 'if ("$($manifest.version)" -cne $Version) {', 'if ($false) {')
     @($assets, 'if ("$($manifest.url)" -cne $url) {', 'if ($false) {')
     @($assets, 'if ("$($manifest.size)" -cne "$($setup.Length)") {', 'if ($false) {')
@@ -146,8 +150,10 @@ $mutations = @(
     @($release, "if (`$isDraft -eq 'true') {", 'if ($false) {')
     @($release, '--draft --verify-tag', '--verify-tag')
     @($release, '--draft --verify-tag', '--draft')
-    @($release, 'persist-credentials: false', 'persist-credentials: true')
-    @($release, 'permissions: {}', 'permissions: write-all')
+    @($release, "fetch-depth: 0`n          persist-credentials: false", "fetch-depth: 0`n          persist-credentials: true")
+    @($release, "with:`n          persist-credentials: false", "with:`n          persist-credentials: true")
+    @($release, "- 'v*'`n`npermissions: {}", "- 'v*'`n`npermissions: write-all")
+    @($release, "timeout-minutes: 5`n    permissions: {}", "timeout-minutes: 5`n    permissions: write-all")
     @($release, 'run: dotnet test Hindsound.slnx', 'run: Write-Output Hindsound.slnx')
     @($release, 'run: ./tools/release/test-release-scripts.ps1', 'run: Write-Output')
     @($release, '"VERSION=$version" >> $env:GITHUB_ENV', '"VERSION=0.1.0" >> $env:GITHUB_ENV')
@@ -194,7 +200,8 @@ $mutations = @(
     @('tools/release/assemble-release.ps1', ', "hindsound_${Version}_amd64.deb")', ')')
     @($release, ' "$env:RUNNER_TEMP/out/hindsound_${env:VERSION}_amd64.deb"', '')
     @('.github/workflows/release-files.yml', 'run: bash packaging/linux/try-deb.sh linux-files', 'run: echo packaging/linux/try-deb.sh linux-files')
-    @('.github/workflows/release-files.yml', "image: ['ubuntu:22.04', 'ubuntu:24.04', 'debian:12']", "image: ['ubuntu:24.04']")
+    @('.github/workflows/release-files.yml', "image: ['ubuntu:22.04', 'ubuntu:24.04', 'debian:12', 'debian:13']", "image: ['ubuntu:24.04']")
+    @('.github/workflows/release-files.yml', "'debian:12', 'debian:13']", "'debian:12']")
 )
 
 $repository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).ProviderPath
@@ -204,23 +211,48 @@ $entries = [int]($mutations.Count / 3)
 $last = [Math]::Min($To, $entries)
 $totalFailures = 0
 $missed = @()
+$stale = @()
 
 for ($index = $From; $index -le $last; $index++) {
     $file, $find, $replace = $mutations[(3 * ($index - 1))..(3 * $index - 1)]
 
-    $copy = Join-Path ([IO.Path]::GetTempPath()) ('hindsound-mutation-' + [Guid]::NewGuid().ToString('N'))
+    $copy = Join-Path $WorkFolder ('hindsound-mutation-' + [Guid]::NewGuid().ToString('N'))
     try {
-        foreach ($folder in 'tools/release', '.github/workflows') {
+        # What test-release-scripts.ps1 reads from the repository: the scripts, the workflows, and the files of the packages it compares.
+        foreach ($folder in 'tools/release', '.github/workflows', 'licenses', 'packaging/windows', 'installer') {
             $target = Join-Path $copy $folder
             New-Item -ItemType Directory -Force -Path $target | Out-Null
             Copy-Item -Path (Join-Path $repository "$folder/*") -Destination $target
         }
+        foreach ($shared in 'LICENSE', 'THIRD-PARTY-NOTICES.md') {
+            Copy-Item -LiteralPath (Join-Path $repository $shared) -Destination (Join-Path $copy $shared)
+        }
+
+        # The test of the portable zip takes the date of the commit of the repository it runs in: the copy is one, with an empty commit.
+        & git -C $copy init -q
+        & git -C $copy -c user.name=mutation -c user.email=mutation@example.invalid commit -q --allow-empty -m copy
+        if ($LASTEXITCODE -ne 0) { throw 'git could not make the commit of the copy.' }
 
         $path = Join-Path $copy $file
-        $text = [IO.File]::ReadAllText($path)
+        # A Windows checkout has CRLF; the texts of the entries are written with LF.
+        $text = [IO.File]::ReadAllText($path).Replace("`r`n", "`n")
         $count = ($text.Length - $text.Replace($find, '').Length) / $find.Length
+        # The steps of the release moved from release.yml to release-files.yml: an entry whose text is no longer in the first
+        # is looked for in the second.
+        if ($count -ne 1 -and $file -eq $release) {
+            $moved = Join-Path $copy '.github/workflows/release-files.yml'
+            $movedText = [IO.File]::ReadAllText($moved).Replace("`r`n", "`n")
+            if (($movedText.Length - $movedText.Replace($find, '').Length) / $find.Length -eq 1) {
+                $file = '.github/workflows/release-files.yml'
+                $path = $moved
+                $text = $movedText
+                $count = 1
+            }
+        }
         if ($count -ne 1) {
-            throw "Entry $index is out of date: its text is found $count times in ${file}: $find"
+            Write-Output ('{0,3} STALE  {1}: its text is found {2} times: {3}' -f $index, (Split-Path -Leaf $file), $count, $find.Replace("`n", ' '))
+            $stale += $index
+            continue
         }
         [IO.File]::WriteAllText($path, $text.Replace($find, $replace))
 
@@ -249,7 +281,10 @@ for ($index = $From; $index -le $last; $index++) {
     }
 }
 
-Write-Output "Entries $From to $last of ${entries}: $totalFailures failure(s) in all, missed: $($missed.Count)."
+Write-Output "Entries $From to $last of ${entries}: $totalFailures failure(s) in all, missed: $($missed.Count), out of date: $($stale.Count)."
+if ($stale.Count -gt 0) {
+    throw "Entries out of date, their text is no longer in the file: $($stale -join ', ')."
+}
 if ($missed.Count -gt 0) {
     throw "Guards undone without a failing test: entries $($missed -join ', ')."
 }
