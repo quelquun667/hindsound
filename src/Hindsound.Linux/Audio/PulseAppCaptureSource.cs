@@ -46,6 +46,14 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     /// <summary>The name of the stream on each output that keeps its delay short.</summary>
     public const string PaceName = "Short delay for the chosen application";
 
+    /// <summary>
+    /// How long a recording that failed waits before it is tried again, doubled at each try, and how many times it is: a
+    /// stream the server moves because its output went away (a headset unplugged) may refuse a recording for a moment.
+    /// </summary>
+    public const int RetryMilliseconds = 1000;
+
+    public const int MaxRetries = 4;
+
     private const int MaxChunkFrames = InternalFormat.SampleRate / 10;
 
     // PA_STREAM_CREATING.
@@ -58,6 +66,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     private readonly int _channels;
     private readonly PulseAppMixer _mixer;
     private readonly TaskCompletionSource<bool> _firstLook = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly Timer _retry;
     private GCHandle _self;
     private Thread? _thread;
     private int _started;
@@ -81,6 +90,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         Format = PulseFormats.WaveFormatFor(AudioFlow.System);
         _channels = Format.Channels;
         _mixer = new PulseAppMixer(_channels, InternalFormat.SampleRate * PrimeMilliseconds / 1000, InternalFormat.SampleRate * MaxMilliseconds / 1000);
+        _retry = new Timer(_ => Retry());
     }
 
     public WaveFormat Format { get; }
@@ -188,6 +198,16 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         }
 
         _thread?.Join(TimeSpan.FromSeconds(2));
+
+        // A try again under way ends before the connection: it would take the lock of a loop that is gone.
+        using (var idle = new ManualResetEvent(false))
+        {
+            if (_retry.Dispose(idle))
+            {
+                idle.WaitOne(PulseConnection.Patience);
+            }
+        }
+
         _connection.Locked(() =>
         {
             foreach (var input in _inputs.Values.Concat(_pacers.Values).Concat(_closing).ToList())
@@ -275,6 +295,36 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
 
     private void OnLost() => Fail(new IOException("The sound server went away."));
 
+    // On a thread of the pool, once, when a recording that failed is due to be tried again: one more look does it.
+    private void Retry()
+    {
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            _connection.Locked(Look);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            _log("a recording of the application could not be tried again: " + exception.GetType().Name + ": " + exception.Message);
+        }
+    }
+
+    // How long a recording that failed still waits before it is tried again; null once it has had all its tries.
+    private static TimeSpan? WaitOf(Input input)
+    {
+        if (input.Tries >= MaxRetries)
+        {
+            return null;
+        }
+
+        var wait = TimeSpan.FromMilliseconds(RetryMilliseconds << input.Tries) - Stopwatch.GetElapsedTime(input.DeadAt);
+        return wait > TimeSpan.Zero ? wait : TimeSpan.Zero;
+    }
+
     private void OnEvent(uint eventType)
     {
         if (PulseAppRules.IsStreamChange(eventType))
@@ -349,12 +399,17 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
             _inputs.Remove(key);
         }
 
-        // A recording that failed keeps its place until its stream ends, without its stream.
-        foreach (var input in _inputs.Values)
+        // A recording that failed keeps its place until its stream ends, without its stream, and is tried again a few times
+        // while its stream lives, later each time.
+        foreach (var (key, input) in _inputs.ToList())
         {
             if (input.Dead)
             {
                 Release(input);
+                if (WaitOf(input) == TimeSpan.Zero)
+                {
+                    _inputs[key] = OpenInput(key, look.Monitors[key.Sink], tries: input.Tries + 1);
+                }
             }
         }
 
@@ -362,10 +417,25 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         {
             _inputs[key] = OpenInput(key, monitor);
         }
+
+        // One look again when the next try is due: once, never in a loop.
+        TimeSpan? next = null;
+        foreach (var input in _inputs.Values.Concat(_pacers.Values))
+        {
+            if (input.Dead && WaitOf(input) is { } wait && (next is null || wait < next))
+            {
+                next = wait;
+            }
+        }
+
+        if (next is { } due)
+        {
+            _retry.Change(due + TimeSpan.FromMilliseconds(20), Timeout.InfiniteTimeSpan);
+        }
     }
 
-    // One pacer on each output, opened once; it goes with its output. One that failed is not opened again while its output is
-    // there, so that an output that refuses it costs one try, not one per look.
+    // One pacer on each output; it goes with its output. One that failed is tried again a few times, later each time, so that
+    // an output that refuses it costs a few tries, not one per look.
     private void Pace(Dictionary<uint, string> monitors)
     {
         foreach (var sink in _pacers.Keys.Where(sink => !monitors.ContainsKey(sink)).ToList())
@@ -376,23 +446,28 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
 
         foreach (var (sink, monitor) in monitors)
         {
-            if (!_pacers.ContainsKey(sink))
+            if (!_pacers.TryGetValue(sink, out var pacer))
             {
                 _pacers[sink] = OpenInput(new PulseMonitorKey(uint.MaxValue, sink), monitor, pace: true);
+            }
+            else if (pacer.Dead && WaitOf(pacer) == TimeSpan.Zero)
+            {
+                Release(pacer);
+                _pacers[sink] = OpenInput(pacer.Key, monitor, pace: true, tries: pacer.Tries + 1);
             }
         }
     }
 
-    private Input OpenInput(PulseMonitorKey key, string monitor, bool pace = false)
+    private Input OpenInput(PulseMonitorKey key, string monitor, bool pace = false, int tries = 0)
     {
-        var input = new Input(this, key) { Pace = pace };
+        var input = new Input(this, key) { Pace = pace, Tries = tries };
         var spec = PulseFormats.SampleSpecFor(AudioFlow.System);
         var context = _connection.Context;
         var stream = PulseNative.StreamNew(context, pace ? PaceName : StreamName, &spec, IntPtr.Zero);
         if (stream == IntPtr.Zero)
         {
-            input.Dead = true;
-            _log("a stream of the application could not be recorded: " + PulseNative.ErrorOf(context));
+            input.Die();
+            LogFailure(input, PulseNative.ErrorOf(context));
             return input;
         }
 
@@ -405,9 +480,9 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         if ((!pace && PulseNative.StreamSetMonitorStream(stream, key.SinkInput) < 0)
             || PulseNative.StreamConnectRecord(stream, monitor, &attributes, PulseAppRules.RecordFlags) < 0)
         {
-            _log("a stream of the application could not be recorded: " + PulseNative.ErrorOf(context));
+            LogFailure(input, PulseNative.ErrorOf(context));
             Release(input);
-            input.Dead = true;
+            input.Die();
         }
         else if (!pace)
         {
@@ -452,6 +527,13 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         }
     }
 
+    private void LogFailure(Input input, string error)
+    {
+        var what = input.Pace ? "the short delay of an output could not be kept" : "a stream of the application could not be recorded";
+        var next = input.Tries < MaxRetries ? $", tried again in {RetryMilliseconds << input.Tries} ms" : ", not tried again";
+        _log($"{what} (try {input.Tries + 1} of {MaxRetries + 1}{next}): {error}");
+    }
+
     // Takes a recording out of the mix, unless a newer recording of the same stream holds its place there now: one let go
     // while it was being created ends later, and must not take the sound of the one opened after it.
     private void Unmix(Input input)
@@ -489,23 +571,29 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
                 return;
             }
 
-            if (input.Pace)
+            if (state == PulseNative.StreamReady)
             {
-                if (state is PulseNative.StreamFailed or PulseNative.StreamTerminated)
-                {
-                    input.Dead = true;
-                }
-
+                input.WasReady = true;
                 return;
             }
 
-            if (state is PulseNative.StreamFailed or PulseNative.StreamTerminated && !input.Dead)
+            if (state is not (PulseNative.StreamFailed or PulseNative.StreamTerminated) || input.Dead)
             {
-                // PulseAudio ends it when the application's stream ends or moves: the next look lets it go, or records it again.
-                input.Dead = true;
-                input.Owner.Unmix(input);
-                input.Owner.Look();
+                return;
             }
+
+            // PulseAudio ends a recording when the application's stream ends or moves, which is no failure: the next look lets
+            // it go, or records the stream on its new output. One that never started failed, and is told; the next look tries
+            // it again later while its stream lives.
+            var owner = input.Owner;
+            if (input.Pace || !input.WasReady)
+            {
+                owner.LogFailure(input, PulseNative.ErrorOf(owner._connection.Context));
+            }
+
+            input.Die();
+            owner.Unmix(input);
+            owner.Look();
         }
         catch (Exception)
         {
@@ -654,13 +742,28 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
 
         public GCHandle Handle;
 
-        public bool Dead { get; set; }
+        public bool Dead { get; private set; }
+
+        /// <summary>When it failed, by <see cref="Stopwatch.GetTimestamp"/>.</summary>
+        public long DeadAt { get; private set; }
+
+        /// <summary>How many times it was tried before this one.</summary>
+        public int Tries { get; init; }
+
+        /// <summary>Whether the server started it: one that ends after that has not failed to start.</summary>
+        public bool WasReady { get; set; }
 
         /// <summary>Let go while it was being created: it closes itself once the server answers.</summary>
         public bool Closing { get; set; }
 
         /// <summary>The stream that keeps an output's delay short: its sound is dropped.</summary>
         public bool Pace { get; init; }
+
+        public void Die()
+        {
+            Dead = true;
+            DeadAt = Stopwatch.GetTimestamp();
+        }
 
         public void ReadAll(IntPtr stream)
         {
