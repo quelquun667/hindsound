@@ -156,7 +156,7 @@ internal static class PulseAppRules
 
     /// <summary>
     /// The sessions <see cref="AudioAppList.Build"/> makes the list from: for each stream, the process to offer and the name the
-    /// stream gives. A process of a program made of several, whose name in /proc is not the program's (a browser's tab, say), is
+    /// stream gives, when that name holds the process's name (else null, and the list shows the process's name). A process of a program made of several, whose name in /proc is not the program's (a browser's tab, say), is
     /// offered as its highest ancestor that bears the program's name, so that choosing it records the whole program.
     /// </summary>
     public static IReadOnlyList<(int ProcessId, string? DisplayName)> Sessions(IReadOnlyList<PulsePlaybackStream> streams, IReadOnlyList<ProcessEntry> processes)
@@ -167,10 +167,24 @@ internal static class PulseAppRules
         foreach (var stream in streams)
         {
             var owner = OwnerOf(stream, byId, processes) ?? 0;
-            sessions.Add((ProgramOf(owner, KernelName(stream.Binary), byId), stream.AppName));
+            var program = ProgramOf(owner, KernelName(stream.Binary), byId);
+            sessions.Add((program, NameFor(stream.AppName, program, byId)));
         }
 
         return sessions;
+    }
+
+    // The name a stream gives itself is kept only when it holds the process's name, whatever the case: "Firefox" for firefox,
+    // "Google Chrome" for chrome. "WEBRTC VoiceEngine" for Discord or "Chromium" for an Electron app say nothing of the
+    // program, so the list falls back on the process's name.
+    private static string? NameFor(string? appName, int program, Dictionary<int, ProcessEntry> byId)
+    {
+        if (string.IsNullOrWhiteSpace(appName) || !byId.TryGetValue(program, out var entry) || string.IsNullOrEmpty(entry.ExeName))
+        {
+            return null;
+        }
+
+        return appName.Contains(entry.ExeName, StringComparison.OrdinalIgnoreCase) ? appName : null;
     }
 
     /// <summary>
