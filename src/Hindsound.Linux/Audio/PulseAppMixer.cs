@@ -112,22 +112,6 @@ internal sealed class PulseAppMixer
         return heard;
     }
 
-    // DIAG: the samples dropped for want of room, and the times a stream ran dry, since the last call.
-    public string DiagCounters()
-    {
-        lock (_gate)
-        {
-            var text = string.Join(" ", _inputs.Select(pair => $"[{pair.Key.SinkInput}: held {pair.Value.Held / _channels} dropped {pair.Value.Dropped / _channels} dry {pair.Value.Dry}]"));
-            foreach (var input in _inputs.Values)
-            {
-                input.Dropped = 0;
-                input.Dry = 0;
-            }
-
-            return text;
-        }
-    }
-
     /// <summary>One stream's queue: a ring of samples.</summary>
     private sealed class Input(float[] ring)
     {
@@ -135,24 +119,17 @@ internal sealed class PulseAppMixer
         private int _count;
         private bool _ready;
 
-        public long Dropped;
-        public int Dry;
-
-        public int Held => _count;
-
         public void Write(ReadOnlySpan<float> samples, bool isSilence)
         {
             // More than the ring holds: only its end can stay.
             if (samples.Length > ring.Length)
             {
-                Dropped += samples.Length - ring.Length;
                 samples = samples[^ring.Length..];
             }
 
             var overflow = _count + samples.Length - ring.Length;
             if (overflow > 0)
             {
-                Dropped += overflow;
                 Skip(overflow);
             }
 
@@ -197,7 +174,6 @@ internal sealed class PulseAppMixer
             Skip(take);
             if (take < output.Length)
             {
-                Dry++;
                 _ready = false;
             }
 

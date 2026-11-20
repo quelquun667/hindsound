@@ -15,6 +15,14 @@ namespace Hindsound.Linux.Audio;
 /// one that ends is closed. PulseAudio ends a record stream whose playback stream ended, PipeWire keeps it on silence and says
 /// nothing, so the capture never waits to be told and closes it itself.
 /// <para>
+/// PulseAudio gives a record stream on a playback stream its sound only once the output has played it, and an output that no
+/// client asks to be quick renders up to two seconds ahead: a short sound would be rendered, its stream ended, and its record
+/// stream ended with it before it was played, so nothing of it would be heard. Each output therefore holds one plain record
+/// stream on its monitor that asks for a short delay, and whose sound is dropped: the output then renders a few milliseconds
+/// ahead. What it had rendered before is played first, so the capture waits for that, at most <see cref="PaceLimit"/>, before
+/// it is opened. PipeWire has no need of it: there it is one more stream on each output, which costs little.
+/// </para>
+/// <para>
 /// The mix runs on a thread of its own, which is the audio thread the engine expects: it gives the engine the frames its clock
 /// asks for, silence when the application plays nothing, so the time of the clip goes on as with the whole PC. Everything on
 /// the server is done on one connection of its own; its loop's thread only writes into the mixer.
@@ -34,6 +42,12 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
 
     public const int MaxMilliseconds = 250;
 
+    /// <summary>The name of the stream on each output that keeps its delay short.</summary>
+    public const string PaceName = "Short delay for the chosen application";
+
+    /// <summary>How long the opening waits at most for the outputs to play what they had rendered ahead.</summary>
+    public static readonly TimeSpan PaceLimit = TimeSpan.FromSeconds(3);
+
     private const int MaxChunkFrames = InternalFormat.SampleRate / 10;
 
     // PA_STREAM_CREATING.
@@ -46,6 +60,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     private readonly int _channels;
     private readonly PulseAppMixer _mixer;
     private readonly TaskCompletionSource<bool> _firstLook = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _paced = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private GCHandle _self;
     private Thread? _thread;
     private int _started;
@@ -55,102 +70,9 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     // On the loop's thread, or under its lock.
     private readonly Dictionary<PulseMonitorKey, Input> _inputs = [];
     private readonly HashSet<Input> _closing = [];
+    private readonly Dictionary<uint, Input> _pacers = [];
     private StreamLook? _look;
     private bool _lookAgain;
-
-    // DIAG: lines for the CI, to a file named by HINDSOUND_APP_TRACE.
-    private static readonly string? DiagPath = Environment.GetEnvironmentVariable("HINDSOUND_APP_TRACE");
-    private static readonly Stopwatch DiagClock = Stopwatch.StartNew();
-
-    internal static void Diag(string line)
-    {
-        if (DiagPath is null)
-        {
-            return;
-        }
-
-        lock (DiagClock)
-        {
-            File.AppendAllText(DiagPath, $"{DiagClock.ElapsedMilliseconds,7} {line}\n");
-        }
-    }
-
-    private static readonly bool DiagKeep = Environment.GetEnvironmentVariable("HINDSOUND_APP_KEEP") == "1";
-    private static readonly bool DiagKick = Environment.GetEnvironmentVariable("HINDSOUND_APP_KICK") == "1";
-    private static readonly float[] DiagSilence = new float[4800];
-    private readonly Dictionary<uint, IntPtr> _keepers = [];
-    private Dictionary<uint, string> _sinkNames = [];
-
-    // DIAG: a plain record stream on the monitor, low latency, whose data is dropped.
-    private void Keep(Dictionary<uint, string> monitors)
-    {
-        foreach (var (sink, monitor) in monitors)
-        {
-            if (_keepers.ContainsKey(sink))
-            {
-                continue;
-            }
-
-            var spec = PulseFormats.SampleSpecFor(AudioFlow.System);
-            var stream = PulseNative.StreamNew(_connection.Context, "diag keep", &spec, IntPtr.Zero);
-            PulseNative.StreamSetReadCallback(stream, (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, nuint, IntPtr, void>)&OnKeepRead, IntPtr.Zero);
-            var attributes = PulseFormats.BufferAttrFor(AudioFlow.System);
-            var result = PulseNative.StreamConnectRecord(stream, monitor, &attributes, PulseAppRules.RecordFlags);
-            Diag($"keep {monitor}: {result}");
-            _keepers[sink] = stream;
-        }
-    }
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void OnKeepRead(IntPtr stream, nuint length, IntPtr userData)
-    {
-        IntPtr data;
-        nuint size;
-        while (PulseNative.StreamPeek(stream, &data, &size) >= 0 && size > 0)
-        {
-            PulseNative.StreamDrop(stream);
-        }
-    }
-
-    // DIAG: a short silence played on the output, which makes the server render it again from now.
-    private void Kick(uint sink)
-    {
-        if (!_sinkNames.TryGetValue(sink, out var name))
-        {
-            Diag($"kick {sink}: no name");
-            return;
-        }
-
-        var spec = PulseFormats.SampleSpecFor(AudioFlow.System);
-        var stream = PulseNative.StreamNew(_connection.Context, "diag kick", &spec, IntPtr.Zero);
-        PulseNative.StreamSetStateCallback(stream, (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, IntPtr, void>)&OnKickState, IntPtr.Zero);
-        var attributes = new PaBufferAttr { MaxLength = uint.MaxValue, TargetLength = 4800 * 8, PreBuffer = 0, MinRequest = uint.MaxValue, FragmentSize = uint.MaxValue };
-        var result = PulseNative.StreamConnectPlayback(stream, name, &attributes, 0, IntPtr.Zero, IntPtr.Zero);
-        Diag($"kick {name}: {result}");
-        _ = Task.Delay(600).ContinueWith(_ => _connection.Locked(() =>
-        {
-            PulseNative.StreamSetStateCallback(stream, IntPtr.Zero, IntPtr.Zero);
-            if (PulseNative.StreamGetState(stream) == PulseNative.StreamReady)
-            {
-                PulseNative.StreamDisconnect(stream);
-            }
-
-            PulseNative.StreamUnref(stream);
-        }));
-    }
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void OnKickState(IntPtr stream, IntPtr userData)
-    {
-        if (PulseNative.StreamGetState(stream) == PulseNative.StreamReady)
-        {
-            fixed (float* data = DiagSilence)
-            {
-                var result = PulseNative.StreamWrite(stream, data, (nuint)(DiagSilence.Length * sizeof(float)), IntPtr.Zero, 0, 0);
-                Diag($"kick written: {result}");
-            }
-        }
-    }
 
     private PulseAppCaptureSource(PulseConnection connection, int target, string? name, IProcessSnapshot processes, Action<string> log)
     {
@@ -271,19 +193,13 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         _thread?.Join(TimeSpan.FromSeconds(2));
         _connection.Locked(() =>
         {
-            foreach (var input in _inputs.Values.Concat(_closing).ToList())
+            foreach (var input in _inputs.Values.Concat(_pacers.Values).Concat(_closing).ToList())
             {
                 Release(input, now: true);
             }
 
-            foreach (var keeper in _keepers.Values)
-            {
-                PulseNative.StreamSetReadCallback(keeper, IntPtr.Zero, IntPtr.Zero);
-                PulseNative.StreamDisconnect(keeper);
-                PulseNative.StreamUnref(keeper);
-            }
-
             _inputs.Clear();
+            _pacers.Clear();
         });
         _connection.Dispose();
 
@@ -312,6 +228,12 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         if (!_firstLook.Task.Result)
         {
             throw new IOException("The sound server did not list its playback streams.");
+        }
+
+        // An output that does not answer in time is no failure: its streams are recorded, only later.
+        if (!_paced.Task.Wait(PaceLimit))
+        {
+            _log("the outputs did not shorten their delay within " + PaceLimit.TotalSeconds.ToString(CultureInfo.InvariantCulture) + " s");
         }
     }
 
@@ -348,11 +270,6 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
                     var heard = _mixer.Mix(samples);
                     var flags = heard ? PulseFormats.FlagsOf(hole: false) : PulseFormats.FlagsOf(hole: true);
                     PacketAvailable?.Invoke(MemoryMarshal.AsBytes(samples), flags, given, 0);
-                    if ((given + frames) / InternalFormat.SampleRate != given / InternalFormat.SampleRate)
-                    {
-                        Diag($"mix {given + frames}: {_mixer.DiagCounters()}");
-                    }
-
                     given += frames;
                     due -= frames;
                 }
@@ -431,12 +348,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
 
     private void Follow(StreamLook look)
     {
-        _sinkNames = look.Names;
-        if (DiagKeep)
-        {
-            Keep(look.Monitors);
-        }
-
+        Pace(look.Monitors);
         var processes = _processes.Take();
         var mine = PulseAppRules.StreamsOf(look.Streams, processes, _target, Environment.ProcessId);
         var (open, close) = PulseAppRules.Changes(_inputs.Keys, mine, look.Monitors);
@@ -461,12 +373,42 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         }
     }
 
-    private Input OpenInput(PulseMonitorKey key, string monitor)
+    // One pacer on each output, opened once; it goes with its output. One that failed is not opened again while its output is
+    // there, so that an output that refuses it costs one try, not one per look.
+    private void Pace(Dictionary<uint, string> monitors)
     {
-        var input = new Input(this, key);
+        foreach (var sink in _pacers.Keys.Where(sink => !monitors.ContainsKey(sink)).ToList())
+        {
+            Release(_pacers[sink]);
+            _pacers.Remove(sink);
+        }
+
+        foreach (var (sink, monitor) in monitors)
+        {
+            if (!_pacers.ContainsKey(sink))
+            {
+                _pacers[sink] = OpenInput(new PulseMonitorKey(uint.MaxValue, sink), monitor, pace: true);
+            }
+        }
+
+        CheckPaced();
+    }
+
+    // Once every output has played what it had rendered ahead, or cannot be paced.
+    private void CheckPaced()
+    {
+        if (_pacers.Values.All(pacer => pacer.Heard || pacer.Dead))
+        {
+            _paced.TrySetResult();
+        }
+    }
+
+    private Input OpenInput(PulseMonitorKey key, string monitor, bool pace = false)
+    {
+        var input = new Input(this, key) { Pace = pace };
         var spec = PulseFormats.SampleSpecFor(AudioFlow.System);
         var context = _connection.Context;
-        var stream = PulseNative.StreamNew(context, StreamName, &spec, IntPtr.Zero);
+        var stream = PulseNative.StreamNew(context, pace ? PaceName : StreamName, &spec, IntPtr.Zero);
         if (stream == IntPtr.Zero)
         {
             input.Dead = true;
@@ -479,10 +421,13 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         var userData = GCHandle.ToIntPtr(input.Handle);
         PulseNative.StreamSetStateCallback(stream, (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, IntPtr, void>)&OnState, userData);
         PulseNative.StreamSetReadCallback(stream, (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, nuint, IntPtr, void>)&OnRead, userData);
-        _mixer.Add(key);
+        if (!pace)
+        {
+            _mixer.Add(key);
+        }
+
         var attributes = PulseFormats.BufferAttrFor(AudioFlow.System);
-        Diag($"open sink input {key.SinkInput} on {monitor}, fragsize {attributes.FragmentSize}");
-        if (PulseNative.StreamSetMonitorStream(stream, key.SinkInput) < 0
+        if ((!pace && PulseNative.StreamSetMonitorStream(stream, key.SinkInput) < 0)
             || PulseNative.StreamConnectRecord(stream, monitor, &attributes, PulseAppRules.RecordFlags) < 0)
         {
             _log("a stream of the application could not be recorded: " + PulseNative.ErrorOf(context));
@@ -540,13 +485,6 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
             }
 
             var state = PulseNative.StreamGetState(stream);
-            var granted = state == PulseNative.StreamReady ? PulseNative.StreamGetBufferAttr(stream) : null;
-            Diag($"stream {input.Key.SinkInput} state {state} closing {input.Closing}" + (granted is null ? "" : $" maxlength {granted->MaxLength} fragsize {granted->FragmentSize}"));
-            if (DiagKick && state == PulseNative.StreamReady && !input.Closing)
-            {
-                input.Owner.Kick(input.Key.Sink);
-            }
-
             if (input.Closing)
             {
                 if (state == PulseNative.StreamReady)
@@ -556,6 +494,17 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
                 else if (state is PulseNative.StreamFailed or PulseNative.StreamTerminated)
                 {
                     input.Owner.Release(input, now: true);
+                }
+
+                return;
+            }
+
+            if (input.Pace)
+            {
+                if (state is PulseNative.StreamFailed or PulseNative.StreamTerminated)
+                {
+                    input.Dead = true;
+                    input.Owner.CheckPaced();
                 }
 
                 return;
@@ -608,7 +557,6 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
             if (info != IntPtr.Zero && PulseNative.Text(sink->MonitorSourceName) is { } monitor)
             {
                 look.Monitors[sink->Index] = monitor;
-                look.Names[sink->Index] = PulseNative.Text(sink->Name) ?? "";
             }
         }
         catch (Exception)
@@ -662,8 +610,6 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         public bool Failed { get; private set; }
 
         public Dictionary<uint, string> Monitors { get; } = [];
-
-        public Dictionary<uint, string> Names { get; } = [];
 
         public List<PulsePlaybackStream> Streams { get; } = [];
 
@@ -724,35 +670,21 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         /// <summary>Let go while it was being created: it closes itself once the server answers.</summary>
         public bool Closing { get; set; }
 
-        // DIAG
-        private long _diagBytes;
-        private int _diagChunks;
-        private int _diagHoles;
-        private int _diagMin = int.MaxValue;
-        private int _diagMax;
-        private long _diagSince = -1;
-        private long _diagTotal;
+        /// <summary>The stream that keeps an output's delay short: its sound is dropped.</summary>
+        public bool Pace { get; init; }
+
+        /// <summary>A pacer that has had its first sound: its output now renders only a little ahead.</summary>
+        public bool Heard { get; private set; }
 
         public void ReadAll(IntPtr stream)
         {
-            var mixer = Owner._mixer;
-            var now = DiagClock.ElapsedMilliseconds;
-            if (_diagSince < 0)
+            if (Pace)
             {
-                Diag($"first data {Key.SinkInput}");
-                _diagSince = now;
-            }
-            else if (now - _diagSince >= 1000)
-            {
-                Diag($"read {Key.SinkInput}: {_diagBytes / (Owner._channels * sizeof(float))} frames in {now - _diagSince} ms, total {_diagTotal / (Owner._channels * sizeof(float))}, {_diagChunks} chunks of {_diagMin}..{_diagMax} bytes, {_diagHoles} holes, readable {PulseNative.StreamReadableSize(stream)}");
-                _diagSince = now;
-                _diagBytes = 0;
-                _diagChunks = 0;
-                _diagHoles = 0;
-                _diagMin = int.MaxValue;
-                _diagMax = 0;
+                Drain(stream);
+                return;
             }
 
+            var mixer = Owner._mixer;
             var frameBytes = Owner._channels * sizeof(float);
             while (true)
             {
@@ -764,16 +696,6 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
                 }
 
                 var bytes = (int)length;
-                _diagBytes += bytes;
-                _diagTotal += bytes;
-                _diagChunks++;
-                _diagMin = Math.Min(_diagMin, bytes);
-                _diagMax = Math.Max(_diagMax, bytes);
-                if (data == IntPtr.Zero)
-                {
-                    _diagHoles++;
-                }
-
                 if (data == IntPtr.Zero)
                 {
                     // A hole: the server has no data for this stretch.
@@ -785,6 +707,29 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
                 }
 
                 PulseNative.StreamDrop(stream);
+            }
+        }
+
+        private void Drain(IntPtr stream)
+        {
+            var heard = false;
+            while (true)
+            {
+                IntPtr data;
+                nuint length;
+                if (PulseNative.StreamPeek(stream, &data, &length) < 0 || length == 0)
+                {
+                    break;
+                }
+
+                heard = true;
+                PulseNative.StreamDrop(stream);
+            }
+
+            if (heard && !Heard)
+            {
+                Heard = true;
+                Owner.CheckPaced();
             }
         }
     }
