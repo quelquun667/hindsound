@@ -110,8 +110,10 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
             Thread.Sleep(20);
         }
 
-        // Its streams are let go once they end, on both servers: PulseAudio ends the record stream, PipeWire does not.
+        // Its streams are let go once they end, on both servers: PulseAudio ends the record stream, PipeWire does not. The
+        // server is asked too, for a recording this capture would no longer know of.
         WaitFor(() => source.HeldStreams == 0 && source.RecordedStreams == 0, "the streams of the application let go");
+        WaitFor(() => RecordingsOnServer(PulseAppCaptureSource.StreamName) == 0, "the recordings of the application gone from the server");
         Thread.Sleep(500);
         source.Stop();
         var elapsed = clock.Elapsed;
@@ -123,8 +125,9 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
         var pattern = string.Concat(blocks.Select(level => level > 0.1 ? '#' : level < 0.01 ? '.' : '-'));
         _output.WriteLine($"followed: {pattern} ({samples.Length / Channels} frames in {elapsed.TotalSeconds:0.00} s, at most {most} stream at once)");
 
-        // Tone, then a second and more of silence, then the tone again.
-        Assert.Matches(@"#{5,}[-.]*\.{10,}[-.]*#{5,}", pattern);
+        // Tone, then a second and more of silence, then the tone again: each tone of a second heard over 8 blocks of 100 ms at
+        // least, one at each end being shared with the silence.
+        Assert.Matches(@"#{8,}[-.]*\.{10,}[-.]*#{8,}", pattern);
         Assert.All(others, level => Assert.True(level < 0.01, $"the other process is heard at {level:0.0000}: {pattern}"));
         Assert.Equal(1, most);
 
@@ -308,6 +311,13 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
         return index is null
             ? 0
             : Pactl("list", "short", "sink-inputs").Split('\n').Select(line => line.Split('\t')).Count(parts => parts.Length > 1 && parts[1] == index);
+    }
+
+    // The recordings on the server named so, by their media.name: those of every client, this capture's among them.
+    private static int RecordingsOnServer(string name)
+    {
+        var line = $"media.name = \"{name}\"";
+        return Pactl("list", "source-outputs").Split('\n').Count(entry => entry.Trim() == line);
     }
 
     private static void WaitFor(Func<bool> condition, string what)
