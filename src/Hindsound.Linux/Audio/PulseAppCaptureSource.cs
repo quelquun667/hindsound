@@ -428,6 +428,13 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
                 Release(input);
                 if (WaitOf(input) == TimeSpan.Zero)
                 {
+                    // PipeWire starts the recording of a stream it moves off an output that went away, then ends it as the
+                    // move settles, saying nothing: told here, as it is tried again.
+                    if (input.WasReady)
+                    {
+                        _log($"a recording of the application ended while its stream plays (try {input.Tries + 1} of {MaxRetries + 1}), recorded again");
+                    }
+
                     _inputs[key] = OpenInput(key, look.Monitors[key.Sink], tries: input.Tries + 1);
                 }
             }
