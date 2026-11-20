@@ -13,8 +13,8 @@ Record one application on Linux, as on Windows. On Windows, Hindsound works as i
 ### Added
 
 - On Linux, `Record` can follow one application and its child processes instead of the whole PC, as on Windows, through PulseAudio or PipeWire. The list shows the applications while they play sound, under the name an application gives its sound stream when it holds the name of its process, else under the name of the process (`Discord`, not `WEBRTC VoiceEngine`).
-- On Linux with PulseAudio (Ubuntu 22.04), the first 2 seconds after you choose the application, or after Hindsound starts, may be missing from the memory. PipeWire does not have this gap.
-- On Linux, an application in a Flatpak or Snap sandbox has not been tried.
+- On Linux with PulseAudio (Ubuntu 22.04), the first 2 seconds after you choose the application, after Hindsound starts, or after the application or the sound server starts again, may be missing from the memory. PipeWire does not have this gap.
+- On Linux, the recording of one application has been tried in the CI only, with test players, not yet with real applications on a desktop; an application in a Flatpak or Snap sandbox has not been tried.
 
 ## [0.9.0] - 2026-11-20
 
