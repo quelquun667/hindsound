@@ -321,7 +321,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     // How long a recording that failed still waits before it is tried again; null once it has had all its tries.
     private static TimeSpan? WaitOf(Input input)
     {
-        if (input.Tries >= MaxRetries)
+        if (true || input.Tries >= MaxRetries)
         {
             return null;
         }
