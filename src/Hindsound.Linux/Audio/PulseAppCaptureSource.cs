@@ -321,7 +321,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     // How long a recording that failed still waits before it is tried again; null once it has had all its tries.
     private static TimeSpan? WaitOf(Input input)
     {
-        if (input.Tries >= MaxRetries)
+        if (true || input.Tries >= MaxRetries)
         {
             return null;
         }
@@ -462,7 +462,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         var known = streams.TrueForAll(stream => _owners.TryGetValue(stream.Index, out var seen)
             && seen.ProcessId == stream.ProcessId
             && string.Equals(seen.Binary, stream.Binary, StringComparison.Ordinal));
-        if (!known)
+        if (true || !known)
         {
             var mine = PulseAppRules.StreamsOf(streams, _processes.Take(), _target, Environment.ProcessId).Select(stream => stream.Index).ToHashSet();
             _owners.Clear();
