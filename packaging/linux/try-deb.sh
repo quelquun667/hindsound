@@ -22,7 +22,7 @@ readonly PAGES=80
 # Not in the list: libmp3lame.so.0 and libSDL3.so.0, which the package ships in /usr/lib/hindsound and the runs below prove
 # loaded from there, and libX11.so.6 (src/Hindsound.Linux/Input/X11Native.cs), which only the shortcuts of an X11 session
 # use: the program catches its absence and goes without them, so no package of Depends brings it.
-readonly LOADED_LIBRARIES='libnonexistent.so.9 libpulse.so.0 libssl.so.3 libfreetype.so.6 libharfbuzz.so.0 libfontconfig.so.1 libc.so.6'
+readonly LOADED_LIBRARIES='libpulse.so.0 libssl.so.3 libfreetype.so.6 libharfbuzz.so.0 libfontconfig.so.1 libc.so.6'
 
 fail() {
     echo "try-deb: $*" >&2
