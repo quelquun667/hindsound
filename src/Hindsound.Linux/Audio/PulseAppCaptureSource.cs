@@ -303,7 +303,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     // On a thread of the pool, once, when a recording that failed is due to be tried again: one more look does it.
     private void Retry()
     {
-        if (Volatile.Read(ref _disposed) >= 0)
+        if (Volatile.Read(ref _disposed) != 0)
         {
             return;
         }
