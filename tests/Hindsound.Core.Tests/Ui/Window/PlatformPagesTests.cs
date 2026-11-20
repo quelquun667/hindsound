@@ -251,7 +251,7 @@ public sealed unsafe class PlatformPagesTests
     }
 
     [Fact]
-    public void Windows_greys_the_output_while_one_application_is_recorded_and_Linux_does_not()
+    public void Windows_greys_the_output_while_one_application_is_recorded()
     {
         var settings = new AppSettings().Normalize();
         settings.Audio.SourceApp = "Discord.exe";
