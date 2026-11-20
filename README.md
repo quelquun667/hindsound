@@ -472,6 +472,8 @@ applications that have an audio session, so an application that has played nothi
   plays sound. Hindsound remembers it by its process name, as `/proc` gives it (its first 15 characters), and records the
   sound streams of that process and of its children. An application in a Flatpak or Snap sandbox may give a process id
   of its own sandbox: Hindsound then finds it by the name of its program, which has not been tried on a real sandbox.
+- On Linux with PulseAudio (Ubuntu 22.04), the first 2 seconds after you choose the application, or after Hindsound starts, may
+  be missing from the memory. PipeWire does not have this gap.
 - If the application closes, the band says `Not running: Discord`, and the memory gets silence. The capture attaches again
   when the application comes back. None of this makes a notification.
 - `Output` is greyed out in this mode: the capture does not depend on an output.

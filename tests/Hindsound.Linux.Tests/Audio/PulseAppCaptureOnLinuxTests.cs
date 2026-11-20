@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Hindsound.Audio;
@@ -23,6 +24,11 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
     private const double OtherHz = 2300;
     private const string Sink = "hindsound_app_out";
     private static readonly TimeSpan Guard = TimeSpan.FromSeconds(20);
+
+    // PulseAudio plays what an output had rendered ahead (up to two seconds) before the short delay its pacers ask for takes
+    // effect, so the first seconds after the capture is opened may miss a sound. That is the server's: the tests let the
+    // opening pass before they measure. PipeWire has no such gap.
+    private static readonly TimeSpan OpeningGap = TimeSpan.FromMilliseconds(2500);
 
     private readonly ITestOutputHelper _output;
     private readonly string _folder = Directory.CreateTempSubdirectory("hindsound-app-").FullName;
@@ -59,8 +65,8 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
     [Fact]
     public void Only_the_chosen_application_is_recorded_while_another_process_plays_at_the_same_time()
     {
-        var app = StartApp("hsappone", $"{Play(Tone("app.wav", AppHz, 4))}; true");
-        Start("paplay", "--device=" + Sink, Tone("other.wav", OtherHz, 4));
+        var app = StartApp("hsappone", $"{Play(Tone("app.wav", AppHz, 8))}; true");
+        Start("paplay", "--device=" + Sink, Tone("other.wav", OtherHz, 8));
         WaitFor(() => StreamsOn(Sink) >= 2, "the two tones playing");
 
         var log = new Log();
@@ -69,6 +75,7 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
         {
             source.PacketAvailable += recorder.OnPacket;
             source.Start();
+            Thread.Sleep(OpeningGap);
             Thread.Sleep(2000);
             Assert.Equal(1, source.RecordedStreams);
             source.Stop();
@@ -132,12 +139,13 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
     {
         var log = new Log();
         var recorder = new Recorder();
-        var app = StartApp("hsappthree", $"sleep 1; {Play(Tone("app.wav", AppHz, 2))}; true");
+        var app = StartApp("hsappthree", $"sleep {(1 + OpeningGap.TotalSeconds).ToString(CultureInfo.InvariantCulture)}; {Play(Tone("app.wav", AppHz, 2))}; true");
         var started = Stopwatch.StartNew();
         using var source = PulseAppCaptureSource.Open(app.Id, "hsappthree", new ProcProcessSnapshot(), log.Write);
         source.PacketAvailable += recorder.OnPacket;
         source.Start();
         TimeSpan? recorded = null;
+        Thread.Sleep(OpeningGap);
         while (recorder.FirstTone is null)
         {
             Assert.True(started.Elapsed < Guard, "the tone never came. Log: " + log);
@@ -151,17 +159,17 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
 
         source.Stop();
 
-        // The player starts a second after the application; its tone is in the mix less than half a second after that.
-        var late = recorder.FirstToneSince(started) - TimeSpan.FromSeconds(1);
-        _output.WriteLine($"first sound: stream recorded {recorded?.TotalMilliseconds:0} ms, tone heard {late.TotalMilliseconds + 1000:0} ms after the application started");
+        // The player starts a second after the opening has passed; its tone is in the mix less than half a second after that.
+        var late = recorder.FirstToneSince(started) - TimeSpan.FromSeconds(1) - OpeningGap;
+        _output.WriteLine($"first sound: stream recorded {recorded?.TotalMilliseconds:0} ms, tone heard {late.TotalMilliseconds + 1000:0} ms after the opening");
         Assert.True(late < TimeSpan.FromMilliseconds(500), $"the first sound came {late.TotalMilliseconds:0} ms after the player started (stream recorded at {recorded?.TotalMilliseconds:0} ms). Log: {log}");
     }
 
     [Fact]
     public async Task The_engine_records_the_application_chosen_by_its_name()
     {
-        StartApp("hsappfour", $"{Play(Tone("app.wav", AppHz, 5))}; true");
-        Start("paplay", "--device=" + Sink, Tone("other.wav", OtherHz, 5));
+        StartApp("hsappfour", $"{Play(Tone("app.wav", AppHz, 8))}; true");
+        Start("paplay", "--device=" + Sink, Tone("other.wav", OtherHz, 8));
         WaitFor(() => StreamsOn(Sink) >= 2, "the two tones playing");
 
         var log = new Log();
@@ -172,6 +180,7 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
             processes: new ProcProcessSnapshot());
         await engine.StartAsync();
         WaitFor(() => engine.Status.SystemCapturing, "the capture of the application");
+        Thread.Sleep(OpeningGap);
         Thread.Sleep(2000);
         var snapshot = engine.Snapshot(TimeSpan.FromSeconds(1.5));
         await engine.StopAsync();

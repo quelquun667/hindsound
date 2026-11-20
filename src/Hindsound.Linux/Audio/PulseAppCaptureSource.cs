@@ -19,8 +19,9 @@ namespace Hindsound.Linux.Audio;
 /// client asks to be quick renders up to two seconds ahead: a short sound would be rendered, its stream ended, and its record
 /// stream ended with it before it was played, so nothing of it would be heard. Each output therefore holds one plain record
 /// stream on its monitor that asks for a short delay, and whose sound is dropped: the output then renders a few milliseconds
-/// ahead. What it had rendered before is played first, so the capture waits for that, at most <see cref="PaceLimit"/>, before
-/// it is opened. PipeWire has no need of it: there it is one more stream on each output, which costs little.
+/// ahead. What it had rendered before is played first, so for about two seconds after the capture is opened a sound of the
+/// application may still be missed: that is the server's, and the capture does not wait for it. PipeWire has no need of the
+/// pacers: there it is one more stream on each output, which costs little.
 /// </para>
 /// <para>
 /// The mix runs on a thread of its own, which is the audio thread the engine expects: it gives the engine the frames its clock
@@ -45,9 +46,6 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     /// <summary>The name of the stream on each output that keeps its delay short.</summary>
     public const string PaceName = "Short delay for the chosen application";
 
-    /// <summary>How long the opening waits at most for the outputs to play what they had rendered ahead.</summary>
-    public static readonly TimeSpan PaceLimit = TimeSpan.FromSeconds(3);
-
     private const int MaxChunkFrames = InternalFormat.SampleRate / 10;
 
     // PA_STREAM_CREATING.
@@ -60,7 +58,6 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     private readonly int _channels;
     private readonly PulseAppMixer _mixer;
     private readonly TaskCompletionSource<bool> _firstLook = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private readonly TaskCompletionSource _paced = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private GCHandle _self;
     private Thread? _thread;
     private int _started;
@@ -229,12 +226,6 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         {
             throw new IOException("The sound server did not list its playback streams.");
         }
-
-        // An output that does not answer in time is no failure: its streams are recorded, only later.
-        if (!_paced.Task.Wait(PaceLimit))
-        {
-            _log("the outputs did not shorten their delay within " + PaceLimit.TotalSeconds.ToString(CultureInfo.InvariantCulture) + " s");
-        }
     }
 
     // True for the call that ended the capture. The streams stay open until Dispose, the mix's thread stops.
@@ -390,17 +381,6 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
                 _pacers[sink] = OpenInput(new PulseMonitorKey(uint.MaxValue, sink), monitor, pace: true);
             }
         }
-
-        CheckPaced();
-    }
-
-    // Once every output has played what it had rendered ahead, or cannot be paced.
-    private void CheckPaced()
-    {
-        if (_pacers.Values.All(pacer => pacer.Heard || pacer.Dead))
-        {
-            _paced.TrySetResult();
-        }
     }
 
     private Input OpenInput(PulseMonitorKey key, string monitor, bool pace = false)
@@ -504,7 +484,6 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
                 if (state is PulseNative.StreamFailed or PulseNative.StreamTerminated)
                 {
                     input.Dead = true;
-                    input.Owner.CheckPaced();
                 }
 
                 return;
@@ -673,9 +652,6 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         /// <summary>The stream that keeps an output's delay short: its sound is dropped.</summary>
         public bool Pace { get; init; }
 
-        /// <summary>A pacer that has had its first sound: its output now renders only a little ahead.</summary>
-        public bool Heard { get; private set; }
-
         public void ReadAll(IntPtr stream)
         {
             if (Pace)
@@ -710,9 +686,8 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
             }
         }
 
-        private void Drain(IntPtr stream)
+        private static void Drain(IntPtr stream)
         {
-            var heard = false;
             while (true)
             {
                 IntPtr data;
@@ -722,14 +697,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
                     break;
                 }
 
-                heard = true;
                 PulseNative.StreamDrop(stream);
-            }
-
-            if (heard && !Heard)
-            {
-                Heard = true;
-                Owner.CheckPaced();
             }
         }
     }
