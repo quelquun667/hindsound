@@ -202,6 +202,86 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
     }
 
     [Fact]
+    public void The_recording_of_the_application_killed_on_the_server_is_opened_again_by_the_next_try()
+    {
+        // The key of the stream (its sink input and its output) does not change, so only a new try can open its recording again.
+        var app = StartApp("hsappeight", $"{Play(Tone("retry.wav", AppHz, 16))}; true");
+        WaitFor(() => StreamsOn(Sink) >= 1, "the tone playing");
+        var log = new Log();
+        var recorder = new Recorder();
+        using var source = PulseAppCaptureSource.Open(app.Id, "hsappeight", new ProcProcessSnapshot(), log.Write);
+        source.PacketAvailable += recorder.OnPacket;
+        source.Start();
+        Thread.Sleep(OpeningGap);
+        WaitFor(() => source.RecordedStreams == 1, "the application recorded");
+        var killed = Assert.Single(SourceOutputsNamed(PulseAppCaptureSource.StreamName));
+
+        var clock = Stopwatch.StartNew();
+        Pactl("kill-source-output", killed);
+        string? reopened = null;
+        while (reopened is null && clock.Elapsed < TimeSpan.FromSeconds(5))
+        {
+            Thread.Sleep(50);
+            reopened = SourceOutputsNamed(PulseAppCaptureSource.StreamName).FirstOrDefault(index => index != killed);
+        }
+
+        var delay = clock.Elapsed;
+        Thread.Sleep(500);
+        var from = recorder.Frames;
+        Thread.Sleep(2000);
+        var levels = Blocks(recorder.Samples()[(from * Channels)..], AppHz);
+        var (recorded, onServer) = (source.RecordedStreams, SourceOutputsNamed(PulseAppCaptureSource.StreamName).Count);
+        var playing = !app.HasExited;
+        source.Stop();
+
+        _output.WriteLine($"killed recording: reopened={reopened ?? "no"} after {delay.TotalMilliseconds:0} ms, recorded={recorded} onServer={onServer} level={levels.DefaultIfEmpty().Min():0.000} to {levels.DefaultIfEmpty().Max():0.000}, log: {log}");
+        Assert.True(playing, "the application stopped playing too early to mean anything");
+        Assert.NotNull(reopened);
+        Assert.Equal(1, recorded);
+        Assert.Equal(1, onServer);
+        Assert.True(levels.Length >= 15, $"only {levels.Length} blocks measured");
+        Assert.All(levels, level => Assert.InRange(level, 0.4, 0.6));
+    }
+
+    [Fact]
+    public void The_stream_keeping_an_output_quick_killed_on_the_server_is_opened_again_by_the_next_try()
+    {
+        var server = Pactl("info").Split('\n').FirstOrDefault(line => line.StartsWith("Server Name", StringComparison.Ordinal));
+        if (server?.Contains("on PipeWire", StringComparison.Ordinal) == true)
+        {
+            // PipeWire has no such stream.
+            _output.WriteLine($"{server}: nothing to try");
+            return;
+        }
+
+        var app = StartApp("hsappnine", $"{Play(Tone("pacer.wav", AppHz, 10))}; true");
+        WaitFor(() => StreamsOn(Sink) >= 1, "the tone playing");
+        var log = new Log();
+        using var source = PulseAppCaptureSource.Open(app.Id, "hsappnine", new ProcProcessSnapshot(), log.Write);
+        source.Start();
+        WaitFor(() => source.RecordedStreams == 1, "the application recorded");
+        WaitFor(() => SourceOutputsNamed(PulseAppCaptureSource.PaceName).Count >= 3, "a stream keeping each output quick");
+        var before = SourceOutputsNamed(PulseAppCaptureSource.PaceName);
+        var killed = before[0];
+
+        var clock = Stopwatch.StartNew();
+        Pactl("kill-source-output", killed);
+        List<string> after;
+        do
+        {
+            Thread.Sleep(50);
+            after = SourceOutputsNamed(PulseAppCaptureSource.PaceName);
+        }
+        while ((after.Count != before.Count || after.Contains(killed)) && clock.Elapsed < TimeSpan.FromSeconds(3));
+
+        var delay = clock.Elapsed;
+        source.Stop();
+        _output.WriteLine($"killed pacer: {before.Count} before, {after.Count} after {delay.TotalMilliseconds:0} ms, log: {log}");
+        Assert.DoesNotContain(killed, after);
+        Assert.Equal(before.Count, after.Count);
+    }
+
+    [Fact]
     public void A_change_of_volume_of_a_stream_already_seen_does_not_read_the_processes_again()
     {
         var app = StartApp("hsappseven", $"{Play(Tone("app.wav", AppHz, 8))}; true");
@@ -411,6 +491,28 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
     {
         var line = $"media.name = \"{name}\"";
         return Pactl("list", "source-outputs").Split('\n').Count(entry => entry.Trim() == line);
+    }
+
+    // The indexes of the recordings on the server named so, by their media.name.
+    private static List<string> SourceOutputsNamed(string name)
+    {
+        var line = $"media.name = \"{name}\"";
+        var found = new List<string>();
+        string? index = null;
+        foreach (var raw in Pactl("list", "source-outputs").Split('\n'))
+        {
+            var entry = raw.Trim();
+            if (entry.StartsWith("Source Output #", StringComparison.Ordinal))
+            {
+                index = entry["Source Output #".Length..];
+            }
+            else if (entry == line && index is not null)
+            {
+                found.Add(index);
+            }
+        }
+
+        return found;
     }
 
     // The index of the first playback stream on an output.
