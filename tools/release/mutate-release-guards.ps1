@@ -131,7 +131,7 @@ $mutations = @(
     @($release, './tools/release/check-remote-tag.ps1 -Tag $env:TAG -Commit (git rev-parse HEAD)', 'Write-Output check')
 
     # The files of the draft, downloaded back
-    @($assets, 'if (($names -join '', '') -cne ($expected -join '', '')) {', 'if ($false) {')
+    @($assets, 'if (($names -join '', '') -cne ($expectedNames -join '', '')) {', 'if ($false) {')
     @($assets, 'if ("$($manifest.version)" -cne $Version) {', 'if ($false) {')
     @($assets, 'if ("$($manifest.url)" -cne $url) {', 'if ($false) {')
     @($assets, 'if ("$($manifest.size)" -cne "$($setup.Length)") {', 'if ($false) {')

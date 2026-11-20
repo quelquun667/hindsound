@@ -114,7 +114,7 @@ software is freely granted, provided that this notice
 is preserved.
 ```
 
-To use your own build of SDL 3, put it in the folder of the program as `libSDL3.so.0` (in the tar.gz; an AppImage is read-only), or remove the shipped one so that the system's copy is used.
+To use your own build of SDL 3, put it in the folder of the program as `libSDL3.so.0` (in the tar.gz; an AppImage is read-only; the folder of the .deb is `/usr/lib/hindsound`, which `apt` owns and refills at each install of the package), or remove the shipped one so that the system's copy is used.
 
 ### The fonts
 

@@ -1080,6 +1080,7 @@ try {
     Report 'release-files has no cache of the window library or the fonts' (-not ($filesText -match 'actions/cache|cache-hit'))
     Report 'the tests the proof of the encoding runs are built first' ($filesText -cmatch '- name: Build the tests\n\s+run: dotnet build tests/Hindsound\.Tests/Hindsound\.Tests\.csproj -c Release\n')
     Report 'the compiled DLL replaces the one in the published folder' ($filesText -cmatch '- name: Replace the DLL in the published folder\n\s+run: Copy-Item -LiteralPath "\$env:RUNNER_TEMP/lame/libmp3lame\.64\.dll" -Destination "\$env:RUNNER_TEMP/publish/libmp3lame\.64\.dll" -Force')
+    Report 'the LAME source is copied into the files of the Windows job, and into the packages of the Linux job' (($filesText -cmatch '- name: Add the LAME source\n\s+run: Copy-Item -LiteralPath "\$env:RUNNER_TEMP/lame/lame-3\.100\.tar\.gz" -Destination "\$env:RUNNER_TEMP/out/lame-3\.100\.tar\.gz"\n') -and ($filesText -cmatch '- name: Add the LAME source\n\s+run: cp -- "\$RUNNER_TEMP/lame-work/lame-3\.100\.tar\.gz" "\$RUNNER_TEMP/packages/"\n'))
     Report 'the zip is made from the folder the Setup is built from' (($filesText -cmatch '"/DPublishDir=\$env:RUNNER_TEMP/publish"') -and ($filesText -cmatch 'build-portable-zip\.ps1 -PublishDir "\$env:RUNNER_TEMP/publish" '))
     Report 'the lame workflow builds and proves' (($lameText -cmatch '\./tools/release/build-lame\.ps1 ') -and ($lameText -cmatch '\./tools/release/prove-encoding\.ps1 '))
     Report 'the release sees all the tags'($releaseText -match '(?m)^\s+fetch-depth: 0$')
