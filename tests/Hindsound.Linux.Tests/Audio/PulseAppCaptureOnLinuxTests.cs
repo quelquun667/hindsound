@@ -161,15 +161,6 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
             var pacers = RecordingsOnServer(PulseAppCaptureSource.PaceName);
             var server = Pactl("info").Split('\n').FirstOrDefault(line => line.StartsWith("Server Name", StringComparison.Ordinal));
             _output.WriteLine($"{server}: {pacers} streams keeping an output quick");
-            if (server?.Contains("on PipeWire", StringComparison.Ordinal) == true)
-            {
-                Assert.Equal(0, pacers);
-            }
-            else
-            {
-                Assert.True(pacers >= 3, $"{pacers} streams keep an output quick under {server}");
-            }
-
             Pactl("unload-module", module);
             unloaded = true;
 
@@ -184,6 +175,15 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
 
             _output.WriteLine($"output gone: held={held} recorded={recorded} onServer={onServer} level={levels.DefaultIfEmpty().Min():0.000} to {levels.DefaultIfEmpty().Max():0.000}, log: {log}");
             Assert.True(playing, "the application stopped playing too early to mean anything");
+            if (server?.Contains("on PipeWire", StringComparison.Ordinal) == true)
+            {
+                Assert.Equal(0, pacers);
+            }
+            else
+            {
+                Assert.True(pacers >= 3, $"{pacers} streams keep an output quick under {server}");
+            }
+
             Assert.True(levels.Length >= 15, $"only {levels.Length} blocks measured");
 
             // Each block at the tone's level, played at 0.5: never cut, and never two recordings of it added.

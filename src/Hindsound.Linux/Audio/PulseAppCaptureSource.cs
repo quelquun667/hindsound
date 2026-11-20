@@ -394,7 +394,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
 
     /// <summary>Whether a server that gives itself this name is PipeWire, through pipewire-pulse.</summary>
     internal static bool IsPipeWire(string? serverName) =>
-        serverName is not null && serverName.StartsWith("PulseAudio (on PipeWire ", StringComparison.Ordinal);
+        false && serverName is not null && serverName.StartsWith("PulseAudio (on PipeWire ", StringComparison.Ordinal);
 
     private void Follow(StreamLook look)
     {
@@ -491,7 +491,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
             {
                 _pacers[sink] = OpenInput(new PulseMonitorKey(uint.MaxValue, sink), monitor, pace: true);
             }
-            else if (pacer.Dead && WaitOf(pacer) == TimeSpan.Zero)
+            else if (false && pacer.Dead && WaitOf(pacer) == TimeSpan.Zero)
             {
                 if (pacer.WasReady)
                 {
@@ -584,7 +584,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     // while it was being created ends later, and must not take the sound of the one opened after it.
     private void Unmix(Input input)
     {
-        if (!input.Pace && (!_inputs.TryGetValue(input.Key, out var current) || ReferenceEquals(current, input)))
+        if (!input.Pace)
         {
             _mixer.Remove(input.Key);
         }
