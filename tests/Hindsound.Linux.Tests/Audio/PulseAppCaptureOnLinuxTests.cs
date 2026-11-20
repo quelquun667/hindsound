@@ -209,6 +209,63 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
         Assert.DoesNotContain(choices.Apps(), entry => entry.ExeName == "hsplayfive");
     }
 
+    [Fact]
+    public void R1Probe_a_stream_moved_then_its_output_gone()
+    {
+        var lines = new List<string>();
+        foreach (var noClose in new[] { false, true })
+        {
+            Environment.SetEnvironmentVariable("R1_NOCLOSE", noClose ? "1" : null);
+            string? two = Pactl("load-module", "module-null-sink", "sink_name=hindsound_app_two");
+            try
+            {
+                var name = noClose ? "hsmoveb" : "hsmovea";
+                var app = StartApp(name, $"{Play(Tone("move.wav", AppHz, 10))}; true");
+                WaitFor(() => StreamsOn(Sink) >= 1, "the tone playing");
+                var recorder = new Recorder();
+                var log = new Log();
+                using var source = PulseAppCaptureSource.Open(app.Id, name, new ProcProcessSnapshot(), log.Write);
+                source.PacketAvailable += recorder.OnPacket;
+                source.Start();
+                Thread.Sleep(OpeningGap + TimeSpan.FromSeconds(1));
+                string Measure(string when)
+                {
+                    var samples = recorder.Samples();
+                    var last = samples[Math.Max(0, samples.Length - (Rate * Channels))..];
+                    var outputs = Pactl("list", "source-outputs");
+                    var onServer = System.Text.RegularExpressions.Regex.Matches(outputs, "media.name = \"" + PulseAppCaptureSource.StreamName + "\"").Count;
+                    var pacers = System.Text.RegularExpressions.Regex.Matches(outputs, "media.name = \"" + PulseAppCaptureSource.PaceName + "\"").Count;
+                    return $"noClose={noClose} {when}: held={source.HeldStreams} recorded={source.RecordedStreams} onServer={onServer} pacers={pacers} level={Strongest(last).App:0.000} sinkinputs=[{Pactl("list", "short", "sink-inputs").Replace('\n', ';').Replace('\t', ' ')}]";
+                }
+
+                lines.Add(Measure("before"));
+                var sinks = Pactl("list", "short", "sinks").Split('\n').Select(line => line.Split('\t')).Where(parts => parts.Length > 1);
+                var sinkIndex = sinks.First(parts => parts[1] == Sink)[0];
+                var input = Pactl("list", "short", "sink-inputs").Split('\n').Select(line => line.Split('\t')).First(parts => parts.Length > 1 && parts[1] == sinkIndex)[0];
+                Pactl("move-sink-input", input, "hindsound_app_two");
+                Thread.Sleep(1500);
+                lines.Add(Measure("moved"));
+                Pactl("unload-module", two);
+                two = null;
+                Thread.Sleep(1500);
+                lines.Add(Measure("output gone"));
+                source.Stop();
+                lines.Add("log: " + log);
+            }
+            finally
+            {
+                if (two is not null)
+                {
+                    Pactl("unload-module", two);
+                }
+
+                Environment.SetEnvironmentVariable("R1_NOCLOSE", null);
+            }
+        }
+
+        Assert.Fail("R1MOVE " + string.Join(" || ", lines));
+    }
+
     // The strongest level of each tone over blocks of 50 ms: the application's, and the other one's.
     private static (double App, double Other) Strongest(float[] samples) => (Blocks(samples, AppHz).DefaultIfEmpty().Max(), Blocks(samples, OtherHz).DefaultIfEmpty().Max());
 

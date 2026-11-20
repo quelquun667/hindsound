@@ -345,7 +345,11 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         var (open, close) = PulseAppRules.Changes(_inputs.Keys, mine, look.Monitors);
         foreach (var key in close)
         {
-            Release(_inputs[key]);
+            if (Environment.GetEnvironmentVariable("R1_NOCLOSE") != "1")
+            {
+                Release(_inputs[key]);
+            }
+
             _inputs.Remove(key);
         }
 
