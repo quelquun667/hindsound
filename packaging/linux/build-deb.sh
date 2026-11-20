@@ -116,7 +116,6 @@ chmod 644 -- "$doc/copyright"
 chmod 644 -- "$doc/changelog.gz"
 
 control_text "$version" "$(installed_size "$root")" > "$root/DEBIAN/control"
-echo "X-Extra: 1" >> "$root/DEBIAN/control"
 (cd -- "$root" && find usr -type f -print0 | LC_ALL=C sort -z | xargs -0 md5sum) > "$root/DEBIAN/md5sums"
 chmod 644 -- "$root/DEBIAN/control" "$root/DEBIAN/md5sums"
 
