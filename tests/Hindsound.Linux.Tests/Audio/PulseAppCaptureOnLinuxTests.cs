@@ -157,6 +157,19 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
             Thread.Sleep(OpeningGap);
             WaitFor(() => source.RecordedStreams == 1, "the application recorded");
 
+            // PipeWire has no need of the streams that keep each output quick; PulseAudio has one on each of the three outputs.
+            var pacers = RecordingsOnServer(PulseAppCaptureSource.PaceName);
+            var server = Pactl("info").Split('\n').FirstOrDefault(line => line.StartsWith("Server Name", StringComparison.Ordinal));
+            _output.WriteLine($"{server}: {pacers} streams keeping an output quick");
+            if (server?.Contains("on PipeWire", StringComparison.Ordinal) == true)
+            {
+                Assert.Equal(0, pacers);
+            }
+            else
+            {
+                Assert.True(pacers >= 3, $"{pacers} streams keep an output quick under {server}");
+            }
+
             Pactl("unload-module", module);
             unloaded = true;
 

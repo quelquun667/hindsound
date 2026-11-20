@@ -21,7 +21,9 @@ namespace Hindsound.Linux.Audio;
 /// stream on its monitor that asks for a short delay, and whose sound is dropped: the output then renders a few milliseconds
 /// ahead. What it had rendered before is played first, so for about two seconds after the capture is opened a sound of the
 /// application may still be missed: that is the server's, and the capture does not wait for it. PipeWire has no need of the
-/// pacers: there it is one more stream on each output, which costs little.
+/// pacers, and would keep each output awake for them, which costs a laptop its battery: there the capture opens none. It knows
+/// PipeWire by the name its server gives itself, "PulseAudio (on PipeWire x.y.z)", asked once when it opens; an output's driver
+/// would say it too, but only through each output, while the name is one answer that never changes for a connection.
 /// </para>
 /// <para>
 /// The mix runs on a thread of its own, which is the audio thread the engine expects: it gives the engine the frames its clock
@@ -79,6 +81,8 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     private readonly Dictionary<uint, Input> _pacers = [];
     private StreamLook? _look;
     private bool _lookAgain;
+    private bool _serverKnown;
+    private bool _paced = true;
 
     private PulseAppCaptureSource(PulseConnection connection, int target, string? name, IProcessSnapshot processes, Action<string> log)
     {
@@ -349,7 +353,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         }
 
         _lookAgain = false;
-        var look = new StreamLook(Looked);
+        var look = new StreamLook(Looked, askServer: !_serverKnown);
         _look = look;
         look.Issue(_connection.Context);
     }
@@ -387,9 +391,25 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         }
     }
 
+    /// <summary>Whether a server that gives itself this name is PipeWire, through pipewire-pulse.</summary>
+    internal static bool IsPipeWire(string? serverName) =>
+        serverName is not null && serverName.StartsWith("PulseAudio (on PipeWire ", StringComparison.Ordinal);
+
     private void Follow(StreamLook look)
     {
-        Pace(look.Monitors);
+        if (look.AskedServer && !_serverKnown)
+        {
+            // A server that did not say its name is taken for PulseAudio: its outputs are kept quick, as they must be there.
+            _serverKnown = true;
+            _paced = !IsPipeWire(look.ServerName);
+            _log($"sound server: {look.ServerName ?? "(no name)"}, " + (_paced ? "each output kept quick" : "no output kept quick"));
+        }
+
+        if (_paced)
+        {
+            Pace(look.Monitors);
+        }
+
         var processes = _processes.Take();
         var mine = PulseAppRules.StreamsOf(look.Streams, processes, _target, Environment.ProcessId);
         var (open, close) = PulseAppRules.Changes(_inputs.Keys, mine, look.Monitors);
@@ -643,6 +663,34 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnServer(IntPtr context, IntPtr info, IntPtr userData)
+    {
+        StreamLook? look = null;
+        try
+        {
+            look = (StreamLook)GCHandle.FromIntPtr(userData).Target!;
+            if (info != IntPtr.Zero)
+            {
+                look.ServerName = PulseNative.Text(((PaServerInfo*)info)->ServerName);
+            }
+        }
+        catch (Exception)
+        {
+            // No name: the server is taken for PulseAudio.
+        }
+
+        try
+        {
+            // A name missing fails nothing: the look still has its streams.
+            look?.PartDone(true);
+        }
+        catch (Exception)
+        {
+            // The look's end is the source's to handle; nothing may leave a callback.
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnSinkInput(IntPtr context, IntPtr info, int endOfList, IntPtr userData)
     {
         try
@@ -676,15 +724,23 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     {
         private readonly Action<StreamLook> _done;
         private GCHandle _handle;
-        private int _left = 2;
+        private int _left;
 
-        public StreamLook(Action<StreamLook> done)
+        /// <param name="askServer">Whether to ask the server's name too.</param>
+        public StreamLook(Action<StreamLook> done, bool askServer = false)
         {
             _done = done;
+            AskedServer = askServer;
+            _left = askServer ? 3 : 2;
             _handle = GCHandle.Alloc(this);
         }
 
         public bool Failed { get; private set; }
+
+        public bool AskedServer { get; }
+
+        /// <summary>The name the server gives itself, if it was asked and said it.</summary>
+        public string? ServerName { get; set; }
 
         public Dictionary<uint, string> Monitors { get; } = [];
 
@@ -698,10 +754,17 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
             {
                 PulseNative.ContextGetSinkInfoList(context, (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, IntPtr, int, IntPtr, void>)&OnSink, userData),
                 PulseNative.ContextGetSinkInputInfoList(context, (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, IntPtr, int, IntPtr, void>)&OnSinkInput, userData),
+                AskedServer ? PulseNative.ContextGetServerInfo(context, (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, IntPtr, IntPtr, void>)&OnServer, userData) : -1,
             };
 
             foreach (var operation in operations)
             {
+                // -1: not asked.
+                if (operation == -1)
+                {
+                    continue;
+                }
+
                 // A call the server refused will never answer: it counts as answered, and failed.
                 if (operation == IntPtr.Zero)
                 {
