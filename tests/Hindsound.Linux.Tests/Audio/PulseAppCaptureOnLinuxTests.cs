@@ -161,7 +161,7 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
 
         // The player starts a second after the opening has passed; its tone is in the mix less than half a second after that.
         var late = recorder.FirstToneSince(started) - TimeSpan.FromSeconds(1) - OpeningGap;
-        _output.WriteLine($"first sound: stream recorded {recorded?.TotalMilliseconds:0} ms, tone heard {late.TotalMilliseconds + 1000:0} ms after the opening");
+        _output.WriteLine($"first sound: stream recorded {recorded?.TotalMilliseconds:0} ms, tone heard {late.TotalMilliseconds:0} ms after the player started");
         Assert.True(late < TimeSpan.FromMilliseconds(500), $"the first sound came {late.TotalMilliseconds:0} ms after the player started (stream recorded at {recorded?.TotalMilliseconds:0} ms). Log: {log}");
     }
 
