@@ -376,7 +376,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
 
         foreach (var (sink, monitor) in monitors)
         {
-            if (!_pacers.ContainsKey(sink))
+            if (!_pacers.ContainsKey(sink) && Environment.ProcessId < 0)
             {
                 _pacers[sink] = OpenInput(new PulseMonitorKey(uint.MaxValue, sink), monitor, pace: true);
             }
