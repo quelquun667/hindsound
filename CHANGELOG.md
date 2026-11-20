@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - On Linux, a `.deb` package for Ubuntu 22.04 and later and Debian 12 and later: `sudo apt install ./hindsound_X.Y.Z_amd64.deb` installs Hindsound in `/usr/lib/hindsound`, with `/usr/bin/hindsound`, its entry in the list of applications and its icons, and `sudo apt remove hindsound` takes it away. Like the AppImage, it does not update itself: a notification says when a new version is out, with the link to its release.
-- On Linux, once the `.deb` is installed, the next launch of Hindsound, from the list of applications or elsewhere, removes the entry that an AppImage or the tar.gz wrote in `~/.local/share/applications`, with the icons it copied that are the same as the package's: under the same name, that entry went before the one of the package, and the list kept starting the old copy. The launches after it start the `.deb`. An entry you changed or hid stays, and an AppImage started after the `.deb` is installed writes none.
+- On Linux, once the `.deb` is installed, the next launch of Hindsound, from the list of applications or elsewhere, removes the entry that an AppImage or the tar.gz wrote in `~/.local/share/applications`, with the icons it copied that are the same as the package's: under the same name, that entry went before the one of the package, and the list kept starting the old copy. The launches after it start the `.deb`. An entry you changed or hid stays, and an AppImage started after the `.deb` is installed writes none. A tar.gz copied into `~/.local` by the steps of its `README.txt` is not removed: delete it before you install the `.deb`, as `~/.local/bin` comes before `/usr/bin` on the PATH.
 
 ### Fixed
 

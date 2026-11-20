@@ -208,6 +208,8 @@ times, and the releases from 0.6.0 to 0.8.0 the first two; take one:
 
   It puts the program in `/usr/lib/hindsound`, with its MP3 encoder, SDL 3 and the fonts, and `/usr/bin/hindsound`, a
   link to it. `apt` installs what it needs from the system: the sound library, FreeType, HarfBuzz, fontconfig and OpenSSL.
+  Unless your `apt` skips recommended packages, it also adds a clipboard tool for `Copy` (`wl-clipboard`, `xclip` or
+  `xsel`), `xdg-utils`, which opens folders and links, and the certificates the update check needs (`ca-certificates`).
 
 All three bring what the window needs that a desktop may lack: SDL 3 and the fonts. The rest, FreeType, HarfBuzz and
 fontconfig, comes with every desktop install, so the AppImage and the tar.gz ask you to install nothing more.
@@ -233,6 +235,10 @@ anywhere else, removes that entry and those of its icons that are the same as th
 That launch may still be the old copy; the ones after it start the .deb, and an AppImage started then writes no entry.
 An entry you changed or hid stays: delete it yourself. `Start with the session` stays with the copy that turned it on:
 the .deb shows it off, so turn it on there, and the session starts the .deb from then on.
+
+If you copied the tar.gz into `~/.local` with the steps of its `README.txt`, remove that copy before you install the
+.deb, with the list of files under Uninstall in the same `README.txt`. Hindsound does not do it: `~/.local/bin` comes
+before `/usr/bin` on the PATH, so `hindsound`, and the list of applications with it, would keep starting that copy.
 
 **Save from a key.** On X11, and on Wayland where the desktop offers global shortcuts (GNOME 48 and later, so Ubuntu
 26.04, and KDE), Hindsound uses its hotkey. Ubuntu 24.04 on Wayland has no such shortcuts: open Settings > Keyboard >

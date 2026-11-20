@@ -57,6 +57,9 @@ hand while Hindsound is not running.
 Uninstall
 ---------
 
+Remove this copy as below before you install the .deb of Hindsound: ~/.local/bin comes before /usr/bin on the PATH,
+so "hindsound", and the list of applications with it, would keep starting this copy.
+
 Turn "Start with the session" off in the menu of the icon first, or the last line below removes it for you. Then:
 
     rm ~/.local/bin/hindsound ~/.local/bin/libmp3lame.so.0 ~/.local/bin/libSDL3.so.0
