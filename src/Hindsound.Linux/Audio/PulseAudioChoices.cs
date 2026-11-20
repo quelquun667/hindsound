@@ -5,8 +5,9 @@ using Hindsound.Audio;
 namespace Hindsound.Linux.Audio;
 
 /// <summary>
-/// The outputs and the microphones of the sound server, read afresh at each call. Capturing a single application is not in
-/// the Linux version, so there are no applications to offer.
+/// The outputs and the microphones of the sound server, and the applications that play sound now, read afresh at each call.
+/// An application is in the list while it has a playback stream: one that has played nothing yet, or has closed its stream,
+/// is not.
 /// </summary>
 [SupportedOSPlatform("linux")]
 internal sealed class PulseAudioChoices : IAudioChoices
@@ -28,5 +29,18 @@ internal sealed class PulseAudioChoices : IAudioChoices
         }
     }
 
-    public IReadOnlyList<AudioAppInfo> Apps() => [];
+    public IReadOnlyList<AudioAppInfo> Apps()
+    {
+        try
+        {
+            var streams = PulseAppCaptureSource.ReadStreams();
+            var processes = new ProcProcessSnapshot().Take();
+            return AudioAppList.Build(PulseAppRules.Sessions(streams, processes), processes, Environment.ProcessId);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            _log("the applications could not be listed: " + exception.GetType().Name + ": " + exception.Message);
+            return [];
+        }
+    }
 }

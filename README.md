@@ -263,6 +263,9 @@ the later systems Hindsound is made for already have.
 
 - Listening to a clip: while it plays, the capture of the PC's sound records silence, so the clip does not end up in the
   next one. The microphone keeps recording.
+- `Record` can follow one application and its child processes, as on Windows, through PulseAudio or PipeWire. An
+  application is in its list only while it plays sound: start a sound in it, then choose it. See
+  [Record one application](#record-one-application).
 - `Delete`, and an edit saved in place of its original, send the file to the Trash of the desktop.
 - The `Hotkeys` page shows keys typed in a field on X11, the keys the desktop chose under its shortcut portal (change them
   in the shortcut settings of the desktop), or, with neither, the command to bind to a key, with a `Copy` button.
@@ -274,7 +277,7 @@ replace the file. For the .deb, download the new one from that release and insta
 `sudo apt install ./hindsound_<version>_amd64.deb`: it replaces the old version. `apt upgrade` does not see it, as no
 repository serves it.
 
-**Not there yet:** recording one application, and any processor other than x64.
+**Not there yet:** any processor other than x64.
 
 **Remove it.** Before you delete the AppImage (or the program), turn `Start with the session` off in the menu of the icon,
 or delete `~/.config/autostart/io.github.quelquun667.Hindsound.desktop`: otherwise your session tries to start a file that
@@ -465,6 +468,22 @@ there too, next to the `Mic` lane: turned off, the microphone is not opened at a
 applications that have an audio session, so an application that has played nothing yet is not in it.
 
 - Hindsound remembers the application by the name of its exe.
+- On Linux, the list shows the applications that have a sound stream open now: an application is in it only while it
+  plays sound. Hindsound remembers it by its process name, as `/proc` gives it (the kernel keeps its first 15 bytes, so a
+  name with accents is cut earlier: an accented letter takes 2 bytes or more, and is dropped whole when it does not fit), and
+  records the sound streams of that process and of its children. An application in a Flatpak or Snap sandbox may give a
+  process id of its own sandbox: Hindsound then finds it by the name of its program, which has not been tried on a real
+  sandbox.
+- On Linux, the list shows the name the application gives its sound stream only when that name holds the name of its
+  process, whatever the case: `Firefox` for `firefox`, `Google Chrome` for `chrome`. A stream named otherwise, such as
+  `WEBRTC VoiceEngine` for Discord in a call, or `Chromium` for an Electron application, is shown by the name of the process,
+  such as `Discord` or `code`, so that two applications are not both called `Chromium`. The `{app}` part of a clip's file name
+  follows the list.
+- On Linux, an application that stops playing sound leaves the list. If it is the one you chose, the `Record` menu then shows
+  its process name, `firefox` instead of `Firefox`, as on Windows for an application with no audio session: the choice is
+  the same, only the name shown changes, and it comes back when the application plays again.
+- On Linux with PulseAudio (Ubuntu 22.04), the first 2 seconds after you choose the application, or after Hindsound starts, may
+  be missing from the memory. PipeWire does not have this gap.
 - If the application closes, the band says `Not running: Discord`, and the memory gets silence. The capture attaches again
   when the application comes back. None of this makes a notification.
 - `Output` is greyed out in this mode: the capture does not depend on an output.
@@ -521,7 +540,11 @@ The `Capture on` notification at each launch reminds you, not the people in the 
 
 Hindsound does not touch your game. It injects nothing, sets no hook, and opens no handle to the game. The `{app}` part of a
 file name comes from the title of the active window, or from the name of the application you chose in `Record`. With `Record` set to one application, Hindsound looks for it in a
-list of processes that Windows gives, every 3 seconds, and takes its sound through the audio API of Windows.
+list of processes that Windows gives, every 3 seconds, and takes its sound through the audio API of Windows. On Linux, it reads
+the list of processes in `/proc`, when the window opens or comes to the front, and when PulseAudio or PipeWire shows a sound
+stream it has not seen yet, or one whose process has changed, while an application is recorded (a stream already seen is not
+looked up again when it only changes volume or ends); it takes the sound streams of that application through PulseAudio or
+PipeWire, and touches nothing in the game.
 
 This is not a promise about any anti-cheat: it has not been tried against one, and no anti-cheat publisher guarantees it.
 
@@ -587,10 +610,12 @@ the same two ways, and removes it. Not tried for real:
 - the window on X11 and on Wayland, at each display scale, with its keyboard, its input methods and its folder dialog
 - listening to a clip, and the PC's sound recorded as silence meanwhile
 - deleting a clip to the Trash of the desktop
+- recording one application (the CI records a player started from a shell, beside another one, on PulseAudio and on
+  PipeWire), with a real application such as a browser, a game or Discord, and in a Flatpak or Snap sandbox
 
 ## Roadmap
 
-- Recording one application on Linux, and a Mac version, with no date yet
+- A Mac version, with no date yet
 
 ## License
 

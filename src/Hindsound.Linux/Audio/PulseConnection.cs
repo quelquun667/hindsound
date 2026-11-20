@@ -105,14 +105,17 @@ internal sealed unsafe class PulseConnection : IDisposable
     /// Asks the server for its events of outputs, inputs and itself. <paramref name="onEvent"/> gets each event's type, on the
     /// loop's thread.
     /// </summary>
-    public void Subscribe(Action<uint> onEvent)
+    public void Subscribe(Action<uint> onEvent) => Subscribe(onEvent, PulseFormats.SubscriptionMask);
+
+    /// <summary>Asks the server for the events of <paramref name="mask"/> (pa_subscription_mask_t), given as in <see cref="Subscribe(Action{uint})"/>.</summary>
+    public void Subscribe(Action<uint> onEvent, uint mask)
     {
         var userData = GCHandle.ToIntPtr(_self);
         Locked(() =>
         {
             _onEvent = onEvent;
             PulseNative.ContextSetSubscribeCallback(_context, SubscribeCallback(), userData);
-            var operation = PulseNative.ContextSubscribe(_context, PulseFormats.SubscriptionMask, IntPtr.Zero, IntPtr.Zero);
+            var operation = PulseNative.ContextSubscribe(_context, mask, IntPtr.Zero, IntPtr.Zero);
             if (operation == IntPtr.Zero)
             {
                 throw new IOException("The sound server refused to report its changes: " + PulseNative.ErrorOf(_context));

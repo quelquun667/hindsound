@@ -222,7 +222,7 @@ public sealed unsafe class PlatformPagesTests
     [InlineData("Capture")]
     [InlineData("Portal")]
     [InlineData("Command")]
-    public void Linux_hides_the_notification_look_the_sound_and_the_single_app_in_every_mode(string modeName)
+    public void Linux_hides_the_notification_look_and_the_sound_and_offers_the_single_app_in_every_mode(string modeName)
     {
         var mode = Enum.Parse<ShortcutMode>(modeName);
         var settings = new AppSettings().Normalize();
@@ -242,17 +242,16 @@ public sealed unsafe class PlatformPagesTests
         Assert.True(rig.Has("general.test"));
         Assert.True(rig.Has("general.notifications") && rig.Has("general.fullscreen") && rig.Has("general.size"));
 
+        // One application is recorded alone as on Windows: the choice is there, and the output is greyed while it is set.
         rig.Screen.ShowSection(Section.Audio);
         var audio = rig.Texts();
-        Assert.False(rig.Has("audio.record"));
-        Assert.DoesNotContain("Record", audio);
-
-        // A name left in the file by hand changes nothing here: the output stays the choice, and is not greyed.
-        Assert.True(rig.Screen.WidgetById("audio.output")!.Enabled);
+        Assert.True(rig.Has("audio.record"));
+        Assert.Contains("Record", audio);
+        Assert.False(rig.Screen.WidgetById("audio.output")!.Enabled);
     }
 
     [Fact]
-    public void Windows_greys_the_output_while_one_application_is_recorded_and_Linux_does_not()
+    public void Windows_greys_the_output_while_one_application_is_recorded()
     {
         var settings = new AppSettings().Normalize();
         settings.Audio.SourceApp = "Discord.exe";

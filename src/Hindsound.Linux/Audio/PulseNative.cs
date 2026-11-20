@@ -80,6 +80,18 @@ internal static unsafe partial class PulseNative
     [LibraryImport(Library, EntryPoint = "pa_context_get_source_info_list")]
     public static partial IntPtr ContextGetSourceInfoList(IntPtr context, IntPtr callback, IntPtr userData);
 
+    // The capture of one application (PulseAppCaptureSource): its playback streams, and a record stream on one of them. In
+    // libpulse since 0.9.
+
+    [LibraryImport(Library, EntryPoint = "pa_context_get_sink_input_info_list")]
+    public static partial IntPtr ContextGetSinkInputInfoList(IntPtr context, IntPtr callback, IntPtr userData);
+
+    [LibraryImport(Library, EntryPoint = "pa_proplist_gets", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial IntPtr ProplistGets(IntPtr proplist, string key);
+
+    [LibraryImport(Library, EntryPoint = "pa_stream_set_monitor_stream")]
+    public static partial int StreamSetMonitorStream(IntPtr stream, uint sinkInputIndex);
+
     [LibraryImport(Library, EntryPoint = "pa_context_set_subscribe_callback")]
     public static partial void ContextSetSubscribeCallback(IntPtr context, IntPtr callback, IntPtr userData);
 

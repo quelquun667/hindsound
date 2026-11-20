@@ -72,6 +72,26 @@ internal struct PaSinkInfo
     public IntPtr MonitorSourceName;
 }
 
+/// <summary>The start of pa_sink_input_info, up to proplist.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct PaSinkInputInfo
+{
+    public uint Index;
+    public IntPtr Name;
+    public uint OwnerModule;
+    public uint Client;
+    public uint Sink;
+    public PaSampleSpec SampleSpec;
+    public PaChannelMap ChannelMap;
+    public PaCVolume Volume;
+    public ulong BufferUsec;
+    public ulong SinkUsec;
+    public IntPtr ResampleMethod;
+    public IntPtr Driver;
+    public int Mute;
+    public IntPtr Proplist;
+}
+
 /// <summary>The start of pa_timing_info (pulse/def.h), up to read_index.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct PaTimingInfo
