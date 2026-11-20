@@ -407,7 +407,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         }
 
         var attributes = PulseFormats.BufferAttrFor(AudioFlow.System);
-        if ((!pace && PulseNative.StreamSetMonitorStream(stream, key.SinkInput) < 0)
+        if ((false)
             || PulseNative.StreamConnectRecord(stream, monitor, &attributes, PulseAppRules.RecordFlags) < 0)
         {
             _log("a stream of the application could not be recorded: " + PulseNative.ErrorOf(context));
