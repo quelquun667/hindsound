@@ -401,11 +401,6 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         var userData = GCHandle.ToIntPtr(input.Handle);
         PulseNative.StreamSetStateCallback(stream, (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, IntPtr, void>)&OnState, userData);
         PulseNative.StreamSetReadCallback(stream, (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, nuint, IntPtr, void>)&OnRead, userData);
-        if (!pace)
-        {
-            _mixer.Add(key);
-        }
-
         var attributes = PulseFormats.BufferAttrFor(AudioFlow.System);
         if ((!pace && PulseNative.StreamSetMonitorStream(stream, key.SinkInput) < 0)
             || PulseNative.StreamConnectRecord(stream, monitor, &attributes, PulseAppRules.RecordFlags) < 0)
@@ -413,6 +408,11 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
             _log("a stream of the application could not be recorded: " + PulseNative.ErrorOf(context));
             Release(input);
             input.Dead = true;
+        }
+        else if (!pace)
+        {
+            // Under the loop's lock: no packet can come before it is in the mix.
+            _mixer.Add(key);
         }
 
         return input;
@@ -423,7 +423,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     // itself once it is ready (OnState), unless <paramref name="now"/> says the connection closes anyway.
     private void Release(Input input, bool now = false)
     {
-        _mixer.Remove(input.Key);
+        Unmix(input);
         var stream = input.Stream;
         if (stream != IntPtr.Zero && !now && PulseNative.StreamGetState(stream) == StreamCreating)
         {
@@ -449,6 +449,16 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         if (input.Handle.IsAllocated)
         {
             input.Handle.Free();
+        }
+    }
+
+    // Takes a recording out of the mix, unless a newer recording of the same stream holds its place there now: one let go
+    // while it was being created ends later, and must not take the sound of the one opened after it.
+    private void Unmix(Input input)
+    {
+        if (!input.Pace && (!_inputs.TryGetValue(input.Key, out var current) || ReferenceEquals(current, input)))
+        {
+            _mixer.Remove(input.Key);
         }
     }
 
@@ -493,7 +503,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
             {
                 // PulseAudio ends it when the application's stream ends or moves: the next look lets it go, or records it again.
                 input.Dead = true;
-                input.Owner._mixer.Remove(input.Key);
+                input.Owner.Unmix(input);
                 input.Owner.Look();
             }
         }
