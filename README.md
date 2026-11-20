@@ -541,9 +541,10 @@ The `Capture on` notification at each launch reminds you, not the people in the 
 Hindsound does not touch your game. It injects nothing, sets no hook, and opens no handle to the game. The `{app}` part of a
 file name comes from the title of the active window, or from the name of the application you chose in `Record`. With `Record` set to one application, Hindsound looks for it in a
 list of processes that Windows gives, every 3 seconds, and takes its sound through the audio API of Windows. On Linux, it reads
-the list of processes in `/proc`, when the window opens or comes to the front, and each time PulseAudio or PipeWire says a
-sound stream started, changed or ended while an application is recorded; it takes the sound streams of that application through
-PulseAudio or PipeWire, and touches nothing in the game.
+the list of processes in `/proc`, when the window opens or comes to the front, and when PulseAudio or PipeWire shows a sound
+stream it has not seen yet, or one whose process has changed, while an application is recorded (a stream already seen is not
+looked up again when it only changes volume or ends); it takes the sound streams of that application through PulseAudio or
+PipeWire, and touches nothing in the game.
 
 This is not a promise about any anti-cheat: it has not been tried against one, and no anti-cheat publisher guarantees it.
 
