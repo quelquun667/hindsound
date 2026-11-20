@@ -150,8 +150,10 @@ $mutations = @(
     @($release, "if (`$isDraft -eq 'true') {", 'if ($false) {')
     @($release, '--draft --verify-tag', '--verify-tag')
     @($release, '--draft --verify-tag', '--draft')
-    @($release, 'persist-credentials: false', 'persist-credentials: true')
-    @($release, 'permissions: {}', 'permissions: write-all')
+    @($release, "fetch-depth: 0`n          persist-credentials: false", "fetch-depth: 0`n          persist-credentials: true")
+    @($release, "with:`n          persist-credentials: false", "with:`n          persist-credentials: true")
+    @($release, "- 'v*'`n`npermissions: {}", "- 'v*'`n`npermissions: write-all")
+    @($release, "timeout-minutes: 5`n    permissions: {}", "timeout-minutes: 5`n    permissions: write-all")
     @($release, 'run: dotnet test Hindsound.slnx', 'run: Write-Output Hindsound.slnx')
     @($release, 'run: ./tools/release/test-release-scripts.ps1', 'run: Write-Output')
     @($release, '"VERSION=$version" >> $env:GITHUB_ENV', '"VERSION=0.1.0" >> $env:GITHUB_ENV')
@@ -232,13 +234,14 @@ for ($index = $From; $index -le $last; $index++) {
         if ($LASTEXITCODE -ne 0) { throw 'git could not make the commit of the copy.' }
 
         $path = Join-Path $copy $file
-        $text = [IO.File]::ReadAllText($path)
+        # A Windows checkout has CRLF; the texts of the entries are written with LF.
+        $text = [IO.File]::ReadAllText($path).Replace("`r`n", "`n")
         $count = ($text.Length - $text.Replace($find, '').Length) / $find.Length
         # The steps of the release moved from release.yml to release-files.yml: an entry whose text is no longer in the first
         # is looked for in the second.
         if ($count -ne 1 -and $file -eq $release) {
             $moved = Join-Path $copy '.github/workflows/release-files.yml'
-            $movedText = [IO.File]::ReadAllText($moved)
+            $movedText = [IO.File]::ReadAllText($moved).Replace("`r`n", "`n")
             if (($movedText.Length - $movedText.Replace($find, '').Length) / $find.Length -eq 1) {
                 $file = '.github/workflows/release-files.yml'
                 $path = $moved

@@ -610,6 +610,7 @@ try {
     $damagedBytes[0] = $damagedBytes[0] -bxor 0xFF
     [IO.File]::WriteAllBytes($damaged, $damagedBytes)
     Assert-Refused 'a Setup of the same size with other bytes refused' { Test-ReleaseFiles $releaseFiles } 'the SHA-256'
+    Assert-Refused 'a Setup of the same size with other bytes refused by the manifest, not only by SHA256SUMS' { Test-ReleaseFiles $releaseFiles } 'and the Setup there has'
     foreach ($announceName in 'hindsound-update-linux-x64.json', 'hindsound-update-win-x64-portable.json') {
         $releaseFiles = New-ReleaseFiles
         & $writeAnnounce -Version '1.2.3' -Repository 'other/name' -OutFile (Join-Path $releaseFiles $announceName)
@@ -1121,6 +1122,7 @@ try {
     Report 'a published release is refused' ($releaseText.Contains('if ($isDraft -eq ''false'') { throw "$env:TAG is already published." }'))
     Report 'a draft is reused' ($releaseText.Contains('if ($isDraft -eq ''true'') {'))
     Report 'the token stays out of git' ($releaseText -match '(?m)^\s+persist-credentials: false$')
+    Report 'every checkout of release.yml keeps the token out of git' (([regex]::Matches($releaseText, 'uses: actions/checkout@')).Count -eq ([regex]::Matches($releaseText, '(?m)^\s+persist-credentials: false$')).Count)
     Report 'the workflow starts with no permission' ($releaseText -match '(?m)^permissions: \{\}$')
     Report 'the version comes from check-tag' ($releaseText.Contains('"VERSION=$version" >> $env:GITHUB_ENV') -and $releaseText.Contains('"version=$version" >> $env:GITHUB_OUTPUT') -and $releaseText.Contains('version: ${{ steps.tag.outputs.version }}'))
     Report 'the releases run one at a time, none cancelled' ($releaseText -cmatch '(?m)^concurrency:\n  group: release\n  cancel-in-progress: false$')
