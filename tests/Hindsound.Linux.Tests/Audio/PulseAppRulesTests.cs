@@ -94,8 +94,8 @@ public sealed unsafe class PulseAppRulesTests
         Assert.Null(PulseAppRules.KernelName(null));
 
         // 14 bytes, then a character of two: the kernel keeps half of it, the comparison none.
-        Assert.Equal("abcdefghijklmn", PulseAppRules.KernelName("abcdefghijklmné"));
-        Assert.Equal("abcdefghijklmé", PulseAppRules.KernelName("abcdefghijklmé-x"));
+        Assert.Equal("abcdefghijklmn", PulseAppRules.KernelName("abcdefghijklmn\u00e9"));
+        Assert.Equal("abcdefghijklm\u00e9", PulseAppRules.KernelName("abcdefghijklm\u00e9-x"));
     }
 
     [Fact]
@@ -159,7 +159,7 @@ public sealed unsafe class PulseAppRulesTests
             new(6, 9, 101, null, null),
         ];
 
-        var (open, close) = PulseAppRules.Plan(current, wanted, monitors);
+        var (open, close) = PulseAppRules.Changes(current, wanted, monitors);
 
         // 3 starts; 5 moved to the headset, recorded again there; 6 is on an output with no monitor; 1 ended; 2 is kept.
         Assert.Equal([(new PulseMonitorKey(3, 0), "out.monitor"), (new PulseMonitorKey(5, 1), "headset.monitor")], open.OrderBy(item => item.Key.SinkInput).ToArray());
@@ -170,7 +170,7 @@ public sealed unsafe class PulseAppRulesTests
     public void Nothing_changes_when_the_streams_are_those_recorded()
     {
         var monitors = new Dictionary<uint, string> { [0] = "out.monitor" };
-        var (open, close) = PulseAppRules.Plan([new PulseMonitorKey(2, 0)], [new PulsePlaybackStream(2, 0, 1, null, null)], monitors);
+        var (open, close) = PulseAppRules.Changes([new PulseMonitorKey(2, 0)], [new PulsePlaybackStream(2, 0, 1, null, null)], monitors);
 
         Assert.Empty(open);
         Assert.Empty(close);

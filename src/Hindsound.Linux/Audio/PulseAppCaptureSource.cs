@@ -327,7 +327,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     {
         var processes = _processes.Take();
         var mine = PulseAppRules.StreamsOf(look.Streams, processes, _target, Environment.ProcessId);
-        var (open, close) = PulseAppRules.Plan(_inputs.Keys, mine, look.Monitors);
+        var (open, close) = PulseAppRules.Changes(_inputs.Keys, mine, look.Monitors);
         foreach (var key in close)
         {
             Release(_inputs[key]);

@@ -178,7 +178,7 @@ internal static class PulseAppRules
     /// monitor), and those to stop (recorded, but no longer the application's, or on another output now). A stream whose
     /// recording failed stays in <paramref name="current"/> until it ends, so it is not opened again and again.
     /// </summary>
-    public static (IReadOnlyList<(PulseMonitorKey Key, string MonitorSource)> Open, IReadOnlyList<PulseMonitorKey> Close) Plan(
+    public static (IReadOnlyList<(PulseMonitorKey Key, string MonitorSource)> Open, IReadOnlyList<PulseMonitorKey> Close) Changes(
         IEnumerable<PulseMonitorKey> current,
         IReadOnlyList<PulsePlaybackStream> wanted,
         IReadOnlyDictionary<uint, string> monitors)
