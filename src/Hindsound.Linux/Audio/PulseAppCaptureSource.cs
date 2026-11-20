@@ -79,6 +79,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     private readonly Dictionary<PulseMonitorKey, Input> _inputs = [];
     private readonly HashSet<Input> _closing = [];
     private readonly Dictionary<uint, Input> _pacers = [];
+    private readonly Dictionary<uint, (int? ProcessId, string? Binary, bool Mine)> _owners = [];
     private StreamLook? _look;
     private bool _lookAgain;
     private bool _serverKnown;
@@ -410,8 +411,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
             Pace(look.Monitors);
         }
 
-        var processes = _processes.Take();
-        var mine = PulseAppRules.StreamsOf(look.Streams, processes, _target, Environment.ProcessId);
+        var mine = Mine(look.Streams);
         var (open, close) = PulseAppRules.Changes(_inputs.Keys, mine, look.Monitors);
         foreach (var key in close)
         {
@@ -452,6 +452,27 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         {
             _retry.Change(due + TimeSpan.FromMilliseconds(20), Timeout.InfiniteTimeSpan);
         }
+    }
+
+    // The application's streams among those of a look. /proc is read again only when a stream is new, or now says another
+    // program plays it: a stream's process and its place in the tree of the application do not change while it lives, so a
+    // change of its volume, of its properties or of its output costs no reading.
+    private List<PulsePlaybackStream> Mine(List<PulsePlaybackStream> streams)
+    {
+        var known = streams.TrueForAll(stream => _owners.TryGetValue(stream.Index, out var seen)
+            && seen.ProcessId == stream.ProcessId
+            && string.Equals(seen.Binary, stream.Binary, StringComparison.Ordinal));
+        if (!known)
+        {
+            var mine = PulseAppRules.StreamsOf(streams, _processes.Take(), _target, Environment.ProcessId).Select(stream => stream.Index).ToHashSet();
+            _owners.Clear();
+            foreach (var stream in streams)
+            {
+                _owners[stream.Index] = (stream.ProcessId, stream.Binary, mine.Contains(stream.Index));
+            }
+        }
+
+        return streams.FindAll(stream => _owners[stream.Index].Mine);
     }
 
     // One pacer on each output; it goes with its output. One that failed is tried again a few times, later each time, so that

@@ -202,6 +202,35 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
     }
 
     [Fact]
+    public void A_change_of_volume_of_a_stream_already_seen_does_not_read_the_processes_again()
+    {
+        var app = StartApp("hsappseven", $"{Play(Tone("app.wav", AppHz, 8))}; true");
+        WaitFor(() => StreamsOn(Sink) >= 1, "the tone playing");
+        var index = StreamOn(Sink);
+        var processes = new CountingSnapshot();
+        var log = new Log();
+        using var source = PulseAppCaptureSource.Open(app.Id, "hsappseven", processes, log.Write);
+        source.Start();
+        WaitFor(() => source.RecordedStreams == 1, "the application recorded");
+        Thread.Sleep(300);
+
+        var before = processes.Takes;
+        for (var change = 0; change < 20; change++)
+        {
+            Pactl("set-sink-input-volume", index, change % 2 == 0 ? "90%" : "100%");
+        }
+
+        Thread.Sleep(500);
+        var reads = processes.Takes - before;
+        source.Stop();
+
+        // Other tests may start a stream meanwhile, which reads it once: a few readings, not one for each change.
+        _output.WriteLine($"volume: {reads} readings of /proc for 20 changes of volume");
+        Assert.True(reads < 5, $"/proc read {reads} times for 20 changes of volume. Log: {log}");
+        Assert.Equal(1, source.RecordedStreams);
+    }
+
+    [Fact]
     public void The_first_sound_of_a_stream_that_starts_arrives_quickly()
     {
         var log = new Log();
@@ -384,6 +413,13 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
         return Pactl("list", "source-outputs").Split('\n').Count(entry => entry.Trim() == line);
     }
 
+    // The index of the first playback stream on an output.
+    private static string StreamOn(string sink)
+    {
+        var index = Pactl("list", "short", "sinks").Split('\n').Select(line => line.Split('\t')).First(parts => parts.Length > 1 && parts[1] == sink)[0];
+        return Pactl("list", "short", "sink-inputs").Split('\n').Select(line => line.Split('\t')).First(parts => parts.Length > 1 && parts[1] == index)[0];
+    }
+
     private static void WaitFor(Func<bool> condition, string what)
     {
         var clock = Stopwatch.StartNew();
@@ -465,6 +501,21 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
             {
                 return [.. _samples];
             }
+        }
+    }
+
+    /// <summary>The processes of /proc, counting how many times they are read.</summary>
+    private sealed class CountingSnapshot : IProcessSnapshot
+    {
+        private readonly ProcProcessSnapshot _proc = new();
+        private int _takes;
+
+        public int Takes => Volatile.Read(ref _takes);
+
+        public IReadOnlyList<ProcessEntry> Take()
+        {
+            Interlocked.Increment(ref _takes);
+            return _proc.Take();
         }
     }
 
