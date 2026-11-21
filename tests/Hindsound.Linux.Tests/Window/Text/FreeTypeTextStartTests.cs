@@ -47,8 +47,9 @@ public sealed class FreeTypeTextStartTests : IDisposable
 
         var error = Assert.Throws<TextUnavailableException>(() => LinuxText.Create(_folder));
 
-        // Windows has no FreeType: the library is named. Linux has it, and the first font it opens is the headings'.
-        Assert.Contains(OperatingSystem.IsWindows() ? "libfreetype.so.6" : "BarlowSemiCondensed-SemiBold.ttf", error.Message, StringComparison.Ordinal);
+        // Windows has no FreeType, and on macOS no dylib is next to these tests (the Mac's text is MacText, tested by its own
+        // project): the library is named. Linux has it, and the first font it opens is the headings'.
+        Assert.Contains(OperatingSystem.IsLinux() ? "BarlowSemiCondensed-SemiBold.ttf" : "libfreetype.so.6", error.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(_folder, error.Message, StringComparison.OrdinalIgnoreCase);
     }
 }
