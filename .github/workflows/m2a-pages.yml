@@ -2,7 +2,7 @@ name: m2a-pages
 
 # Temporary: the pages of the Linux app drawn off screen by the exe of the base of this branch and by the exe of the
 # branch, at the scales 1 and 1.5, with the clock fixed by libfaketime, compared byte for byte; and the fingerprints of the
-# branch's pages on the Ubuntu of the CI, to compare with the mac job. Removed before the branch is merged.
+# branch's pages on Ubuntu 24.04 (the FreeType and HarfBuzz of the mac job), to compare with the mac job. Removed before the branch is merged.
 on:
   push:
     branches: [agent/mac-m2a]
@@ -79,7 +79,7 @@ jobs:
           exit $failed
 
   prints:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Check out
