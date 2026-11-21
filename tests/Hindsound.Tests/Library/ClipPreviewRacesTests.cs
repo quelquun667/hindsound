@@ -13,6 +13,17 @@ public sealed class ClipPreviewRacesTests
     private static ClipGroup Line(params string[] paths) =>
         new(paths.Select(path => new ClipFile(path, 10, new DateTime(2026, 3, 10, 12, 0, 0, DateTimeKind.Utc))).ToList());
 
+    /// <summary>
+    /// Runs a call that must be seen to finish within seconds from a thread of its own, not from the pool: on the Windows runner
+    /// of the CI, the tests that run beside this one can hold every thread of the pool for seconds, and a Task.Run there had
+    /// not even started the call 5 s later.
+    /// </summary>
+    private static Task<T> OnAThreadOfItsOwn<T>(Func<T> call) =>
+        Task.Factory.StartNew(call, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
+    private static Task OnAThreadOfItsOwn(Action call) =>
+        Task.Factory.StartNew(call, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
     /// <summary>A clock that is far past the grace of a start at every look, so that a stopped track is an ended one at once.</summary>
     private static Func<long> FastClock()
     {
@@ -272,9 +283,9 @@ public sealed class ClipPreviewRacesTests
         Assert.True(inside.Wait(Patience));
 
         // Dispose neither waits for the listener nor holds the lock of the preview while it runs.
-        var dispose = Task.Run(preview.Dispose);
+        var dispose = OnAThreadOfItsOwn(preview.Dispose);
         Assert.True(SpinWait.SpinUntil(() => dispose.IsCompleted, TimeSpan.FromSeconds(5)), "Dispose waited for the listener");
-        var current = Task.Run(() => preview.Current);
+        var current = OnAThreadOfItsOwn(() => preview.Current);
         Assert.True(SpinWait.SpinUntil(() => current.IsCompleted, TimeSpan.FromSeconds(5)), "the lock is held while the listener runs");
         Assert.False(Volatile.Read(ref finished), "the listener was already over, the test says nothing");
 
