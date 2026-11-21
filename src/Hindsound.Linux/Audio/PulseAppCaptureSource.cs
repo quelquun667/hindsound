@@ -48,14 +48,6 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     /// <summary>The name of the stream on each output that keeps its delay short.</summary>
     public const string PaceName = "Short delay for the chosen application";
 
-    /// <summary>
-    /// How long a recording that failed waits before it is tried again, doubled at each try, and how many times it is: a
-    /// stream the server moves because its output went away (a headset unplugged) may refuse a recording for a moment.
-    /// </summary>
-    public const int RetryMilliseconds = 1000;
-
-    public const int MaxRetries = 4;
-
     private const int MaxChunkFrames = InternalFormat.SampleRate / 10;
 
     // PA_STREAM_CREATING.
@@ -69,6 +61,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     private readonly PulseAppMixer _mixer;
     private readonly TaskCompletionSource<bool> _firstLook = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly Timer _retry;
+    private readonly TimeSpan _steady;
     private GCHandle _self;
     private Thread? _thread;
     private int _started;
@@ -85,9 +78,10 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     private bool _serverKnown;
     private bool _paced = true;
 
-    private PulseAppCaptureSource(PulseConnection connection, int target, string? name, IProcessSnapshot processes, Action<string> log)
+    internal PulseAppCaptureSource(PulseConnection connection, int target, string? name, IProcessSnapshot processes, Action<string> log, TimeSpan steady)
     {
         _connection = connection;
+        _steady = steady;
         _target = target;
         _processes = processes;
         _log = log;
@@ -123,13 +117,14 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     /// <summary>
     /// Opens the capture of <paramref name="targetProcessId"/> and its children, or throws if the server cannot be reached or
     /// does not list its streams. An application that plays nothing yet is no failure: it is recorded once it does.
+    /// <paramref name="steady"/> stands in for <see cref="PulseAppRules.SteadyMilliseconds"/>, for the tests.
     /// </summary>
-    public static PulseAppCaptureSource Open(int targetProcessId, string? name, IProcessSnapshot processes, Action<string> log)
+    public static PulseAppCaptureSource Open(int targetProcessId, string? name, IProcessSnapshot processes, Action<string> log, TimeSpan? steady = null)
     {
         ArgumentNullException.ThrowIfNull(processes);
         ArgumentNullException.ThrowIfNull(log);
         var connection = PulseConnection.Open();
-        var source = new PulseAppCaptureSource(connection, targetProcessId, name, processes, log);
+        var source = new PulseAppCaptureSource(connection, targetProcessId, name, processes, log, steady ?? TimeSpan.FromMilliseconds(PulseAppRules.SteadyMilliseconds));
         try
         {
             source.Begin();
@@ -321,12 +316,12 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     // How long a recording that failed still waits before it is tried again; null once it has had all its tries.
     private static TimeSpan? WaitOf(Input input)
     {
-        if (input.Tries >= MaxRetries)
+        if (input.Tries >= PulseAppRules.MaxRetries)
         {
             return null;
         }
 
-        var wait = TimeSpan.FromMilliseconds(RetryMilliseconds << input.Tries) - Stopwatch.GetElapsedTime(input.DeadAt);
+        var wait = TimeSpan.FromMilliseconds(PulseAppRules.RetryMilliseconds << input.Tries) - Stopwatch.GetElapsedTime(input.DeadAt);
         return wait > TimeSpan.Zero ? wait : TimeSpan.Zero;
     }
 
@@ -420,19 +415,25 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         }
 
         // A recording that failed keeps its place until its stream ends, without its stream, and is tried again a few times
-        // while its stream lives, later each time.
+        // while its stream lives, later each time; one the server had ready for long counts its tries from zero again.
         foreach (var (key, input) in _inputs.ToList())
         {
             if (input.Dead)
             {
                 Release(input);
-                if (WaitOf(input) == TimeSpan.Zero)
+                var wait = WaitOf(input);
+                if (wait is null && input.WasReady && !input.GivenUp)
+                {
+                    input.GivenUp = true;
+                    _log($"a recording of the application ended while its stream plays (try {input.Tries + 1} of {PulseAppRules.MaxRetries + 1}), not recorded again");
+                }
+                else if (wait == TimeSpan.Zero)
                 {
                     // PipeWire starts the recording of a stream it moves off an output that went away, then ends it as the
                     // move settles, saying nothing: told here, as it is tried again.
                     if (input.WasReady)
                     {
-                        _log($"a recording of the application ended while its stream plays (try {input.Tries + 1} of {MaxRetries + 1}), recorded again");
+                        _log($"a recording of the application ended while its stream plays (try {input.Tries + 1} of {PulseAppRules.MaxRetries + 1}), recorded again");
                     }
 
                     _inputs[key] = OpenInput(key, look.Monitors[key.Sink], tries: input.Tries + 1);
@@ -498,11 +499,16 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
             {
                 _pacers[sink] = OpenInput(new PulseMonitorKey(uint.MaxValue, sink), monitor, pace: true);
             }
+            else if (pacer.Dead && WaitOf(pacer) is null && pacer.WasReady && !pacer.GivenUp)
+            {
+                pacer.GivenUp = true;
+                _log($"the short delay of an output ended while its output is there (try {pacer.Tries + 1} of {PulseAppRules.MaxRetries + 1}), not kept again");
+            }
             else if (pacer.Dead && WaitOf(pacer) == TimeSpan.Zero)
             {
                 if (pacer.WasReady)
                 {
-                    _log($"the short delay of an output ended while its output is there (try {pacer.Tries + 1} of {MaxRetries + 1}), kept again");
+                    _log($"the short delay of an output ended while its output is there (try {pacer.Tries + 1} of {PulseAppRules.MaxRetries + 1}), kept again");
                 }
 
                 Release(pacer);
@@ -583,8 +589,8 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     private void LogFailure(Input input, string error)
     {
         var what = input.Pace ? "the short delay of an output could not be kept" : "a stream of the application could not be recorded";
-        var next = input.Tries < MaxRetries ? $", tried again in {RetryMilliseconds << input.Tries} ms" : ", not tried again";
-        _log($"{what} (try {input.Tries + 1} of {MaxRetries + 1}{next}): {error}");
+        var next = input.Tries < PulseAppRules.MaxRetries ? $", tried again in {PulseAppRules.RetryMilliseconds << input.Tries} ms" : ", not tried again";
+        _log($"{what} (try {input.Tries + 1} of {PulseAppRules.MaxRetries + 1}{next}): {error}");
     }
 
     // Takes a recording out of the mix, unless a newer recording of the same stream holds its place there now: one let go
@@ -627,6 +633,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
             if (state == PulseNative.StreamReady)
             {
                 input.WasReady = true;
+                input.ReadyAt = Stopwatch.GetTimestamp();
                 return;
             }
 
@@ -645,6 +652,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
             }
 
             input.Die();
+            input.Tries = PulseAppRules.TriesAfterEnd(input.Tries, input.WasReady ? Stopwatch.GetElapsedTime(input.ReadyAt, input.DeadAt) : null, owner._steady);
             owner.Unmix(input);
             owner.Look();
         }
@@ -843,11 +851,20 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         /// <summary>When it failed, by <see cref="Stopwatch.GetTimestamp"/>.</summary>
         public long DeadAt { get; private set; }
 
-        /// <summary>How many times it was tried before this one.</summary>
-        public int Tries { get; init; }
+        /// <summary>
+        /// How many times it was tried before this one; none again once it ends after it held long enough
+        /// (<see cref="PulseAppRules.TriesAfterEnd"/>).
+        /// </summary>
+        public int Tries { get; set; }
 
         /// <summary>Whether the server started it: one that ends after that has not failed to start.</summary>
         public bool WasReady { get; set; }
+
+        /// <summary>When the server started it, by <see cref="Stopwatch.GetTimestamp"/>.</summary>
+        public long ReadyAt { get; set; }
+
+        /// <summary>Ended after it started, with all its tries had: told once.</summary>
+        public bool GivenUp { get; set; }
 
         /// <summary>Let go while it was being created: it closes itself once the server answers.</summary>
         public bool Closing { get; set; }
