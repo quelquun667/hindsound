@@ -31,6 +31,9 @@ internal sealed unsafe partial class CoreTextFallback : IFontFallback
         }
     }
 
+    /// <summary>The PostScript name of the font macOS draws a sign with for a character no other font has.</summary>
+    internal const string LastResort = "LastResort";
+
     public (byte[] Path, int Index)? Find(int codePoint, int weight)
     {
         if (_disposed || !Rune.IsValid(codePoint))
@@ -46,6 +49,11 @@ internal sealed unsafe partial class CoreTextFallback : IFontFallback
 
         var text = new Rune(codePoint).ToString();
         var str = CFString(text);
+        if (str == 0)
+        {
+            return null;
+        }
+
         try
         {
             // The font CoreText picks first. Some of its picks are private fonts of the system that FreeType cannot open
@@ -120,7 +128,15 @@ internal sealed unsafe partial class CoreTextFallback : IFontFallback
             return null;
         }
 
-        var index = FaceIndex(path, Text(CTFontCopyPostScriptName(font), release: true));
+        var postScript = Text(CTFontCopyPostScriptName(font), release: true);
+        if (postScript == LastResort)
+        {
+            // The font of the system that draws a sign for any character no other font has: the text of Linux draws its
+            // empty box there, and so does this one.
+            return null;
+        }
+
+        var index = FaceIndex(path, postScript);
         using var file = FontFile.Open(_freeType, 0, path, index);
         return file is not null && file.Covers(codePoint) ? (path, index) : null;
     }
@@ -163,8 +179,19 @@ internal sealed unsafe partial class CoreTextFallback : IFontFallback
     /// <summary>The PostScript name and the file of the font CoreText picks for <paramref name="text"/>, for the tests.</summary>
     internal (string? PostScript, string? File) Describe(string text, bool bold)
     {
+        var baseFont = BaseFont(bold);
         var str = CFString(text);
-        var found = CTFontCreateForString(BaseFont(bold), str, new CFRange(0, text.Length));
+        if (baseFont == 0 || str == 0)
+        {
+            if (str != 0)
+            {
+                CFRelease(str);
+            }
+
+            return (null, null);
+        }
+
+        var found = CTFontCreateForString(baseFont, str, new CFRange(0, text.Length));
         CFRelease(str);
         if (found == 0)
         {
@@ -183,6 +210,11 @@ internal sealed unsafe partial class CoreTextFallback : IFontFallback
         if (font == 0)
         {
             var name = CFString(bold ? "Helvetica-Bold" : "Helvetica");
+            if (name == 0)
+            {
+                return 0;
+            }
+
             font = CTFontCreateWithName(name, 14, 0);
             CFRelease(name);
         }

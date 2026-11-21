@@ -22,33 +22,30 @@ internal sealed record InstancePlace(string Folder, bool OwnFolder, string Socke
 
     /// <summary>The place of this system: <see cref="ForMac"/> on macOS, <see cref="For"/> elsewhere.</summary>
     public static InstancePlace? ForThisSystem(Func<string, string?> environment, string? home, string key) =>
-        OperatingSystem.IsMacOS() ? ForMac(environment, home, key) : For(environment, home, key);
+        OperatingSystem.IsMacOS() ? ForMac(environment, home, key, MacUserTemporary.Read) : For(environment, home, key);
 
     /// <summary>
     /// The place on macOS, which has no XDG_RUNTIME_DIR: the user's own temporary folder (<c>TMPDIR</c>, under /var/folders,
-    /// private to the user and emptied at restart), else a folder of the app in ~/Library/Caches. Null when no folder is
-    /// known, or when the path is too long for a socket of macOS.
+    /// private to the user and emptied at restart), else a folder of the app in ~/Library/Caches. Without <c>TMPDIR</c>
+    /// (<c>env -i</c>, a launch by launchd), <paramref name="userTemporary"/> asks the system for that same folder, so that
+    /// both launches meet in one place. When the socket would be too long for macOS in the temporary folder, the folder in
+    /// ~/Library/Caches, with or without <c>TMPDIR</c> alike. Null when no folder is known or none is short enough.
     /// </summary>
-    public static InstancePlace? ForMac(Func<string, string?> environment, string? home, string key)
+    /// <param name="userTemporary">The temporary folder of the user as the system gives it (confstr), or null.</param>
+    public static InstancePlace? ForMac(Func<string, string?> environment, string? home, string key, Func<string?>? userTemporary = null)
     {
-        string folder;
-        bool own;
-        if (Absolute(environment(MacTemporaryVariable)) is { } temporary)
+        var name = FileNameFor(key);
+        if ((Absolute(environment(MacTemporaryVariable)) ?? Absolute(userTemporary?.Invoke())) is { } temporary
+            && MacPlace(temporary, own: false, name) is { } inTemporary)
         {
-            folder = temporary;
-            own = false;
-        }
-        else if (Absolute(home) is { } h)
-        {
-            folder = Join(Join(Join(h, "Library"), "Caches"), "Hindsound");
-            own = true;
-        }
-        else
-        {
-            return null;
+            return inTemporary;
         }
 
-        var name = FileNameFor(key);
+        return Absolute(home) is { } h ? MacPlace(Join(Join(Join(h, "Library"), "Caches"), "Hindsound"), own: true, name) : null;
+    }
+
+    private static InstancePlace? MacPlace(string folder, bool own, string name)
+    {
         var socket = Join(folder, name + ".sock");
         return Encoding.UTF8.GetByteCount(socket) > MaxMacSocketBytes ? null : new InstancePlace(folder, own, socket, Join(folder, name + ".lock"));
     }
@@ -97,6 +94,28 @@ internal sealed record InstancePlace(string Folder, bool OwnFolder, string Socke
 
     // Linux paths, the same on any system a test runs on.
     private static string Join(string folder, string name) => folder + "/" + name;
+}
+
+/// <summary>The temporary folder of the user on macOS as the system gives it, whatever TMPDIR says: confstr(_CS_DARWIN_USER_TEMP_DIR).</summary>
+internal static unsafe class MacUserTemporary
+{
+    private const int DarwinUserTempDir = 65537;
+
+    public static string? Read()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            return null;
+        }
+
+        const int Size = 1024;
+        var buffer = stackalloc byte[Size];
+        var length = confstr(DarwinUserTempDir, buffer, Size);
+        return length is > 1 and <= Size ? Encoding.UTF8.GetString(buffer, (int)length - 1) : null;
+    }
+
+    [System.Runtime.InteropServices.DllImport("/usr/lib/libSystem.B.dylib")]
+    private static extern nuint confstr(int name, byte* buffer, nuint length);
 }
 
 /// <summary>What travels on the socket: one short line from the second launch, one short line back.</summary>

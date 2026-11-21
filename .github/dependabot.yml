@@ -14,10 +14,12 @@ updates:
       - /src/Hindsound
       - /src/Hindsound.Core
       - /src/Hindsound.Linux
+      - /src/Hindsound.Mac
       - /src/Hindsound.Unix
       - /tests/Hindsound.Tests
       - /tests/Hindsound.Core.Tests
       - /tests/Hindsound.Linux.Tests
+      - /tests/Hindsound.Mac.Tests
     schedule:
       interval: weekly
     groups:

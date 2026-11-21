@@ -86,7 +86,7 @@ public sealed class PathRulesTests
     }
 
     [Fact]
-    public void Off_Windows_two_clips_that_differ_only_by_case_stay_two_clips()
+    public void Where_case_counts_two_clips_that_differ_only_by_case_stay_two_clips()
     {
         // Where case counts (Linux): macOS ignores it as Windows does, as The_comparer_of_this_system_follows_its_file_system says.
         if (PathRules.IgnoresCase)
