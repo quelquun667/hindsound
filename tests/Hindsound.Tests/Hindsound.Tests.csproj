@@ -37,6 +37,8 @@
     <Compile Include="..\Hindsound.Core.Tests\Export\TestSupport.cs" Link="Shared\TestSupport.cs" />
     <Compile Include="..\Hindsound.Core.Tests\Updates\FakeTransport.cs" Link="Shared\FakeTransport.cs" />
     <Compile Include="..\Hindsound.Core.Tests\Updates\TempFolder.cs" Link="Shared\TempFolder.cs" />
+    <!-- The portable notification of macOS, set against the Windows one pixel by pixel (Notification). -->
+    <Compile Include="..\..\src\Hindsound.Unix\Notification\NotificationPicture.cs" Link="Shared\NotificationPicture.cs" />
   </ItemGroup>
 
   <ItemGroup>
