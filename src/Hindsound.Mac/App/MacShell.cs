@@ -1,6 +1,7 @@
 using System.Runtime.Versioning;
 using Hindsound.App;
 using Hindsound.Library;
+using Hindsound.Mac.Tray;
 using Hindsound.Mac.Window;
 using Hindsound.Ui;
 using Hindsound.Unix.App;
@@ -28,12 +29,16 @@ internal sealed class MacShell(Action<string> log) : IAppShell
     public IAppLoop NewLoop()
     {
         _idle = new MacRunLoopPump();
-        return _loop = new UnixLoop(nowMs: null, idle: _idle);
+        _loop = new UnixLoop(nowMs: null, idle: _idle);
+
+        // Disposing the loop frees the pump after it, which nothing then waits on.
+        return new MacAppLoop(_loop, _idle);
     }
 
     public INotificationView NewNotification(IAppLoop loop, bool offscreen) => throw Later("the notification", "M2b");
 
-    public ITrayIcon NewTray(IAppLoop loop) => throw Later("the icon of the menu bar", "M2b");
+    public ITrayIcon NewTray(IAppLoop loop) =>
+        MacStatusItem.TryCreate(loop, log) ?? throw new NotSupportedException("the icon of the menu bar needs the main thread");
 
     public ISessionEnd SessionEnd(IAppLoop loop) => throw Later("the end of the session", "M2b");
 

@@ -1,6 +1,8 @@
 using System.Runtime.Versioning;
 using Hindsound.App;
+using Hindsound.Input;
 using Hindsound.Mac.App;
+using Hindsound.Mac.Input;
 using Hindsound.Unix.Export;
 using Hindsound.Unix.Updates;
 using Hindsound.Unix.Window;
@@ -40,13 +42,17 @@ internal static class MacPlatform
 
             UnixLibraries.InstallResolver();
             PlatformDefaults.LaunchPath = () => Environment.ProcessPath;
-            PlatformDefaults.Features = PlatformFeatures.Mac(() => SaveCommand(Environment.ProcessPath));
+            PlatformDefaults.Features = PlatformFeatures.Mac(() => SaveCommand(Environment.ProcessPath), ShortcutsNow);
+            PlatformDefaults.Hotkeys = () => new KeyByKeyHotkeys(CarbonHotkeys.TryOpen(log) ?? throw new NotSupportedException("the Carbon shortcuts need the main thread"));
             PlatformDefaults.UpdateNetwork = () => new UnixHttpTransport(log);
             PlatformDefaults.Mp3Encoder = LameMp3Encoder.Open;
             PlatformDefaults.Shell = () => new MacShell(log);
             _installed = true;
         }
     }
+
+    /// <summary>The field of each action listens to the keyboard once the Carbon shortcuts run; until then, a command to bind.</summary>
+    internal static ShortcutMode ShortcutsNow() => OperatingSystem.IsMacOS() && CarbonHotkeys.Ready ? ShortcutMode.Capture : ShortcutMode.Command;
 
     /// <summary>
     /// The command that saves a clip, for the Hotkeys page: the program inside the bundle with <c>--save</c>. Null when the

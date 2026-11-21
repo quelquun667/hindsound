@@ -2,6 +2,7 @@ using System.Runtime.Versioning;
 using Hindsound.App;
 using Hindsound.Mac.App;
 using Hindsound.Mac.Window;
+using Hindsound.Unix.App;
 using Hindsound.Unix.Export;
 using Hindsound.Unix.Library;
 using Hindsound.Unix.Window;
@@ -9,9 +10,10 @@ using Hindsound.Unix.Window;
 namespace Hindsound.Mac;
 
 /// <summary>
-/// The entry point of the macOS app. For now it draws the pages of its window (<c>--dump-settings</c>) and proves its MP3
-/// (<c>--prove-mp3</c>); a plain launch says in the log that the app cannot run yet (no capture before step M3) and
-/// leaves with a failure code, never as if it ran.
+/// The entry point of the macOS app. For now it draws the pages of its window (<c>--dump-settings</c>), proves its MP3
+/// (<c>--prove-mp3</c>) and its loop (<c>--prove-loop</c>), and hands <c>--save</c> or a second launch to the instance
+/// that runs; a plain first launch says in the log that the app cannot run yet (no capture before step M3) and leaves with
+/// a failure code, never as if it ran.
 /// </summary>
 [SupportedOSPlatform("macos")]
 internal static class Program
@@ -20,8 +22,8 @@ internal static class Program
 
     private static int Main(string[] args)
     {
-        var rest = args.Where(arg => arg != MacPlatform.SaveOption).ToArray();
-        var options = AppOptions.Parse(rest);
+        var launch = MacLaunch.Read(args);
+        var options = AppOptions.Parse(launch.Rest);
         var journal = new Journal(Journal.PathFor(options.SettingsPath));
         MacPlatform.Install(journal.Write);
 
@@ -46,6 +48,22 @@ internal static class Program
                 : "mp3: no encoder: " + LameLibrary.LastError);
             var proof = Mp3Proof.Write(options.ProveMp3Folder, journal);
             return proof == 0 ? Mp3ReadBack.Check(options.ProveMp3Folder, new UnixClipDecoder(), journal.Write) : proof;
+        }
+
+        using var instance = UnixInstanceChannel.Take(options, journal.Write);
+        if (!instance.First)
+        {
+            return SingleInstance.Leave(instance, options, journal.Write, launch.Message);
+        }
+
+        if (launch.ProveLoop)
+        {
+            return MacLoopProof.Run(instance, journal.Write);
+        }
+
+        if (launch.Save)
+        {
+            journal.Write("--save with no running instance");
         }
 
         journal.Write("the macOS app does not run yet: it draws its pages (--dump-settings) and proves its MP3 (--prove-mp3); "
