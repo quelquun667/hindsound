@@ -5,6 +5,7 @@ using Hindsound.Linux.App;
 using Hindsound.Linux.DBus;
 using Hindsound.Linux.Desktop;
 using Hindsound.Ui;
+using Hindsound.Unix.App;
 using Tmds.DBus.Protocol;
 
 namespace Hindsound.Linux.Tests.Desktop;
@@ -80,7 +81,7 @@ public sealed class NotificationWatchOnLinuxTests
     [Fact]
     public void One_click_on_show_in_folder_opens_the_folder_once_when_the_notification_connected_the_bus()
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         var server = new FakeServer();
         var folder = new FakeFolder();
         Exception? failure = null;

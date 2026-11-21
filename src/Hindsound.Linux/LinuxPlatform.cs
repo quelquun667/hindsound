@@ -5,8 +5,9 @@ using Hindsound.Linux.Audio;
 using Hindsound.Linux.DBus;
 using Hindsound.Linux.Desktop;
 using Hindsound.Linux.Input;
-using Hindsound.Linux.Updates;
+using Hindsound.Unix.Desktop;
 using Hindsound.Unix.Export;
+using Hindsound.Unix.Updates;
 using Tmds.DBus.Protocol;
 
 namespace Hindsound.Linux;
@@ -21,8 +22,8 @@ namespace Hindsound.Linux;
 //             PulseAudioChoices.cs       the devices and the applications the settings offer (LinuxShell)
 //             PulseAppCaptureSource.cs   capture: one application and its children (PulseAppRules.cs, PulseAppMixer.cs)
 //   Export/   LameMp3Encoder.cs          the MP3, through the libmp3lame.so.0 shipped with the app
-//   App/      LinuxLoop.cs               the loop of the app: done
-//             LinuxInstanceChannel.cs    one instance at a time, and what "hindsound" or "hindsound --save" tells it (Program)
+//   App/      UnixLoop.cs               the loop of the app: done
+//             UnixInstanceChannel.cs    one instance at a time, and what "hindsound" or "hindsound --save" tells it (Program)
 //             LaunchPaths.cs             the file the session starts again: done
 //             LinuxWindowSupport.cs      whether the window can be drawn here: SDL, FreeType, HarfBuzz, fontconfig, the fonts
 //             NoSettingsProbe.cs         --settings-probe where the window cannot be drawn
@@ -45,7 +46,7 @@ namespace Hindsound.Linux;
 //             FreedesktopTrash.cs        the Trash, where a deleted clip goes (LinuxShell)
 //   Input/    LinuxHotkeys.cs            the global shortcuts: the GlobalShortcuts portal, else XGrabKey on X11
 //   Tray/     StatusNotifierTray.cs      the icon and its menu, through StatusNotifierItem (LinuxShell)
-//   Updates/  LinuxHttpTransport.cs      the HTTP of the update check
+//   Updates/  UnixHttpTransport.cs      the HTTP of the update check
 //   DBus/     SessionBus.cs, BusCalls.cs the session bus every part shares: done
 
 /// <summary>The Linux layer: the classes that reach the sound server, D-Bus and the desktop, handed to the portable code.</summary>
@@ -88,7 +89,7 @@ internal static class LinuxPlatform
                 return hotkeys;
             };
             PlatformDefaults.Features = PlatformFeatures.Linux(ShortcutModeNow, () => SaveCommand(LaunchPaths.Current()));
-            PlatformDefaults.UpdateNetwork = () => new LinuxHttpTransport(log);
+            PlatformDefaults.UpdateNetwork = () => new UnixHttpTransport(log);
             PlatformDefaults.UpdateChannel = Hindsound.Updates.UpdateChannel.LinuxAnnounce;
             PlatformDefaults.Mp3Encoder = LameMp3Encoder.Open;
             PlatformDefaults.Desktop = Desktop;

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net.Sockets;
 using Hindsound.App;
 using Hindsound.Linux.App;
+using Hindsound.Unix.App;
 
 namespace Hindsound.Linux.Tests.App;
 
@@ -31,8 +32,8 @@ public sealed class InstanceChannelSilentLaunchTests : IDisposable
     public void A_launch_that_says_nothing_does_not_hold_the_next_one_past_its_wait()
     {
         var log = new List<string>();
-        using var first = LinuxInstanceChannel.Take(Place(), log.Add);
-        using var second = LinuxInstanceChannel.Take(Place(), log.Add);
+        using var first = UnixInstanceChannel.Take(Place(), log.Add);
+        using var second = UnixInstanceChannel.Take(Place(), log.Add);
 
         // Connected first, so the running instance accepts it first; it stays open and silent to the end of the test.
         using var silent = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
@@ -57,9 +58,9 @@ public sealed class InstanceChannelSilentLaunchTests : IDisposable
     private static bool? Answer(Task<bool> telling) => telling.Wait(15_000) ? telling.Result : null;
 
     // Runs the loop until a message arrives, or fails past the guard.
-    private static InstanceMessage? Receive(LinuxInstanceChannel first)
+    private static InstanceMessage? Receive(UnixInstanceChannel first)
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         InstanceMessage? received = null;
         using var guard = new Timer(_ => loop.Post(loop.Quit), null, 15_000, Timeout.Infinite);
         first.Listen(loop, message =>

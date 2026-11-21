@@ -1,7 +1,7 @@
-namespace Hindsound.Linux.App;
+namespace Hindsound.Unix.App;
 
 /// <summary>
-/// The wait of <see cref="LinuxLoop"/> while a window is open: the window's own event queue, so that its events and the
+/// The wait of <see cref="UnixLoop"/> while a window is open: the window's own event queue, so that its events and the
 /// loop's actions are handled on the same thread, one at a time.
 /// </summary>
 internal interface ILoopPump

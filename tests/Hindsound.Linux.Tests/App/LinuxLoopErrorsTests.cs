@@ -1,5 +1,6 @@
 using Hindsound.Linux.App;
 using Hindsound.Ui;
+using Hindsound.Unix.App;
 
 namespace Hindsound.Linux.Tests.App;
 
@@ -8,7 +9,7 @@ namespace Hindsound.Linux.Tests.App;
 /// buffer of the app lives as long as the loop.
 /// </summary>
 [Collection(UiErrorsCollection.Name)]
-public sealed class LinuxLoopErrorsTests
+public sealed class UnixLoopErrorsTests
 {
     // A loop that never ends would hang the run: past this, the guard asks it to quit and the test fails.
     private const int GuardMs = 10_000;
@@ -30,7 +31,7 @@ public sealed class LinuxLoopErrorsTests
         return reported;
     }
 
-    private static void RunGuarded(LinuxLoop loop)
+    private static void RunGuarded(UnixLoop loop)
     {
         var guarded = false;
         using var guard = new Timer(_ =>
@@ -48,7 +49,7 @@ public sealed class LinuxLoopErrorsTests
         var ran = new List<string>();
         var reported = Capture(() =>
         {
-            using var loop = new LinuxLoop();
+            using var loop = new UnixLoop();
             loop.Post(() => throw new InvalidOperationException("from an action"));
             loop.Post(() => ran.Add("next action"));
             loop.After(0, () => throw new InvalidOperationException("from a timer"));
@@ -70,7 +71,7 @@ public sealed class LinuxLoopErrorsTests
         var ran = false;
         var reported = Capture(() =>
         {
-            using var loop = new LinuxLoop();
+            using var loop = new UnixLoop();
             loop.Pump = new ThrowingOncePump(loop, () => ran = true);
 
             RunGuarded(loop);
@@ -81,7 +82,7 @@ public sealed class LinuxLoopErrorsTests
     }
 
     // A pump whose first wait throws, as a handler of the window does; the second posts an action and quits.
-    private sealed class ThrowingOncePump(LinuxLoop loop, Action after) : ILoopPump
+    private sealed class ThrowingOncePump(UnixLoop loop, Action after) : ILoopPump
     {
         private int _waits;
 

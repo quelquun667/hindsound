@@ -1,6 +1,6 @@
 using Hindsound.App;
 
-namespace Hindsound.Linux.Desktop;
+namespace Hindsound.Unix.Desktop;
 
 /// <summary>
 /// The Linux app plays no confirmation sound: the only sound it plays is a clip listened to, which the capture of the PC's

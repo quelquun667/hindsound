@@ -1,6 +1,7 @@
 using System.Net.Sockets;
 using Hindsound.App;
 using Hindsound.Linux.App;
+using Hindsound.Unix.App;
 
 namespace Hindsound.Linux.Tests.App;
 
@@ -30,8 +31,8 @@ public sealed class InstanceChannelReadTimeTests : IDisposable
     public void A_launch_that_stays_silent_is_let_go_after_its_read_time_and_nothing_is_run()
     {
         var log = new List<string>();
-        using var first = LinuxInstanceChannel.Take(Place(), log.Add);
-        using var loop = new LinuxLoop();
+        using var first = UnixInstanceChannel.Take(Place(), log.Add);
+        using var loop = new UnixLoop();
         var received = new List<InstanceMessage>();
         first.Listen(loop, received.Add);
 
@@ -39,7 +40,7 @@ public sealed class InstanceChannelReadTimeTests : IDisposable
         silent.Connect(new UnixDomainSocketEndPoint(Place().Socket));
 
         // Past the read time, with room for a busy machine: the running instance must have closed the connection by then.
-        silent.ReceiveTimeout = LinuxInstanceChannel.ReadTimeoutMs + 5000;
+        silent.ReceiveTimeout = UnixInstanceChannel.ReadTimeoutMs + 5000;
         int got;
         try
         {

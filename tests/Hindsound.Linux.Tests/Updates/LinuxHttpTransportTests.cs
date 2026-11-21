@@ -2,17 +2,17 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using Hindsound.Linux.Updates;
+using Hindsound.Unix.Updates;
 using Hindsound.Updates;
 
 namespace Hindsound.Linux.Tests.Updates;
 
 /// <summary>
 /// The HTTP of the Linux update check. HttpClient is the same on every system, so these run here too: on a local server,
-/// through <see cref="LinuxHttpTransport.Run"/> with a redirect loop that lets the loopback address through.
+/// through <see cref="UnixHttpTransport.Run"/> with a redirect loop that lets the loopback address through.
 /// </summary>
 [Collection(HttpTransportCollection.Name)]
-public class LinuxHttpTransportTests
+public class UnixHttpTransportTests
 {
     private const string GitHubUrl = "https://github.com/quelquun667/hindsound/releases/latest/download/hindsound-update-linux-x64.json";
     private static readonly TransferLimits Roomy = new(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(5), 1024);
@@ -144,7 +144,7 @@ public class LinuxHttpTransportTests
         Assert.Throws<InvalidDataException>(() => server.Get(Roomy, _ => throw new InvalidDataException()));
     }
 
-    private static LinuxHttpTransport Transport() => new(_ => { });
+    private static UnixHttpTransport Transport() => new(_ => { });
 
     /// <summary>A loopback server for one request: it writes the given answer and keeps the connection open, or says nothing.</summary>
     private sealed class OneAnswer : IDisposable

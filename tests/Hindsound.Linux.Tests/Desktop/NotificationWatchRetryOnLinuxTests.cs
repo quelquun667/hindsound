@@ -5,6 +5,7 @@ using Hindsound.Linux.App;
 using Hindsound.Linux.DBus;
 using Hindsound.Linux.Desktop;
 using Hindsound.Ui;
+using Hindsound.Unix.App;
 using Tmds.DBus.Protocol;
 
 namespace Hindsound.Linux.Tests.Desktop;
@@ -133,9 +134,9 @@ public sealed class NotificationWatchRetryOnLinuxTests
         folder.Shown.Clear();
     }
 
-    private static void Run(Func<LinuxLoop, FreedesktopNotification, SessionBus, SessionBus, FakeServer, FakeFolder, FailingPuts, Task> test)
+    private static void Run(Func<UnixLoop, FreedesktopNotification, SessionBus, SessionBus, FakeServer, FakeFolder, FailingPuts, Task> test)
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         var server = new FakeServer();
         var folder = new FakeFolder();
         var puts = new FailingPuts();
@@ -180,7 +181,7 @@ public sealed class NotificationWatchRetryOnLinuxTests
         Assert.Null(failure);
     }
 
-    private static async Task FirstNoticeWithoutWatch(LinuxLoop loop, FreedesktopNotification notification, SessionBus serverBus, FakeServer server, FakeFolder folder, FailingPuts puts)
+    private static async Task FirstNoticeWithoutWatch(UnixLoop loop, FreedesktopNotification notification, SessionBus serverBus, FakeServer server, FakeFolder folder, FailingPuts puts)
     {
         loop.Post(() => notification.Present(First, default, 0));
         await Until(() => server.Notified == 1 && puts.Failed >= 1, "no Notify, or no put of the watch");

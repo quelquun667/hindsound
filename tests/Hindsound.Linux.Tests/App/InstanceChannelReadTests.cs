@@ -1,6 +1,7 @@
 using System.Net.Sockets;
 using Hindsound.App;
 using Hindsound.Linux.App;
+using Hindsound.Unix.App;
 
 namespace Hindsound.Linux.Tests.App;
 
@@ -33,8 +34,8 @@ public sealed class InstanceChannelReadTests : IDisposable
     public void A_line_that_came_is_read_however_late_the_read_starts()
     {
         var log = new List<string>();
-        using var first = LinuxInstanceChannel.Take(Place(), log.Add);
-        using var second = LinuxInstanceChannel.Take(Place(), log.Add);
+        using var first = UnixInstanceChannel.Take(Place(), log.Add);
+        using var second = UnixInstanceChannel.Take(Place(), log.Add);
         first.BeforeRead = () => Task.Delay(Late);
 
         var telling = Task.Run(() => second.Tell(InstanceMessage.Show));
@@ -49,9 +50,9 @@ public sealed class InstanceChannelReadTests : IDisposable
     public void The_answer_keeps_a_time_of_its_own_past_the_read_time()
     {
         var log = new List<string>();
-        using var first = LinuxInstanceChannel.Take(Place(), log.Add);
-        using var second = LinuxInstanceChannel.Take(Place(), log.Add);
-        first.BeforeAnswer = () => Task.Delay(LinuxInstanceChannel.ReadTimeoutMs + 1000);
+        using var first = UnixInstanceChannel.Take(Place(), log.Add);
+        using var second = UnixInstanceChannel.Take(Place(), log.Add);
+        first.BeforeAnswer = () => Task.Delay(UnixInstanceChannel.ReadTimeoutMs + 1000);
 
         var telling = Task.Run(() => second.Tell(InstanceMessage.Show));
         var received = Receive(first);
@@ -65,8 +66,8 @@ public sealed class InstanceChannelReadTests : IDisposable
     public void A_connection_held_in_its_read_does_not_hold_the_next_launch()
     {
         var log = new List<string>();
-        using var first = LinuxInstanceChannel.Take(Place(), log.Add);
-        using var second = LinuxInstanceChannel.Take(Place(), log.Add);
+        using var first = UnixInstanceChannel.Take(Place(), log.Add);
+        using var second = UnixInstanceChannel.Take(Place(), log.Add);
         var hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var reads = 0;
         first.BeforeRead = () => Interlocked.Increment(ref reads) == 1 ? hold.Task : Task.CompletedTask;
@@ -92,8 +93,8 @@ public sealed class InstanceChannelReadTests : IDisposable
     [Fact]
     public void A_line_still_being_answered_when_the_channel_closes_is_not_run()
     {
-        var first = LinuxInstanceChannel.Take(Place(), _ => { });
-        using var second = LinuxInstanceChannel.Take(Place(), _ => { });
+        var first = UnixInstanceChannel.Take(Place(), _ => { });
+        using var second = UnixInstanceChannel.Take(Place(), _ => { });
         var answering = new ManualResetEventSlim();
         var hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         first.BeforeAnswer = () =>
@@ -101,7 +102,7 @@ public sealed class InstanceChannelReadTests : IDisposable
             answering.Set();
             return hold.Task;
         };
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         var received = new List<InstanceMessage>();
         first.Listen(loop, received.Add);
 
@@ -124,9 +125,9 @@ public sealed class InstanceChannelReadTests : IDisposable
     private static bool? Answer(Task<bool> telling) => telling.Wait(15_000) ? telling.Result : null;
 
     // Runs the loop until a message arrives, or fails past the guard.
-    private static InstanceMessage? Receive(LinuxInstanceChannel first)
+    private static InstanceMessage? Receive(UnixInstanceChannel first)
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         InstanceMessage? received = null;
         using var guard = new Timer(_ => loop.Post(loop.Quit), null, 15_000, Timeout.Infinite);
         first.Listen(loop, message =>

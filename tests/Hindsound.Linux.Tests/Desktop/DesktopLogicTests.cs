@@ -4,6 +4,8 @@ using Hindsound.Linux.App;
 using Hindsound.Linux.Desktop;
 using Hindsound.Settings;
 using Hindsound.Ui;
+using Hindsound.Unix.App;
+using Hindsound.Unix.Desktop;
 using Tmds.DBus.Protocol;
 
 namespace Hindsound.Linux.Tests.Desktop;
@@ -73,7 +75,7 @@ public sealed class DesktopLogicTests : IDisposable
     [Fact]
     public void Without_a_bus_a_notification_finishes_at_once_and_says_so_once()
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         var log = new List<string>();
         var finished = 0;
         using var notification = new FreedesktopNotification(loop, log.Add, () => throw new InvalidOperationException("no bus"), new FakeFolder(), holdMs: 60_000);
@@ -158,7 +160,7 @@ public sealed class DesktopLogicTests : IDisposable
     [Fact]
     public void Sigterm_ends_the_session_and_a_first_ctrl_c_asks_to_quit_on_the_loop()
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         var steps = new List<string>();
         var end = new LinuxSessionEnd(loop, _ => { }, register: false) { Ending = () => steps.Add("ending") };
         loop.CloseAsked = () => steps.Add("close asked");

@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace Hindsound.Linux.Desktop;
+namespace Hindsound.Unix.Desktop;
 
 /// <summary>
 /// The programs of the desktop the app starts (xdg-open, wl-copy, xclip, xsel): found on the PATH, started without a shell,

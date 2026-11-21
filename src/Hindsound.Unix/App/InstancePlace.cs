@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Hindsound.App;
 
-namespace Hindsound.Linux.App;
+namespace Hindsound.Unix.App;
 
 /// <summary>Where the single instance of Linux lives: a lock file, held by the running instance, and the socket it listens on.</summary>
 /// <param name="Folder">The folder of both.</param>

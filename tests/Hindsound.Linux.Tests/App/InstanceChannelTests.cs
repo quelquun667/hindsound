@@ -1,6 +1,7 @@
 using System.Text;
 using Hindsound.App;
 using Hindsound.Linux.App;
+using Hindsound.Unix.App;
 
 namespace Hindsound.Linux.Tests.App;
 
@@ -100,9 +101,9 @@ public sealed class InstanceChannelTests : IDisposable
     private InstancePlace Place() => new(_folder, true, Path.Combine(_folder, "i.sock"), Path.Combine(_folder, "i.lock"));
 
     // Runs the loop until a message arrives, or fails past the guard.
-    private static InstanceMessage? Receive(LinuxInstanceChannel first, Func<bool> tell, out bool told)
+    private static InstanceMessage? Receive(UnixInstanceChannel first, Func<bool> tell, out bool told)
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         InstanceMessage? received = null;
         var answer = false;
         using var guard = new Timer(_ => loop.Post(loop.Quit), null, 10_000, Timeout.Infinite);
@@ -122,8 +123,8 @@ public sealed class InstanceChannelTests : IDisposable
     public void The_first_launch_holds_the_place_and_a_second_one_tells_it_to_save()
     {
         var log = new List<string>();
-        using var first = LinuxInstanceChannel.Take(Place(), log.Add);
-        using var second = LinuxInstanceChannel.Take(Place(), log.Add);
+        using var first = UnixInstanceChannel.Take(Place(), log.Add);
+        using var second = UnixInstanceChannel.Take(Place(), log.Add);
 
         Assert.True(first.First);
         Assert.False(second.First);
@@ -135,8 +136,8 @@ public sealed class InstanceChannelTests : IDisposable
     [Fact]
     public void A_plain_second_launch_tells_show()
     {
-        using var first = LinuxInstanceChannel.Take(Place(), _ => { });
-        using var second = LinuxInstanceChannel.Take(Place(), _ => { });
+        using var first = UnixInstanceChannel.Take(Place(), _ => { });
+        using var second = UnixInstanceChannel.Take(Place(), _ => { });
 
         Assert.Equal(InstanceMessage.Show, Receive(first, () => second.Tell(InstanceMessage.Show), out var told));
         Assert.True(told);
@@ -145,7 +146,7 @@ public sealed class InstanceChannelTests : IDisposable
     [Fact]
     public void The_first_instance_tells_nobody()
     {
-        using var first = LinuxInstanceChannel.Take(Place(), _ => { });
+        using var first = UnixInstanceChannel.Take(Place(), _ => { });
 
         Assert.False(first.Tell(InstanceMessage.Show));
     }
@@ -153,12 +154,12 @@ public sealed class InstanceChannelTests : IDisposable
     [Fact]
     public void Once_the_first_is_gone_the_next_launch_is_the_first_again()
     {
-        var first = LinuxInstanceChannel.Take(Place(), _ => { });
+        var first = UnixInstanceChannel.Take(Place(), _ => { });
         Assert.True(first.First);
         first.Dispose();
 
-        using var next = LinuxInstanceChannel.Take(Place(), _ => { });
-        using var other = LinuxInstanceChannel.Take(Place(), _ => { });
+        using var next = UnixInstanceChannel.Take(Place(), _ => { });
+        using var other = UnixInstanceChannel.Take(Place(), _ => { });
 
         Assert.True(next.First);
         Assert.False(other.First);
@@ -172,8 +173,8 @@ public sealed class InstanceChannelTests : IDisposable
         File.WriteAllText(Place().Socket, "left over");
 
         var log = new List<string>();
-        using var first = LinuxInstanceChannel.Take(Place(), log.Add);
-        using var second = LinuxInstanceChannel.Take(Place(), _ => { });
+        using var first = UnixInstanceChannel.Take(Place(), log.Add);
+        using var second = UnixInstanceChannel.Take(Place(), _ => { });
 
         Assert.True(first.First);
 
@@ -189,7 +190,7 @@ public sealed class InstanceChannelTests : IDisposable
         // The lock is held, but the holder has no socket: as when the first instance is still starting or stuck.
         using var held = new FileStream(Place().Lock, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
         var log = new List<string>();
-        using var second = LinuxInstanceChannel.Take(Place(), log.Add);
+        using var second = UnixInstanceChannel.Take(Place(), log.Add);
 
         Assert.False(second.First);
         Assert.False(second.Tell(InstanceMessage.Save));
@@ -204,7 +205,7 @@ public sealed class InstanceChannelTests : IDisposable
         var place = new InstancePlace(Path.Combine(blocked, "sub"), true, Path.Combine(blocked, "sub", "i.sock"), Path.Combine(blocked, "sub", "i.lock"));
         var log = new List<string>();
 
-        using var channel = LinuxInstanceChannel.Take(place, log.Add);
+        using var channel = UnixInstanceChannel.Take(place, log.Add);
 
         Assert.True(channel.First);
         Assert.Contains(log, line => line.StartsWith("single instance: the lock could not be made", StringComparison.Ordinal));

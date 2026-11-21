@@ -1,4 +1,5 @@
 using Hindsound.App;
+using Hindsound.Unix.Desktop;
 
 namespace Hindsound.Linux.Desktop;
 

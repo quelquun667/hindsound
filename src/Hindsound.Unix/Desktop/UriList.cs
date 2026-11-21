@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Hindsound.Linux.Desktop;
+namespace Hindsound.Unix.Desktop;
 
 /// <summary>
 /// Files as text/uri-list (RFC 2483): one file:// URI per line, each line ended by CR LF. A file manager pastes that as files.

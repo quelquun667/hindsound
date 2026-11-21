@@ -6,6 +6,7 @@ using Hindsound.Linux.App;
 using Hindsound.Linux.Window.Input;
 using Hindsound.Ui;
 using Hindsound.Ui.Window;
+using Hindsound.Unix.App;
 
 namespace Hindsound.Linux.Window;
 
@@ -33,7 +34,7 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
     private static int s_windows;
     private static int s_bitmaps;
 
-    private readonly LinuxLoop _loop;
+    private readonly UnixLoop _loop;
     private readonly ISdlVideo _video;
     private readonly Func<ICanvasText> _newText;
     private readonly Func<float> _readMicPeak;
@@ -69,7 +70,7 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
 
     /// <summary>Opens SDL's video and makes the window, hidden until <see cref="Show"/>.</summary>
     /// <param name="newText">Makes the text of a bitmap: each bitmap gets its own, and frees it with itself.</param>
-    public LinuxSettingsWindow(SettingsWindowRequest request, LinuxLoop loop, Func<ICanvasText> newText, ISdlVideo video)
+    public LinuxSettingsWindow(SettingsWindowRequest request, UnixLoop loop, Func<ICanvasText> newText, ISdlVideo video)
     {
         Closed = request.Closed;
         _loop = loop;
@@ -131,7 +132,7 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
     }
 
     /// <summary>Opens a window on SDL itself.</summary>
-    public static LinuxSettingsWindow Open(SettingsWindowRequest request, LinuxLoop loop, Func<ICanvasText> newText) =>
+    public static LinuxSettingsWindow Open(SettingsWindowRequest request, UnixLoop loop, Func<ICanvasText> newText) =>
         new(request, loop, newText, new SdlVideo());
 
     /// <summary>The windows open in this process, for <c>--settings-probe</c>.</summary>

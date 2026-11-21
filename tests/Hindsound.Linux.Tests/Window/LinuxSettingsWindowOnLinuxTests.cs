@@ -4,6 +4,7 @@ using Hindsound.Linux.App;
 using Hindsound.Linux.Window;
 using Hindsound.Settings;
 using Hindsound.Ui.Window;
+using Hindsound.Unix.App;
 
 namespace Hindsound.Linux.Tests.Window;
 
@@ -19,7 +20,7 @@ public sealed unsafe class LinuxSettingsWindowOnLinuxTests
     private const int GuardMs = 10_000;
 
     // Runs the loop until what is queued and posted now is done, with a guard against a loop that never ends.
-    private static void Turn(LinuxLoop loop)
+    private static void Turn(UnixLoop loop)
     {
         var guarded = false;
         using var guard = new Timer(_ =>
@@ -32,7 +33,7 @@ public sealed unsafe class LinuxSettingsWindowOnLinuxTests
         Assert.False(guarded, "the loop had to be stopped by the guard");
     }
 
-    private static LinuxSettingsWindow Open(LinuxLoop loop, Action closed)
+    private static LinuxSettingsWindow Open(UnixLoop loop, Action closed)
     {
         // The first size follows the zoom of the settings, 120 % by default as on Windows: the test states 100 %, the design size.
         var settings = new AppSettings().Normalize();
@@ -62,7 +63,7 @@ public sealed unsafe class LinuxSettingsWindowOnLinuxTests
         Assert.True(SdlLibrary.TryLoad(), SdlLibrary.LastError);
         var bitmaps = LinuxSettingsWindow.LiveBitmaps;
         var folder = Directory.CreateTempSubdirectory("hindsound-window-");
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         try
         {
             var closed = 0;
@@ -123,7 +124,7 @@ public sealed unsafe class LinuxSettingsWindowOnLinuxTests
     {
         Assert.True(SdlLibrary.TryLoad(), SdlLibrary.LastError);
         var bitmaps = LinuxSettingsWindow.LiveBitmaps;
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         var stop = false;
         var posts = 0;
         var poster = new Thread(() =>
@@ -162,7 +163,7 @@ public sealed unsafe class LinuxSettingsWindowOnLinuxTests
     }
 
     // Runs what is posted now, with a guard against a loop that never ends.
-    private static void RunGuarded(LinuxLoop loop)
+    private static void RunGuarded(UnixLoop loop)
     {
         var guarded = false;
         using var guard = new Timer(_ =>

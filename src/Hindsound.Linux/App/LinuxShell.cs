@@ -7,6 +7,7 @@ using Hindsound.Linux.Tray;
 using Hindsound.Linux.Window;
 using Hindsound.Linux.Window.Text;
 using Hindsound.Ui;
+using Hindsound.Unix.App;
 using Hindsound.Unix.Library;
 
 namespace Hindsound.Linux.App;
@@ -21,7 +22,7 @@ internal sealed class LinuxShell : IAppShell
 {
     private readonly Action<string> log;
     private readonly PulsePlaybackSilence silence;
-    private LinuxLoop? _loop;
+    private UnixLoop? _loop;
     private ISettingsProbe? _probe;
 
     public LinuxShell(Action<string> log)
@@ -38,7 +39,7 @@ internal sealed class LinuxShell : IAppShell
     }
 
     // Kept for the window, which waits through the loop: SettingsWindowRequest does not carry it.
-    public IAppLoop NewLoop() => _loop = new LinuxLoop();
+    public IAppLoop NewLoop() => _loop = new UnixLoop();
 
     public INotificationView NewNotification(IAppLoop loop, bool offscreen) => new FreedesktopNotification(loop, log);
 

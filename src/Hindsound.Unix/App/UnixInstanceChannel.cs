@@ -1,7 +1,7 @@
 using System.Net.Sockets;
 using Hindsound.App;
 
-namespace Hindsound.Linux.App;
+namespace Hindsound.Unix.App;
 
 /// <summary>
 /// The single instance of Linux, named from <see cref="SingleInstance.NameFor(AppOptions)"/>. The running instance holds a
@@ -9,7 +9,7 @@ namespace Hindsound.Linux.App;
 /// and <c>hindsound --save</c> tells it <see cref="InstanceMessage.Save"/>. The lock, not the socket, decides who runs: the
 /// system lets it go when a process dies, where a socket file stays behind.
 /// </summary>
-internal sealed class LinuxInstanceChannel : IInstanceChannel
+internal sealed class UnixInstanceChannel : IInstanceChannel
 {
     private const int ExchangeTimeoutMs = 2000;
 
@@ -32,7 +32,7 @@ internal sealed class LinuxInstanceChannel : IInstanceChannel
     private int _listening;
     private bool _disposed;
 
-    private LinuxInstanceChannel(Action<string> log, InstancePlace? place, bool first, FileStream? held, Socket? listener)
+    private UnixInstanceChannel(Action<string> log, InstancePlace? place, bool first, FileStream? held, Socket? listener)
     {
         _log = log;
         _place = place;
@@ -53,20 +53,20 @@ internal sealed class LinuxInstanceChannel : IInstanceChannel
     internal Func<Task> BeforeAnswer { get; set; } = static () => Task.CompletedTask;
 
     /// <summary>Holds the name for <paramref name="options"/> for as long as the channel lives.</summary>
-    public static LinuxInstanceChannel Take(AppOptions options, Action<string> log)
+    public static UnixInstanceChannel Take(AppOptions options, Action<string> log)
     {
         var home = Hindsound.Settings.UserFolders.Find(Environment.SpecialFolder.UserProfile);
         if (InstancePlace.For(Environment.GetEnvironmentVariable, home, SingleInstance.NameFor(options)) is not { } place)
         {
             log("single instance: no folder fits a socket, so every launch counts as the first");
-            return new LinuxInstanceChannel(log, null, first: true, held: null, listener: null);
+            return new UnixInstanceChannel(log, null, first: true, held: null, listener: null);
         }
 
         return Take(place, log);
     }
 
     /// <summary>Takes <paramref name="place"/>: the first holder of its lock is the one instance.</summary>
-    internal static LinuxInstanceChannel Take(InstancePlace place, Action<string> log)
+    internal static UnixInstanceChannel Take(InstancePlace place, Action<string> log)
     {
         FileStream held;
         try
@@ -92,10 +92,10 @@ internal sealed class LinuxInstanceChannel : IInstanceChannel
         }
         catch (IOException)
         {
-            return new LinuxInstanceChannel(log, place, first: false, held: null, listener: null);
+            return new UnixInstanceChannel(log, place, first: false, held: null, listener: null);
         }
 
-        return new LinuxInstanceChannel(log, place, first: true, held, Bind(place, log));
+        return new UnixInstanceChannel(log, place, first: true, held, Bind(place, log));
     }
 
     public bool Tell(InstanceMessage message)
@@ -166,10 +166,10 @@ internal sealed class LinuxInstanceChannel : IInstanceChannel
     }
 
     // Nothing can tell a second launch apart: better two instances than none.
-    private static LinuxInstanceChannel Alone(InstancePlace place, Action<string> log, Exception ex)
+    private static UnixInstanceChannel Alone(InstancePlace place, Action<string> log, Exception ex)
     {
         log($"single instance: the lock could not be made ({ex.GetType().Name}), so this launch counts as the first");
-        return new LinuxInstanceChannel(log, place, first: true, held: null, listener: null);
+        return new UnixInstanceChannel(log, place, first: true, held: null, listener: null);
     }
 
     private static Socket? Bind(InstancePlace place, Action<string> log)

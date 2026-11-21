@@ -1,5 +1,6 @@
 using Hindsound.App;
 using Hindsound.Linux.App;
+using Hindsound.Unix.App;
 
 namespace Hindsound.Linux.Tests.App;
 
@@ -32,8 +33,8 @@ public sealed class InstanceChannelLateAnswerTests : IDisposable
     public void A_second_launch_waits_for_a_first_one_that_accepts_late()
     {
         var log = new List<string>();
-        using var first = LinuxInstanceChannel.Take(Place(), log.Add);
-        using var second = LinuxInstanceChannel.Take(Place(), log.Add);
+        using var first = UnixInstanceChannel.Take(Place(), log.Add);
+        using var second = UnixInstanceChannel.Take(Place(), log.Add);
 
         // The socket of the first already takes connections; it only starts reading them past the delay.
         var telling = Task.Run(() => second.Tell(InstanceMessage.Save));
@@ -49,8 +50,8 @@ public sealed class InstanceChannelLateAnswerTests : IDisposable
     public void A_whole_line_is_answered_however_late_the_answer_goes()
     {
         var log = new List<string>();
-        using var first = LinuxInstanceChannel.Take(Place(), log.Add);
-        using var second = LinuxInstanceChannel.Take(Place(), log.Add);
+        using var first = UnixInstanceChannel.Take(Place(), log.Add);
+        using var second = UnixInstanceChannel.Take(Place(), log.Add);
         first.BeforeAnswer = () => Task.Delay(Late);
 
         var telling = Task.Run(() => second.Tell(InstanceMessage.Show));
@@ -67,9 +68,9 @@ public sealed class InstanceChannelLateAnswerTests : IDisposable
     private static bool? Answer(Task<bool> telling) => telling.Wait(15_000) ? telling.Result : null;
 
     // Runs the loop until a message arrives, or fails past the guard.
-    private static InstanceMessage? Receive(LinuxInstanceChannel first)
+    private static InstanceMessage? Receive(UnixInstanceChannel first)
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         InstanceMessage? received = null;
         using var guard = new Timer(_ => loop.Post(loop.Quit), null, 15_000, Timeout.Infinite);
         first.Listen(loop, message =>

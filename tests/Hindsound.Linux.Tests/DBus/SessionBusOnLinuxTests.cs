@@ -1,6 +1,7 @@
 using System.Runtime.Versioning;
 using Hindsound.Linux.App;
 using Hindsound.Linux.DBus;
+using Hindsound.Unix.App;
 using Tmds.DBus.Protocol;
 
 namespace Hindsound.Linux.Tests.DBus;
@@ -22,7 +23,7 @@ public sealed class SessionBusOnLinuxTests
     private static readonly BusMethod RequestName = new("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "RequestName");
 
     // Runs the loop until done, or fails past the guard.
-    private static void RunUntil(LinuxLoop loop, Func<Task> work)
+    private static void RunUntil(UnixLoop loop, Func<Task> work)
     {
         Exception? failure = null;
         using var guard = new Timer(_ =>
@@ -51,7 +52,7 @@ public sealed class SessionBusOnLinuxTests
     public void The_loop_runs_and_the_session_bus_answers()
     {
         var log = new List<string>();
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         using var bus = new SessionBus(() => DBusAddress.Session, line => loop.Post(() => log.Add(line)));
         string? id = null;
 
@@ -80,7 +81,7 @@ public sealed class SessionBusOnLinuxTests
     [Fact]
     public void An_exported_object_answers_a_call_with_arguments()
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         using var bus = new SessionBus(() => DBusAddress.Session, _ => { });
         uint owner = 0;
         string? echoed = null;

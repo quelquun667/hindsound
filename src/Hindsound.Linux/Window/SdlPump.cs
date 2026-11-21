@@ -1,5 +1,6 @@
 using System.Runtime.Versioning;
 using Hindsound.Linux.App;
+using Hindsound.Unix.App;
 
 namespace Hindsound.Linux.Window;
 
@@ -7,7 +8,7 @@ namespace Hindsound.Linux.Window;
 internal delegate void SdlEventHandler(in SdlNative.Event e);
 
 /// <summary>
-/// The wait of <see cref="LinuxLoop"/> while an SDL window is open: SDL's event queue, so that the window's events and the
+/// The wait of <see cref="UnixLoop"/> while an SDL window is open: SDL's event queue, so that the window's events and the
 /// loop's actions take turns on the loop thread. A wake is an event of a type of its own, pushed from any thread; at most
 /// one is in the queue at a time, however often the loop is woken.
 /// </summary>

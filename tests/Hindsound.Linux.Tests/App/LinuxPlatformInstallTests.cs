@@ -1,6 +1,6 @@
 using System.Runtime.Versioning;
 using Hindsound.App;
-using Hindsound.Linux.Updates;
+using Hindsound.Unix.Updates;
 using Hindsound.Updates;
 
 namespace Hindsound.Linux.Tests.App;
@@ -17,6 +17,6 @@ public sealed class LinuxPlatformInstallTests
         LinuxPlatform.Install(_ => { });
 
         Assert.Equal(UpdateChannel.LinuxAnnounce, PlatformDefaults.UpdateChannel);
-        Assert.IsType<LinuxHttpTransport>(PlatformDefaults.Make(PlatformDefaults.UpdateNetwork, "the update network"));
+        Assert.IsType<UnixHttpTransport>(PlatformDefaults.Make(PlatformDefaults.UpdateNetwork, "the update network"));
     }
 }

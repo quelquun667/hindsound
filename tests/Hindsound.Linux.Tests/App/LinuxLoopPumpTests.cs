@@ -1,4 +1,5 @@
 using Hindsound.Linux.App;
+using Hindsound.Unix.App;
 
 namespace Hindsound.Linux.Tests.App;
 
@@ -6,12 +7,12 @@ namespace Hindsound.Linux.Tests.App;
 /// The loop while a window's pump does the waiting: it waits through the pump, with the time to its next timer, and every
 /// way the loop can be asked something from another thread (post, timer, quit, dispose, a new pump) wakes the pump.
 /// </summary>
-public sealed class LinuxLoopPumpTests
+public sealed class UnixLoopPumpTests
 {
     // A loop that never ends would hang the run: past this, the guard asks it to quit and the test fails.
     private const int GuardMs = 10_000;
 
-    private static void RunGuarded(LinuxLoop loop)
+    private static void RunGuarded(UnixLoop loop)
     {
         var guarded = false;
         using var guard = new Timer(_ =>
@@ -106,7 +107,7 @@ public sealed class LinuxLoopPumpTests
     [Fact]
     public void A_post_from_another_thread_wakes_the_loop_waiting_in_its_pump()
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         var pump = new FakePump();
         loop.Pump = pump;
         var ran = false;
@@ -127,7 +128,7 @@ public sealed class LinuxLoopPumpTests
     [Fact]
     public void A_window_event_runs_on_the_loop_thread_and_what_it_posts_runs_next()
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         var pump = new FakePump();
         loop.Pump = pump;
         var ran = new List<string>();
@@ -154,7 +155,7 @@ public sealed class LinuxLoopPumpTests
     public void The_pump_waits_until_the_next_timer_and_the_timer_runs_when_it_is_due()
     {
         long now = 0;
-        using var loop = new LinuxLoop(() => Interlocked.Read(ref now));
+        using var loop = new UnixLoop(() => Interlocked.Read(ref now));
         var pump = new FakePump();
 
         // Each wait lasts as long as it was asked: the clock jumps by its timeout.
@@ -176,7 +177,7 @@ public sealed class LinuxLoopPumpTests
     [Fact]
     public void A_timer_set_from_another_thread_wakes_the_pump_so_the_wait_is_shortened()
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         var pump = new FakePump();
         loop.Pump = pump;
         var ran = false;
@@ -196,7 +197,7 @@ public sealed class LinuxLoopPumpTests
     [Fact]
     public void Quit_from_another_thread_ends_the_wait_in_the_pump()
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         loop.Pump = new FakePump();
         var quitter = Later(100, loop.Quit);
 
@@ -207,7 +208,7 @@ public sealed class LinuxLoopPumpTests
     [Fact]
     public void Dispose_from_another_thread_ends_the_wait_in_the_pump()
     {
-        var loop = new LinuxLoop();
+        var loop = new UnixLoop();
         loop.Pump = new FakePump();
         var disposer = Later(100, loop.Dispose);
 
@@ -218,7 +219,7 @@ public sealed class LinuxLoopPumpTests
     [Fact]
     public void A_pump_taken_away_while_the_loop_waits_in_it_is_woken_and_the_loop_waits_on_its_own()
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         var pump = new FakePump();
         loop.Pump = pump;
         var ran = false;
@@ -245,7 +246,7 @@ public sealed class LinuxLoopPumpTests
     [Fact]
     public void A_pump_given_while_the_loop_waits_on_its_own_takes_over_the_wait()
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         var pump = new FakePump();
         var ran = false;
         var opener = Later(100, () =>
@@ -267,7 +268,7 @@ public sealed class LinuxLoopPumpTests
     [Fact]
     public void Posted_actions_still_go_before_due_timers_and_quit_still_lets_them_run()
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         loop.Pump = new FakePump();
         var ran = new List<string>();
         loop.After(0, () => ran.Add("timer"));
@@ -287,7 +288,7 @@ public sealed class LinuxLoopPumpTests
     public void A_turn_from_inside_an_action_runs_what_is_posted_then_the_timers_due_then_waits_once()
     {
         var now = 1_000L;
-        using var loop = new LinuxLoop(() => now);
+        using var loop = new UnixLoop(() => now);
         var pump = new FakePump();
         loop.Pump = pump;
         var ran = new List<string>();
@@ -324,7 +325,7 @@ public sealed class LinuxLoopPumpTests
     [Fact]
     public void A_turn_from_inside_an_action_does_not_take_a_quit_from_run()
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         loop.Pump = new FakePump();
         var ran = new List<string>();
         loop.Post(() =>

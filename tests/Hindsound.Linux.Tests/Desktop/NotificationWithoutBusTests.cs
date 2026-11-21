@@ -3,6 +3,7 @@ using Hindsound.Linux.App;
 using Hindsound.Linux.DBus;
 using Hindsound.Linux.Desktop;
 using Hindsound.Ui;
+using Hindsound.Unix.App;
 
 namespace Hindsound.Linux.Tests.Desktop;
 
@@ -26,7 +27,7 @@ public sealed class NotificationWithoutBusTests
     // Two notifications 200 ms apart, as in the logic tests: how many ended, and what the log said.
     private static (int Finished, bool Showing, List<string> Log) TwoNotifications(Func<SessionBus> bus, Action? beforeFirst = null)
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         var log = new List<string>();
         var finished = 0;
         using var notification = new FreedesktopNotification(loop, log.Add, bus, new NoFolder(), holdMs: 60_000);

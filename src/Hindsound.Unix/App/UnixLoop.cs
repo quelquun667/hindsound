@@ -1,7 +1,7 @@
 using Hindsound.App;
 using Hindsound.Ui;
 
-namespace Hindsound.Linux.App;
+namespace Hindsound.Unix.App;
 
 /// <summary>
 /// The thread of the app on Linux: a queue of actions and a list of timers, run one at a time on the thread that calls
@@ -16,7 +16,7 @@ namespace Hindsound.Linux.App;
 /// <remarks>An exception thrown by an action, a timer or a window event the pump hands out is reported through
 /// <see cref="UiErrors"/> and the loop goes on, as the Windows loop does: one failed piece of work must not end the app,
 /// and the buffer with it.</remarks>
-internal sealed class LinuxLoop : IAppLoop
+internal sealed class UnixLoop : IAppLoop
 {
     private readonly object _gate = new();
     private readonly Queue<Action> _actions = new();
@@ -29,7 +29,7 @@ internal sealed class LinuxLoop : IAppLoop
     private ILoopPump? _pump;
 
     /// <param name="nowMs">The clock of the timers, in milliseconds. A monotonic count by default.</param>
-    public LinuxLoop(Func<long>? nowMs = null) => _nowMs = nowMs ?? (static () => Environment.TickCount64);
+    public UnixLoop(Func<long>? nowMs = null) => _nowMs = nowMs ?? (static () => Environment.TickCount64);
 
     public Action? CloseAsked { get; set; }
 

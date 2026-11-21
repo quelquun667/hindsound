@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using Hindsound.Linux.Updates;
+using Hindsound.Unix.Updates;
 using Hindsound.Updates;
 
 namespace Hindsound.Linux.Tests.Updates;
@@ -13,7 +13,7 @@ namespace Hindsound.Linux.Tests.Updates;
 /// the Windows runner, a hop waited the 5 s of its delay for nothing.
 /// </summary>
 [Collection(HttpTransportCollection.Name)]
-public class LinuxHttpTransportCookieTests
+public class UnixHttpTransportCookieTests
 {
     private static readonly TransferLimits Roomy = new(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(5), 1024);
 
@@ -23,7 +23,7 @@ public class LinuxHttpTransportCookieTests
         using var server = new TwoAnswers(
             "HTTP/1.1 302 Found\r\nSet-Cookie: session=abc; Path=/\r\nLocation: /second\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
             "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok");
-        var transport = new LinuxHttpTransport(_ => { });
+        var transport = new UnixHttpTransport(_ => { });
 
         var result = transport.Run(server.Address.AbsoluteUri, Roomy, _ => { }, () => false, (url, request, _) =>
         {

@@ -1,6 +1,7 @@
 using System.Runtime.Versioning;
 using Hindsound.Linux.App;
 using Hindsound.Linux.Window;
+using Hindsound.Unix.App;
 
 namespace Hindsound.Linux.Tests.Window;
 
@@ -17,7 +18,7 @@ public sealed unsafe class SdlOffscreenOnLinuxTests
     private const int Width = 320;
     private const int Height = 200;
 
-    private static void RunGuarded(LinuxLoop loop)
+    private static void RunGuarded(UnixLoop loop)
     {
         var guarded = false;
         using var guard = new Timer(_ =>
@@ -113,7 +114,7 @@ public sealed unsafe class SdlOffscreenOnLinuxTests
     // window's handler on the loop thread, never the wake itself.
     private static void ThePumpWakesTheLoop()
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         var pump = new SdlPump();
         var ownType = SdlNative.RegisterEvents(1);
         Assert.NotEqual(0u, ownType);

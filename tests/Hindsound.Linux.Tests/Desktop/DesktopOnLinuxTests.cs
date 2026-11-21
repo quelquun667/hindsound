@@ -7,6 +7,7 @@ using Hindsound.Linux.DBus;
 using Hindsound.Linux.Desktop;
 using Hindsound.Settings;
 using Hindsound.Ui;
+using Hindsound.Unix.App;
 using Tmds.DBus.Protocol;
 
 namespace Hindsound.Linux.Tests.Desktop;
@@ -84,7 +85,7 @@ public sealed class DesktopOnLinuxTests : IDisposable
         new(NotificationKind.Silent, "Clip saved", body, [], 0, NotificationVisual.Bars, 0, []) { ClipPath = clip };
 
     // Runs the loop until the work is done, or fails past the guard. The work runs on the pool and reaches the loop by Post.
-    private static void RunUntil(LinuxLoop loop, Func<Task> work)
+    private static void RunUntil(UnixLoop loop, Func<Task> work)
     {
         Exception? failure = null;
         using var guard = new Timer(_ =>
@@ -158,7 +159,7 @@ public sealed class DesktopOnLinuxTests : IDisposable
     [Fact]
     public void A_notification_reaches_the_server_silent_and_its_actions_come_back()
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         var server = new FakeServer();
         var folder = new FakeFolder();
         var log = new ConcurrentQueue<string>();
@@ -227,7 +228,7 @@ public sealed class DesktopOnLinuxTests : IDisposable
     [Fact]
     public void A_notification_counts_as_gone_after_its_hold_and_a_newer_one_gets_its_own()
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         var server = new FakeServer();
         using var appBus = new SessionBus(() => DBusAddress.Session, _ => { });
         using var notification = new FreedesktopNotification(loop, _ => { }, () => appBus, new FakeFolder(), holdMs: 1500);
@@ -267,9 +268,9 @@ public sealed class DesktopOnLinuxTests : IDisposable
     public void The_single_instance_makes_its_own_folder_for_the_user_alone_and_answers_on_it()
     {
         var place = InstancePlace.For(name => name == InstancePlace.CacheVariable ? _folder : null, null, SingleInstance.Name)!;
-        using var first = LinuxInstanceChannel.Take(place, _ => { });
-        using var second = LinuxInstanceChannel.Take(place, _ => { });
-        using var loop = new LinuxLoop();
+        using var first = UnixInstanceChannel.Take(place, _ => { });
+        using var second = UnixInstanceChannel.Take(place, _ => { });
+        using var loop = new UnixLoop();
         InstanceMessage? received = null;
         first.Listen(loop, message => received = message);
 

@@ -3,6 +3,7 @@ using Hindsound.App;
 using Hindsound.Linux.App;
 using Hindsound.Linux.Window;
 using Hindsound.Settings;
+using Hindsound.Unix.App;
 
 namespace Hindsound.Linux.Tests.Window;
 
@@ -47,6 +48,6 @@ public sealed class LinuxShellWindowFailureTests
     private static LinuxSettingsWindow NewWindow(FakeVideo video)
     {
         var request = new SettingsWindowRequest(new AppSettings().Normalize(), new CountingBackend(), () => 0f, false, true, default, () => { });
-        return new LinuxSettingsWindow(request, new LinuxLoop(() => video.Clock), () => new BlockText(), video);
+        return new LinuxSettingsWindow(request, new UnixLoop(() => video.Clock), () => new BlockText(), video);
     }
 }

@@ -1,6 +1,7 @@
 using Hindsound.App;
 using Hindsound.Linux.DBus;
 using Hindsound.Ui;
+using Hindsound.Unix.Desktop;
 using Tmds.DBus.Protocol;
 
 namespace Hindsound.Linux.Desktop;

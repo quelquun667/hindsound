@@ -1,5 +1,6 @@
 using Hindsound.App;
 using Hindsound.Linux.App;
+using Hindsound.Unix.App;
 
 namespace Hindsound.Linux.Tests.App;
 
@@ -31,11 +32,11 @@ public sealed class InstanceChannelLeftSocketTests : IDisposable
         File.WriteAllText(Place().Socket, "left over");
         var log = new List<string>();
 
-        using var first = LinuxInstanceChannel.Take(Place(), log.Add);
+        using var first = UnixInstanceChannel.Take(Place(), log.Add);
         Assert.True(first.First);
         Assert.Empty(log);
 
-        using var second = LinuxInstanceChannel.Take(Place(), log.Add);
+        using var second = UnixInstanceChannel.Take(Place(), log.Add);
         var telling = Task.Run(() => second.Tell(InstanceMessage.Show));
         var received = Receive(first);
 
@@ -50,9 +51,9 @@ public sealed class InstanceChannelLeftSocketTests : IDisposable
     private static bool? Answer(Task<bool> telling) => telling.Wait(15_000) ? telling.Result : null;
 
     // Runs the loop until a message arrives, or fails past the guard.
-    private static InstanceMessage? Receive(LinuxInstanceChannel first)
+    private static InstanceMessage? Receive(UnixInstanceChannel first)
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         InstanceMessage? received = null;
         using var guard = new Timer(_ => loop.Post(loop.Quit), null, 15_000, Timeout.Infinite);
         first.Listen(loop, message =>

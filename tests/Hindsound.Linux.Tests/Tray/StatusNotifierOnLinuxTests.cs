@@ -3,6 +3,7 @@ using Hindsound.Linux.App;
 using Hindsound.Linux.DBus;
 using Hindsound.Linux.Tray;
 using Hindsound.Ui;
+using Hindsound.Unix.App;
 using Tmds.DBus.Protocol;
 
 namespace Hindsound.Linux.Tests.Tray;
@@ -37,7 +38,7 @@ public sealed class StatusNotifierOnLinuxTests
     }
 
     // Runs the loop until done, or fails past the guard.
-    private static void RunUntil(LinuxLoop loop, Func<Task> work)
+    private static void RunUntil(UnixLoop loop, Func<Task> work)
     {
         Exception? failure = null;
         using var guard = new Timer(_ =>
@@ -62,7 +63,7 @@ public sealed class StatusNotifierOnLinuxTests
         Assert.Null(failure);
     }
 
-    private static Task<T> OnLoop<T>(LinuxLoop loop, Func<T> action)
+    private static Task<T> OnLoop<T>(UnixLoop loop, Func<T> action)
     {
         var done = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
         loop.Post(() => done.SetResult(action()));
@@ -130,7 +131,7 @@ public sealed class StatusNotifierOnLinuxTests
     [Fact]
     public void A_watcher_gets_the_item_reads_it_opens_its_menu_and_a_click_reaches_the_app()
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         var log = new List<string>();
         using var appBus = new SessionBus(() => DBusAddress.Session, line => loop.Post(() => log.Add(line)));
         using var panelBus = new SessionBus(() => DBusAddress.Session, _ => { });
@@ -226,7 +227,7 @@ public sealed class StatusNotifierOnLinuxTests
     [Fact]
     public void Without_a_watcher_the_icon_is_not_there_and_the_log_says_why()
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         var log = new List<string>();
         using var appBus = new SessionBus(() => DBusAddress.Session, line => loop.Post(() => log.Add(line)));
         var added = true;

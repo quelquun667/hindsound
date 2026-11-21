@@ -3,6 +3,7 @@ using Hindsound.App;
 using Hindsound.Linux.App;
 using Hindsound.Linux.Desktop;
 using Hindsound.Linux.Window;
+using Hindsound.Unix.App;
 using Hindsound.Unix.Export;
 using Hindsound.Unix.Library;
 
@@ -49,7 +50,7 @@ internal static class Program
             return proof == 0 ? Mp3ReadBack.Check(options.ProveMp3Folder, new UnixClipDecoder(), journal.Write) : proof;
         }
 
-        using var instance = LinuxInstanceChannel.Take(options, journal.Write);
+        using var instance = UnixInstanceChannel.Take(options, journal.Write);
         if (!instance.First)
         {
             return SingleInstance.Leave(instance, options, journal.Write, launch.Message);

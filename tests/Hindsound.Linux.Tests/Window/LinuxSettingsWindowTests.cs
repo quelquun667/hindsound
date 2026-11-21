@@ -5,6 +5,7 @@ using Hindsound.Linux.Window;
 using Hindsound.Settings;
 using Hindsound.Ui;
 using Hindsound.Ui.Window;
+using Hindsound.Unix.App;
 
 namespace Hindsound.Linux.Tests.Window;
 
@@ -148,7 +149,7 @@ public sealed unsafe class LinuxSettingsWindowTests
     public void A_window_that_fails_to_make_its_pump_leaves_no_window_bitmap_nor_video()
     {
         var video = new FakeVideo { NewPumpFails = new InvalidOperationException("no event type left") };
-        using var loop = new LinuxLoop(() => video.Clock);
+        using var loop = new UnixLoop(() => video.Clock);
         var windows = LinuxSettingsWindow.OpenWindows;
         var bitmaps = LinuxSettingsWindow.LiveBitmaps;
         var closed = 0;
@@ -167,7 +168,7 @@ public sealed unsafe class LinuxSettingsWindowTests
     public void A_window_that_fails_after_taking_the_loops_wait_gives_it_back()
     {
         var video = new FakeVideo();
-        using var loop = new LinuxLoop(() => video.Clock);
+        using var loop = new UnixLoop(() => video.Clock);
 
         // The wait the loop had before throws when the window's pump replaces it: the window has taken the loop's wait by then.
         loop.Pump = new FailingWakePump();
@@ -182,7 +183,7 @@ public sealed unsafe class LinuxSettingsWindowTests
         Assert.Equal(bitmaps, LinuxSettingsWindow.LiveBitmaps);
     }
 
-    private static LinuxSettingsWindow OpenOn(FakeVideo video, LinuxLoop loop, Action closed)
+    private static LinuxSettingsWindow OpenOn(FakeVideo video, UnixLoop loop, Action closed)
     {
         var request = new SettingsWindowRequest(new AppSettings().Normalize(), new CountingBackend(), () => 0f, false, true, default, closed);
         return new LinuxSettingsWindow(request, loop, () => new BlockText(), video);

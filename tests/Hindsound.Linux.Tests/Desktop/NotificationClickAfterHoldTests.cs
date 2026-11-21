@@ -3,6 +3,7 @@ using Hindsound.Linux.App;
 using Hindsound.Linux.DBus;
 using Hindsound.Linux.Desktop;
 using Hindsound.Ui;
+using Hindsound.Unix.App;
 
 namespace Hindsound.Linux.Tests.Desktop;
 
@@ -24,7 +25,7 @@ public sealed class NotificationClickAfterHoldTests
     private static SessionBus NoBus() => throw new InvalidOperationException("no bus");
 
     // The loop is never run here: the ends of the notices it would carry never come, and nothing else is posted to it.
-    private static (FreedesktopNotification Notification, List<NotificationContent?> Clicks) View(LinuxLoop loop)
+    private static (FreedesktopNotification Notification, List<NotificationContent?> Clicks) View(UnixLoop loop)
     {
         var clicks = new List<NotificationContent?>();
         var notification = new FreedesktopNotification(loop, _ => { }, NoBus, new NoFolder(), holdMs: 60_000);
@@ -37,7 +38,7 @@ public sealed class NotificationClickAfterHoldTests
     [Fact]
     public void A_click_on_a_clip_after_its_hold_passes_that_clip_on()
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         var (notification, clicks) = View(loop);
         using var _ = notification;
         notification.Keep(5, Older);
@@ -51,7 +52,7 @@ public sealed class NotificationClickAfterHoldTests
     [Fact]
     public void A_click_on_the_update_notice_after_its_hold_passes_the_update_notice_on()
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         var (notification, clicks) = View(loop);
         using var _ = notification;
         notification.Keep(9, Update);
@@ -65,7 +66,7 @@ public sealed class NotificationClickAfterHoldTests
     [Fact]
     public void A_click_on_an_older_notice_passes_that_one_on_and_leaves_the_newer_one_showing()
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         var (notification, clicks) = View(loop);
         using var _ = notification;
         notification.Keep(5, Older);
@@ -82,7 +83,7 @@ public sealed class NotificationClickAfterHoldTests
     [Fact]
     public void A_click_on_a_notification_of_another_app_passes_nothing_on()
     {
-        using var loop = new LinuxLoop();
+        using var loop = new UnixLoop();
         var (notification, clicks) = View(loop);
         using var _ = notification;
         notification.Keep(5, Older);

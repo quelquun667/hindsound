@@ -4,7 +4,7 @@ using System.Net;
 using System.Net.Http;
 using Hindsound.Updates;
 
-namespace Hindsound.Linux.Updates;
+namespace Hindsound.Unix.Updates;
 
 /// <summary>
 /// The GET of the update check, on HttpClient. The same rules as the Windows transport: its own redirects are turned off, so
@@ -13,7 +13,7 @@ namespace Hindsound.Linux.Updates;
 /// credential, a fixed User-Agent, nothing else sent. A client is made for each GET and gone after it: between two checks,
 /// nothing of the transport is alive.
 /// </summary>
-internal sealed class LinuxHttpTransport(Action<string> log) : IUpdateTransport
+internal sealed class UnixHttpTransport(Action<string> log) : IUpdateTransport
 {
     private const string UserAgent = "Hindsound";
 
