@@ -19,7 +19,8 @@
 # Usage:
 #   build-natives.sh WORK_DIR OUT_DIR   builds and checks; OUT_DIR receives the four dylibs
 #   build-natives.sh --check OUT_DIR    checks dylibs already built (ones a cache gave back)
-# Needs the Xcode command line tools, CMake and curl (all on the GitHub macOS runners).
+# Needs the Xcode command line tools, CMake and curl (all on the GitHub macOS runners). The CMake of the runner (4.x)
+# refuses the cmake_minimum_required of FreeType 2.13.2 (below 3.5): CMAKE_POLICY_VERSION_MINIMUM=3.5 lets it configure.
 # Last checked: 21/11/2026, on the runner macos-26 (the CI's job mac).
 
 set -euo pipefail
@@ -50,12 +51,13 @@ readonly SDL_OPTIONS=(
 readonly FREETYPE_OPTIONS=(
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 "-DCMAKE_OSX_DEPLOYMENT_TARGET=$DEPLOYMENT_TARGET"
   -DBUILD_SHARED_LIBS=ON -DFT_DISABLE_ZLIB=ON -DFT_DISABLE_BZIP2=ON -DFT_DISABLE_PNG=ON -DFT_DISABLE_HARFBUZZ=ON
-  -DFT_DISABLE_BROTLI=ON
+  -DFT_DISABLE_BROTLI=ON -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 )
 readonly HARFBUZZ_OPTIONS=(
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 "-DCMAKE_OSX_DEPLOYMENT_TARGET=$DEPLOYMENT_TARGET"
   -DBUILD_SHARED_LIBS=ON -DHB_HAVE_FREETYPE=OFF -DHB_HAVE_GLIB=OFF -DHB_HAVE_GOBJECT=OFF -DHB_HAVE_ICU=OFF
   -DHB_HAVE_GRAPHITE2=OFF -DHB_HAVE_CORETEXT=OFF -DHB_BUILD_UTILS=OFF -DHB_BUILD_SUBSET=OFF -DHB_HAVE_INTROSPECTION=OFF
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 )
 
 readonly LIBRARIES='libSDL3.0.dylib libfreetype.6.dylib libharfbuzz.0.dylib libmp3lame.0.dylib'
