@@ -58,7 +58,9 @@ jobs:
           failed=0
           for scale in 1 1.5; do
             for side in base branch base2; do
-              exe="$RUNNER_TEMP/${side%2}/hindsound"
+              # The same path for both exes: the keyboard pages show the command of the program, its path included.
+              rm -rf "$RUNNER_TEMP/app" && cp -r "$RUNNER_TEMP/${side%2}" "$RUNNER_TEMP/app"
+              exe="$RUNNER_TEMP/app/hindsound"
               run="$RUNNER_TEMP/run"
               rm -rf "$run" && mkdir -p "$run/png"
               printf '%s\n' '{"audio":{"micDeviceId":"disabled"}}' > "$run/settings.json"
