@@ -606,6 +606,143 @@ jobs:
           echo "prove-preview: exit code $code"
           [ "$code" -eq 0 ] && grep -q "preview-proof result pass" "$folder/settings.log"
 
+      # The whole app, launched as a user launches it (open, through Launch Services, so that TCC asks about the bundle and
+      # not the runner), with settings of its own: clips of 10 s in a folder of the step, the microphone disabled, the copy to
+      # the clipboard on. The rights of audio capture and microphone are written granted before anything opens a device (the
+      # step of the capture leaves them refused). Then: the capture starts (its line in the log, with the memory), afplay
+      # plays a 1 kHz tone on BlackHole 2ch, "hindsound --save" from a second launch, the clip written in the folder of the
+      # settings (size, duration by afinfo, the 1 kHz measured on its decoding by afconvert), the pasteboard holding the URL
+      # of the clip, the notification shown, the resident memory of the process, and SIGTERM, which ends the app cleanly:
+      # its exit code is in its log, since open does not give it back.
+      - name: Run the whole app, save a clip of a 1 kHz tone and quit
+        if: ${{ !cancelled() && steps.assemble.outcome == 'success' }}
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+          HOMEBREW_NO_ENV_HINTS: 1
+        run: |
+          app="$RUNNER_TEMP/app/Hindsound.app"
+          program="$app/Contents/MacOS/hindsound"
+          folder="$RUNNER_TEMP/mac-whole"
+          clips="$folder/clips"
+          log="$folder/settings.log"
+          mkdir -p "$folder" "$clips"
+          printf '{"clipSeconds":10,"audio":{"micDeviceId":"disabled"},"export":{"outputFolder":"%s","copyToClipboard":true},"general":{"startWithWindows":false}}\n' "$clips" > "$folder/settings.json"
+          cat "$folder/settings.json"
+          brew install --cask blackhole-2ch > "$folder/brew-blackhole.log" 2>&1 || { tail -n 20 "$folder/brew-blackhole.log"; exit 1; }
+          brew install switchaudio-osx > "$folder/brew-switchaudio.log" 2>&1 || { tail -n 20 "$folder/brew-switchaudio.log"; exit 1; }
+          for _ in $(seq 1 60); do
+            SwitchAudioSource -a -t output 2> /dev/null | grep -q 'BlackHole 2ch' && break
+            sleep 0.5
+          done
+          for type in output input system; do
+            SwitchAudioSource -t "$type" -s 'BlackHole 2ch' > /dev/null
+            echo "default $type: $(SwitchAudioSource -t "$type" -c)"
+          done
+          requirement=$(codesign -d -r- "$app" 2>&1 | sed -n 's/^#* *designated => //p' | head -n 1)
+          csreq -r "=$requirement" -b "$folder/csreq.bin"
+          hex=$(xxd -p "$folder/csreq.bin" | tr -d '\n')
+          for db in "/Library/Application Support/com.apple.TCC/TCC.db" "$HOME/Library/Application Support/com.apple.TCC/TCC.db"; do
+            for service in kTCCServiceAudioCapture kTCCServiceMicrophone; do
+              sudo sqlite3 "$db" "insert or replace into access (service, client, client_type, auth_value, auth_reason, auth_version, csreq, flags, last_modified) values ('$service', 'io.github.quelquun667.hindsound', 0, 2, 3, 1, X'$hex', 0, CAST(strftime('%s','now') AS INTEGER));"
+              echo "tcc: $service in $db: $(sudo sqlite3 "$db" "select auth_value from access where service = '$service' and client = 'io.github.quelquun667.hindsound';")"
+            done
+          done
+          sudo killall tccd || true
+          killall tccd 2> /dev/null || true
+          sleep 2
+          python3 - "$folder/tone.wav" <<'PY'
+          import array, math, sys, wave
+          rate, seconds = 48000, 12
+          tone = array.array('h')
+          for i in range(rate * seconds):
+              value = int(0.5 * 32767 * math.sin(2 * math.pi * 1000 * i / rate))
+              tone.extend((value, value))
+          with wave.open(sys.argv[1], 'wb') as f:
+              f.setnchannels(2)
+              f.setsampwidth(2)
+              f.setframerate(rate)
+              f.writeframes(tone.tobytes())
+          PY
+          # Each check says its result and the step goes on to the next: the log then has every number.
+          set +e
+          failed=0
+          check() { if [ "$2" -eq 0 ]; then echo "whole app: $1 pass"; else echo "whole app: $1 FAIL"; failed=1; fi; }
+          wait_for() {
+            for _ in $(seq 1 "$2"); do
+              grep -qE "$1" "$log" 2> /dev/null && return 0
+              sleep 0.5
+            done
+            return 1
+          }
+          perl -e 'alarm shift; exec @ARGV' 240 open -n -W --stdout "$folder/app.out" --stderr "$folder/app.err" "$app" --args --settings "$folder/settings.json" &
+          opener=$!
+          wait_for 'capture started:' 120; check "capture started" $?
+          pid=$(pgrep -f 'Hindsound.app/Contents/MacOS/hindsound --settings' | head -n 1)
+          echo "whole app: pid ${pid:-none}"
+          perl -e 'alarm shift; exec @ARGV' 30 afplay "$folder/tone.wav" &
+          player=$!
+          sleep 6
+          [ -n "$pid" ] && echo "whole app: resident memory while capturing $(ps -o rss= -p "$pid" | tr -d ' ') KB (ps)"
+          code=0
+          perl -e 'alarm shift; exec @ARGV' 30 "$program" --settings "$folder/settings.json" --save || code=$?
+          echo "--save from a second launch: exit code $code (2: handed to the running instance)"
+          [ "$code" -eq 2 ]; check "--save handed over" $?
+          wait_for 'clip saved:|clip not saved:' 60; check "clip saved line" $?
+          wait_for 'notification (Saved|Partial|WavFallback):' 20; check "notification shown" $?
+          clip=$(find "$clips" -maxdepth 1 -name '*.mp3' | head -n 1)
+          echo "whole app: clip '${clip:-none}', $(stat -f %z "$clip" 2> /dev/null || echo 0) bytes"
+          [ -n "$clip" ] && [ -s "$clip" ]; check "clip written in the folder of the settings" $?
+          if [ -n "$clip" ]; then
+            afinfo "$clip" | sed 's/^/  afinfo: /'
+            afconvert -f WAVE -d LEI16 "$clip" "$folder/clip.wav"; check "clip decoded" $?
+            python3 - "$folder/clip.wav" <<'PY'; check "1 kHz in the clip" $?
+          import array, math, sys, wave
+          with wave.open(sys.argv[1], 'rb') as f:
+              rate, channels = f.getframerate(), f.getnchannels()
+              data = array.array('h', f.readframes(f.getnframes()))
+          left = [data[i] / 32768.0 for i in range(0, len(data), channels)]
+          print(f"clip: {len(left) / rate:.2f} s at {rate} Hz, {channels} channels")
+          def level(samples, hz):
+              w = 2 * math.pi * hz / rate
+              k = 2 * math.cos(w)
+              s1 = s2 = 0.0
+              for x in samples:
+                  s1, s2 = x + k * s1 - s2, s1
+              power = s1 * s1 + s2 * s2 - k * s1 * s2
+              return 20 * math.log10(max(1e-12, 2 * math.sqrt(max(0.0, power)) / len(samples)))
+          # The loudest second: the tone plays in the last part of the clip, after the silence before afplay.
+          seconds = [left[i:i + rate] for i in range(0, len(left) - rate + 1, rate)]
+          best = max(seconds, key=lambda s: sum(x * x for x in s))
+          rms = 20 * math.log10(max(1e-12, math.sqrt(sum(x * x for x in best) / len(best))))
+          peak = 20 * math.log10(max(1e-12, max(abs(x) for x in best)))
+          a1000, a440, a2000 = level(best, 1000), level(best, 440), level(best, 2000)
+          # A pure sine of amplitude A has a RMS of A/sqrt(2): its Goertzel amplitude in dBFS is the RMS plus 3 dB.
+          print(f"clip: loudest second rms={rms:.1f}dBFS peak={peak:.1f}dBFS a1000={a1000:.1f}dBFS a440={a440:.1f}dBFS a2000={a2000:.1f}dBFS")
+          sys.exit(0 if rms > -40 and a1000 > rms and a1000 - a440 > 30 and a1000 - a2000 > 30 else 1)
+          PY
+            pasted=$(osascript -l JavaScript -e 'ObjC.import("AppKit"); ObjC.unwrap($.NSPasteboard.generalPasteboard.stringForType("public.file-url"))' 2>&1)
+            echo "whole app: pasteboard file URL '$pasted'"
+            python3 - "$pasted" "$clip" <<'PY'; check "pasteboard holds the URL of the clip" $?
+          import os, sys, urllib.parse
+          url = urllib.parse.urlparse(sys.argv[1])
+          sys.exit(0 if url.scheme == 'file' and os.path.realpath(urllib.parse.unquote(url.path)) == os.path.realpath(sys.argv[2]) else 1)
+          PY
+          fi
+          [ -n "$pid" ] && echo "whole app: resident memory after the clip $(ps -o rss= -p "$pid" | tr -d ' ') KB (ps)"
+          wait "$player" || true
+          if [ -n "$pid" ]; then
+            kill -TERM "$pid"; check "SIGTERM sent" $?
+          fi
+          opener_code=0
+          wait "$opener" || opener_code=$?
+          echo "whole app: open ended with code $opener_code"
+          pgrep -f 'Hindsound.app/Contents/MacOS/hindsound --settings' > /dev/null && { echo "whole app: still running"; pkill -KILL -f 'Hindsound.app/Contents/MacOS/hindsound --settings'; failed=1; }
+          cat "$folder/app.out" "$folder/app.err" 2> /dev/null | sed 's/^/  console: /' || true
+          sed 's/^/  log whole: /' "$log" || true
+          grep -q 'leaving with exit code 0' "$log"; check "the app left with exit code 0" $?
+          exit $failed
+
       - name: Keep the pages of the window
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

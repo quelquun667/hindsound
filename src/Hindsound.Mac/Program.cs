@@ -103,6 +103,9 @@ internal static class Program
             // update channel of macOS comes with step M4: until then no update is looked for (the log says "not installed").
             var code = new HindsoundApp(options, journal, AppOptions.UpdaterMayRun(launch.Rest), MacDesktop.Parts(journal.Write), shell: new MacShell(journal.Write), instance: instance).Run();
 
+            // Launched through Launch Services (open), the app's code reaches no one: the log keeps it.
+            journal.Write($"leaving with exit code {code}");
+
             // A capture thread stuck in Core Audio must not keep the process alive with the icon gone.
             Environment.Exit(code);
             return code;
