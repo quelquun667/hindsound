@@ -484,6 +484,16 @@ applications that have an audio session, so an application that has played nothi
   the same, only the name shown changes, and it comes back when the application plays again.
 - On Linux with PulseAudio (Ubuntu 22.04), the first 2 seconds after you choose the application, or after Hindsound starts, may
   be missing from the memory. PipeWire does not have this gap.
+- On Linux with PulseAudio, while one application is recorded, Hindsound also holds one record stream on each output, shown
+  as `Short delay for the chosen application` in the sound settings. It asks the output to play only a few milliseconds ahead
+  instead of up to 2 seconds, so that a short sound of the application is heard before its stream ends; its own sound is
+  dropped. What it costs: the server refills each output in small pieces, more often, Hindsound reads each of these streams
+  in 20 ms pieces, and an output is not suspended while nothing plays. This has not been measured; on a laptop it may cost
+  some battery. These streams close when you record the whole PC again. PipeWire does not need them: Hindsound opens none
+  there.
+- On Linux, while the chosen application is recorded and Hindsound is not paused, Hindsound reads the list of processes in
+  `/proc` every 3 seconds (the `stat` file of each process) to tell when the application closes: its sound streams do not
+  say it. It reads it again too when a new sound stream starts, to know whether it is the application's.
 - If the application closes, the band says `Not running: Discord`, and the memory gets silence. The capture attaches again
   when the application comes back. None of this makes a notification.
 - `Output` is greyed out in this mode: the capture does not depend on an output.
