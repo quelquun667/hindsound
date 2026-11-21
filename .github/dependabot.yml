@@ -14,6 +14,7 @@ updates:
       - /src/Hindsound
       - /src/Hindsound.Core
       - /src/Hindsound.Linux
+      - /src/Hindsound.Unix
       - /tests/Hindsound.Tests
       - /tests/Hindsound.Core.Tests
       - /tests/Hindsound.Linux.Tests
