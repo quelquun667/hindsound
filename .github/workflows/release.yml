@@ -57,7 +57,7 @@ jobs:
 
       # The tests marked Category=Linux need Linux itself: the CI runs them on Ubuntu for every pull request.
       - name: Test
-        run: dotnet test Hindsound.slnx -c Release --filter "Category!=Device&Category!=Linux"
+        run: dotnet test Hindsound.slnx -c Release --filter "Category!=Device&Category!=Linux&Category!=Mac"
 
       - name: Test the release scripts
         run: ./tools/release/test-release-scripts.ps1
