@@ -6,12 +6,14 @@
     An immutable release takes no change once published, so a file damaged on its way up, or one left by an earlier run,
     would reach the users. The folder must hold exactly the files of the release:
       Hindsound-<v>-Setup.exe, Hindsound-<v>-win-x64-portable.zip, hindsound-<v>-linux-x64.AppImage,
-      hindsound-<v>-linux-x64.tar.gz, hindsound_<v>_amd64.deb, hindsound-update-win-x64.json, hindsound-update-win-x64-portable.json,
-      hindsound-update-linux-x64.json, lame-3.100.tar.gz, fuse-3.15.0.tar.xz, type2-runtime-20251108-source.tar.gz,
+      hindsound-<v>-linux-x64.tar.gz, hindsound_<v>_amd64.deb, Hindsound-<v>-macos-arm64.zip, hindsound-update-win-x64.json,
+      hindsound-update-win-x64-portable.json, hindsound-update-linux-x64.json, hindsound-update-macos-arm64.json, lame-3.100.tar.gz, fuse-3.15.0.tar.xz, type2-runtime-20251108-source.tar.gz,
       type2-runtime-20251108-libraries-source.tar.gz and SHA256SUMS.
     The Setup manifest must give this version, the address of this Setup on the release of the tag, and the size and
-    SHA-256 of the Setup in the folder. The two announce manifests must give this version and exactly the page of the
-    release, and nothing else. The portable zip must hold portable.txt next to Hindsound.exe. The .deb must be a Debian
+    SHA-256 of the Setup in the folder. The three announce manifests must give this version and exactly the page of the
+    release, and nothing else. The portable zip must hold portable.txt next to Hindsound.exe. The Mac zip must hold
+    Hindsound.app and nothing else, with its program, its Info.plist, its four dylibs and its signature, and no AppleDouble
+    file. The .deb must be a Debian
     package: an ar archive whose first member is debian-binary, holding 2.0. The LAME source must have the
     SHA-256 given in THIRD-PARTY-NOTICES.md. fuse-3.15.0.tar.xz must have the SHA-256 that fetch-runtime-sources.sh pins,
     read from that script, and the source of the runtime must be a gzip archive: that script checked what it holds. The
@@ -80,8 +82,9 @@ function Read-Manifest([string]$Name) {
 $setupName = "Hindsound-$Version-Setup.exe"
 $zipName = "Hindsound-$Version-win-x64-portable.zip"
 $debName = "hindsound_${Version}_amd64.deb"
+$macZipName = "Hindsound-$Version-macos-arm64.zip"
 $manifestName = 'hindsound-update-win-x64.json'
-$announceNames = @('hindsound-update-win-x64-portable.json', 'hindsound-update-linux-x64.json')
+$announceNames = @('hindsound-update-win-x64-portable.json', 'hindsound-update-linux-x64.json', 'hindsound-update-macos-arm64.json')
 $lameName = 'lame-3.100.tar.gz'
 $fuseName = 'fuse-3.15.0.tar.xz'
 $runtimeSourceName = 'type2-runtime-20251108-source.tar.gz'
@@ -90,8 +93,8 @@ $sumsName = 'SHA256SUMS'
 
 [string[]]$expectedNames = @(
     $setupName, $zipName, "hindsound-$Version-linux-x64.AppImage", "hindsound-$Version-linux-x64.tar.gz", $debName,
-    $manifestName, $announceNames[0], $announceNames[1], $lameName, $fuseName, $runtimeSourceName, $librariesSourceName,
-    $sumsName
+    $macZipName, $manifestName, $announceNames[0], $announceNames[1], $announceNames[2], $lameName, $fuseName,
+    $runtimeSourceName, $librariesSourceName, $sumsName
 )
 [Array]::Sort($expectedNames, [StringComparer]::Ordinal)
 $names = Get-SortedNames $Folder
@@ -145,6 +148,40 @@ finally {
 foreach ($entry in "$top/Hindsound.exe", "$top/libmp3lame.64.dll", "$top/portable.txt") {
     if ($entries -cnotcontains $entry) {
         throw "$zipName on the release has no $entry."
+    }
+}
+
+# The Mac zip, as ditto -c -k --keepParent wrote it: Hindsound.app and only it, signed (check-zip.sh verified the
+# signature and started the app in its job), without the AppleDouble files of extended attributes.
+$stream = [IO.File]::OpenRead((Join-Path $Folder $macZipName))
+try {
+    try {
+        $zip = New-Object IO.Compression.ZipArchive($stream, [IO.Compression.ZipArchiveMode]::Read)
+    }
+    catch {
+        throw "$macZipName on the release is not a zip: $($_.Exception.Message)"
+    }
+    try {
+        $macEntries = @($zip.Entries | ForEach-Object FullName)
+    }
+    finally {
+        $zip.Dispose()
+    }
+}
+finally {
+    $stream.Dispose()
+}
+foreach ($entry in $macEntries) {
+    if (-not $entry.StartsWith('Hindsound.app/', [StringComparison]::Ordinal)) {
+        throw "$macZipName on the release holds $entry, outside Hindsound.app."
+    }
+    if ($entry -cmatch '(^|/)\._|__MACOSX') {
+        throw "$macZipName on the release holds the AppleDouble file $entry."
+    }
+}
+foreach ($entry in 'Info.plist', 'MacOS/hindsound', '_CodeSignature/CodeResources', 'Frameworks/libSDL3.0.dylib', 'Frameworks/libfreetype.6.dylib', 'Frameworks/libharfbuzz.0.dylib', 'Frameworks/libmp3lame.0.dylib', 'Resources/licenses/LAME-COPYING.txt') {
+    if ($macEntries -cnotcontains "Hindsound.app/Contents/$entry") {
+        throw "$macZipName on the release has no Hindsound.app/Contents/$entry."
     }
 }
 

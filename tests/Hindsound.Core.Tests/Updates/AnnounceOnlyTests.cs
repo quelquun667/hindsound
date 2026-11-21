@@ -9,6 +9,7 @@ namespace Hindsound.Tests.Updates;
 public class AnnounceOnlyTests
 {
     private const string LinuxManifestUrl = "https://github.com/quelquun667/hindsound/releases/latest/download/hindsound-update-linux-x64.json";
+    private const string MacManifestUrl = "https://github.com/quelquun667/hindsound/releases/latest/download/hindsound-update-macos-arm64.json";
     private const string PageOf020 = "https://github.com/quelquun667/hindsound/releases/tag/v0.2.0";
     private const string SetupOf020 = "https://github.com/quelquun667/hindsound/releases/download/v0.2.0/Hindsound-0.2.0-Setup.exe";
 
@@ -32,6 +33,15 @@ public class AnnounceOnlyTests
     {
         Assert.Equal(LinuxManifestUrl, UpdateChannel.LinuxAnnounce.ManifestUrl);
         Assert.True(UpdateChannel.LinuxAnnounce.AnnouncesOnly);
+    }
+
+    [Fact]
+    public void Mac_reads_its_own_manifest_and_only_tells()
+    {
+        Assert.Equal(MacManifestUrl, UpdateChannel.MacAnnounce.ManifestUrl);
+        Assert.Equal(UpdateDelivery.AnnounceOnly, UpdateChannel.MacAnnounce.Delivery);
+        Assert.True(UpdateChannel.MacAnnounce.AnnouncesOnly);
+        Assert.Equal(UpdateChannel.DefaultStateFolderName, UpdateChannel.MacAnnounce.StateFolderName);
     }
 
     [Theory]
@@ -201,6 +211,8 @@ public class AnnounceOnlyTests
         Assert.Equal(UpdateWiring.AnnouncesOnly, UpdateWiring.Why(true, options, noInstaller, UpdateChannel.LinuxAnnounce));
         Assert.Equal(UpdateWiring.AnnouncesOnly, UpdateWiring.Why(true, options, null, UpdateChannel.LinuxAnnounce));
         Assert.Equal(UpdateWiring.TestRun, UpdateWiring.Why(false, options, noInstaller, UpdateChannel.LinuxAnnounce));
+        Assert.Equal(UpdateWiring.AnnouncesOnly, UpdateWiring.Why(true, options, null, UpdateChannel.MacAnnounce));
+        Assert.Equal(UpdateWiring.TestRun, UpdateWiring.Why(false, options, null, UpdateChannel.MacAnnounce));
         Assert.Equal(UpdateWiring.NotInstalled, UpdateWiring.Why(true, options, noInstaller, UpdateChannel.WindowsSetup));
         Assert.Equal(UpdateWiring.NotInstalled, UpdateWiring.Why(true, options, noInstaller));
     }

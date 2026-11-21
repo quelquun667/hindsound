@@ -1,7 +1,7 @@
 # Releasing Hindsound
 
-A tag `vX.Y.Z` on `main` is all it takes: GitHub Actions builds every file of the release, for Windows and for Linux, and
-publishes the Release.
+A tag `vX.Y.Z` on `main` is all it takes: GitHub Actions builds every file of the release, for Windows, Linux and macOS,
+and publishes the Release.
 
 Last checked: 2026-11-08, with the releases of 0.0.9 and 0.0.10 on GitHub.
 
@@ -18,7 +18,45 @@ gh workflow run lame.yml --ref main
 
 ## Settings of the repository
 
-Once: secret scanning, push protection and immutable releases. The rest needs nothing.
+Once: secret scanning, push protection and immutable releases. The rest needs nothing, but for the certificate of the Mac
+app below, which is optional.
+
+### The certificate of the Mac app
+
+Not made yet. Without it, the job `macos` signs `Hindsound.app` ad hoc, and its log says so in a warning
+(`Mac app signed ad hoc`): the release still goes out. An app signed ad hoc is a new app for macOS at each version, which
+asks again for the permissions (the sound of the system, the microphone) after each update. Signed by the same certificate,
+version after version, it keeps them: the probe of the CI showed it (version 2 signed by the certificate of version 1
+read its permission and captured the sound; signed ad hoc, it was stuck on a prompt). The certificate is made here, not by
+Apple: it does not remove the `Open Anyway` of the first launch, which only a paid Apple account and a notarization would.
+
+To make it, once, in Git Bash, from the root of the repo (OpenSSL 3, as Git for Windows has it; the folder must not
+exist):
+
+```sh
+bash packaging/mac/make-signing-certificate.sh ~/hindsound-signing
+gh secret set MACOS_SIGNING_P12 --repo quelquun667/hindsound < ~/hindsound-signing/hindsound-signing.p12.base64
+gh secret set MACOS_SIGNING_P12_PASSWORD --repo quelquun667/hindsound < ~/hindsound-signing/password.txt
+gh secret list --repo quelquun667/hindsound
+```
+
+The script writes `hindsound-signing.p12` (a self-signed certificate with the extension `codeSigning`, valid 10 years,
+and its RSA key, encrypted in 3DES with a SHA-1 MAC, which `security import` of macOS reads; the defaults of OpenSSL 3 it
+refuses), the same in base64 on one line, its random password, and `hindsound-signing.pem`, the certificate alone. It
+prints the SHA-1 of the certificate: the log of a signed release gives the same in
+`designated requirement: identifier "io.github.quelquun667.hindsound" and certificate leaf = H"<sha1>"`.
+
+Keep the folder somewhere safe and private, outside the repo, or delete it: GitHub never gives a secret back, and the
+certificate cannot be made again the same. A new certificate works too, but the users then give the permissions once more.
+Never commit these files: the key signs the app of every user.
+
+What the job does with it: `release.yml` passes the two secrets to `release-files.yml`, and only to its step
+`Assemble and sign Hindsound.app`; `ci.yml` passes none, so a pull request never reads them. That step decodes the `.p12`
+into a folder of its own, removed at the end of the step, and `packaging/mac/sign-app.sh` puts it in a keychain made for
+the run, signs each Mach-O then the bundle with its SHA-1, checks the signature and the designated requirement, and
+deletes the keychain whatever happens. Every run, with the secrets or not, also makes a throwaway certificate with
+`make-signing-certificate.sh` and signs a copy of the app with it, through the same base64 and `sign-app.sh`: the commands
+above are tried on every pull request.
 
 ## Release a version
 
@@ -68,21 +106,23 @@ never published.
 | files, windows: Write the update manifest | `write-manifest.ps1`: `hindsound-update-win-x64.json`, read by the installed app. |
 | files, windows: Make the portable zip | `build-portable-zip.ps1`, from the folder the Setup was built from: the files the Setup installs, plus `packaging/windows/portable.txt` and `README.txt`, in one folder named like the zip. The zip is read back, entry by entry. |
 | files, linux | On ubuntu-22.04: the Linux app published, `build-lame-linux.sh`, then `packaging/linux/build-packages.sh` and `check-packages.sh`, which start both packages once (`--prove-mp3`), then `packaging/linux/build-deb.sh`, twice to the same bytes, and `check-deb.sh` (fields, files, what the programs link, lintian). Then the verified `lame-3.100.tar.gz`, and `fetch-runtime-sources.sh` for the source of the AppImage runtime and of the libraries linked into it, go into the artifact next to them. |
+| files, macos | On macos-26: `tools/mac/build-natives.sh` builds SDL3, FreeType, HarfBuzz and LAME from their pinned archives (no cache), `fetch-fonts.sh` the fonts, then `packaging/mac/build-app.sh` publishes the app for `osx-arm64` and makes `Hindsound.app` with its dylibs, fonts and licences, and `sign-app.sh` signs it, by the certificate above or ad hoc. `ditto -c -k --keepParent` makes `Hindsound-X.Y.Z-macos-arm64.zip`, and `packaging/mac/check-zip.sh` unzips it elsewhere: Hindsound.app alone, its signature (`codesign --verify --deep --strict`), nothing linked from Homebrew (`otool -L`), then the app started with `--prove-mp3` and `--dump-settings` (80 pages), each with the dylibs of the bundle. Last, the rehearsal of the certificate. |
 | files, deb | In clean `ubuntu:22.04`, `ubuntu:24.04`, `debian:12` and `debian:13` containers, `packaging/linux/try-deb.sh`: `apt-get install` of the .deb with its Depends alone, `/usr/bin/hindsound --prove-mp3` and `--dump-settings` with the libraries and fonts of `/usr/lib/hindsound`, then `apt-get remove`, and nothing of the package left in `/usr`. The release job waits for it, as for every job of `release-files.yml`. |
-| files, assemble | `assemble-release.ps1`: the files of both jobs, the same LAME source from both, the source of the AppImage runtime from the Linux job, `write-announce-manifest.ps1` for `hindsound-update-win-x64-portable.json` and `hindsound-update-linux-x64.json` (the page of the release, nothing to download), and one `SHA256SUMS` for every file. Then `check-release-files.ps1`, and the artifact `release-files`. |
+| files, assemble | `assemble-release.ps1`: the files of the three jobs, the same LAME source from Windows and Linux, the source of the AppImage runtime from the Linux job, the zip from the macOS job, `write-announce-manifest.ps1` for `hindsound-update-win-x64-portable.json`, `hindsound-update-linux-x64.json` and `hindsound-update-macos-arm64.json` (the page of the release, nothing to download), and one `SHA256SUMS` for every file. Then `check-release-files.ps1`, and the artifact `release-files`. |
 | release: Check the files of the release | `check-release-files.ps1` on the artifact, before anything goes up. |
 | release: Create the draft release | A draft, with the notes. |
-| release: Attach the files | The thirteen files, each named. Then they are downloaded back, and `check-release-files.ps1` wants exactly these thirteen, the .deb a Debian package, the manifests right, `SHA256SUMS` right, the SHA-256 of the LAME source, the SHA-256 of `fuse-3.15.0.tar.xz` that `fetch-runtime-sources.sh` pins, in `type2-runtime-20251108-libraries-source.tar.gz` exactly the files of `LIBRARY_FILES` in that script, each with its SHA-256 there, and each file with the size and SHA-256 of the one sent. |
+| release: Attach the files | The fifteen files, each named. Then they are downloaded back, and `check-release-files.ps1` wants exactly these fifteen, the .deb a Debian package, the Mac zip Hindsound.app alone with its program, dylibs and signature, the manifests right, `SHA256SUMS` right, the SHA-256 of the LAME source, the SHA-256 of `fuse-3.15.0.tar.xz` that `fetch-runtime-sources.sh` pins, in `type2-runtime-20251108-libraries-source.tar.gz` exactly the files of `LIBRARY_FILES` in that script, each with its SHA-256 there, and each file with the size and SHA-256 of the one sent. |
 | release: Publish the release | `check-remote-tag.ps1`: the tag on GitHub must still point at the commit built. Then the draft goes public, marked as the latest release (`--latest`): the app reads that one, and sees the new version from then on. |
 
 The files of a release: `Hindsound-X.Y.Z-Setup.exe`, `Hindsound-X.Y.Z-win-x64-portable.zip`,
-`hindsound-X.Y.Z-linux-x64.AppImage`, `hindsound-X.Y.Z-linux-x64.tar.gz`, `hindsound_X.Y.Z_amd64.deb`, `hindsound-update-win-x64.json`,
-`hindsound-update-win-x64-portable.json`, `hindsound-update-linux-x64.json`, `lame-3.100.tar.gz`, `fuse-3.15.0.tar.xz`,
+`hindsound-X.Y.Z-linux-x64.AppImage`, `hindsound-X.Y.Z-linux-x64.tar.gz`, `hindsound_X.Y.Z_amd64.deb`,
+`Hindsound-X.Y.Z-macos-arm64.zip`, `hindsound-update-win-x64.json`, `hindsound-update-win-x64-portable.json`,
+`hindsound-update-linux-x64.json`, `hindsound-update-macos-arm64.json`, `lame-3.100.tar.gz`, `fuse-3.15.0.tar.xz`,
 `type2-runtime-20251108-source.tar.gz`, `type2-runtime-20251108-libraries-source.tar.gz` and `SHA256SUMS`.
 
 `ci.yml` calls `release-files.yml` too, on every pull request and push to `main`, with the version of the latest release in
 `CHANGELOG.md`: the same files are built and checked, and kept as the artifacts `hindsound-windows-x64`,
-`hindsound-linux-x64` and `release-files` of the run. That workflow has no token that could write: only `release.yml`
+`hindsound-linux-x64`, `hindsound-macos-arm64` and `release-files` of the run. That workflow has no token that could write: only `release.yml`
 talks to the Release.
 
 `lame.yml` runs only the compilation, its checks and the proof of the encoding. It publishes nothing, on a manual start or on a

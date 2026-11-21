@@ -24,10 +24,9 @@ namespace Hindsound.Mac;
 //            watch of the devices, the lists of devices and of applications that play, and the process list
 //            (Audio/Devices/), the listening of a clip on an AudioQueue (Audio/Playback/), the capture through Core
 //            Audio: the sound of the PC by a tap that leaves the app out, one application and its children, the
-//            microphone (Audio/Capture/).
-//   off:     the update channel of macOS (step
-//            M4). Each is left null here or throws in MacShell, and PlatformFeatures.Mac turns off what the pages would
-//            offer for it.
+//            microphone (Audio/Capture/), the update channel, which only tells that a version is out and opens the page
+//            of its release (hindsound-update-macos-arm64.json).
+//   off:     the confirmation sound: PlatformFeatures.Mac turns off what the pages would offer for it.
 
 /// <summary>The macOS layer: the classes handed to the portable code, and nothing that pretends to work.</summary>
 internal static class MacPlatform
@@ -54,6 +53,7 @@ internal static class MacPlatform
             PlatformDefaults.Features = PlatformFeatures.Mac(() => SaveCommand(Environment.ProcessPath), ShortcutsNow);
             PlatformDefaults.Hotkeys = () => new KeyByKeyHotkeys(CarbonHotkeys.TryOpen(log) ?? throw new NotSupportedException("the Carbon shortcuts need the main thread"));
             PlatformDefaults.UpdateNetwork = () => new UnixHttpTransport(log);
+            PlatformDefaults.UpdateChannel = Hindsound.Updates.UpdateChannel.MacAnnounce;
             PlatformDefaults.Mp3Encoder = LameMp3Encoder.Open;
             PlatformDefaults.Shell = () => new MacShell(log);
             PlatformDefaults.RunKey = () => new LaunchAgentEntry();

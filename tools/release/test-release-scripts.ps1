@@ -347,9 +347,10 @@ try {
     & $writeNotes -Version '1.2.3' -ChangelogFile $changelogPart -OutFile $releaseNotes
     $releaseNotesText = [IO.File]::ReadAllText($releaseNotes)
     Report 'the notes start with the changelog' ($releaseNotesText.StartsWith("### Added`n`n- Something new.`n`n## Downloads`n"))
-    foreach ($name in 'Hindsound-1.2.3-Setup.exe', 'Hindsound-1.2.3-win-x64-portable.zip', 'hindsound-1.2.3-linux-x64.AppImage', 'hindsound-1.2.3-linux-x64.tar.gz', 'hindsound_1.2.3_amd64.deb', 'hindsound-update-win-x64.json', 'hindsound-update-win-x64-portable.json', 'hindsound-update-linux-x64.json', 'lame-3.100.tar.gz', 'fuse-3.15.0.tar.xz', 'type2-runtime-20251108-source.tar.gz', 'type2-runtime-20251108-libraries-source.tar.gz', 'SHA256SUMS') {
+    foreach ($name in 'Hindsound-1.2.3-Setup.exe', 'Hindsound-1.2.3-win-x64-portable.zip', 'hindsound-1.2.3-linux-x64.AppImage', 'hindsound-1.2.3-linux-x64.tar.gz', 'hindsound_1.2.3_amd64.deb', 'Hindsound-1.2.3-macos-arm64.zip', 'hindsound-update-win-x64.json', 'hindsound-update-win-x64-portable.json', 'hindsound-update-linux-x64.json', 'hindsound-update-macos-arm64.json', 'lame-3.100.tar.gz', 'fuse-3.15.0.tar.xz', 'type2-runtime-20251108-source.tar.gz', 'type2-runtime-20251108-libraries-source.tar.gz', 'SHA256SUMS') {
         Report "the notes say whom $name is for" ($releaseNotesText -cmatch "(?m)^\| [^\n]*``$([regex]::Escape($name))``[^\n]*\| [^|\n]+\. \|$")
     }
+    Report 'the notes say how to open the Mac app the first time' ($releaseNotesText -cmatch '\*\*Privacy & Security\*\*, and click \*\*Open Anyway\*\*')
     Report 'the notes have no BOM and no carriage return' (([IO.File]::ReadAllBytes($releaseNotes)[0] -eq [byte][char]'#') -and -not $releaseNotesText.Contains("`r"))
     [IO.File]::WriteAllText((Join-Path $temp 'changelog-empty.md'), "`n")
     Assert-Refused 'notes without a changelog refused' { & $writeNotes -Version '1.2.3' -ChangelogFile (Join-Path $temp 'changelog-empty.md') -OutFile (Join-Path $temp 'notes-none.md') } 'is empty'
@@ -441,13 +442,32 @@ try {
         $member = 'debian-binary'.PadRight(16) + '0'.PadRight(12) + '0'.PadRight(6) + '0'.PadRight(6) + '100644'.PadRight(8) + "$($Format.Length)".PadRight(10) + [char]0x60 + "`n"
         [IO.File]::WriteAllText($Path, "!<arch>`n" + $member + $Format + 'fake control and data', (New-Object Text.UTF8Encoding $false))
     }
-    # The folders of the two jobs, as their artifacts hold them.
+    # A zip of the Mac app as ditto writes it, from the names of its entries, each holding its own name.
+    $macEntries = @('Info.plist', 'MacOS/hindsound', '_CodeSignature/CodeResources', 'Frameworks/libSDL3.0.dylib', 'Frameworks/libfreetype.6.dylib', 'Frameworks/libharfbuzz.0.dylib', 'Frameworks/libmp3lame.0.dylib', 'Resources/fonts/Selawik-Regular.ttf', 'Resources/licenses/LAME-COPYING.txt') | ForEach-Object { "Hindsound.app/Contents/$_" }
+    function Write-FakeMacZip([string]$Path, [string[]]$Entries = $macEntries) {
+        Add-Type -AssemblyName System.IO.Compression
+        $stream = [IO.File]::Open($Path, [IO.FileMode]::CreateNew)
+        try {
+            $zip = New-Object IO.Compression.ZipArchive($stream, [IO.Compression.ZipArchiveMode]::Create)
+            foreach ($name in $Entries) {
+                $writer = New-Object IO.StreamWriter($zip.CreateEntry($name).Open())
+                try { $writer.Write("fake $name") } finally { $writer.Dispose() }
+            }
+            $zip.Dispose()
+        }
+        finally {
+            $stream.Dispose()
+        }
+    }
+    # The folders of the three jobs, as their artifacts hold them.
     function New-JobFiles([string]$ManifestVersion = '1.2.3', [string]$Repository = 'owner/name') {
         $script:filesNumber++
         $root = Join-Path $temp "release-files-$($script:filesNumber)"
         $windows = Join-Path $root 'windows'
         $linux = Join-Path $root 'linux'
-        New-Item -ItemType Directory -Path $windows, $linux | Out-Null
+        $mac = Join-Path $root 'macos'
+        New-Item -ItemType Directory -Path $windows, $linux, $mac | Out-Null
+        Write-FakeMacZip (Join-Path $mac 'Hindsound-1.2.3-macos-arm64.zip')
         $file = Join-Path $windows 'Hindsound-1.2.3-Setup.exe'
         [IO.File]::WriteAllBytes($file, [byte[]](1..200 | ForEach-Object { $_ % 7 }))
         & $writeManifest -Version $ManifestVersion -SetupPath $file -Repository $Repository -OutFile (Join-Path $windows 'hindsound-update-win-x64.json')
@@ -464,22 +484,22 @@ try {
         $root
     }
     function Invoke-Assemble([string]$Root) {
-        & $assemble -Version '1.2.3' -Repository 'owner/name' -WindowsFolder (Join-Path $Root 'windows') -LinuxFolder (Join-Path $Root 'linux') -OutFolder (Join-Path $Root 'release')
+        & $assemble -Version '1.2.3' -Repository 'owner/name' -WindowsFolder (Join-Path $Root 'windows') -LinuxFolder (Join-Path $Root 'linux') -MacFolder (Join-Path $Root 'macos') -OutFolder (Join-Path $Root 'release')
     }
     function New-ReleaseFiles([string]$ManifestVersion = '1.2.3', [string]$Repository = 'owner/name') {
         $root = New-JobFiles $ManifestVersion $Repository
         $null = Invoke-Assemble $root
         Join-Path $root 'release'
     }
-    Assert-Accepted 'the files of both jobs gather' { $null = Invoke-Assemble (New-JobFiles) }
+    Assert-Accepted 'the files of the three jobs gather' { $null = Invoke-Assemble (New-JobFiles) }
     $releaseFiles = New-ReleaseFiles
     $fakeLameSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $releaseFiles 'lame-3.100.tar.gz')).Hash.ToLowerInvariant()
     $fakeFuseSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $releaseFiles 'fuse-3.15.0.tar.xz')).Hash.ToLowerInvariant()
     function Test-ReleaseFiles([string]$Folder, [string]$Expected = '') {
         & $checkFiles -Folder $Folder -Version '1.2.3' -Repository 'owner/name' -LameSha256 $fakeLameSha256 -FuseSha256 $fakeFuseSha256 -LibraryFiles $fakeLibraryFiles -Expected $Expected
     }
-    $allNames = @('Hindsound-1.2.3-Setup.exe', 'Hindsound-1.2.3-win-x64-portable.zip', 'SHA256SUMS', 'fuse-3.15.0.tar.xz', 'hindsound-1.2.3-linux-x64.AppImage', 'hindsound-1.2.3-linux-x64.tar.gz', 'hindsound-update-linux-x64.json', 'hindsound-update-win-x64-portable.json', 'hindsound-update-win-x64.json', 'hindsound_1.2.3_amd64.deb', 'lame-3.100.tar.gz', 'type2-runtime-20251108-libraries-source.tar.gz', 'type2-runtime-20251108-source.tar.gz')
-    Assert-Equal 'the release gathers the files of both jobs, the announce manifests and SHA256SUMS' ($allNames -join ' ') ((Get-OrdinalNames $releaseFiles) -join ' ')
+    $allNames = @('Hindsound-1.2.3-Setup.exe', 'Hindsound-1.2.3-macos-arm64.zip', 'Hindsound-1.2.3-win-x64-portable.zip', 'SHA256SUMS', 'fuse-3.15.0.tar.xz', 'hindsound-1.2.3-linux-x64.AppImage', 'hindsound-1.2.3-linux-x64.tar.gz', 'hindsound-update-linux-x64.json', 'hindsound-update-macos-arm64.json', 'hindsound-update-win-x64-portable.json', 'hindsound-update-win-x64.json', 'hindsound_1.2.3_amd64.deb', 'lame-3.100.tar.gz', 'type2-runtime-20251108-libraries-source.tar.gz', 'type2-runtime-20251108-source.tar.gz')
+    Assert-Equal 'the release gathers the files of the three jobs, the announce manifests and SHA256SUMS' ($allNames -join ' ') ((Get-OrdinalNames $releaseFiles) -join ' ')
     Assert-Accepted 'the files of the release pass' { Test-ReleaseFiles $releaseFiles }
     $sumsBytes = [IO.File]::ReadAllBytes((Join-Path $releaseFiles 'SHA256SUMS'))
     $sumsLines = [Text.Encoding]::UTF8.GetString($sumsBytes).TrimEnd("`n").Split("`n")
@@ -487,6 +507,8 @@ try {
     Report 'SHA256SUMS is in the form of sha256sum, with LF only and no BOM' (($sumsBytes[0] -ne 0xEF) -and -not ($sumsBytes -contains 13) -and ($sumsBytes[-1] -eq 10) -and @($sumsLines | Where-Object { $_ -cnotmatch '\A[0-9a-f]{64}  \S+\z' }).Count -eq 0)
     Assert-Equal 'the release names the page of the release for the Linux app' 'https://github.com/owner/name/releases/tag/v1.2.3' ([IO.File]::ReadAllText((Join-Path $releaseFiles 'hindsound-update-linux-x64.json')) | ConvertFrom-Json).url
     Assert-Equal 'the release names the page of the release for the portable zip' 'https://github.com/owner/name/releases/tag/v1.2.3' ([IO.File]::ReadAllText((Join-Path $releaseFiles 'hindsound-update-win-x64-portable.json')) | ConvertFrom-Json).url
+    Assert-Equal 'the release names the page of the release for the Mac app' 'https://github.com/owner/name/releases/tag/v1.2.3' ([IO.File]::ReadAllText((Join-Path $releaseFiles 'hindsound-update-macos-arm64.json')) | ConvertFrom-Json).url
+    Assert-Equal 'the release carries the Mac zip of its job, unchanged' ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $releaseFiles '..\macos\Hindsound-1.2.3-macos-arm64.zip')).Hash) ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $releaseFiles 'Hindsound-1.2.3-macos-arm64.zip')).Hash)
 
     # assemble-release refuses what the jobs should not have made.
     $jobFiles = New-JobFiles
@@ -517,6 +539,15 @@ try {
         Assert-Refused "Linux packages without $runtimeSource refused" { Invoke-Assemble $jobFiles } 'The Linux files are'
     }
     $jobFiles = New-JobFiles
+    Remove-Item -LiteralPath (Join-Path $jobFiles 'macos\Hindsound-1.2.3-macos-arm64.zip')
+    Assert-Refused 'a macOS job without its zip refused' { Invoke-Assemble $jobFiles } 'The macOS files are'
+    $jobFiles = New-JobFiles
+    Rename-Item -LiteralPath (Join-Path $jobFiles 'macos\Hindsound-1.2.3-macos-arm64.zip') -NewName 'Hindsound-1.2.2-macos-arm64.zip'
+    Assert-Refused 'a Mac zip of another version refused' { Invoke-Assemble $jobFiles } 'The macOS files are'
+    $jobFiles = New-JobFiles
+    [IO.File]::WriteAllText((Join-Path $jobFiles 'macos\hindsound-update-macos-arm64.json'), '{}')
+    Assert-Refused 'a file more from the macOS job refused' { Invoke-Assemble $jobFiles } 'The macOS files are'
+    $jobFiles = New-JobFiles
     New-Item -ItemType Directory -Path (Join-Path $jobFiles 'release') | Out-Null
     [IO.File]::WriteAllText((Join-Path $jobFiles 'release\left.txt'), 'left by an earlier run')
     Assert-Refused 'a folder of the release that is not empty refused' { Invoke-Assemble $jobFiles } 'is not empty'
@@ -535,6 +566,30 @@ try {
     $releaseFiles = New-ReleaseFiles
     Remove-Item -LiteralPath (Join-Path $releaseFiles 'hindsound_1.2.3_amd64.deb')
     Assert-Refused 'a release without the .deb refused' { Test-ReleaseFiles $releaseFiles } 'expected'
+    foreach ($macName in 'Hindsound-1.2.3-macos-arm64.zip', 'hindsound-update-macos-arm64.json') {
+        $releaseFiles = New-ReleaseFiles
+        Remove-Item -LiteralPath (Join-Path $releaseFiles $macName)
+        Assert-Refused "a release without $macName refused" { Test-ReleaseFiles $releaseFiles } 'expected'
+    }
+    $macZipCases = @(
+        @{ Name = 'a Mac zip with a file outside Hindsound.app refused'; Entries = @($macEntries) + @('README.txt'); Reason = 'holds README.txt, outside Hindsound.app' },
+        @{ Name = 'a Mac zip with the AppleDouble file of an attribute refused'; Entries = @($macEntries) + @('Hindsound.app/Contents/MacOS/._hindsound'); Reason = 'holds the AppleDouble file Hindsound.app/Contents/MacOS/._hindsound' },
+        @{ Name = 'a Mac zip with __MACOSX refused'; Entries = @($macEntries) + @('Hindsound.app/__MACOSX/x'); Reason = 'holds the AppleDouble file' },
+        @{ Name = 'a Mac zip without its signature refused'; Entries = @($macEntries | Where-Object { $_ -notmatch 'CodeResources' }); Reason = 'has no Hindsound.app/Contents/_CodeSignature/CodeResources' },
+        @{ Name = 'a Mac zip without its program refused'; Entries = @($macEntries | Where-Object { $_ -notmatch 'MacOS/hindsound' }); Reason = 'has no Hindsound.app/Contents/MacOS/hindsound' },
+        @{ Name = 'a Mac zip without its encoder refused'; Entries = @($macEntries | Where-Object { $_ -notmatch 'libmp3lame' }); Reason = 'has no Hindsound.app/Contents/Frameworks/libmp3lame.0.dylib' },
+        @{ Name = 'a Mac zip without the licence of LAME refused'; Entries = @($macEntries | Where-Object { $_ -notmatch 'LAME-COPYING' }); Reason = 'has no Hindsound.app/Contents/Resources/licenses/LAME-COPYING.txt' },
+        @{ Name = 'a Mac zip whose bundle is in a folder refused'; Entries = @($macEntries | ForEach-Object { "out/$_" }); Reason = 'outside Hindsound.app' },
+        @{ Name = 'a Mac zip that is not a zip refused'; Text = 'not a zip'; Reason = 'Hindsound-1.2.3-macos-arm64.zip on the release is not a zip' }
+    )
+    foreach ($case in $macZipCases) {
+        $releaseFiles = New-ReleaseFiles
+        $macZip = Join-Path $releaseFiles 'Hindsound-1.2.3-macos-arm64.zip'
+        Remove-Item -LiteralPath $macZip
+        if ($case.ContainsKey('Text')) { [IO.File]::WriteAllText($macZip, $case.Text) } else { Write-FakeMacZip $macZip $case.Entries }
+        Write-Sums $releaseFiles @($allNames | Where-Object { $_ -cne 'SHA256SUMS' })
+        Assert-Refused $case.Name { Test-ReleaseFiles $releaseFiles } $case.Reason
+    }
     foreach ($case in @(
         @{ Name = 'a .deb that is not an ar archive refused'; Text = 'PK not a package' },
         @{ Name = 'a .deb of another format refused'; Format = "3.0`n" },
@@ -611,7 +666,7 @@ try {
     [IO.File]::WriteAllBytes($damaged, $damagedBytes)
     Assert-Refused 'a Setup of the same size with other bytes refused' { Test-ReleaseFiles $releaseFiles } 'the SHA-256'
     Assert-Refused 'a Setup of the same size with other bytes refused by the manifest, not only by SHA256SUMS' { Test-ReleaseFiles $releaseFiles } 'and the Setup there has'
-    foreach ($announceName in 'hindsound-update-linux-x64.json', 'hindsound-update-win-x64-portable.json') {
+    foreach ($announceName in 'hindsound-update-linux-x64.json', 'hindsound-update-win-x64-portable.json', 'hindsound-update-macos-arm64.json') {
         $releaseFiles = New-ReleaseFiles
         & $writeAnnounce -Version '1.2.3' -Repository 'other/name' -OutFile (Join-Path $releaseFiles $announceName)
         Assert-Refused "$announceName naming another page refused" { Test-ReleaseFiles $releaseFiles } "$announceName on the release gives the address"
@@ -1064,7 +1119,8 @@ try {
         'Write the update manifest', 'Make the portable zip', 'Add the LAME source', 'Keep the Windows files',
         'Check out', 'Set up .NET', 'Publish the Linux app', 'Build the MP3 encoder', 'Build the window library', 'Check the window library', 'Fetch the fonts of the window', 'Check the fonts of the window', 'Install the checker of desktop entries and the text libraries', 'Make the AppImage and the tar.gz', 'Check the packages', 'Make the .deb', 'Check the .deb', 'Add the LAME source', 'Add the source of the AppImage runtime', 'Keep the packages',
         'Check out', 'Take the Linux files', 'Install, run and remove the .deb',
-        'Check out', 'Take the Windows files', 'Take the Linux files', 'Gather the files of the release', 'Check the files of the release', 'Keep the files of the release'
+        'Check out', 'Set up .NET', 'Build the native libraries', 'Give the font script a sha256sum', 'Fetch the fonts of the window', 'Check the fonts of the window', 'Assemble and sign Hindsound.app', 'Make the zip', 'Check the zip', 'Rehearse the signing with a throwaway certificate', 'Keep the Mac files',
+        'Check out', 'Take the Windows files', 'Take the Linux files', 'Take the Mac files', 'Gather the files of the release', 'Check the files of the release', 'Keep the files of the release'
     )
     $filesSteps = @($files | ForEach-Object { if ($_ -match '^\s+- name: (.+)$') { $Matches[1] } })
     Assert-Equal 'release-files.yml has its steps in order' ($filesStepOrder -join ' | ') ($filesSteps -join ' | ')
@@ -1090,7 +1146,7 @@ try {
     Report 'the release attaches the Setup, the manifest and the LAME source' ($releaseText -cmatch 'gh release upload [^\n]*Setup\.exe[^\n]*hindsound-update-win-x64\.json[^\n]*lame-3\.100\.tar\.gz')
     $uploadLine = @($release | Where-Object { $_ -cmatch 'gh release upload ' })
     Assert-Equal 'the release uploads in one command' 1 $uploadLine.Count
-    foreach ($name in 'Hindsound-$env:VERSION-Setup.exe', 'Hindsound-$env:VERSION-win-x64-portable.zip', 'hindsound-$env:VERSION-linux-x64.AppImage', 'hindsound-$env:VERSION-linux-x64.tar.gz', 'hindsound_${env:VERSION}_amd64.deb', 'hindsound-update-win-x64.json', 'hindsound-update-win-x64-portable.json', 'hindsound-update-linux-x64.json', 'lame-3.100.tar.gz', 'fuse-3.15.0.tar.xz', 'type2-runtime-20251108-source.tar.gz', 'type2-runtime-20251108-libraries-source.tar.gz', 'SHA256SUMS') {
+    foreach ($name in 'Hindsound-$env:VERSION-Setup.exe', 'Hindsound-$env:VERSION-win-x64-portable.zip', 'hindsound-$env:VERSION-linux-x64.AppImage', 'hindsound-$env:VERSION-linux-x64.tar.gz', 'hindsound_${env:VERSION}_amd64.deb', 'Hindsound-$env:VERSION-macos-arm64.zip', 'hindsound-update-win-x64.json', 'hindsound-update-win-x64-portable.json', 'hindsound-update-linux-x64.json', 'hindsound-update-macos-arm64.json', 'lame-3.100.tar.gz', 'fuse-3.15.0.tar.xz', 'type2-runtime-20251108-source.tar.gz', 'type2-runtime-20251108-libraries-source.tar.gz', 'SHA256SUMS') {
         Report "the release attaches $name" ($uploadLine[0].Contains("`"`$env:RUNNER_TEMP/out/$name`""))
     }
     Report 'the release downloads its files back and checks them against those sent, before publishing' ($releaseText -cmatch '--clobber\n\s+if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}\n\s+gh release download \$env:TAG --dir "\$env:RUNNER_TEMP/verify"\n\s+if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}\n\s+\./tools/release/check-release-files\.ps1 -Folder "\$env:RUNNER_TEMP/verify" -Version \$env:VERSION -Repository \$env:GITHUB_REPOSITORY -Expected "\$env:RUNNER_TEMP/out"\n\n\s+# A rerun')
@@ -1114,8 +1170,22 @@ try {
     Report 'the release runs the tests' ($releaseText -cmatch '- name: Test\n\s+run: dotnet test Hindsound\.slnx -c Release --filter "Category!=Device&Category!=Linux&Category!=Mac"')
     Report 'the release tests its scripts' ($releaseText -cmatch '- name: Test the release scripts\n\s+run: \./tools/release/test-release-scripts\.ps1')
     Report 'the release waits for the checks and for the files of Windows and Linux' (($releaseText -cmatch '\n  release:\n    needs: \[check, files\]\n') -and ($releaseText -cmatch '\n  files:\n    needs: check\n    permissions:\n      contents: read\n    uses: \./\.github/workflows/release-files\.yml\n    with:\n      version: \$\{\{ needs\.check\.outputs\.version \}\}\n'))
-    Report 'the files of the release wait for the Windows and the Linux jobs' (($filesText -cmatch '\n  assemble:\n    needs: \[windows, linux\]\n') -and ($filesText -cmatch '\n  linux:\n    runs-on: ubuntu-22\.04\n'))
-    Report 'release-files is called only, reads only, and publishes nothing' (($filesText -cmatch '\non:\n  workflow_call:\n') -and ($filesText -match '(?m)^permissions:\n  contents: read$') -and -not ($filesText -match 'contents: write|GH_TOKEN|github\.token|gh release|secrets\.'))
+    Report 'the files of the release wait for the Windows, the Linux and the macOS jobs' (($filesText -cmatch '\n  assemble:\n    needs: \[windows, linux, macos\]\n') -and ($filesText -cmatch '\n  linux:\n    runs-on: ubuntu-22\.04\n') -and ($filesText -cmatch '\n  macos:\n    runs-on: macos-26\n'))
+    # The one secret of release-files: the certificate of the Mac app and its password, optional, given by release.yml to
+    # the one step that signs, through env. Nothing else of the workflow reads a secret.
+    $signingEnv = '        env:' + "`n" + '          MACOS_SIGNING_P12: ${{ secrets.MACOS_SIGNING_P12 }}' + "`n" + '          MACOS_SIGNING_P12_PASSWORD: ${{ secrets.MACOS_SIGNING_P12_PASSWORD }}' + "`n"
+    $signingStep = '      - name: Assemble and sign Hindsound.app' + "`n" + $signingEnv + '        run: |' + "`n"
+    Report 'the certificate of the Mac app reaches the step that signs it, and only that step' (([regex]::Matches($filesText, [regex]::Escape($signingStep))).Count -eq 1 -and ([regex]::Matches($filesText, 'secrets\.')).Count -eq 2 -and $filesText.IndexOf($signingStep) -gt $filesText.IndexOf("`n  macos:`n") -and $filesText.IndexOf($signingStep) -lt $filesText.IndexOf("`n  assemble:`n"))
+    Report 'release-files declares the two secrets of the certificate, both optional' ($filesText -cmatch '\n    secrets:\n      MACOS_SIGNING_P12:\n        description: [^\n]+\n        required: false\n      MACOS_SIGNING_P12_PASSWORD:\n        description: [^\n]+\n        required: false\n\npermissions:')
+    Report 'release-files is called only, reads only, and publishes nothing' (($filesText -cmatch '\non:\n  workflow_call:\n') -and ($filesText -match '(?m)^permissions:\n  contents: read$') -and -not ($filesText.Replace($signingEnv, '') -match 'contents: write|GH_TOKEN|github\.token|gh release|secrets\.'))
+    Report 'the release passes release-files the certificate of the Mac app, and no other secret' (([regex]::Matches($releaseText, 'secrets\.')).Count -eq 2 -and $releaseText -cmatch '\n      version: \$\{\{ needs\.check\.outputs\.version \}\}\n    # [^\n]+\n    secrets:\n      MACOS_SIGNING_P12: \$\{\{ secrets\.MACOS_SIGNING_P12 \}\}\n      MACOS_SIGNING_P12_PASSWORD: \$\{\{ secrets\.MACOS_SIGNING_P12_PASSWORD \}\}\n\n  release:\n' -and -not ($releaseText -match 'secrets: inherit'))
+    Report 'without the certificate, the Mac app is signed ad hoc and the log warns' ($filesText -cmatch '\n          if \[ -n "\$MACOS_SIGNING_P12" \]; then\n[^\n]+\n[^\n]+\n[^\n]+\| base64 --decode > "\$signing/signing\.p12"\n[^\n]+HINDSOUND_SIGNING_P12="\$signing/signing\.p12"[^\n]+\n[^\n]+\n          else\n            echo "::warning [^\n]+signed ad hoc[^\n]+"\n          fi\n          bash packaging/mac/build-app\.sh "\$RUNNER_TEMP/natives" "\$RUNNER_TEMP/fonts" "\$RUNNER_TEMP/app" "\$HINDSOUND_VERSION"\n')
+    Report 'the Mac libraries are built from their pins by build-natives.sh, afresh' ($filesText -cmatch '- name: Build the native libraries\n\s+timeout-minutes: \d+\n\s+run: bash tools/mac/build-natives\.sh "\$RUNNER_TEMP/natives-work" "\$RUNNER_TEMP/natives"\n')
+    Report 'the Mac zip is made by ditto from the signed bundle, under its name' ($filesText -cmatch 'ditto -c -k --norsrc --noextattr --noqtn --keepParent "\$RUNNER_TEMP/app/Hindsound\.app" "\$RUNNER_TEMP/out/Hindsound-\$HINDSOUND_VERSION-macos-arm64\.zip"\n')
+    Report 'the Mac zip is unzipped and its app started by check-zip.sh before it is kept' ($filesText -cmatch '- name: Check the zip\n\s+timeout-minutes: \d+\n\s+run: bash packaging/mac/check-zip\.sh "\$RUNNER_TEMP/out/Hindsound-\$HINDSOUND_VERSION-macos-arm64\.zip" "\$HINDSOUND_VERSION" "\$RUNNER_TEMP/zip-check"\n' -and $filesText -cmatch '\n          name: hindsound-macos-arm64\n          path: \$\{\{ runner\.temp \}\}/out/\n')
+    Report 'a throwaway certificate made by make-signing-certificate.sh signs a copy of the Mac app' ($filesText -cmatch 'bash packaging/mac/make-signing-certificate\.sh "\$certificate"\n\s+base64 --decode -i "\$certificate/hindsound-signing\.p12\.base64" -o "\$certificate/from-secret\.p12"\n[^\n]+\n\s+HINDSOUND_SIGNING_P12="\$certificate/from-secret\.p12" [^\n]+\n\s+bash packaging/mac/sign-app\.sh "\$RUNNER_TEMP/rehearsal/Hindsound\.app"\n')
+    $nativesText = [IO.File]::ReadAllText((Join-Path $PSScriptRoot '..\mac\build-natives.sh'))
+    Report 'the Mac encoder is built from the LAME source the release carries' ($nativesText -cmatch "(?m)^readonly LAME_SHA256='ddfe36cab873794038ae2c1210557ad34857a4b6bdc515785d1da9e175b1da1e'\r?$" -and [IO.File]::ReadAllText($checkFiles).Contains("[string]`$LameSha256 = 'ddfe36cab873794038ae2c1210557ad34857a4b6bdc515785d1da9e175b1da1e'"))
     Report 'the CI rehearses the release with the same workflow, and publishes nothing' (($ciText -cmatch '\n    uses: \./\.github/workflows/release-files\.yml\n') -and ($ciText -match '(?m)^permissions:\n  contents: read$') -and -not ($ciText -match 'contents: write|GH_TOKEN|github\.token|gh release|secrets\.'))
     Report 'the release starts as a verified draft' ($releaseText.Contains('gh release create $env:TAG --draft --verify-tag '))
     Report 'a failure of gh release view other than "release not found" stops the step' ($releaseText.Contains('2>&1' + "`n" + '          $viewExit = $LASTEXITCODE') -and $releaseText.Contains('if ($viewExit -ne 0 -and "$view" -notmatch ''release not found'') { throw'))

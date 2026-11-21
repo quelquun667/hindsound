@@ -1,15 +1,15 @@
 <#
 .SYNOPSIS
-    Gathers the files of a release from what the Windows and Linux jobs built, writes the two announce manifests and one
-    SHA256SUMS for all of them.
+    Gathers the files of a release from what the Windows, Linux and macOS jobs built, writes the three announce manifests
+    and one SHA256SUMS for all of them.
 .DESCRIPTION
     The Windows folder must hold exactly the Setup, the portable zip, hindsound-update-win-x64.json and lame-3.100.tar.gz.
     The Linux folder must hold exactly the AppImage, the tar.gz, the .deb, their SHA256SUMS (which must match them),
     lame-3.100.tar.gz, the same bytes as the Windows one, and the source of the AppImage runtime that
     fetch-runtime-sources.sh verified: fuse-3.15.0.tar.xz, type2-runtime-20251108-source.tar.gz and
-    type2-runtime-20251108-libraries-source.tar.gz. The output folder then holds the files of the release, and only them:
-    those ten, hindsound-update-win-x64-portable.json,
-    hindsound-update-linux-x64.json and SHA256SUMS.
+    type2-runtime-20251108-libraries-source.tar.gz. The macOS folder must hold exactly Hindsound-<v>-macos-arm64.zip. The
+    output folder then holds the files of the release, and only them: those eleven, hindsound-update-win-x64-portable.json,
+    hindsound-update-linux-x64.json, hindsound-update-macos-arm64.json and SHA256SUMS.
     check-release-files.ps1 checks the result.
 .PARAMETER Version
     The version, X.Y.Z.
@@ -19,16 +19,19 @@
     The files of the Windows job.
 .PARAMETER LinuxFolder
     The files of the Linux job.
+.PARAMETER MacFolder
+    The files of the macOS job.
 .PARAMETER OutFolder
     Where the files of the release go. It must not exist, or be empty.
 .EXAMPLE
-    ./tools/release/assemble-release.ps1 -Version 0.1.0 -Repository quelquun667/hindsound -WindowsFolder windows -LinuxFolder linux -OutFolder release
+    ./tools/release/assemble-release.ps1 -Version 0.1.0 -Repository quelquun667/hindsound -WindowsFolder windows -LinuxFolder linux -MacFolder macos -OutFolder release
 #>
 param(
     [Parameter(Mandatory = $true)][string]$Version,
     [Parameter(Mandatory = $true)][string]$Repository,
     [Parameter(Mandatory = $true)][string]$WindowsFolder,
     [Parameter(Mandatory = $true)][string]$LinuxFolder,
+    [Parameter(Mandatory = $true)][string]$MacFolder,
     [Parameter(Mandatory = $true)][string]$OutFolder
 )
 
@@ -58,6 +61,7 @@ if ($Version -cnotmatch '\A[0-9]+\.[0-9]+\.[0-9]+\z') {
 
 $windows = Get-FullPath $WindowsFolder
 $linux = Get-FullPath $LinuxFolder
+$mac = Get-FullPath $MacFolder
 $out = Get-FullPath $OutFolder
 
 $lameName = 'lame-3.100.tar.gz'
@@ -67,6 +71,10 @@ $packages = @("hindsound-$Version-linux-x64.AppImage", "hindsound-$Version-linux
 $runtimeSources = @('fuse-3.15.0.tar.xz', 'type2-runtime-20251108-source.tar.gz', 'type2-runtime-20251108-libraries-source.tar.gz')
 Assert-Holds $windows 'Windows' $windowsFiles
 Assert-Holds $linux 'Linux' ($packages + $runtimeSources + @('SHA256SUMS', $lameName))
+# The Mac app: check-zip.sh unzipped and started it in its job. Its LAME source is the one of the other two jobs, the same
+# pinned archive (tools/mac/build-natives.sh).
+$macFiles = @("Hindsound-$Version-macos-arm64.zip")
+Assert-Holds $mac 'macOS' $macFiles
 
 # The checksums of build-packages.sh: what the Linux job checked is what arrived here.
 $listed = New-Object 'System.Collections.Generic.Dictionary[string,string]' ([StringComparer]::Ordinal)
@@ -115,9 +123,12 @@ foreach ($name in $windowsFiles) {
 foreach ($name in $packages + $runtimeSources) {
     Copy-Item -LiteralPath (Join-Path $linux $name) -Destination (Join-Path $out $name)
 }
+foreach ($name in $macFiles) {
+    Copy-Item -LiteralPath (Join-Path $mac $name) -Destination (Join-Path $out $name)
+}
 
 $writeAnnounce = Join-Path $PSScriptRoot 'write-announce-manifest.ps1'
-foreach ($manifest in 'hindsound-update-win-x64-portable.json', 'hindsound-update-linux-x64.json') {
+foreach ($manifest in 'hindsound-update-win-x64-portable.json', 'hindsound-update-linux-x64.json', 'hindsound-update-macos-arm64.json') {
     & $writeAnnounce -Version $Version -Repository $Repository -OutFile (Join-Path $out $manifest)
 }
 

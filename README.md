@@ -68,6 +68,7 @@ window, comes with the releases after 0.5.0, and the releases after 0.7.0 add it
 - About 62 MB of RAM for the whole app with a 5:00 buffer and no microphone, 94 MB with it. The audio alone is 58 MB, or
   87 MB with the microphone. See [Memory](#memory).
 - To build it: the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). To run it: nothing else, .NET comes with it.
+- On Linux and macOS, see [Linux](#linux) and [macOS](#macos).
 
 ## Installation
 
@@ -81,6 +82,7 @@ release holds:
 | `hindsound-X.Y.Z-linux-x64.AppImage` | Linux: one file to run. See [Linux](#linux). |
 | `hindsound-X.Y.Z-linux-x64.tar.gz` | Linux, where the AppImage does not run: a folder to unpack. See [Linux](#linux). |
 | `hindsound_X.Y.Z_amd64.deb` | Ubuntu 22.04 and later, Debian 12 and later: a package to install with `apt`. See [Linux](#linux). |
+| `Hindsound-X.Y.Z-macos-arm64.zip` | macOS 14.4 and later, on a Mac with Apple silicon: the app, in a zip. See [macOS](#macos). |
 | `SHA256SUMS` | The SHA-256 of every file of the release. |
 
 The portable zip, the AppImage and the tar.gz come with the releases after 0.5.0, and the `.deb` with the releases after
@@ -317,6 +319,65 @@ The Linux layer is in `src/Hindsound.Linux`. What it would share as it is with a
 window, the loop of the app, the single instance, the HTTP transport, the decoder of the clips and the MP3 encoder) is in
 `src/Hindsound.Unix`, which it references. The tests of both are in `tests/Hindsound.Linux.Tests`.
 
+### macOS
+
+A first Mac version, for a Mac with Apple silicon (M1 or later) on macOS 14.4 or later, comes with the releases after
+0.10.1. There is no build for Intel Macs yet. It has the same window as on Windows and Linux, and captures the sound of the
+whole Mac (Hindsound itself left out), or one application and its child processes, and the microphone if your settings
+name one. It saves a clip on its hotkey, on `hindsound --save` or from the menu of its icon in the menu bar, says so with
+its own notification, as on Windows, and puts the clip on the clipboard as a file.
+
+**No one has tried it on a real Mac yet.** Everything in this section has only run on the macOS machines of GitHub's CI
+(macOS 26 on Apple silicon): the app is built, signed, unzipped and started there, its window drawn off screen, its MP3
+encoder and its capture checked with a test tone played through a virtual sound device, the permissions written by the CI
+itself. Pasting into a real app, a real hotkey pressed on a real keyboard, the prompts of macOS answered by a person and a
+real game or call have not been tried. If something does not work, the log is in
+`~/Library/Logs/Hindsound/hindsound.log`; an issue with it helps.
+
+**Download.** `Hindsound-<version>-macos-arm64.zip` from the
+[latest release](https://github.com/quelquun667/hindsound/releases/latest). Between releases, the CI builds the same file
+on every change: open a recent run of the [CI workflow](https://github.com/quelquun667/hindsound/actions/workflows/ci.yml)
+on `main`, and download the `hindsound-macos-arm64` artifact (GitHub asks you to sign in; it is a zip that holds the zip).
+Open the zip in the Finder, and move `Hindsound.app` to `Applications`.
+
+**The first launch.** Hindsound is not signed by an Apple developer account nor notarized, so macOS blocks it the first
+time with a message that it could not verify it. Click `Done`, then open System Settings > Privacy & Security, scroll to
+the message about Hindsound, click `Open Anyway`, and confirm with your password. Each new version asks this once again.
+Or, in Terminal, remove the mark that the download put on the app, then open it as any other:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Hindsound.app
+```
+
+**Two permissions.** At its first capture, macOS asks whether Hindsound may record the sound of the system (`System Audio
+Recording`), and, if your settings name a microphone, whether it may use the microphone. Without them, macOS gives
+Hindsound silence: after 2 seconds of it, Hindsound stops that capture and says which permission is missing. To give them
+back, or to take them away, open System Settings > Privacy & Security > Screen & System Audio Recording (the list
+`System Audio Recording Only`), and Privacy & Security > Microphone, then quit and start Hindsound again. If macOS asks
+again after an update, answer as the first time.
+
+**The icon and the hotkey.** Hindsound has no icon in the Dock: it is in the menu bar, with the same menu as on Windows.
+The hotkeys are set in Settings > Hotkeys, as on Windows, with `Control`, `Option`, `Shift` and `Cmd`. To save a clip from elsewhere, such as a shortcut of the Shortcuts app or of another keyboard tool, run the program inside
+the app with `--save`:
+
+```sh
+/Applications/Hindsound.app/Contents/MacOS/hindsound --save
+```
+
+It reaches the Hindsound that is running; if none is, it starts one.
+
+**Where things are.** Settings in `~/Library/Application Support/Hindsound/settings.json`, the same file as on Windows (see
+[Settings](#settings)); the log in `~/Library/Logs/Hindsound`; clips in `~/Music/Hindsound`. `Open at login`, in Settings > General, adds Hindsound
+to the apps that open when you log in. To remove Hindsound, quit it, turn `Open at login` off first, and move
+`Hindsound.app` to the Trash; delete the folders above too if you want nothing left.
+
+**What is not there.** No confirmation sound plays when a clip is saved, and the settings offer none. Hindsound does not
+update itself: once a day it checks whether a new version is out, and tells you with a link to its release, as the Linux
+app does.
+
+The Mac layer is in `src/Hindsound.Mac`, and its tests in `tests/Hindsound.Mac.Tests`. `packaging/mac/build-app.sh` makes
+the app from a build.
+
 ## First run
 
 Hindsound starts capturing as soon as it starts, and sits in the notification area of the taskbar. The icon may be hidden
@@ -532,7 +593,7 @@ clip, 173 MB for a 5:00 clip.
 | `Off` | No automatic check. Only `Check now` reaches the network, when you click it. |
 
 Settings > General > Updates shows the running version, when it last checked, and the buttons `Check now`, `Update now`, `What's new` and `Skip this version`. A build from source, or Hindsound started with a command-line option for a test or a check, never updates itself. The
-portable zip and the Linux app never install anything: they only tell you that a version is out, and their link opens the
+portable zip, the Linux app and the Mac app never install anything: they only tell you that a version is out, and their link opens the
 page of its release. In the portable zip, that section offers `Ask me` and `Off` only, and a `Download` button in place of
 `Update now` and `What's new`, which opens the page of the release.
 
@@ -581,7 +642,8 @@ public.
 
 ## Not tried yet
 
-Hindsound has only run on one Windows 11 PC so far. These have not been tried for real:
+Hindsound has only run on one Windows 11 PC so far, and the Mac app on no real Mac at all (see [macOS](#macos)). These
+have not been tried for real:
 
 - pasting a clip into the Discord app
 - recording only a real game or Discord

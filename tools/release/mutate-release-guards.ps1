@@ -3,7 +3,7 @@
     Undoes the guards of the release scripts and workflows one at a time, on a copy, and fails if a test run does not notice.
 .DESCRIPTION
     Each entry replaces one piece of text, found exactly once, in a new copy of what test-release-scripts.ps1 reads: tools/release,
-    .github/workflows, licenses, LICENSE, THIRD-PARTY-NOTICES.md, packaging/windows/portable.txt and README.txt, and
+    tools/mac, .github/workflows, licenses, LICENSE, THIRD-PARTY-NOTICES.md, packaging/windows/portable.txt and README.txt, and
     installer/Hindsound.iss, in a git repository of one empty commit (the date of the zip). It then runs test-release-scripts.ps1 from that copy. Nothing in the repository changes. Each entry
     takes about 20 to 60 s, depending on the load of the PC.
 .PARAMETER WorkFolder
@@ -202,6 +202,12 @@ $mutations = @(
     @('.github/workflows/release-files.yml', 'run: bash packaging/linux/try-deb.sh linux-files', 'run: echo packaging/linux/try-deb.sh linux-files')
     @('.github/workflows/release-files.yml', "image: ['ubuntu:22.04', 'ubuntu:24.04', 'debian:12', 'debian:13']", "image: ['ubuntu:24.04']")
     @('.github/workflows/release-files.yml', "'debian:12', 'debian:13']", "'debian:12']")
+    # The Mac app
+    @('tools/release/assemble-release.ps1', 'foreach ($name in $macFiles) {', 'foreach ($name in @()) {')
+    @('tools/release/assemble-release.ps1', "'hindsound-update-linux-x64.json', 'hindsound-update-macos-arm64.json') {", "'hindsound-update-linux-x64.json', 'hindsound-update-macos-x64.json') {")
+    @($assets, 'if ($entry -cmatch ''(^|/)\._|__MACOSX'') {', 'if ($false) {')
+    @($release, ' "$env:RUNNER_TEMP/out/Hindsound-$env:VERSION-macos-arm64.zip"', '')
+    @('.github/workflows/release-files.yml', 'run: bash packaging/mac/check-zip.sh', 'run: echo packaging/mac/check-zip.sh')
 )
 
 $repository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).ProviderPath
@@ -219,7 +225,7 @@ for ($index = $From; $index -le $last; $index++) {
     $copy = Join-Path $WorkFolder ('hindsound-mutation-' + [Guid]::NewGuid().ToString('N'))
     try {
         # What test-release-scripts.ps1 reads from the repository: the scripts, the workflows, and the files of the packages it compares.
-        foreach ($folder in 'tools/release', '.github/workflows', 'licenses', 'packaging/windows', 'installer') {
+        foreach ($folder in 'tools/release', 'tools/mac', '.github/workflows', 'licenses', 'packaging/windows', 'installer') {
             $target = Join-Path $copy $folder
             New-Item -ItemType Directory -Force -Path $target | Out-Null
             Copy-Item -Path (Join-Path $repository "$folder/*") -Destination $target

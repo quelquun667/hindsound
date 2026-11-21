@@ -100,7 +100,7 @@ internal static class Program
         {
             // On the thread of Main, which is the main thread of the process: the loop of the app must turn there. The raw
             // command line, not the options read from it: a typo in a test's options must not look like a real launch. The
-            // update channel of macOS comes with step M4: until then no update is looked for (the log says "not installed").
+            // update channel is the one MacPlatform.Install set: it only tells, and the log names its manifest.
             var code = new HindsoundApp(options, journal, AppOptions.UpdaterMayRun(launch.Rest), MacDesktop.Parts(journal.Write), shell: new MacShell(journal.Write), instance: instance).Run();
 
             // Launched through Launch Services (open), the app's code reaches no one: the log keeps it.

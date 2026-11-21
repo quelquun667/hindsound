@@ -38,7 +38,8 @@ $downloads = @"
 | ``hindsound-$Version-linux-x64.AppImage`` | Linux, 64-bit: one file to make executable and run. Start here on Linux. |
 | ``hindsound_${Version}_amd64.deb`` | Ubuntu 22.04 and later, Debian 12 and later, 64-bit: install it with ``sudo apt install ./hindsound_${Version}_amd64.deb``, and Hindsound is in the list of applications; ``sudo apt remove hindsound`` takes it away. It does not update itself: it tells you when a new version is out, with a link to its release. |
 | ``hindsound-$Version-linux-x64.tar.gz`` | Linux, 64-bit, where the AppImage does not run: a folder to unpack, with a ``README.txt`` that says how to install it. |
-| ``hindsound-update-win-x64.json``, ``hindsound-update-win-x64-portable.json``, ``hindsound-update-linux-x64.json`` | Read by Hindsound to learn that this version is out. Nothing to download. |
+| ``Hindsound-$Version-macos-arm64.zip`` | macOS 14.4 or later, on a Mac with Apple silicon (M1 or later): unzip it and move ``Hindsound.app`` to Applications. A first version, tried only on the macOS machines of GitHub's CI, never on a real Mac. It does not update itself: it tells you when a new version is out, with a link to its release. |
+| ``hindsound-update-win-x64.json``, ``hindsound-update-win-x64-portable.json``, ``hindsound-update-linux-x64.json``, ``hindsound-update-macos-arm64.json`` | Read by Hindsound to learn that this version is out. Nothing to download. |
 | ``lame-3.100.tar.gz`` | The source of LAME, the MP3 encoder that every download above carries, under the LGPL. |
 | ``fuse-3.15.0.tar.xz`` | The source of libfuse, which the AppImage carries in its runtime, the program at its head that mounts it: offered next to the AppImage under the LGPL-2.1, unchanged. |
 | ``type2-runtime-20251108-source.tar.gz`` | The source of that AppImage runtime, with the change it makes to libfuse (``patches/libfuse/mount.c.diff``) and its build scripts: offered for the LGPL-2.1 of libfuse. |
@@ -46,7 +47,8 @@ $downloads = @"
 | ``SHA256SUMS`` | The SHA-256 of every file above. On Linux: ``sha256sum --check --ignore-missing SHA256SUMS``. |
 
 Hindsound is not signed: Windows will probably show **Windows protected your PC** for the Setup and for the program of the
-zip. Click **More info**, then **Run anyway**.
+zip. Click **More info**, then **Run anyway**. On macOS, Hindsound is not notarized by Apple, so the first launch is
+blocked: open **System Settings** > **Privacy & Security**, and click **Open Anyway** next to the message about Hindsound.
 "@
 
 $notes = $changelog + "`n`n" + $downloads.Replace("`r`n", "`n").Trim() + "`n"

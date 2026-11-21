@@ -18,6 +18,7 @@ public class UpdateNoticeTests
         "setup" => UpdateChannel.WindowsSetup,
         "portable" => UpdateChannel.WindowsPortable,
         "linux" => UpdateChannel.LinuxAnnounce,
+        "mac" => UpdateChannel.MacAnnounce,
         _ => null,
     };
 
@@ -40,6 +41,8 @@ public class UpdateNoticeTests
     [InlineData("portable", true)]
     [InlineData("linux", false)]
     [InlineData("linux", true)]
+    [InlineData("mac", false)]
+    [InlineData("mac", true)]
     public void A_copy_that_installs_nothing_says_the_version_is_out(string channel, bool auto)
     {
         var content = UpdateNotice.For(ChannelNamed(channel), Next, auto ? UpdateMode.Auto : UpdateMode.Ask, Accent);
@@ -61,5 +64,8 @@ public class UpdateNoticeTests
         Assert.Equal(
             "updates: active True (announces only), channel hindsound-update-linux-x64.json",
             UpdateWiring.LaunchLine(UpdateWiring.AnnouncesOnly, UpdateChannel.LinuxAnnounce));
+        Assert.Equal(
+            "updates: active True (announces only), channel hindsound-update-macos-arm64.json",
+            UpdateWiring.LaunchLine(UpdateWiring.AnnouncesOnly, UpdateChannel.MacAnnounce));
     }
 }

@@ -8,7 +8,7 @@ internal enum UpdateDelivery
 
     /// <summary>
     /// Tells the user once per version, and a click opens the page of the release. Nothing is downloaded or installed: for a
-    /// platform where the app cannot replace itself (Linux, and the portable Windows copy).
+    /// platform where the app cannot replace itself (Linux, macOS, and the portable Windows copy).
     /// </summary>
     AnnounceOnly,
 }
@@ -23,6 +23,12 @@ internal sealed record UpdateChannel(string ManifestName, UpdateDelivery Deliver
 
     /// <summary>The Linux app: its manifest names the page of the release, which the user downloads from.</summary>
     public static UpdateChannel LinuxAnnounce { get; } = new("hindsound-update-linux-x64.json", UpdateDelivery.AnnounceOnly);
+
+    /// <summary>
+    /// The Mac app, unzipped from its release: nothing installs it, so nothing replaces it. Its manifest names the page of the
+    /// release, as Linux's does.
+    /// </summary>
+    public static UpdateChannel MacAnnounce { get; } = new("hindsound-update-macos-arm64.json", UpdateDelivery.AnnounceOnly);
 
     /// <summary>
     /// The portable Windows copy, unpacked from its zip: nothing installs it, so nothing replaces it. Its manifest names the

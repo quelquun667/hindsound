@@ -1,8 +1,10 @@
 <#
 .SYNOPSIS
-    Writes the manifest of a copy that does not install its updates: the Linux app, or the portable zip for Windows.
+    Writes the manifest of a copy that does not install its updates: the Linux app, the Mac app, or the portable zip for
+    Windows.
 .DESCRIPTION
-    Such a copy reads hindsound-update-linux-x64.json or hindsound-update-win-x64-portable.json from releases/latest/download,
+    Such a copy reads hindsound-update-linux-x64.json, hindsound-update-macos-arm64.json or
+    hindsound-update-win-x64-portable.json from releases/latest/download,
     tells the user that a version is out, and opens the page of its release on a click. Nothing is downloaded, so the
     manifest names that page, exactly https://github.com/<owner/name>/releases/tag/v<version>, and carries no hash nor size:
     the app refuses any other address for such a manifest.

@@ -130,6 +130,19 @@ The SIL Open Font License 1.1 lets the fonts be bundled with software and redist
 
 The text of the window is shaped and drawn by FreeType (`libfreetype.so.6`), HarfBuzz (`libharfbuzz.so.0`) and fontconfig (`libfontconfig.so.1`), the copies of the system, loaded when the app starts: every Linux desktop has them. A character that the four fonts lack, such as a Japanese name of a clip, is drawn with a font of the system that fontconfig finds. The packages hold no copy of these libraries or of those fonts, so their licences ask nothing of the packages; the same goes for the libraries SDL opens from the system.
 
+## The Mac app
+
+`Hindsound.app` carries, in `Contents/Frameworks`, four libraries that [tools/mac/build-natives.sh](tools/mac/build-natives.sh) builds for Apple silicon from their archives, each checked against its SHA-256 before it is read, with no file of the archives changed; the four fonts of the Linux packages in `Contents/Resources/fonts`; and, in `Contents/Resources`, `LICENSE`, this file, and the licence texts it links to, in `licenses` as in the repository.
+
+- `libSDL3.0.dylib` is SDL 3.2.30, from the same `SDL3-3.2.30.tar.gz` as on Linux (see [SDL](#sdl)), with the Cocoa and offscreen video drivers, the renderer and the dialogs, and none of SDL's audio, GPU API, camera, joystick, haptic, sensor, HID or power code. The zlib License of SDL asks nothing of a binary. Of the code of others SDL compiles in, the Mac build has `src/video/yuv2rgb`, whose notice is in [SDL3-yuv2rgb-LICENSE.txt](licenses/linux/SDL3-yuv2rgb-LICENSE.txt), and `src/libm`, whose notice is above; it has none of the X11 or Wayland code.
+- `libfreetype.6.dylib` is FreeType 2.13.2, from `freetype-2.13.2.tar.xz` of [download.savannah.gnu.org](https://download.savannah.gnu.org/releases/freetype/), SHA-256 `12991c4e55c506dd7f9b765933e62fd2be2e06d421505d7950a132e4f1bb484d`, without zlib, bzip2, libpng, HarfBuzz or Brotli. FreeType is offered under the FreeType License or the GPL version 2; Hindsound uses it under the FreeType License, which asks the documentation to say: Portions of this software are copyright © 2023 The FreeType Project (www.freetype.org). All rights reserved. Its texts are in [FreeType-LICENSE.txt](licenses/mac/FreeType-LICENSE.txt) and [FreeType-FTL.txt](licenses/mac/FreeType-FTL.txt), from the archive.
+- `libharfbuzz.0.dylib` is HarfBuzz 8.3.0, from `harfbuzz-8.3.0.tar.xz` of the release `8.3.0` of [harfbuzz/harfbuzz](https://github.com/harfbuzz/harfbuzz), SHA-256 `109501eaeb8bde3eadb25fab4164e993fbace29c3d775bcaa1c1e58e2f15f847`, with its own OpenType code only. It is under the "Old MIT" licence, which asks its notice to be in every copy: [HarfBuzz-COPYING.txt](licenses/mac/HarfBuzz-COPYING.txt), from the archive.
+- `libmp3lame.0.dylib` is LAME 3.100, from the same `lame-3.100.tar.gz` as the Windows and Linux builds, under the LGPL: see [LAME](#lame) below. Its source goes with every release.
+- The fonts are the four files of [The fonts](#the-fonts), under the SIL Open Font License 1.1, whose texts the app carries.
+- The program `Contents/MacOS/hindsound` holds the .NET runtime, as the Linux program does: its licence and notices are in [licenses/](licenses).
+
+To use your own build of one of these libraries, put it in `Contents/Frameworks` under the same name, then sign the app again, as macOS refuses to load a bundle changed after it was signed: `codesign --force --deep --sign - /Applications/Hindsound.app`. macOS then takes it for another app, and asks again for its permissions.
+
 ## LAME
 
 Hindsound uses **LAME** (LAME Ain't an MP3 Encoder) to write MP3 files. LAME is a separate library, and the library and its use are covered by the GNU Library General Public License, version 2, or any later version: see [licenses/LAME-COPYING.txt](licenses/LAME-COPYING.txt). The project's own note on using LAME in other programs is in [licenses/LAME-LICENSE.txt](licenses/LAME-LICENSE.txt).

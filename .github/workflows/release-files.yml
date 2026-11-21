@@ -10,6 +10,14 @@ on:
         description: The version X.Y.Z, in the names of the files, in the programs and in the manifests.
         required: true
         type: string
+    # Only release.yml passes them, and only to the step that signs the Mac app. Without them, the Mac app is signed ad hoc.
+    secrets:
+      MACOS_SIGNING_P12:
+        description: The certificate that signs the Mac app and its key, a .p12 in base64 (packaging/mac/make-signing-certificate.sh).
+        required: false
+      MACOS_SIGNING_P12_PASSWORD:
+        description: The password of that .p12.
+        required: false
 
 permissions:
   contents: read
@@ -217,10 +225,100 @@ jobs:
       - name: Install, run and remove the .deb
         run: bash packaging/linux/try-deb.sh linux-files "$HINDSOUND_VERSION"
 
-  # The files of the release, together: the two announce manifests and one SHA256SUMS are written here, then everything is
-  # checked as the release job checks the files it downloads back from the draft.
+  # The Mac app for Apple silicon, Hindsound.app in a zip made by ditto. Its four native libraries are built from their
+  # pinned sources and its fonts fetched, afresh, as for Linux: no cache. The app is signed by the certificate of the
+  # repository when release.yml passes the secret MACOS_SIGNING_P12, ad hoc otherwise, with a warning in the log. The zip is
+  # then unzipped elsewhere and its program started (--prove-mp3, then --dump-settings), as the .deb is tried. Last, a
+  # throwaway certificate made by make-signing-certificate.sh signs a copy, so the path of the certificate is proven before
+  # the secret exists.
+  macos:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      HINDSOUND_VERSION: ${{ inputs.version }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 10.0.x
+
+      # SDL3, FreeType, HarfBuzz and LAME, each archive checked against its pin before it is read, then each dylib checked.
+      - name: Build the native libraries
+        timeout-minutes: 30
+        run: bash tools/mac/build-natives.sh "$RUNNER_TEMP/natives-work" "$RUNNER_TEMP/natives"
+
+      # The font script of Linux calls sha256sum, which macOS may not have: the same digest through shasum.
+      - name: Give the font script a sha256sum
+        run: |
+          if ! command -v sha256sum > /dev/null; then
+            mkdir -p "$RUNNER_TEMP/bin"
+            printf '#!/bin/sh\nexec shasum -a 256 "$@"\n' > "$RUNNER_TEMP/bin/sha256sum"
+            chmod +x "$RUNNER_TEMP/bin/sha256sum"
+            echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          fi
+
+      - name: Fetch the fonts of the window
+        run: bash tools/linux/fetch-fonts.sh "$RUNNER_TEMP/fonts-work" "$RUNNER_TEMP/fonts"
+
+      - name: Check the fonts of the window
+        run: bash tools/linux/fetch-fonts.sh --check "$RUNNER_TEMP/fonts"
+
+      # The .p12 goes to a folder of its own, removed when the step ends; sign-app.sh deletes its keychain itself.
+      - name: Assemble and sign Hindsound.app
+        env:
+          MACOS_SIGNING_P12: ${{ secrets.MACOS_SIGNING_P12 }}
+          MACOS_SIGNING_P12_PASSWORD: ${{ secrets.MACOS_SIGNING_P12_PASSWORD }}
+        run: |
+          if [ -n "$MACOS_SIGNING_P12" ]; then
+            signing="$(mktemp -d)"
+            trap 'rm -rf "$signing"' EXIT
+            printf '%s' "$MACOS_SIGNING_P12" | base64 --decode > "$signing/signing.p12"
+            export HINDSOUND_SIGNING_P12="$signing/signing.p12" HINDSOUND_SIGNING_P12_PASSWORD="$MACOS_SIGNING_P12_PASSWORD"
+            echo "Hindsound.app is signed by the certificate of the secret MACOS_SIGNING_P12."
+          else
+            echo "::warning title=Mac app signed ad hoc::No secret MACOS_SIGNING_P12: Hindsound.app is signed ad hoc, and macOS will ask again for the permissions (sound of the system, microphone) after each update. tools/release/README.md says how to make the certificate."
+          fi
+          bash packaging/mac/build-app.sh "$RUNNER_TEMP/natives" "$RUNNER_TEMP/fonts" "$RUNNER_TEMP/app" "$HINDSOUND_VERSION"
+
+      # Without the extended attributes and resource forks of the build machine: the zip holds Hindsound.app alone.
+      - name: Make the zip
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          ditto -c -k --norsrc --noextattr --noqtn --keepParent "$RUNNER_TEMP/app/Hindsound.app" "$RUNNER_TEMP/out/Hindsound-$HINDSOUND_VERSION-macos-arm64.zip"
+
+      - name: Check the zip
+        timeout-minutes: 15
+        run: bash packaging/mac/check-zip.sh "$RUNNER_TEMP/out/Hindsound-$HINDSOUND_VERSION-macos-arm64.zip" "$HINDSOUND_VERSION" "$RUNNER_TEMP/zip-check"
+
+      # The commands of tools/release/README.md, with a certificate made here and thrown away: the base64 file goes back to a
+      # .p12 as the secret does, and signs a copy of the app.
+      - name: Rehearse the signing with a throwaway certificate
+        run: |
+          certificate="$RUNNER_TEMP/throwaway-certificate"
+          bash packaging/mac/make-signing-certificate.sh "$certificate"
+          base64 --decode -i "$certificate/hindsound-signing.p12.base64" -o "$certificate/from-secret.p12"
+          ditto "$RUNNER_TEMP/app/Hindsound.app" "$RUNNER_TEMP/rehearsal/Hindsound.app"
+          HINDSOUND_SIGNING_P12="$certificate/from-secret.p12" HINDSOUND_SIGNING_P12_PASSWORD="$(cat "$certificate/password.txt")" \
+            bash packaging/mac/sign-app.sh "$RUNNER_TEMP/rehearsal/Hindsound.app"
+          rm -rf "$certificate" "$RUNNER_TEMP/rehearsal"
+
+      - name: Keep the Mac files
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: hindsound-macos-arm64
+          path: ${{ runner.temp }}/out/
+          if-no-files-found: error
+          overwrite: true
+
+  # The files of the release, together: the three announce manifests and one SHA256SUMS are written here, then everything
+  # is checked as the release job checks the files it downloads back from the draft.
   assemble:
-    needs: [windows, linux]
+    needs: [windows, linux, macos]
     runs-on: windows-latest
     timeout-minutes: 15
     env:
@@ -246,8 +344,14 @@ jobs:
           name: hindsound-linux-x64
           path: ${{ runner.temp }}/linux
 
+      - name: Take the Mac files
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: hindsound-macos-arm64
+          path: ${{ runner.temp }}/macos
+
       - name: Gather the files of the release
-        run: ./tools/release/assemble-release.ps1 -Version $env:VERSION -Repository $env:GITHUB_REPOSITORY -WindowsFolder "$env:RUNNER_TEMP/windows" -LinuxFolder "$env:RUNNER_TEMP/linux" -OutFolder "$env:RUNNER_TEMP/release"
+        run: ./tools/release/assemble-release.ps1 -Version $env:VERSION -Repository $env:GITHUB_REPOSITORY -WindowsFolder "$env:RUNNER_TEMP/windows" -LinuxFolder "$env:RUNNER_TEMP/linux" -MacFolder "$env:RUNNER_TEMP/macos" -OutFolder "$env:RUNNER_TEMP/release"
 
       - name: Check the files of the release
         run: ./tools/release/check-release-files.ps1 -Folder "$env:RUNNER_TEMP/release" -Version $env:VERSION -Repository $env:GITHUB_REPOSITORY

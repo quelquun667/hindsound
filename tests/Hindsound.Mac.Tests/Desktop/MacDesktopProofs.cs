@@ -162,6 +162,16 @@ public sealed class MacDesktopProofs(ITestOutputHelper output) : IDisposable
     }
 
     [Fact]
+    public void Once_installed_the_Mac_app_only_announces_a_new_version_from_its_own_manifest()
+    {
+        MacPlatform.Install(_ => { });
+
+        Assert.Equal(Hindsound.Updates.UpdateChannel.MacAnnounce, PlatformDefaults.UpdateChannel);
+        Assert.Equal(Hindsound.Updates.UpdateChannel.MacAnnounce, UpdateWiring.Channel);
+        Assert.Equal(UpdateWiring.AnnouncesOnly, UpdateWiring.Why(true, new AppOptions(), null, UpdateWiring.Channel));
+    }
+
+    [Fact]
     public void A_character_no_font_has_gets_no_fallback_as_on_Linux_and_not_the_LastResort_sign()
     {
         using var fallback = new CoreTextFallback();

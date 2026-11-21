@@ -836,7 +836,8 @@ jobs:
   # AppImage, the tar.gz, the manifests, SHA256SUMS, the LAME source and the source of libfuse, of the AppImage runtime
   # and of the other libraries linked into it), built and checked by the very workflow the tag runs, and kept as artifacts
   # of the run:
-  # hindsound-windows-x64, hindsound-linux-x64 and release-files.
+  # hindsound-windows-x64, hindsound-linux-x64, hindsound-macos-arm64 and release-files. It passes no secret: the Mac app
+  # of the rehearsal is signed ad hoc, and a throwaway certificate signs a copy.
   release-files:
     needs: release-version
     uses: ./.github/workflows/release-files.yml

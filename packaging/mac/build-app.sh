@@ -3,8 +3,11 @@
 #   1. publishes src/Hindsound.Mac for osx-arm64 with the options of the Linux app (self-contained, single file, trimmed);
 #   2. lays out the bundle: Contents/MacOS/hindsound (and any other Mach-O the publish left: code only, or the signature
 #      breaks), Contents/Frameworks/ the four dylibs of tools/mac/build-natives.sh, Contents/Resources/fonts/ the four
-#      fonts of tools/linux/fetch-fonts.sh, Contents/Info.plist from Info.plist.in with the version;
-#   3. signs it ad hoc, each Mach-O inside first, then the bundle (the certificate comes with the release, step M4);
+#      fonts of tools/linux/fetch-fonts.sh, Contents/Resources/ LICENSE, THIRD-PARTY-NOTICES.md and, in licenses/ laid out
+#      as in the repository (the notices link to them), the licences of what the bundle carries, Contents/Info.plist from
+#      Info.plist.in with the version;
+#   3. signs it with sign-app.sh: by the certificate of HINDSOUND_SIGNING_P12 when it is set (the release), ad hoc
+#      otherwise;
 #   4. checks: plutil -lint, codesign --verify --deep --strict, and otool -L of every Mach-O: no path of Homebrew
 #      (/opt/homebrew, /usr/local) nor of the build machine, only the system and @rpath/@executable_path.
 #
@@ -53,16 +56,20 @@ done
 for font in Selawik-Regular.ttf Selawik-Semibold.ttf BarlowSemiCondensed-SemiBold.ttf CascadiaMono-Regular.ttf; do
   cp "$fonts/$font" "$app/Contents/Resources/fonts/"
 done
+# The licences: of Hindsound, of the .NET runtime and of LAME (licenses/), of SDL and of the fonts (licenses/linux/, the
+# same files as on Linux), of FreeType and HarfBuzz (licenses/mac/). THIRD-PARTY-NOTICES.md says where each comes from.
+resources="$app/Contents/Resources"
+mkdir -p "$resources/licenses/linux" "$resources/licenses/mac"
+cp "$root/LICENSE" "$root/THIRD-PARTY-NOTICES.md" "$resources/"
+cp "$root"/licenses/*.txt "$resources/licenses/"
+cp "$root"/licenses/mac/*.txt "$resources/licenses/mac/"
+for notice in SDL3-LICENSE.txt SDL3-yuv2rgb-LICENSE.txt Selawik-LICENSE.txt CascadiaCode-LICENSE.txt Barlow-OFL.txt; do
+  cp "$root/licenses/linux/$notice" "$resources/licenses/linux/"
+done
 sed -e "s/@VERSION@/$version/g" "$here/Info.plist.in" > "$app/Contents/Info.plist"
 plutil -lint "$app/Contents/Info.plist"
 
-# Inside out: every Mach-O but the main program, then the bundle, which seals the rest.
-while IFS= read -r file; do
-  codesign --force --timestamp=none --sign - "$file"
-done < <(find "$app/Contents/Frameworks" "$app/Contents/MacOS" -type f ! -path "$app/Contents/MacOS/hindsound")
-codesign --force --timestamp=none --sign - --identifier io.github.quelquun667.hindsound "$app"
-codesign --verify --deep --strict --verbose=2 "$app"
-codesign -dvv "$app" 2>&1 | grep -E '^(Identifier|Format|Signature|CodeDirectory)' || true
+bash "$here/sign-app.sh" "$app"
 
 failed=0
 while IFS= read -r file; do

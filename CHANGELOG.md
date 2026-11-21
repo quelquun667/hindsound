@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- A first Mac version, for a Mac with Apple silicon on macOS 14.4 or later: `Hindsound-X.Y.Z-macos-arm64.zip` holds `Hindsound.app`. It has the same window as on Windows and Linux, and keeps the last minutes of the sound of the Mac in memory (Hindsound itself left out), or of one application and its child processes, with the microphone if your settings name one. It saves a clip on its hotkey, on `hindsound --save` or from the menu of its icon in the menu bar, says so with its own notification, as on Windows, and puts the clip on the clipboard. macOS asks once for the permission to record the sound of the system, and for the microphone; without them, Hindsound gets silence and says which one is missing.
+- On macOS, Hindsound is not signed by an Apple developer account nor notarized: the first launch needs `Open Anyway` in System Settings > Privacy & Security (see the README). It does not update itself: a notification says when a new version is out, with the link to its release. No confirmation sound plays when a clip is saved. There is no build for Intel Macs.
+- On macOS, Hindsound has only been tried on the macOS machines of GitHub's CI, with a test tone played through a virtual sound device and the permissions written by the CI: never on a real Mac, with a real game, call, hotkey or prompt.
+
 ## [0.10.1] - 2026-11-21
 
 Small fixes on Linux. On Windows, Hindsound works as in 0.10.0.
