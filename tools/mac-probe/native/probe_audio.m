@@ -188,7 +188,9 @@ static UInt64 capture(const char *name, AudioObjectID device, double rate, doubl
     s->c440 = 2 * cos(2 * M_PI * 440 / s->rate);
     s->c1000 = 2 * cos(2 * M_PI * 1000 / s->rate);
     AudioDeviceIOProcID proc = NULL;
+    probe(key(name, ".step"), @"create_ioproc");
     OSStatus created = AudioDeviceCreateIOProcID(device, inputProc, s, &proc);
+    probe(key(name, ".step"), @"start created=%d", (int)created);
     OSStatus started = created != noErr ? created : AudioDeviceStart(device, proc);
     probe(key(name, ".start"), @"createIOProc=%d start=%d rate=%.0f", (int)created, (int)started, s->rate);
     if (started == noErr) usleep((useconds_t)(seconds * 1e6));
@@ -332,6 +334,8 @@ static void permissions(const char *when) {
 }
 
 static void step(const char *what) { probe("step", @"%s", what); }
+
+int probe_audio_run(const char *tag, int tonePid, int silentPid, double seconds);
 
 static void runAll(int tonePid, int silentPid, double seconds) {
     permissions("before");

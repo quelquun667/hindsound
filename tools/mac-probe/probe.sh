@@ -125,6 +125,8 @@ build() {
     -framework Foundation -framework CoreAudio -framework AVFoundation \
     -install_name @rpath/libprobeaudio.dylib -o "$W/libprobeaudio.dylib" "$here/native/probe_audio.m" 2>&1
   probe native.build "rc=$? sdk=$(xcrun --show-sdk-version 2>&1) clang=$(clang --version | head -n 1)"
+  clang -arch arm64 -mmacosx-version-min=14.2 -o "$W/probe_audio_cli" "$here/native/probe_audio_cli.c"     -L"$W" -lprobeaudio -Wl,-rpath,"$W" 2>&1
+  probe native.build_cli "rc=$?"
 
   local v
   for v in 1 2; do
@@ -236,6 +238,9 @@ run_app() { # mode app outfile args...
   rm -f "$out" "$out.err"
   if [ "$mode" = open ]; then
     open -n -W --stdout "$out" --stderr "$out.err" "$app" --args "$@" &
+  elif [ "$mode" = cli ]; then
+    shift
+    "$W/probe_audio_cli" "$@" > "$out" 2> "$out.err" &
   else
     "$app/Contents/MacOS/HindsoundProbe" "$@" > "$out" 2> "$out.err" &
   fi
@@ -350,6 +355,8 @@ audio_run() { # tag app mode
 
 audio() {
   make_sounds
+  # The same audio code from a plain C program, without .NET: if this one runs and the .app does not, .NET is the cause.
+  audio_run native_cli "$W/probe_audio_cli" cli
   local kind id app
   for kind in adhoc cert; do
     if [ "$kind" = adhoc ]; then id="$ADHOC_ID"; else id="$CERT_ID"; fi
