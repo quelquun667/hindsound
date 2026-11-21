@@ -8,10 +8,11 @@
 #   build      the Core Audio probe (native/capture.m) built twice: build 1 and build 2, different binaries
 #   sign       a throwaway code signing certificate in a temporary keychain; four .app: ad hoc and certificate, build 1
 #              and 2; their designated requirements, codesign --verify, spctl, and whether build 2 satisfies build 1's
-#   audio      stage 1, from the plain program: which way of starting the IO returns (output and input IOProc, AudioQueue
-#              input, a global tap through three aggregates and three readers); stage 2, from the .app with the first
-#              way that delivered data: global tap without and with permission, one process, the microphone, then
-#              build 2 in place of build 1 with no new permission; certificate, then ad hoc
+#   audio      the plain program: an output and an input IOProc (the microphone); then the .app with permission written
+#              first: which way of reading a global tap delivers data (three aggregates, three readers), then with it the
+#              global tap, one process, the microphone, and build 2 in place of build 1 with no new permission
+#              (certificate, then ad hoc); last, without permission: refused, then not decided. A tap without
+#              permission leaves coreaudiod stuck, so coreaudiod is restarted after every test that hangs.
 #   summary    all the PROBE lines
 #   cleanup    deletes the temporary keychain and the certificate files
 # Every test runs in a process of its own with a limit per step: a hang ends that test only, with a sample of its stacks.
@@ -243,21 +244,40 @@ tcc_rows() { # tag
 }
 
 # Writes the permission of system audio capture and microphone for a bundle id, with the requirement of the given build.
-grant() { # tag app id
-  local tag="$1" app="$2" id="$3" req hex which service rc=0
+grant() { # tag app id auth_value (2 allowed, 0 denied)
+  local tag="$1" app="$2" id="$3" value="$4" req hex which service rc=0
   req="$(dr_of "$app")"
   csreq -r "=$req" -b "$W/csreq-$tag.bin" || rc=1
   hex="$(xxd -p "$W/csreq-$tag.bin" | tr -d '\n')"
   for which in system user; do
     for service in kTCCServiceAudioCapture kTCCServiceMicrophone; do
-      sudo sqlite3 "$(tcc_db "$which")" "insert or replace into access (service, client, client_type, auth_value, auth_reason, auth_version, csreq, flags, last_modified) values ('$service', '$id', 0, 2, 3, 1, X'$hex', 0, CAST(strftime('%s','now') AS INTEGER));" || rc=1
+      sudo sqlite3 "$(tcc_db "$which")" "insert or replace into access (service, client, client_type, auth_value, auth_reason, auth_version, csreq, flags, last_modified) values ('$service', '$id', 0, $value, 3, 1, X'$hex', 0, CAST(strftime('%s','now') AS INTEGER));" || rc=1
     done
   done
   sudo killall tccd 2> /dev/null
   killall tccd 2> /dev/null
   sleep 2
-  probe "$tag.grant" "rc=$rc id=$id requirement=$req"
+  probe "$tag.grant" "rc=$rc id=$id auth_value=$value requirement=$req"
   tcc_rows "$tag"
+}
+
+revoke() { # tag id
+  local which rc=0
+  for which in system user; do
+    sudo sqlite3 "$(tcc_db "$which")" "delete from access where client = '$2';" || rc=1
+  done
+  sudo killall tccd 2> /dev/null
+  killall tccd 2> /dev/null
+  sleep 2
+  probe "$1.revoke" "rc=$rc id=$2"
+  tcc_rows "$1"
+}
+
+# Restarts coreaudiod, which a hung tap leaves stuck for every client, and checks that BlackHole is still the default.
+reset_audio() { # tag
+  sudo killall coreaudiod
+  sleep 5
+  probe "$1.coreaudiod_restart" "output=$(SwitchAudioSource -t output -c 2>&1) input=$(SwitchAudioSource -t input -c 2>&1)"
 }
 
 # The frames of a sample that tell where a thread waits.
@@ -267,8 +287,9 @@ stacks() { # sample-file
     return
   fi
   echo "--- stacks (sample): audio, TCC and wait frames"
-  grep -E 'AudioDeviceStart|AudioOutputUnitStart|AudioQueueStart|HALC_|HALB_|HAL_|AudioObject|AudioHardware|AUHAL|TCC|tcc_|semaphore|mach_msg|_dispatch_sync|pthread_cond|xpc_connection_send_message_with_reply_sync|runTest|readIOProc|readAUHAL|readQueue|tapTest|startTone|outIOProc' "$1" \
-    | sed -E -e 's/^[ +!:|]*//' -e 's/ +\[0x[0-9a-f,]+\]//' -e 's/  +/ /g' | awk '!seen[$0]++' | head -n 60
+  grep -E 'Audio[A-Za-z]*(Start|IOProc|SetProperty|Create)|HALC|HALB|HAL_|CA::|AudioObject|AudioHardware|AUHAL|AudioQueue|TCC|tcc_|semaphore|mach_msg|_dispatch_sync|pthread_cond|xpc_connection_send_message_with_reply_sync|runTest|readIOProc|readAUHAL|readQueue|tapTest|startTone|outIOProc' "$1" \
+    | sed -E -e 's/^[ +!:|0-9]*//' -e 's/ +\[0x[0-9a-f,]+\]//' -e 's/  +/ /g' | awk '!seen[$0]++' | head -n 50 > "$1.frames"
+  if [ -s "$1.frames" ]; then cat "$1.frames"; else echo "(no matching frame; head of the sample)"; head -n 25 "$1"; fi
 }
 
 # The recent log of coreaudiod, tccd and the probe; at most three times per run, as log show is slow.
@@ -278,7 +299,7 @@ recent_log() { # since
   echo "--- log since $1: coreaudiod, tccd, the probe"
   perl -e 'alarm 45; exec @ARGV' log show --start "$1" --style compact \
     --predicate 'process == "coreaudiod" OR process == "tccd" OR process == "HindsoundProbe" OR process == "capture-v1"' 2> /dev/null \
-    | grep -iE 'tap|tcc|AudioCapture|aggregate|start|IOProc|error|fail|denied|prompt|timeout|wait' | cut -c1-260 | tail -n 40
+    | grep -E 'kTCCServiceAudioCapture|kTCCServiceMicrophone|AUTHREQ_RESULT|[Pp]rompt|coreaudiod.*([Tt]ap|TCC|[Pp]ermission|IOProc|[Aa]ggregate|[Ee]rror|[Ff]ail)' | cut -c1-300 | tail -n 30
 }
 
 # Runs one test in a process of its own while afplay plays the 1 kHz tone and the silence (their pids replace the words
@@ -324,6 +345,7 @@ run_case() { # tag mode app hal-runloop test [args]
   if grep -q "^PROBE $tag.stuck " "$out" 2> /dev/null; then
     stacks "$out.sample"
     recent_log "$since"
+    reset_audio "$tag"
   fi
   return 0
 }
@@ -334,64 +356,63 @@ works() { # tag: did its capture deliver data (sound or silence)
 
 audio() {
   make_sounds
-  local method='' combo agg reader kind id app
+  local method='' combo app agg reader
 
-  # Stage 1, from the plain program: does any start return, and which way of reading a tap delivers data.
-  run_case s1_perm cli - null perm
+  # The plain program: an output and an input IOProc (the microphone: BlackHole gives back what afplay plays).
   run_case s1_out_ioproc cli - null out_ioproc
   run_case s1_in_ioproc cli - null in_ioproc
-  run_case s1_in_queue cli - null in_queue
-  for combo in $COMBOS; do
-    agg="${combo%%:*}"
-    reader="${combo##*:}"
-    run_case "s1_${agg}_${reader}" cli - null tap global "$agg" "$reader"
-    if [ -z "$method" ] && works "s1_${agg}_${reader}"; then method="$combo"; fi
-  done
-  run_case s1_taponly_ioproc_mainrl cli - main tap global taponly ioproc
-  probe audio.method_cli "${method:-none}"
 
-  # Stage 2, from the .app: certificate first (the update test that matters), then ad hoc.
-  for kind in cert adhoc; do
-    if [ "$kind" = adhoc ]; then id="$ADHOC_ID"; else id="$CERT_ID"; fi
-    app="$INSTALL_DIR/HindsoundProbe-$kind.app"
-    install_app "$W/apps/$kind-v1/HindsoundProbe.app" "$app"
-    run_case "${kind}_v1_noauth_perm" open "$app" null perm
-    if [ -n "$method" ]; then
-      run_case "${kind}_v1_noauth_excl" open "$app" null tap global_excl_self "${method%%:*}" "${method##*:}"
+  # With permission first: the first run showed that a tap without permission leaves coreaudiod stuck for every client.
+  app="$INSTALL_DIR/HindsoundProbe-cert.app"
+  install_app "$W/apps/cert-v1/HindsoundProbe.app" "$app"
+  grant cert_v1 "$app" "$CERT_ID" 2
+  run_case cert_v1_auth_perm open "$app" null perm
+  for combo in $COMBOS; do
+    run_case "cert_v1_auth_find_${combo%%:*}_${combo##*:}" open "$app" null tap global_excl_self "${combo%%:*}" "${combo##*:}"
+    if works "cert_v1_auth_find_${combo%%:*}_${combo##*:}"; then
+      method="$combo"
+      break
     fi
-    [ "$kind" = cert ] && run_case "${kind}_v1_noauth_mic" open "$app" null in_ioproc
-    grant "${kind}_v1" "$app" "$id"
-    run_case "${kind}_v1_auth_perm" open "$app" null perm
-    if [ -z "$method" ]; then
-      for combo in $COMBOS; do
-        run_case "${kind}_v1_auth_find_${combo%%:*}_${combo##*:}" open "$app" null tap global_excl_self "${combo%%:*}" "${combo##*:}"
-        if works "${kind}_v1_auth_find_${combo%%:*}_${combo##*:}"; then
-          method="$combo"
-          break
-        fi
-      done
-      probe "audio.method_app_$kind" "${method:-none}"
-    fi
-    if [ -n "$method" ]; then
-      agg="${method%%:*}"
-      reader="${method##*:}"
-      run_case "${kind}_v1_auth_excl" open "$app" null tap global_excl_self "$agg" "$reader"
-      if [ "$kind" = cert ]; then
-        run_case "${kind}_v1_auth_global" open "$app" null tap global "$agg" "$reader"
-        run_case "${kind}_v1_auth_proc_tone" open "$app" null tap proc "$agg" "$reader" TONE
-        run_case "${kind}_v1_auth_proc_silent" open "$app" null tap proc "$agg" "$reader" SILENT
-        run_case "${kind}_v1_auth_mic" open "$app" null in_ioproc
-      fi
-    fi
-    # Build 2 in place of build 1, same path and bundle id, and no new permission.
-    install_app "$W/apps/$kind-v2/HindsoundProbe.app" "$app"
-    probe "${kind}_v2.installed" "$(dr_of "$app")"
-    run_case "${kind}_v2_perm" open "$app" null perm
-    if [ -n "$method" ]; then
-      run_case "${kind}_v2_excl" open "$app" null tap global_excl_self "${method%%:*}" "${method##*:}"
-    fi
-    tcc_rows "${kind}_end"
   done
+  probe audio.method "${method:-none}"
+  agg="${method%%:*}"
+  reader="${method##*:}"
+  if [ -n "$method" ]; then
+    run_case cert_v1_auth_global open "$app" null tap global "$agg" "$reader"
+    run_case cert_v1_auth_proc_tone open "$app" null tap proc "$agg" "$reader" TONE
+    run_case cert_v1_auth_proc_silent open "$app" null tap proc "$agg" "$reader" SILENT
+  fi
+  run_case cert_v1_auth_mic open "$app" null in_ioproc
+
+  # Build 2 in place of build 1, same path and bundle id, and no new permission.
+  install_app "$W/apps/cert-v2/HindsoundProbe.app" "$app"
+  probe cert_v2.installed "$(dr_of "$app")"
+  run_case cert_v2_perm open "$app" null perm
+  [ -n "$method" ] && run_case cert_v2_excl open "$app" null tap global_excl_self "$agg" "$reader"
+
+  app="$INSTALL_DIR/HindsoundProbe-adhoc.app"
+  install_app "$W/apps/adhoc-v1/HindsoundProbe.app" "$app"
+  grant adhoc_v1 "$app" "$ADHOC_ID" 2
+  run_case adhoc_v1_auth_perm open "$app" null perm
+  [ -n "$method" ] && run_case adhoc_v1_auth_excl open "$app" null tap global_excl_self "$agg" "$reader"
+  install_app "$W/apps/adhoc-v2/HindsoundProbe.app" "$app"
+  probe adhoc_v2.installed "$(dr_of "$app")"
+  run_case adhoc_v2_perm open "$app" null perm
+  [ -n "$method" ] && run_case adhoc_v2_excl open "$app" null tap global_excl_self "$agg" "$reader"
+
+  # Without permission, last: refused (auth_value 0), then not decided (no row), then the plain program (not decided).
+  [ -n "$method" ] || { agg=null; reader=ioproc; }
+  app="$INSTALL_DIR/HindsoundProbe-cert.app"
+  install_app "$W/apps/cert-v1/HindsoundProbe.app" "$app"
+  grant cert_v1_denied "$app" "$CERT_ID" 0
+  run_case cert_v1_denied_perm open "$app" null perm
+  run_case cert_v1_denied_excl open "$app" null tap global_excl_self "$agg" "$reader"
+  run_case cert_v1_denied_mic open "$app" null in_ioproc
+  revoke cert_v1_undecided "$CERT_ID"
+  run_case cert_v1_undecided_perm open "$app" null perm
+  run_case cert_v1_undecided_excl open "$app" null tap global_excl_self "$agg" "$reader"
+  run_case s9_cli_undecided_excl cli - null tap global_excl_self "$agg" "$reader"
+  tcc_rows audio_end
 }
 
 # --- summary and cleanup ------------------------------------------------------------------------------------------------
