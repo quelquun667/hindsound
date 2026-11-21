@@ -38,8 +38,9 @@ dotnet publish "$root/src/Hindsound.Mac/Hindsound.Mac.csproj" -c Release -r osx-
 app="$out/Hindsound.app"
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Frameworks" "$app/Contents/Resources/fonts"
+# No "file | grep -q" in this script: with pipefail, grep -q leaving early can fail the pipe, and the test with it.
 for file in "$publish"/*; do
-  if file -b "$file" | grep -q '^Mach-O'; then
+  if [[ "$(file -b "$file")" == Mach-O* ]]; then
     cp "$file" "$app/Contents/MacOS/"
   else
     echo "Left out of the bundle: $(basename "$file") (not code)"
@@ -65,10 +66,10 @@ codesign -dvv "$app" 2>&1 | grep -E '^(Identifier|Format|Signature|CodeDirectory
 
 failed=0
 while IFS= read -r file; do
-  if file -b "$file" | grep -q '^Mach-O'; then
+  if [[ "$(file -b "$file")" == Mach-O* ]]; then
     links="$(otool -L "$file" | tail -n +2 | awk '{print $1}')"
     echo "$(basename "$file"): $(echo $links)"
-    if printf '%s\n' "$links" | grep -Ev '^(/usr/lib/|/System/Library/|@rpath/|@executable_path/|@loader_path/)' | grep -q .; then
+    if [ -n "$(grep -Ev '^(/usr/lib/|/System/Library/|@rpath/|@executable_path/|@loader_path/)' <<< "$links" || true)" ]; then
       echo "$(basename "$file") links outside the system and the bundle." >&2
       failed=1
     fi

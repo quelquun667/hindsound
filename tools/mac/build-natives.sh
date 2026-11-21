@@ -88,7 +88,7 @@ usage() {
 here="$(cd "$(dirname "$0")" && pwd)"
 
 check_one() {
-  local library="$1/$2" name="$2" file_type id linked exports symbol
+  local library="$1/$2" name="$2" file_type id linked beyond exports symbol
   [ -f "$library" ] || { echo "$library is not there." >&2; exit 1; }
   file_type="$(file -b "$library")"
   case "$file_type" in
@@ -99,15 +99,18 @@ check_one() {
   [ "$id" = "@rpath/$name" ] || { echo "$name is named '$id', expected @rpath/$name." >&2; exit 1; }
   # Only the system: /usr/lib and the frameworks of /System, never Homebrew (/opt/homebrew, /usr/local) nor another
   # library of this list.
+  # No "printf | grep -q" here: with pipefail, grep -q leaving early makes printf fail on a broken pipe, and the test with
+  # it (the run of 21/11/2026 said "libSDL3.0.dylib does not export SDL_GetVersion" so). Here-strings instead.
   linked="$(otool -L "$library" | tail -n +2 | awk '{print $1}' | grep -v "^@rpath/$name\$" || true)"
-  if printf '%s\n' "$linked" | grep -Ev '^(/usr/lib/|/System/Library/)' | grep -q .; then
+  beyond="$(grep -Ev '^(/usr/lib/|/System/Library/)' <<< "$linked" || true)"
+  if [ -n "$beyond" ]; then
     echo "$name links beyond the system:" >&2
-    printf '%s\n' "$linked" | grep -Ev '^(/usr/lib/|/System/Library/)' >&2
+    echo "$beyond" >&2
     exit 1
   fi
   exports="$(nm -gU "$library" | awk '{print $3}' | sed 's/^_//')"
   for symbol in $(exports_of "$name"); do
-    printf '%s\n' "$exports" | grep -qx "$symbol" || { echo "$name does not export $symbol." >&2; exit 1; }
+    grep -qx "$symbol" <<< "$exports" || { echo "$name does not export $symbol." >&2; exit 1; }
   done
   echo "Checked: $name, $(stat -f %z "$library") bytes, SHA-256 $(shasum -a 256 "$library" | cut -d' ' -f1), links: $(echo $linked)"
 }
