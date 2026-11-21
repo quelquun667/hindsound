@@ -16,7 +16,7 @@ public class PathSitesTests
         ["App/HindsoundApp.cs"] = (3, "executable names, a setting value, and the canary of the probe in the lines of the log"),
         ["App/SettingsMapping.cs"] = (3, "setting values, and the default folder on Windows only"),
         ["Audio/AudioEngine.cs"] = (4, "executable names and device ids"),
-        ["Audio/ProcessSnapshot.cs"] = (2, "executable names"),
+        ["Audio/ProcessSnapshot.cs"] = (3, "executable names, and the final .exe of one"),
         ["Export/FileNameTemplate.cs"] = (4, "reserved names and tags of a template"),
         ["Input/HotkeyGesture.cs"] = (3, "key names"),
         ["Library/AudioFileLength.cs"] = (2, "file extensions"),
