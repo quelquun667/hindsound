@@ -321,6 +321,47 @@ jobs:
           [ "$code" -eq 0 ] || failed=1
           exit $failed
 
+      # The loop of the app on the main thread, with the session of the runner: the icon of the menu bar and its menu read
+      # back from AppKit, a Carbon shortcut registered and its press sent, then a real press posted as a keyboard would (with
+      # the PostEvent and Accessibility rights written in TCC for the bundle, as the probe wrote its rights; reported apart),
+      # and "hindsound --save" from a second launch received by the running one.
+      - name: Prove the loop, the icon, the shortcut and --save with the app
+        if: ${{ !cancelled() && steps.assemble.outcome == 'success' }}
+        run: |
+          app="$RUNNER_TEMP/app/Hindsound.app"
+          program="$app/Contents/MacOS/hindsound"
+          folder="$RUNNER_TEMP/mac-loop"
+          mkdir -p "$folder"
+          printf '%s
+' '{"audio":{"micDeviceId":"disabled"}}' > "$folder/settings.json"
+          requirement=$(codesign -d -r- "$app" 2>&1 | sed -n 's/^#* *designated => //p' | head -n 1)
+          echo "designated requirement: $requirement"
+          if csreq -r "=$requirement" -b "$folder/csreq.bin"; then
+            hex=$(xxd -p "$folder/csreq.bin" | tr -d '
+')
+            for db in "/Library/Application Support/com.apple.TCC/TCC.db" "$HOME/Library/Application Support/com.apple.TCC/TCC.db"; do
+              for service in kTCCServicePostEvent kTCCServiceAccessibility; do
+                sudo sqlite3 "$db" "insert or replace into access (service, client, client_type, auth_value, auth_reason, auth_version, csreq, flags, last_modified) values ('$service', 'io.github.quelquun667.hindsound', 0, 2, 3, 1, X'$hex', 0, CAST(strftime('%s','now') AS INTEGER));"                   && echo "tcc: $service written in $db" || echo "tcc: $service not written in $db"
+              done
+            done
+            sudo killall tccd || true
+          fi
+          perl -e 'alarm shift; exec @ARGV' 150 "$program" --settings "$folder/settings.json" --no-mic --no-clipboard --prove-loop > "$folder/proof.out" 2>&1 &
+          proof=$!
+          for attempt in $(seq 1 120); do
+            grep -q "loop proof: ready, waiting for --save" "$folder/settings.log" 2> /dev/null && break
+            sleep 0.5
+          done
+          code=0
+          perl -e 'alarm shift; exec @ARGV' 30 "$program" --settings "$folder/settings.json" --save || code=$?
+          echo "--save from a second launch: exit code $code (2: handed to the running instance)"
+          proof_code=0
+          wait "$proof" || proof_code=$?
+          echo "--prove-loop: exit code $proof_code"
+          cat "$folder/proof.out" || true
+          sed 's/^/  log loop: /' "$folder/settings.log" || true
+          [ "$code" -eq 2 ] && [ "$proof_code" -eq 0 ] && grep -q "loop proof: result pass" "$folder/settings.log"
+
       - name: Keep the pages of the window
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
