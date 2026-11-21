@@ -406,7 +406,7 @@ internal sealed partial class SettingsScreen
                 c.Frame(box, 4, Theme.Raised, Theme.Control);
                 if (asKeys)
                 {
-                    c.Keycaps(bound!, box.X + 8, box.MidY);
+                    c.Keycaps(Features.KeyText(bound!), box.X + 8, box.MidY);
                 }
                 else
                 {
@@ -1095,7 +1095,7 @@ internal sealed partial class SettingsScreen
                 Add(new Painted((c, _) => c.TextMid(say, Face.Body, 14, inner + c.Measure(FirstRunWait, Face.Body, 14) + FirstRunNoteGap, top + 8, Theme.Muted)), scrolls: false);
                 if (mode == ShortcutMode.Capture)
                 {
-                    Add(new Painted((c, _) => c.Keycaps(gesture, inner, top + 42)), scrolls: false);
+                    Add(new Painted((c, _) => c.Keycaps(Features.KeyText(gesture), inner, top + 42)), scrolls: false);
                 }
                 else if (gesture.Length > 0)
                 {
@@ -1105,7 +1105,7 @@ internal sealed partial class SettingsScreen
                     {
                         if (asKeys)
                         {
-                            c.Keycaps(gesture, inner, top + 42);
+                            c.Keycaps(Features.KeyText(gesture), inner, top + 42);
                         }
                         else
                         {
@@ -1125,7 +1125,7 @@ internal sealed partial class SettingsScreen
                         Add(new Painted((c, _) =>
                         {
                             c.TextMid("Now paste it anywhere.", Face.Medium, 14, inner, top + 84, Theme.Text);
-                            c.Keycaps("Ctrl+V", inner + 8 + c.Measure("Now paste it anywhere.", Face.Medium, 14), top + 84);
+                            c.Keycaps(Features.KeyText(Features.PasteGesture), inner + 8 + c.Measure("Now paste it anywhere.", Face.Medium, 14), top + 84);
                         }), scrolls: false);
                     }
                 }
@@ -1199,7 +1199,7 @@ internal sealed partial class SettingsScreen
                 c.Frame(box, 4, Theme.Raised, Theme.Control);
                 if (asKeys)
                 {
-                    c.Keycaps(bound!, box.X + 8, box.MidY);
+                    c.Keycaps(Features.KeyText(bound!), box.X + 8, box.MidY);
                 }
                 else
                 {

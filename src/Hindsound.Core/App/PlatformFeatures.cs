@@ -1,3 +1,5 @@
+using Hindsound.Input;
+
 namespace Hindsound.App;
 
 /// <summary>How the global shortcuts are set on this system, which decides what the Hotkeys page shows.</summary>
@@ -67,6 +69,9 @@ internal sealed record PlatformFeatures
         ReservedNameText = "This name is reserved",
         Shortcuts = shortcuts ?? (static () => ShortcutMode.Command),
         SaveCommand = saveCommand,
+        ModifierNames = ["Control", "Option", "Shift", "Cmd"],
+        PasteGesture = "Win+V",
+        PasteKeys = ["Cmd", "V"],
     };
 
     /// <summary>The choice of one application to capture, in place of the whole PC sound.</summary>
@@ -101,6 +106,45 @@ internal sealed record PlatformFeatures
     /// the pages then say in words what to bind, with nothing to copy.
     /// </summary>
     public Func<string?> SaveCommand { get; init; } = static () => DefaultSaveCommand;
+
+    /// <summary>
+    /// What this system calls the modifier keys of a gesture, in the order of <see cref="HotkeyGesture.ToString"/>: Ctrl, Alt,
+    /// Shift, Win. On a Mac, the key that holds the Win flag is Command, as Carbon and SDL read it.
+    /// </summary>
+    public IReadOnlyList<string> ModifierNames { get; init; } = WindowsModifierNames;
+
+    /// <summary>The keys that paste, as a gesture in the app's own text (its modifier read through <see cref="KeyText"/>).</summary>
+    public string PasteGesture { get; init; } = "Ctrl+V";
+
+    /// <summary>The keys that paste, in this system's words, as the notification draws them.</summary>
+    public IReadOnlyList<string> PasteKeys { get; init; } = WindowsPasteKeys;
+
+    private static readonly string[] WindowsModifierNames = ["Ctrl", "Alt", "Shift", "Win"];
+    private static readonly string[] WindowsPasteKeys = ["Ctrl", "V"];
+
+    /// <summary>
+    /// A gesture in the app's own text (<c>Ctrl+Shift+F10</c>, as the settings keep it) in this system's words, for the eye only:
+    /// each modifier renamed, the key kept. Windows and Linux get the text back as it is.
+    /// </summary>
+    public string KeyText(string gesture)
+    {
+        if (ReferenceEquals(ModifierNames, WindowsModifierNames))
+        {
+            return gesture;
+        }
+
+        var parts = gesture.Split('+');
+        for (var i = 0; i < parts.Length; i++)
+        {
+            var at = Array.IndexOf(WindowsModifierNames, parts[i]);
+            if (at >= 0 && at < ModifierNames.Count)
+            {
+                parts[i] = ModifierNames[at];
+            }
+        }
+
+        return string.Join('+', parts);
+    }
 
     /// <summary>A sentence written with the Windows words, in the words of this system: the Recycle Bin is its own name for the place.</summary>
     public string Words(string windowsText) =>

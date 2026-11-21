@@ -888,16 +888,16 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
         var listening = _capture.Action == action;
         if (listening)
         {
-            return new HotkeyFieldView(null, true, _capture.HeldText(), _capture.Message, false);
+            return new HotkeyFieldView(null, true, Features.KeyText(_capture.HeldText()), _capture.Message, false);
         }
 
         if (_attempts.TryGetValue(action, out var attempt))
         {
-            return new HotkeyFieldView(attempt.Gesture.Length > 0 ? attempt.Gesture : null, false, null, attempt.Message, true);
+            return new HotkeyFieldView(attempt.Gesture.Length > 0 ? Features.KeyText(attempt.Gesture) : null, false, null, attempt.Message, true);
         }
 
         _hotkeyProblems.TryGetValue(action, out var problem);
-        return new HotkeyFieldView(Editor.GestureOf(action), false, null, problem, problem is not null);
+        return new HotkeyFieldView(Editor.GestureOf(action) is { } gesture ? Features.KeyText(gesture) : null, false, null, problem, problem is not null);
     }
 
     // ---------------------------------------------------------------- slider values

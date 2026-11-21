@@ -4,6 +4,7 @@ using Hindsound.Mac.App;
 using Hindsound.Mac.Audio.Capture;
 using Hindsound.Mac.Audio.Devices;
 using Hindsound.Mac.Audio.Playback;
+using Hindsound.Mac.Desktop;
 using Hindsound.Mac.Notification;
 using Hindsound.Mac.Window;
 using Hindsound.Unix.App;
@@ -14,10 +15,9 @@ using Hindsound.Unix.Window;
 namespace Hindsound.Mac;
 
 /// <summary>
-/// The entry point of the macOS app. For now it draws the pages of its window (<c>--dump-settings</c>), proves its MP3
-/// (<c>--prove-mp3</c>) and its loop (<c>--prove-loop</c>), and hands <c>--save</c> or a second launch to the instance
-/// that runs; a plain first launch says in the log that the app cannot run yet (no capture before step M3) and leaves with
-/// a failure code, never as if it ran.
+/// The entry point of the macOS app: one instance at a time, its loop on the main thread (the thread <c>Main</c> runs on,
+/// which AppKit, the icon of the menu bar and the Carbon shortcuts need), and <c>hindsound --save</c> from a second launch.
+/// The proofs of the CI (<c>--prove-…</c>, <c>--dump-settings</c>) run before it and leave.
 /// </summary>
 [SupportedOSPlatform("macos")]
 internal static class Program
@@ -87,11 +87,33 @@ internal static class Program
 
         if (launch.Save)
         {
-            journal.Write("--save with no running instance");
+            // Nothing is kept yet: a clip now would be empty. The app starts, and the next --save finds it.
+            journal.Write("--save with no running instance: starting the app instead");
         }
 
-        journal.Write("the macOS app does not run yet: it draws its pages (--dump-settings) and proves its MP3 (--prove-mp3); "
-            + "the capture, the icon and the shortcuts come with the next steps");
-        return ExitFailed;
+        // A clip that cannot be encoded falls back to WAV without a word: a user who gets WAV files finds the reason here.
+        journal.Write(LameLibrary.Shared is { } encoder
+            ? $"mp3: libmp3lame {encoder.Version} from {encoder.LoadedFrom}"
+            : "mp3: no encoder, clips will be saved as WAV: " + LameLibrary.LastError);
+
+        try
+        {
+            // On the thread of Main, which is the main thread of the process: the loop of the app must turn there. The raw
+            // command line, not the options read from it: a typo in a test's options must not look like a real launch. The
+            // update channel of macOS comes with step M4: until then no update is looked for (the log says "not installed").
+            var code = new HindsoundApp(options, journal, AppOptions.UpdaterMayRun(launch.Rest), MacDesktop.Parts(journal.Write), shell: new MacShell(journal.Write), instance: instance).Run();
+
+            // A capture thread stuck in Core Audio must not keep the process alive with the icon gone.
+            Environment.Exit(code);
+            return code;
+        }
+        catch (Exception ex)
+        {
+            journal.Write("fatal: " + ex);
+
+            // The same as a normal exit: nothing may be left capturing behind a process that has given up.
+            Environment.Exit(ExitFailed);
+            return ExitFailed;
+        }
     }
 }

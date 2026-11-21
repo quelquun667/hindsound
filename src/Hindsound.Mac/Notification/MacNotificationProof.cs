@@ -45,7 +45,7 @@ internal static unsafe partial class MacNotificationProof
             0.14f, 0.23f, 0.35f, 0.44f, 0.36f, 0.35f, 0.78f, 0.84f, 0.88f, 0.59f, 0.8f, 0.8f,
         ];
         var thirty = TimeSpan.FromSeconds(30);
-        return NotificationStates.ForClip(new ClipResult(["clip.mp3"], thirty, 1, false, bars, false, false), thirty, true, true, accent);
+        return NotificationStates.ForClip(new ClipResult(["clip.mp3"], thirty, 1, false, bars, false, false), thirty, true, true, accent, PlatformFeatures.Mac(static () => null));
     }
 
     public static int Run(string folder, Action<string> say)

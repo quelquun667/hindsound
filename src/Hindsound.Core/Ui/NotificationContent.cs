@@ -99,10 +99,14 @@ internal static class NotificationStates
     /// <param name="copyWanted">The settings ask for a copy to the clipboard.</param>
     /// <param name="copied">The copy succeeded.</param>
     /// <param name="accent">The accent colour.</param>
-    public static NotificationContent ForClip(ClipResult result, TimeSpan requested, bool copyWanted, bool copied, uint accent) =>
-        WordsForClip(result, requested, copyWanted, copied, accent) with { ClipPath = result.Paths.Count > 0 ? result.PrimaryPath : null };
+    /// <param name="features">The system, whose keys paste; the one installed when not given, Windows when none is.</param>
+    public static NotificationContent ForClip(ClipResult result, TimeSpan requested, bool copyWanted, bool copied, uint accent, PlatformFeatures? features = null) =>
+        WordsForClip(result, requested, copyWanted, copied, accent, PasteKeysOf(features)) with { ClipPath = result.Paths.Count > 0 ? result.PrimaryPath : null };
 
-    private static NotificationContent WordsForClip(ClipResult result, TimeSpan requested, bool copyWanted, bool copied, uint accent)
+    private static IReadOnlyList<string> PasteKeysOf(PlatformFeatures? features) =>
+        (features ?? PlatformDefaults.Features) is { } system && system.PasteKeys is not ["Ctrl", "V"] ? system.PasteKeys : PasteKeys;
+
+    private static NotificationContent WordsForClip(ClipResult result, TimeSpan requested, bool copyWanted, bool copied, uint accent, IReadOnlyList<string> pasteKeys)
     {
         var copyFailed = copyWanted && !copied;
         if (result.Rescued)
@@ -133,7 +137,7 @@ internal static class NotificationStates
 
         if (result.FellBackToWav)
         {
-            return new NotificationContent(NotificationKind.WavFallback, title, copied ? "Saved as WAV. Paste" : "Saved as WAV. MP3 failed.", copied ? PasteKeys : [],
+            return new NotificationContent(NotificationKind.WavFallback, title, copied ? "Saved as WAV. Paste" : "Saved as WAV. MP3 failed.", copied ? pasteKeys : [],
                 NotificationPalette.Amber, NotificationVisual.Bars, accent, bars);
         }
 
@@ -143,12 +147,13 @@ internal static class NotificationStates
                 NotificationVisual.Bars, accent, bars);
         }
 
-        return new NotificationContent(partial ? NotificationKind.Partial : NotificationKind.Saved, title, "Copied. Paste", PasteKeys,
+        return new NotificationContent(partial ? NotificationKind.Partial : NotificationKind.Saved, title, "Copied. Paste", pasteKeys,
             partial ? NotificationPalette.Amber : accent, NotificationVisual.Bars, accent, bars);
     }
 
     /// <summary>The notification tells the user to paste: the clip really is on the clipboard.</summary>
-    public static bool SaysPaste(NotificationContent content) => ReferenceEquals(content.Keys, PasteKeys);
+    public static bool SaysPaste(NotificationContent content) =>
+        content.Keys.Count > 0 && content.Kind is NotificationKind.Saved or NotificationKind.Partial or NotificationKind.WavFallback;
 
     public static NotificationContent NoDevice() =>
         Icon(NotificationKind.NoDevice, "No audio device", "Nothing is being captured", NotificationPalette.Hot, NotificationVisual.Triangle, NotificationPalette.Hot);
