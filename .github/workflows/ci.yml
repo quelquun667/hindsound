@@ -32,11 +32,11 @@ jobs:
       - name: Build
         run: dotnet build Hindsound.slnx -c Release
 
-      # A hosted runner has no audio device, hence the filter; the tests that need Linux itself run in the job below.
+      # A hosted runner has no audio device, hence the filter; the tests that need Linux or macOS itself run in the jobs below.
       # It is also a shared machine: the tests that measure allocations or hold a real-time pace can be sensitive to its
       # load. Rerun before suspecting the code, and look at the test that failed if it fails twice.
       - name: Test
-        run: dotnet test Hindsound.slnx -c Release --no-build --filter "Category!=Device&Category!=Linux"
+        run: dotnet test Hindsound.slnx -c Release --no-build --filter "Category!=Device&Category!=Linux&Category!=Mac"
 
       - name: Test the release scripts
         run: ./tools/release/test-release-scripts.ps1
@@ -181,6 +181,130 @@ jobs:
         with:
           name: linux-dump
           path: ${{ runner.temp }}/linux-dump/
+          if-no-files-found: warn
+
+  # The macOS app on Apple silicon (macos-26): its native libraries built from pinned sources (and cached), the tests of the
+  # portable code, of the code Linux and macOS share (those of Hindsound.Linux.Tests that need no Linux) and of the Mac app;
+  # then Hindsound.app, assembled and signed ad hoc, draws every page of its window off screen at the scales 1 and 1.5 and
+  # proves its MP3. The fingerprints of the pages are printed, to compare with those of Linux.
+  mac:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore the native libraries
+        id: natives-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/natives
+          key: natives-macos-arm64-${{ hashFiles('tools/mac/build-natives.sh', 'tools/release/lame-exports.txt') }}
+
+      - name: Build the native libraries
+        if: steps.natives-cache.outputs.cache-hit != 'true'
+        run: bash tools/mac/build-natives.sh "$RUNNER_TEMP/natives-work" "$RUNNER_TEMP/natives"
+
+      - name: Check the native libraries
+        run: bash tools/mac/build-natives.sh --check "$RUNNER_TEMP/natives"
+
+      # The font script of Linux calls sha256sum, which macOS may not have: the same digest through shasum.
+      - name: Give the font script a sha256sum
+        run: |
+          if ! command -v sha256sum > /dev/null; then
+            mkdir -p "$RUNNER_TEMP/bin"
+            printf '#!/bin/sh\nexec shasum -a 256 "$@"\n' > "$RUNNER_TEMP/bin/sha256sum"
+            chmod +x "$RUNNER_TEMP/bin/sha256sum"
+            echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          fi
+
+      - name: Restore the fonts of the window
+        id: fonts-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/fonts
+          key: fonts-macos-${{ hashFiles('tools/linux/fetch-fonts.sh') }}
+
+      - name: Fetch the fonts of the window
+        if: steps.fonts-cache.outputs.cache-hit != 'true'
+        run: bash tools/linux/fetch-fonts.sh "$RUNNER_TEMP/fonts-work" "$RUNNER_TEMP/fonts"
+
+      - name: Check the fonts
+        run: bash tools/linux/fetch-fonts.sh --check "$RUNNER_TEMP/fonts"
+
+      - name: Build
+        run: |
+          dotnet build src/Hindsound.Mac/Hindsound.Mac.csproj -c Release
+          dotnet build tests/Hindsound.Core.Tests/Hindsound.Core.Tests.csproj -c Release
+          dotnet build tests/Hindsound.Linux.Tests/Hindsound.Linux.Tests.csproj -c Release
+          dotnet build tests/Hindsound.Mac.Tests/Hindsound.Mac.Tests.csproj -c Release
+
+      # The tests of the Mac load the dylibs next to them, as the app does outside a bundle, and the fonts from
+      # HINDSOUND_FONT_DIR. No "set -e": a failing project must not hide the others.
+      - name: Test
+        env:
+          HINDSOUND_FONT_DIR: ${{ runner.temp }}/fonts
+        run: |
+          cp "$RUNNER_TEMP"/natives/*.dylib tests/Hindsound.Mac.Tests/bin/Release/net10.0/
+          failed=0
+          for run in "Hindsound.Core.Tests|Category!=Device" "Hindsound.Linux.Tests|Category!=Device&Category!=Linux" \
+                     "Hindsound.Mac.Tests|Category!=Device"; do
+            project="${run%%|*}"
+            echo "::group::$project"
+            dotnet test "tests/$project/$project.csproj" -c Release --no-build --filter "${run#*|}" || failed=1
+            echo "::endgroup::"
+          done
+          exit $failed
+
+      - name: Assemble Hindsound.app
+        run: |
+          version=$(sed -nE 's/^## \[([0-9]+\.[0-9]+\.[0-9]+)\].*/\1/p' CHANGELOG.md | head -n 1)
+          bash packaging/mac/build-app.sh "$RUNNER_TEMP/natives" "$RUNNER_TEMP/fonts" "$RUNNER_TEMP/app" "$version"
+
+      # The app of the bundle, with its own dylibs and fonts (no HINDSOUND_FONT_DIR), settings of its own in which the
+      # microphone is disabled, and every option that keeps it from touching the runner's session.
+      - name: Draw the pages and prove the MP3 with the app
+        env:
+          OUT: ${{ runner.temp }}/mac-dump
+        run: |
+          program="$RUNNER_TEMP/app/Hindsound.app/Contents/MacOS/hindsound"
+          failed=0
+          for scale in 1 1.5; do
+            folder="$RUNNER_TEMP/mac-run-$scale"
+            mkdir -p "$folder" "$OUT/$scale"
+            printf '%s\n' '{"audio":{"micDeviceId":"disabled"}}' > "$folder/settings.json"
+            code=0
+            SDL_VIDEO_DRIVER=offscreen perl -e 'alarm shift; exec @ARGV' 300 "$program" --settings "$folder/settings.json" --no-mic --no-clipboard \
+              --no-hotkeys --offscreen --dump-settings "$OUT/$scale" --scale "$scale" || code=$?
+            sed "s/^/  log $scale: /" "$folder/settings.log" || true
+            count=$(find "$OUT/$scale" -maxdepth 1 -name '*.png' | wc -l | tr -d ' ')
+            echo "scale $scale: exit code $code, $count PNG files"
+            [ "$code" -eq 0 ] && [ "$count" -gt 0 ] || failed=1
+            (cd "$OUT/$scale" && shasum -a 256 *.png | sed "s/^/page $scale /")
+          done
+          mkdir -p "$RUNNER_TEMP/mac-mp3"
+          printf '%s\n' '{"audio":{"micDeviceId":"disabled"}}' > "$RUNNER_TEMP/mac-mp3/settings.json"
+          code=0
+          perl -e 'alarm shift; exec @ARGV' 120 "$program" --settings "$RUNNER_TEMP/mac-mp3/settings.json" --no-mic --no-clipboard --no-hotkeys \
+            --offscreen --prove-mp3 "$RUNNER_TEMP/mac-mp3/out" || code=$?
+          sed 's/^/  log mp3: /' "$RUNNER_TEMP/mac-mp3/settings.log" || true
+          echo "prove-mp3: exit code $code"
+          [ "$code" -eq 0 ] || failed=1
+          exit $failed
+
+      - name: Keep the pages of the window
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mac-dump
+          path: ${{ runner.temp }}/mac-dump/
           if-no-files-found: warn
 
   # The capture of one application, on each sound server a desktop runs: PulseAudio, and PipeWire through pipewire-pulse

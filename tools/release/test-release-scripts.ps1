@@ -1111,7 +1111,7 @@ try {
     Report 'the job that reports a failure is the last, without permission or token, and runs no script' (($reportJob -cmatch '\n    permissions: \{\}\n') -and -not ($reportJob -match 'GH_TOKEN|gh |\./tools/|uses:') -and -not ($reportJob.Substring(1) -cmatch '\n  [a-z-]+:\n'))
     Report 'the job that reports a failure waits for every other job' ($reportJob -cmatch '\n    needs: \[check, files, release\]\n')
     Report 'no step of release-files is conditional' (-not ($filesText -match '(?m)^\s+if:'))
-    Report 'the release runs the tests' ($releaseText -cmatch '- name: Test\n\s+run: dotnet test Hindsound\.slnx -c Release --filter "Category!=Device&Category!=Linux"')
+    Report 'the release runs the tests' ($releaseText -cmatch '- name: Test\n\s+run: dotnet test Hindsound\.slnx -c Release --filter "Category!=Device&Category!=Linux&Category!=Mac"')
     Report 'the release tests its scripts' ($releaseText -cmatch '- name: Test the release scripts\n\s+run: \./tools/release/test-release-scripts\.ps1')
     Report 'the release waits for the checks and for the files of Windows and Linux' (($releaseText -cmatch '\n  release:\n    needs: \[check, files\]\n') -and ($releaseText -cmatch '\n  files:\n    needs: check\n    permissions:\n      contents: read\n    uses: \./\.github/workflows/release-files\.yml\n    with:\n      version: \$\{\{ needs\.check\.outputs\.version \}\}\n'))
     Report 'the files of the release wait for the Windows and the Linux jobs' (($filesText -cmatch '\n  assemble:\n    needs: \[windows, linux\]\n') -and ($filesText -cmatch '\n  linux:\n    runs-on: ubuntu-22\.04\n'))
