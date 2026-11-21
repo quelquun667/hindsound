@@ -6,8 +6,8 @@ namespace Hindsound.Mac.Notification;
 
 /// <summary>
 /// What the NSWindow of the notification needs beyond SDL's flags: above the menu bar's level of floating windows, on every
-/// Space and over an app in full screen, out of the window cycle, still there when the app is not the active one, clicks that
-/// leave the app in front where it was (<see cref="NonActivatingClicks"/>), and clicks passing through it when the app asks.
+/// Space and over an app in full screen, out of the window cycle, still there when the app is not the active one, and clicks
+/// passing through it when the app asks.
 /// </summary>
 [SupportedOSPlatform("macos")]
 internal sealed unsafe class MacNotificationHook : INotificationWindowHook
@@ -25,16 +25,9 @@ internal sealed unsafe class MacNotificationHook : INotificationWindowHook
         Messages.SendUInt(nativeWindow, "setCollectionBehavior:", Behavior);
         Messages.SendInt(nativeWindow, "setLevel:", Level);
         Messages.SendBool(nativeWindow, "setHidesOnDeactivate:", false);
-        NonActivatingClicks.ApplyToTree(Messages.Send(nativeWindow, "contentView"));
     }
 
-    public void ClickThrough(nint nativeWindow, bool on)
-    {
-        Messages.SendBool(nativeWindow, "setIgnoresMouseEvents:", on);
-
-        // Again at each opening: the view of the renderer is added under the content view after the window is made.
-        NonActivatingClicks.ApplyToTree(Messages.Send(nativeWindow, "contentView"));
-    }
+    public void ClickThrough(nint nativeWindow, bool on) => Messages.SendBool(nativeWindow, "setIgnoresMouseEvents:", on);
 
     /// <summary>objc_msgSend cast to the exact prototype of each call, as the Objective-C calls of the app do.</summary>
     internal static class Messages
