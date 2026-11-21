@@ -12,7 +12,7 @@ permissions:
 jobs:
   probe:
     runs-on: macos-26
-    timeout-minutes: 50
+    timeout-minutes: 45
     defaults:
       run:
         shell: bash
@@ -22,25 +22,17 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up .NET
-        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
-        with:
-          dotnet-version: 10.0.x
-
       - name: Terrain
         run: bash tools/mac-probe/probe.sh terrain
 
       - name: BlackHole loopback driver
         run: bash tools/mac-probe/probe.sh blackhole
 
-      - name: Build SDL3, the audio library and the probe
+      - name: Build the Core Audio probe
         run: bash tools/mac-probe/probe.sh build
 
       - name: Sign
         run: bash tools/mac-probe/probe.sh sign
-
-      - name: Window, pasteboard, hotkey, login item, fonts
-        run: bash tools/mac-probe/probe.sh ui
 
       - name: Audio capture and permissions
         run: bash tools/mac-probe/probe.sh audio

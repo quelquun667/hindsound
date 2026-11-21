@@ -5,19 +5,22 @@
 # The phases run in this order, one step of the workflow each; a failed point is reported and the phase goes on:
 #   terrain    macOS version, architecture, SIP, the TCC databases (read, write, entries), the audio devices
 #   blackhole  the BlackHole 2ch loopback driver, made the default output and input
-#   build      SDL 3.2.30 from its pinned source (as tools/linux/build-sdl3.sh), the Objective-C audio library, the C#
-#              probe published for osx-arm64 twice (build 1 and build 2: different binaries)
+#   build      the Core Audio probe (native/capture.m) built twice: build 1 and build 2, different binaries
 #   sign       a throwaway code signing certificate in a temporary keychain; four .app: ad hoc and certificate, build 1
 #              and 2; their designated requirements, codesign --verify, spctl, and whether build 2 satisfies build 1's
-#   ui         the window, pasteboard, hotkey, login item and font fallback points, and a screenshot of the window
-#   audio      the capture matrix: without permission, with permission written into TCC, then build 2 in place of
-#              build 1 with no new permission; ad hoc and certificate
+#   audio      stage 1, from the plain program: which way of starting the IO returns (output and input IOProc, AudioQueue
+#              input, a global tap through three aggregates and three readers); stage 2, from the .app with the first
+#              way that delivered data: global tap without and with permission, one process, the microphone, then
+#              build 2 in place of build 1 with no new permission; certificate, then ad hoc
 #   summary    all the PROBE lines
 #   cleanup    deletes the temporary keychain and the certificate files
+# Every test runs in a process of its own with a limit per step: a hang ends that test only, with a sample of its stacks.
+# The window, pasteboard, hotkey, login item and font points were proven by the first version of this probe (commit
+# 498b7bd) and are no longer run.
 # The bash of macOS is 3.2: no associative arrays, no mapfile, no empty "${array[@]}" under set -u.
 set -uo pipefail
 
-phase="${1:?usage: probe.sh terrain|blackhole|build|sign|ui|audio|summary|cleanup}"
+phase="${1:?usage: probe.sh terrain|blackhole|build|sign|audio|summary|cleanup}"
 here="$(cd "$(dirname "$0")" && pwd)"
 W="${RUNNER_TEMP:-/tmp}/mac-probe"
 mkdir -p "$W"
@@ -27,9 +30,6 @@ readonly USER_TCC="$HOME/Library/Application Support/com.apple.TCC/TCC.db"
 readonly ADHOC_ID='com.hindsound.probe.adhoc'
 readonly CERT_ID='com.hindsound.probe.cert'
 readonly INSTALL_DIR="$HOME/Applications"
-readonly SDL_VERSION='3.2.30'
-readonly SDL_URL="https://github.com/libsdl-org/SDL/releases/download/release-$SDL_VERSION/SDL3-$SDL_VERSION.tar.gz"
-readonly SDL_SHA256='4c3b09330d866dc52eb65b66259a6684ad387252ca8c57901b3a2b534eb42e3d'
 
 probe() {
   local name="$1"
@@ -105,58 +105,21 @@ blackhole() {
 # --- build --------------------------------------------------------------------------------------------------------------
 
 build() {
-  local sdl="$W/sdl" rc sha config
-  rm -rf "$sdl"
-  mkdir -p "$sdl"
-  curl --fail --silent --show-error --location --retry 3 --output "$sdl/sdl.tar.gz" "$SDL_URL"
-  sha="$(shasum -a 256 "$sdl/sdl.tar.gz" | cut -d' ' -f1)"
-  if [ "$sha" != "$SDL_SHA256" ]; then
-    probe sdl.archive "BAD sha256=$sha expected=$SDL_SHA256"
-  else
-    probe sdl.archive "ok sha256=$sha"
-    tar -xzf "$sdl/sdl.tar.gz" -C "$sdl"
-    cmake -S "$sdl/SDL3-$SDL_VERSION" -B "$sdl/build" -DCMAKE_BUILD_TYPE=Release \
-      -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TEST_LIBRARY=OFF -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF -DSDL_INSTALL_DOCS=OFF \
-      -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 > "$sdl/configure.log" 2>&1
-    rc=$?
-    [ $rc -eq 0 ] || tail -n 40 "$sdl/configure.log"
-    cmake --build "$sdl/build" --parallel 4 > "$sdl/build.log" 2>&1
-    rc=$?
-    [ $rc -eq 0 ] || tail -n 40 "$sdl/build.log"
-    probe sdl.build "rc=$rc"
-    config="$(find "$sdl/build" -name SDL_build_config.h | head -n 1)"
-    probe sdl.cocoa "$(grep -E '^#define SDL_VIDEO_DRIVER_COCOA( |$)' "$config" 2>&1 | oneline)"
-    cp -L "$sdl/build/libSDL3.0.dylib" "$W/libSDL3.0.dylib"
-    probe sdl.lib "$(file -b "$W/libSDL3.0.dylib" 2>&1) $(otool -D "$W/libSDL3.0.dylib" 2>&1 | tail -n 1)"
-  fi
-
-  clang -fobjc-arc -Wall -dynamiclib -arch arm64 -mmacosx-version-min=14.2 \
-    -framework Foundation -framework CoreAudio -framework AVFoundation \
-    -install_name @rpath/libprobeaudio.dylib -o "$W/libprobeaudio.dylib" "$here/native/probe_audio.m" 2>&1
-  probe native.build "rc=$? sdk=$(xcrun --show-sdk-version 2>&1) clang=$(clang --version | head -n 1)"
-  clang -arch arm64 -mmacosx-version-min=14.2 -o "$W/probe_audio_cli" "$here/native/probe_audio_cli.c"     -L"$W" -lprobeaudio -Wl,-rpath,"$W" 2>&1
-  probe native.build_cli "rc=$?"
-
   local v
   for v in 1 2; do
-    rm -rf "$W/publish-v$v"
-    dotnet publish "$here/HindsoundProbe.csproj" -c Release -r osx-arm64 --self-contained \
-      -p:PublishSingleFile=true -p:ProbeBuild="$v" -o "$W/publish-v$v" > "$W/publish-v$v.log" 2>&1
-    rc=$?
-    [ $rc -eq 0 ] || tail -n 40 "$W/publish-v$v.log"
-    probe "dotnet.publish_v$v" "rc=$rc files=$(ls "$W/publish-v$v" 2>&1 | oneline)"
+    clang -fobjc-arc -Wall -arch arm64 -mmacosx-version-min=14.4 -DPROBE_BUILD="$v"       -framework Foundation -framework CoreAudio -framework AudioToolbox -framework AVFoundation       -o "$W/capture-v$v" "$here/native/capture.m" 2>&1
+    probe "native.build_v$v" "rc=$? sdk=$(xcrun --show-sdk-version 2>&1) clang=$(clang --version | head -n 1)"
   done
-  probe dotnet.v1_v2_differ "$(cmp -s "$W/publish-v1/HindsoundProbe" "$W/publish-v2/HindsoundProbe" && echo no || echo yes)"
+  probe native.v1_v2_differ "$(cmp -s "$W/capture-v1" "$W/capture-v2" && echo no || echo yes)"
 }
 
 # --- sign ---------------------------------------------------------------------------------------------------------------
 
-make_app() { # publish_dir bundle_id version app
-  local publish="$1" id="$2" version="$3" app="$4"
+make_app() { # build bundle_id version app
+  local build="$1" id="$2" version="$3" app="$4"
   rm -rf "$app"
   mkdir -p "$app/Contents/MacOS" "$app/Contents/Frameworks"
-  cp -R "$publish"/. "$app/Contents/MacOS/"
-  cp "$W/libSDL3.0.dylib" "$W/libprobeaudio.dylib" "$app/Contents/Frameworks/"
+  cp "$W/capture-v$build" "$app/Contents/MacOS/HindsoundProbe"
   sed -e "s/@ID@/$id/" -e "s/@VERSION@/$version/" "$here/Info.plist.in" > "$app/Contents/Info.plist"
 }
 
@@ -214,10 +177,10 @@ EOF
 
   local v kind app out
   for v in 1 2; do
-    make_app "$W/publish-v$v" "$ADHOC_ID" "$v" "$W/apps/adhoc-v$v/HindsoundProbe.app"
+    make_app "$v" "$ADHOC_ID" "$v" "$W/apps/adhoc-v$v/HindsoundProbe.app"
     sign_app "$W/apps/adhoc-v$v/HindsoundProbe.app" - > "$W/sign-adhoc-v$v.log" 2>&1
     probe "sign.adhoc_v$v" "rc=$? $(oneline < "$W/sign-adhoc-v$v.log")"
-    make_app "$W/publish-v$v" "$CERT_ID" "$v" "$W/apps/cert-v$v/HindsoundProbe.app"
+    make_app "$v" "$CERT_ID" "$v" "$W/apps/cert-v$v/HindsoundProbe.app"
     sign_app "$W/apps/cert-v$v/HindsoundProbe.app" "$hash" > "$W/sign-cert-v$v.log" 2>&1
     probe "sign.cert_v$v" "rc=$? $(oneline < "$W/sign-cert-v$v.log")"
   done
@@ -237,72 +200,21 @@ EOF
   done
 }
 
-# --- ui -----------------------------------------------------------------------------------------------------------------
+# --- audio --------------------------------------------------------------------------------------------------------------
 
-# Runs an .app and waits for it, with a watchdog. mode: open (through Launch Services: the app is its own responsible
-# process for TCC) or direct (a child of this shell: the runner is the responsible process).
-run_app() { # mode app outfile args...
-  local mode="$1" app="$2" out="$3"
-  shift 3
-  rm -f "$out" "$out.err"
-  if [ "$mode" = open ]; then
-    open -n -W --stdout "$out" --stderr "$out.err" "$app" --args "$@" &
-  elif [ "$mode" = cli ]; then
-    shift
-    "$W/probe_audio_cli" "$@" > "$out" 2> "$out.err" &
-  else
-    "$app/Contents/MacOS/HindsoundProbe" "$@" > "$out" 2> "$out.err" &
-  fi
-  local pid=$!
-  ( sleep 150; kill "$pid" 2> /dev/null ) &
-  local watchdog=$!
-  wait "$pid"
-  kill "$watchdog" 2> /dev/null
-  pkill -f "HindsoundProbe.app/Contents/MacOS/HindsoundProbe" 2> /dev/null
-  grep '^PROBE ' "$out" 2> /dev/null | tee -a "$W/probe.log"
-  grep -v '^PROBE ' "$out" 2> /dev/null
-  [ -s "$out.err" ] && sed 's/^/stderr: /' "$out.err" | tail -n 30
-  return 0
-}
+readonly STEP_LIMIT=12
+readonly CAPTURE_SECONDS=2
+# The ways to read a global tap, in order of preference: aggregate (null: main sub-device the Null Audio Device, whose
+# input is silent; taponly: the tap alone; out: main sub-device the default output, as AudioCap, but BlackHole's input
+# then also brings the tone) and reader.
+readonly COMBOS='null:ioproc null:auhal null:queue taponly:ioproc taponly:auhal taponly:queue out:ioproc'
+log_shown=0
 
 install_app() { # source destination
   rm -rf "$2"
   mkdir -p "$(dirname "$2")"
   ditto "$1" "$2"
 }
-
-ui() {
-  local app="$INSTALL_DIR/HindsoundProbe-ui.app" out="$W/run-ui.out" i
-  install_app "$W/apps/adhoc-v1/HindsoundProbe.app" "$app"
-  rm -f "$out"
-  # Started in the background so that the screenshot is taken while the window is up.
-  ( run_app open "$app" "$out" ui ui 12 > "$W/run-ui.console" 2>&1 ) &
-  local runner=$!
-  for i in $(seq 1 60); do
-    grep -q 'PROBE ui.window_ready' "$out" 2> /dev/null && break
-    sleep 0.5
-  done
-  sleep 2
-  screencapture -x "$W/window.png" > "$W/screencapture.log" 2>&1
-  probe ui.screencapture "rc=$? $(oneline < "$W/screencapture.log") $(sips -g pixelWidth -g pixelHeight "$W/window.png" 2>&1 | tail -n 2 | oneline)"
-  wait "$runner"
-  cat "$W/run-ui.console"
-  python3 -m venv "$W/venv" > /dev/null 2>&1 && "$W/venv/bin/pip" install --quiet pillow > /dev/null 2>&1
-  "$W/venv/bin/python" - "$W/window.png" <<'EOF' | tee -a "$W/probe.log"
-import collections, sys
-from PIL import Image
-image = Image.open(sys.argv[1]).convert('RGB')
-width, height = image.size
-pixels = list(image.getdata())
-target = (0xD4, 0xF5, 0x3C)
-exact = sum(1 for p in pixels if p == target)
-near = sum(1 for p in pixels if all(abs(p[i] - target[i]) <= 24 for i in range(3)))
-top = ' '.join('#%02X%02X%02X=%d' % (c[0], c[1], c[2], n) for c, n in collections.Counter(pixels).most_common(4))
-print(f'PROBE ui.screenshot size={width}x{height} lime_exact={exact} lime_near={near} top: {top}')
-EOF
-}
-
-# --- audio --------------------------------------------------------------------------------------------------------------
 
 make_sounds() {
   python3 - "$W" <<'EOF'
@@ -326,7 +238,7 @@ EOF
 tcc_rows() { # tag
   local which
   for which in system user; do
-    probe "$1.tcc_rows_$which" "$(sudo sqlite3 "$(tcc_db "$which")" "select service || ':' || client || ':auth=' || auth_value || ':reason=' || auth_reason || ':csreq=' || ifnull(length(csreq), 0) from access where client like 'com.hindsound.probe%' or client like '%HindsoundProbe%';" 2>&1 | oneline)"
+    probe "$1.tcc_rows_$which" "$(sudo sqlite3 "$(tcc_db "$which")" "select service || ':' || client || ':auth=' || auth_value || ':reason=' || auth_reason || ':csreq=' || ifnull(length(csreq), 0) from access where client like 'com.hindsound.probe%';" 2>&1 | oneline)"
   done
 }
 
@@ -348,37 +260,137 @@ grant() { # tag app id
   tcc_rows "$tag"
 }
 
-audio_run() { # tag app mode
-  local tag="$1" app="$2" mode="$3" tone silent
+# The frames of a sample that tell where a thread waits.
+stacks() { # sample-file
+  if [ ! -s "$1" ]; then
+    echo "(no sample written)"
+    return
+  fi
+  echo "--- stacks (sample): audio, TCC and wait frames"
+  grep -E 'AudioDeviceStart|AudioOutputUnitStart|AudioQueueStart|HALC_|HALB_|HAL_|AudioObject|AudioHardware|AUHAL|TCC|tcc_|semaphore|mach_msg|_dispatch_sync|pthread_cond|xpc_connection_send_message_with_reply_sync|runTest|readIOProc|readAUHAL|readQueue|tapTest|startTone|outIOProc' "$1" \
+    | sed -E -e 's/^[ +!:|]*//' -e 's/ +\[0x[0-9a-f,]+\]//' -e 's/  +/ /g' | awk '!seen[$0]++' | head -n 60
+}
+
+# The recent log of coreaudiod, tccd and the probe; at most three times per run, as log show is slow.
+recent_log() { # since
+  [ "$log_shown" -ge 3 ] && return
+  log_shown=$((log_shown + 1))
+  echo "--- log since $1: coreaudiod, tccd, the probe"
+  perl -e 'alarm 45; exec @ARGV' log show --start "$1" --style compact \
+    --predicate 'process == "coreaudiod" OR process == "tccd" OR process == "HindsoundProbe" OR process == "capture-v1"' 2> /dev/null \
+    | grep -iE 'tap|tcc|AudioCapture|aggregate|start|IOProc|error|fail|denied|prompt|timeout|wait' | cut -c1-260 | tail -n 40
+}
+
+# Runs one test in a process of its own while afplay plays the 1 kHz tone and the silence (their pids replace the words
+# TONE and SILENT in the arguments). mode: cli (the plain program, a child of this shell; the runner is then the process
+# TCC asks about) or open (the .app through Launch Services: its own responsible process for TCC). A test that hangs
+# prints "stuck", and its stacks and the recent log are printed.
+run_case() { # tag mode app hal-runloop test [args]
+  local tag="$1" mode="$2" app="$3" halrl="$4" out="$W/run-$1.out" tone silent pid arg since watchdog
+  shift 4
+  rm -f "$out" "$out.err" "$out.sample"
   afplay "$W/tone.wav" &
   tone=$!
   afplay "$W/silence.wav" &
   silent=$!
   sleep 1
-  echo "=== $tag ($mode, $app)"
-  run_app "$mode" "$app" "$W/run-$tag.out" audio "$tag" "$tone" "$silent" 2
+  local args=()
+  for arg in "$@"; do
+    case "$arg" in
+      TONE) args+=("$tone") ;;
+      SILENT) args+=("$silent") ;;
+      *) args+=("$arg") ;;
+    esac
+  done
+  since="$(date '+%Y-%m-%d %H:%M:%S')"
+  echo "=== $tag ($mode, hal run loop $halrl: ${args[*]})"
+  if [ "$mode" = open ]; then
+    open -n -W --stdout "$out" --stderr "$out.err" "$app" --args "$tag" "$STEP_LIMIT" "$CAPTURE_SECONDS" "$out.sample" \
+      "$halrl" "${args[@]}" &
+  else
+    "$W/capture-v1" "$tag" "$STEP_LIMIT" "$CAPTURE_SECONDS" "$out.sample" "$halrl" "${args[@]}" > "$out" 2> "$out.err" &
+  fi
+  pid=$!
+  ( sleep 60; kill "$pid"; pkill -f 'HindsoundProbe.app/Contents/MacOS/HindsoundProbe' ) > /dev/null 2>&1 &
+  watchdog=$!
+  wait "$pid"
+  kill "$watchdog" 2> /dev/null
+  pkill -f 'HindsoundProbe.app/Contents/MacOS/HindsoundProbe' 2> /dev/null
   kill "$tone" "$silent" 2> /dev/null
   wait "$tone" "$silent" 2> /dev/null
-  tcc_rows "$tag"
+  grep '^PROBE ' "$out" 2> /dev/null | tee -a "$W/probe.log"
+  grep -q '^PROBE ' "$out" 2> /dev/null || probe "$tag.no_output" "the process wrote nothing"
+  [ -s "$out.err" ] && sed 's/^/stderr: /' "$out.err" | tail -n 20
+  if grep -q "^PROBE $tag.stuck " "$out" 2> /dev/null; then
+    stacks "$out.sample"
+    recent_log "$since"
+  fi
+  return 0
+}
+
+works() { # tag: did its capture deliver data (sound or silence)
+  grep -qE '\.result (SIGNAL|SILENCE_EXACT_ZERO|SILENCE_NEAR_ZERO) ' "$W/run-$1.out" 2> /dev/null
 }
 
 audio() {
   make_sounds
-  # The same audio code from a plain C program, without .NET: if this one runs and the .app does not, .NET is the cause.
-  audio_run native_cli "$W/probe_audio_cli" cli
-  local kind id app
-  for kind in adhoc cert; do
+  local method='' combo agg reader kind id app
+
+  # Stage 1, from the plain program: does any start return, and which way of reading a tap delivers data.
+  run_case s1_perm cli - null perm
+  run_case s1_out_ioproc cli - null out_ioproc
+  run_case s1_in_ioproc cli - null in_ioproc
+  run_case s1_in_queue cli - null in_queue
+  for combo in $COMBOS; do
+    agg="${combo%%:*}"
+    reader="${combo##*:}"
+    run_case "s1_${agg}_${reader}" cli - null tap global "$agg" "$reader"
+    if [ -z "$method" ] && works "s1_${agg}_${reader}"; then method="$combo"; fi
+  done
+  run_case s1_taponly_ioproc_mainrl cli - main tap global taponly ioproc
+  probe audio.method_cli "${method:-none}"
+
+  # Stage 2, from the .app: certificate first (the update test that matters), then ad hoc.
+  for kind in cert adhoc; do
     if [ "$kind" = adhoc ]; then id="$ADHOC_ID"; else id="$CERT_ID"; fi
     app="$INSTALL_DIR/HindsoundProbe-$kind.app"
     install_app "$W/apps/$kind-v1/HindsoundProbe.app" "$app"
-    audio_run "${kind}_v1_noauth" "$app" open
-    [ "$kind" = adhoc ] && audio_run "${kind}_v1_direct" "$app" direct
+    run_case "${kind}_v1_noauth_perm" open "$app" null perm
+    if [ -n "$method" ]; then
+      run_case "${kind}_v1_noauth_excl" open "$app" null tap global_excl_self "${method%%:*}" "${method##*:}"
+    fi
+    [ "$kind" = cert ] && run_case "${kind}_v1_noauth_mic" open "$app" null in_ioproc
     grant "${kind}_v1" "$app" "$id"
-    audio_run "${kind}_v1_auth" "$app" open
+    run_case "${kind}_v1_auth_perm" open "$app" null perm
+    if [ -z "$method" ]; then
+      for combo in $COMBOS; do
+        run_case "${kind}_v1_auth_find_${combo%%:*}_${combo##*:}" open "$app" null tap global_excl_self "${combo%%:*}" "${combo##*:}"
+        if works "${kind}_v1_auth_find_${combo%%:*}_${combo##*:}"; then
+          method="$combo"
+          break
+        fi
+      done
+      probe "audio.method_app_$kind" "${method:-none}"
+    fi
+    if [ -n "$method" ]; then
+      agg="${method%%:*}"
+      reader="${method##*:}"
+      run_case "${kind}_v1_auth_excl" open "$app" null tap global_excl_self "$agg" "$reader"
+      if [ "$kind" = cert ]; then
+        run_case "${kind}_v1_auth_global" open "$app" null tap global "$agg" "$reader"
+        run_case "${kind}_v1_auth_proc_tone" open "$app" null tap proc "$agg" "$reader" TONE
+        run_case "${kind}_v1_auth_proc_silent" open "$app" null tap proc "$agg" "$reader" SILENT
+        run_case "${kind}_v1_auth_mic" open "$app" null in_ioproc
+      fi
+    fi
     # Build 2 in place of build 1, same path and bundle id, and no new permission.
     install_app "$W/apps/$kind-v2/HindsoundProbe.app" "$app"
     probe "${kind}_v2.installed" "$(dr_of "$app")"
-    audio_run "${kind}_v2_noregrant" "$app" open
+    run_case "${kind}_v2_perm" open "$app" null perm
+    if [ -n "$method" ]; then
+      run_case "${kind}_v2_excl" open "$app" null tap global_excl_self "${method%%:*}" "${method##*:}"
+    fi
+    tcc_rows "${kind}_end"
   done
 }
 
@@ -397,7 +409,7 @@ cleanup() {
 }
 
 case "$phase" in
-  terrain | blackhole | build | sign | ui | audio | summary | cleanup) "$phase" ;;
+  terrain | blackhole | build | sign | audio | summary | cleanup) "$phase" ;;
   *) echo "Unknown phase: $phase" >&2; exit 2 ;;
 esac
 exit 0
