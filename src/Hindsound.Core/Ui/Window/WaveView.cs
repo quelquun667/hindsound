@@ -332,7 +332,7 @@ internal static class WaveView
 
     private static string SourceName(string? app) => app is null ? WholePc : AppName(app);
 
-    private static string AppName(string exe) => Path.GetFileNameWithoutExtension(exe);
+    private static string AppName(string exe) => AudioAppList.NameOf(exe);
 
     private static int SecondsOf(long frames) => NotificationStates.WholeSeconds(TimeSpan.FromSeconds((double)frames / Rate));
 
