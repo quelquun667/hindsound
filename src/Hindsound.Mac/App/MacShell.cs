@@ -1,6 +1,7 @@
 using System.Runtime.Versioning;
 using Hindsound.App;
 using Hindsound.Library;
+using Hindsound.Mac.Desktop;
 using Hindsound.Mac.Window;
 using Hindsound.Ui;
 using Hindsound.Unix.App;
@@ -35,18 +36,18 @@ internal sealed class MacShell(Action<string> log) : IAppShell
 
     public ITrayIcon NewTray(IAppLoop loop) => throw Later("the icon of the menu bar", "M2b");
 
-    public ISessionEnd SessionEnd(IAppLoop loop) => throw Later("the end of the session", "M2b");
+    public ISessionEnd SessionEnd(IAppLoop loop) => new MacSessionEnd(loop, log);
 
-    public IClipboardFiles Clipboard(IAppLoop loop) => throw Later("the pasteboard", "M2b");
+    public IClipboardFiles Clipboard(IAppLoop loop) => new MacPasteboard(log);
 
     public ISettingsWindow? NewSettingsWindow(SettingsWindowRequest request) =>
         HasWindow && _loop is { } loop ? UnixSettingsWindow.Open(request, loop, MacText.Create) : null;
 
-    public IFolderShell NewFolderShell() => throw Later("the Finder", "M2b");
+    public IFolderShell NewFolderShell() => new MacOpen(log);
 
     public IPreviewPlayer NewPreviewPlayer() => throw Later("the listening", "M3");
 
-    public IRecycleBin NewRecycleBin(Action<string> journal) => throw Later("the Trash", "M2b");
+    public IRecycleBin NewRecycleBin(Action<string> journal) => new MacTrash(journal);
 
     public IClipDecoder NewClipDecoder() => new UnixClipDecoder();
 

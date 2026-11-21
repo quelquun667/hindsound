@@ -1,6 +1,7 @@
 using System.Runtime.Versioning;
 using Hindsound.App;
 using Hindsound.Mac.App;
+using Hindsound.Mac.Desktop;
 using Hindsound.Unix.Export;
 using Hindsound.Unix.Updates;
 using Hindsound.Unix.Window;
@@ -44,6 +45,8 @@ internal static class MacPlatform
             PlatformDefaults.UpdateNetwork = () => new UnixHttpTransport(log);
             PlatformDefaults.Mp3Encoder = LameMp3Encoder.Open;
             PlatformDefaults.Shell = () => new MacShell(log);
+            PlatformDefaults.RunKey = () => new LaunchAgentEntry();
+            PlatformDefaults.Desktop = () => MacDesktop.Parts(log);
             _installed = true;
         }
     }
