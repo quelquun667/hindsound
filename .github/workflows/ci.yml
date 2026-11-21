@@ -563,6 +563,49 @@ jobs:
           prove denied 150 --prove-capture "$folder" --denied
           grep -qx pass "$folder/granted.result" && grep -qx pass "$folder/denied.result"
 
+      # The listening of a clip: the app plays a 1 kHz tone it encoded in MP3 with its own player (an AudioQueue on the
+      # default output) and hears it at the same time on the input of BlackHole 2ch, made the default output and input (a
+      # loopback device: its input gives back what its output plays). The microphone right of the bundle is written in both
+      # TCC databases before any device opens: the input of BlackHole is opened, and a right not decided leaves coreaudiod
+      # stuck for every client. The app says the level, the dominant frequency, the silence after Stop and after the end.
+      - name: Play a clip with the app and hear it on BlackHole
+        if: ${{ !cancelled() && steps.assemble.outcome == 'success' }}
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+          HOMEBREW_NO_ENV_HINTS: 1
+        run: |
+          app="$RUNNER_TEMP/app/Hindsound.app"
+          program="$app/Contents/MacOS/hindsound"
+          folder="$RUNNER_TEMP/mac-preview"
+          mkdir -p "$folder"
+          printf '%s\n' '{"audio":{"micDeviceId":"disabled"}}' > "$folder/settings.json"
+          requirement=$(codesign -d -r- "$app" 2>&1 | sed -n 's/^#* *designated => //p' | head -n 1)
+          csreq -r "=$requirement" -b "$folder/csreq.bin"
+          hex=$(xxd -p "$folder/csreq.bin" | tr -d '\n')
+          for db in "/Library/Application Support/com.apple.TCC/TCC.db" "$HOME/Library/Application Support/com.apple.TCC/TCC.db"; do
+            sudo sqlite3 "$db" "insert or replace into access (service, client, client_type, auth_value, auth_reason, auth_version, csreq, flags, last_modified) values ('kTCCServiceMicrophone', 'io.github.quelquun667.hindsound', 0, 2, 3, 1, X'$hex', 0, CAST(strftime('%s','now') AS INTEGER));"
+            echo "tcc: kTCCServiceMicrophone in $db: $(sudo sqlite3 "$db" "select auth_value from access where service = 'kTCCServiceMicrophone' and client = 'io.github.quelquun667.hindsound';")"
+          done
+          sudo killall tccd || true
+          brew install --cask blackhole-2ch > "$folder/brew-blackhole.log" 2>&1 || { tail -n 20 "$folder/brew-blackhole.log"; exit 1; }
+          brew install switchaudio-osx > "$folder/brew-switchaudio.log" 2>&1 || { tail -n 20 "$folder/brew-switchaudio.log"; exit 1; }
+          sudo killall coreaudiod || true
+          for _ in $(seq 1 60); do
+            SwitchAudioSource -a -t output 2> /dev/null | grep -q 'BlackHole 2ch' && break
+            sleep 0.5
+          done
+          for type in output input system; do
+            SwitchAudioSource -t "$type" -s 'BlackHole 2ch' > /dev/null
+            echo "default $type: $(SwitchAudioSource -t "$type" -c)"
+          done
+          code=0
+          perl -e 'alarm shift; exec @ARGV' 120 "$program" --settings "$folder/settings.json" --no-mic --no-clipboard --no-hotkeys \
+            --offscreen --prove-preview "$folder/out" || code=$?
+          sed 's/^/  log preview: /' "$folder/settings.log" || true
+          echo "prove-preview: exit code $code"
+          [ "$code" -eq 0 ] && grep -q "preview-proof result pass" "$folder/settings.log"
+
       - name: Keep the pages of the window
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

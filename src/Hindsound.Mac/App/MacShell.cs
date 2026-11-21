@@ -2,6 +2,7 @@ using System.Runtime.Versioning;
 using Hindsound.App;
 using Hindsound.Library;
 using Hindsound.Mac.Audio.Devices;
+using Hindsound.Mac.Audio.Playback;
 using Hindsound.Mac.Desktop;
 using Hindsound.Mac.Notification;
 using Hindsound.Mac.Tray;
@@ -55,7 +56,8 @@ internal sealed class MacShell(Action<string> log) : IAppShell
 
     public IFolderShell NewFolderShell() => new MacOpen(log);
 
-    public IPreviewPlayer NewPreviewPlayer() => throw Later("the listening", "M3");
+    /// <summary>The listening of a clip: an AudioQueue per track on the default output, out of the tap of the PC's sound.</summary>
+    public IPreviewPlayer NewPreviewPlayer() => new MacPreviewPlayer(new UnixClipDecoder(), new AudioQueueOutput(), log);
 
     public IRecycleBin NewRecycleBin(Action<string> journal) => new MacTrash(journal);
 

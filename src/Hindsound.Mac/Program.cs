@@ -3,6 +3,7 @@ using Hindsound.App;
 using Hindsound.Mac.App;
 using Hindsound.Mac.Audio.Capture;
 using Hindsound.Mac.Audio.Devices;
+using Hindsound.Mac.Audio.Playback;
 using Hindsound.Mac.Notification;
 using Hindsound.Mac.Window;
 using Hindsound.Unix.App;
@@ -51,6 +52,11 @@ internal static class Program
             journal.Write("unobserved task exception: " + e.Exception);
             e.SetObserved();
         };
+
+        if (MacPreviewProof.Folder(args) is { } previewProof)
+        {
+            return MacPreviewProof.Run(previewProof, journal.Write);
+        }
 
         if (options.DumpSettingsFolder is not null)
         {
