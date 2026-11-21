@@ -20,6 +20,7 @@ internal static unsafe class SdlFolderPicker
     /// </param>
     /// <param name="error">SDL's message when the dialog failed, else null.</param>
     [SupportedOSPlatform("linux")]
+    [SupportedOSPlatform("macos")]
     public static string? Pick(nint window, string startFolder, Action pumpOnce, out string? error)
     {
         var answer = new Answer();
@@ -50,6 +51,7 @@ internal static unsafe class SdlFolderPicker
     }
 
     [SupportedOSPlatform("linux")]
+    [SupportedOSPlatform("macos")]
     public static string? Pick(nint window, string startFolder, Action pumpOnce) => Pick(window, startFolder, pumpOnce, out _);
 
     /// <summary>What the dialog said. Written by the callback, perhaps on another thread, then <see cref="Done"/> last.</summary>
@@ -89,6 +91,7 @@ internal static unsafe class SdlFolderPicker
     }
 
     [SupportedOSPlatform("linux")]
+    [SupportedOSPlatform("macos")]
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnAnswer(nint userdata, byte** list, int filter)
     {

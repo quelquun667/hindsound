@@ -31,7 +31,7 @@ public sealed class FreeTypeTextStartTests : IDisposable
     {
         File.WriteAllBytes(Path.Combine(_folder, "Selawik-Regular.ttf"), []);
 
-        var error = Assert.Throws<TextUnavailableException>(() => new FreeTypeText(_folder));
+        var error = Assert.Throws<TextUnavailableException>(() => LinuxText.Create(_folder));
 
         Assert.Contains("BarlowSemiCondensed-SemiBold.ttf", error.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(_folder, error.Message, StringComparison.OrdinalIgnoreCase);
@@ -45,7 +45,7 @@ public sealed class FreeTypeTextStartTests : IDisposable
             File.WriteAllBytes(Path.Combine(_folder, file), [1, 2, 3]);
         }
 
-        var error = Assert.Throws<TextUnavailableException>(() => new FreeTypeText(_folder));
+        var error = Assert.Throws<TextUnavailableException>(() => LinuxText.Create(_folder));
 
         // Windows has no FreeType: the library is named. Linux has it, and the first font it opens is the headings'.
         Assert.Contains(OperatingSystem.IsWindows() ? "libfreetype.so.6" : "BarlowSemiCondensed-SemiBold.ttf", error.Message, StringComparison.Ordinal);

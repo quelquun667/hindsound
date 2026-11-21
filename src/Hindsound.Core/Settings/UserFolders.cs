@@ -38,6 +38,24 @@ internal static class UserFolders
     public static string FallbackFor(Environment.SpecialFolder folder) =>
         Path.Combine(Path.GetFullPath(Path.GetTempPath()), "Hindsound", folder.ToString());
 
+    /// <summary>
+    /// The folder of the log on macOS, <c>~/Library/Logs/&lt;parts&gt;</c>, where Console.app looks; null elsewhere, where the
+    /// log stays beside the other files of the app.
+    /// </summary>
+    public static string? MacLogs(params string[] parts) => MacLogs(OperatingSystem.IsMacOS(), Resolve, parts);
+
+    /// <param name="mac">Whether this is macOS. For tests.</param>
+    /// <param name="resolve">Gives the path of a special folder. For tests.</param>
+    internal static string? MacLogs(bool mac, Func<Environment.SpecialFolder, string?> resolve, params string[] parts) =>
+        mac ? Under(Environment.SpecialFolder.UserProfile, resolve, ["Library", "Logs", .. parts]) : null;
+
+    /// <summary>
+    /// What the system calls the folder, but for one choice of macOS: .NET gives ~/.config for the roaming data there, as on
+    /// Linux, where a Mac app keeps its settings in ~/Library/Application Support (what .NET gives for the local data).
+    /// </summary>
+    internal static Environment.SpecialFolder OnThisSystem(Environment.SpecialFolder folder, bool mac) =>
+        mac && folder == Environment.SpecialFolder.ApplicationData ? Environment.SpecialFolder.LocalApplicationData : folder;
+
     private static string Resolve(Environment.SpecialFolder folder) =>
-        Environment.GetFolderPath(folder, Environment.SpecialFolderOption.DoNotVerify);
+        Environment.GetFolderPath(OnThisSystem(folder, OperatingSystem.IsMacOS()), Environment.SpecialFolderOption.DoNotVerify);
 }

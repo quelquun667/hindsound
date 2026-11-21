@@ -4,7 +4,7 @@ using Hindsound.App;
 
 namespace Hindsound.Unix.App;
 
-/// <summary>Where the single instance of Linux lives: a lock file, held by the running instance, and the socket it listens on.</summary>
+/// <summary>Where the single instance lives, on Linux and macOS: a lock file, held by the running instance, and the socket it listens on.</summary>
 /// <param name="Folder">The folder of both.</param>
 /// <param name="OwnFolder">The folder is the app's own, made for it, readable by this user only.</param>
 /// <param name="Socket">The Unix socket a second launch connects to.</param>
@@ -13,6 +13,45 @@ internal sealed record InstancePlace(string Folder, bool OwnFolder, string Socke
 {
     /// <summary>The longest path a Unix socket takes: sun_path holds 108 bytes, the last one a NUL.</summary>
     public const int MaxSocketBytes = 107;
+
+    /// <summary>The same on macOS, whose sun_path holds 104 bytes.</summary>
+    public const int MaxMacSocketBytes = 103;
+
+    /// <summary>The temporary folder of the user on macOS (/var/folders/.../T/), readable by this user only.</summary>
+    public const string MacTemporaryVariable = "TMPDIR";
+
+    /// <summary>The place of this system: <see cref="ForMac"/> on macOS, <see cref="For"/> elsewhere.</summary>
+    public static InstancePlace? ForThisSystem(Func<string, string?> environment, string? home, string key) =>
+        OperatingSystem.IsMacOS() ? ForMac(environment, home, key) : For(environment, home, key);
+
+    /// <summary>
+    /// The place on macOS, which has no XDG_RUNTIME_DIR: the user's own temporary folder (<c>TMPDIR</c>, under /var/folders,
+    /// private to the user and emptied at restart), else a folder of the app in ~/Library/Caches. Null when no folder is
+    /// known, or when the path is too long for a socket of macOS.
+    /// </summary>
+    public static InstancePlace? ForMac(Func<string, string?> environment, string? home, string key)
+    {
+        string folder;
+        bool own;
+        if (Absolute(environment(MacTemporaryVariable)) is { } temporary)
+        {
+            folder = temporary;
+            own = false;
+        }
+        else if (Absolute(home) is { } h)
+        {
+            folder = Join(Join(Join(h, "Library"), "Caches"), "Hindsound");
+            own = true;
+        }
+        else
+        {
+            return null;
+        }
+
+        var name = FileNameFor(key);
+        var socket = Join(folder, name + ".sock");
+        return Encoding.UTF8.GetByteCount(socket) > MaxMacSocketBytes ? null : new InstancePlace(folder, own, socket, Join(folder, name + ".lock"));
+    }
 
     public const string RuntimeVariable = "XDG_RUNTIME_DIR";
 

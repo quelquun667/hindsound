@@ -78,7 +78,7 @@ public class SingleInstanceTests
         Assert.NotEqual(SingleInstance.NameFor(upper, ignoreCase: false), SingleInstance.NameFor(lower, ignoreCase: false));
 
         // The rule of the system running: Windows ignores case and the others do not.
-        Assert.Equal(OperatingSystem.IsWindows(), SingleInstance.NameFor(upper) == SingleInstance.NameFor(lower));
+        Assert.Equal(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS(), SingleInstance.NameFor(upper) == SingleInstance.NameFor(lower));
     }
 }
 

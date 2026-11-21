@@ -1,15 +1,15 @@
 using System.Runtime.InteropServices;
 using Hindsound.Ui;
 using Hindsound.Ui.Window;
-using Hindsound.Unix.Window.Text;
-using static Hindsound.Linux.Window.Text.TextNative;
+using static Hindsound.Unix.Window.Text.TextNative;
 
-namespace Hindsound.Linux.Window.Text;
+namespace Hindsound.Unix.Window.Text;
 
 /// <summary>
-/// The text of the window on Linux: the fonts the app ships, placed by HarfBuzz (kerning and ligatures of the font), drawn
+/// The text of the window on Linux and macOS: the fonts the app ships, placed by HarfBuzz (kerning and ligatures of the font), drawn
 /// by FreeType in grayscale, with the measures of the Windows text (see <see cref="ICanvasText"/>), so every layout of the
-/// pages falls where it falls on Windows. A character the fonts lack comes from a font of the system that fontconfig finds.
+/// pages falls where it falls on Windows. A character the fonts lack comes from a font of the system that the
+/// <see cref="IFontFallback"/> of the system finds: fontconfig on Linux, CoreText on macOS.
 /// <para>
 /// Hinting is along y only, as DirectWrite's grayscale text does: baselines, x-heights and the heights of the horizontal
 /// stems snap to whole pixels, so the letters stay crisp at 12 to 14 px, while x, the widths and the advances stay the design
@@ -49,7 +49,7 @@ internal sealed unsafe class FreeTypeText : ICanvasText
     private readonly nint _buffer;
     private readonly FontFile[] _faces = new FontFile[Fonts.Length];
     private readonly List<FontFile> _fallbacks = [];
-    private readonly FontFallback _fallback = new();
+    private readonly IFontFallback _fallback;
     private readonly Dictionary<(Face, int Em, string Text), float> _measures = [];
     private readonly Dictionary<(Face, int CodePoint), FontFile?> _choices = [];
     private readonly Dictionary<(int File, int Em, uint Glyph, int Subpixel), Glyph> _glyphs = [];
@@ -57,31 +57,45 @@ internal sealed unsafe class FreeTypeText : ICanvasText
     private int _nextId = Fonts.Length;
     private bool _disposed;
 
-    /// <summary>The fonts of <see cref="FontDirectory"/>.</summary>
-    public FreeTypeText()
-        : this(FontDirectory(Environment.GetEnvironmentVariable(FontDirectoryVariable), AppContext.BaseDirectory))
+    /// <summary>The fonts of <see cref="FontDirectory"/> next to the program.</summary>
+    /// <param name="fallback">Finds the fonts of the system for the characters the fonts of the app lack; disposed with this text.</param>
+    public FreeTypeText(IFontFallback fallback)
+        : this(FontDirectory(Environment.GetEnvironmentVariable(FontDirectoryVariable), AppContext.BaseDirectory), fallback)
     {
     }
 
+    /// <param name="fontDirectory">The folder of the four fonts of the app.</param>
+    /// <param name="fallback">Finds the fonts of the system for the characters the fonts of the app lack; disposed with this text.</param>
     /// <exception cref="TextUnavailableException">A font of the app is missing or unreadable, or a library cannot be loaded.</exception>
-    public FreeTypeText(string fontDirectory)
+    public FreeTypeText(string fontDirectory, IFontFallback fallback)
     {
+        _fallback = fallback;
         foreach (var (_, file, name, _) in Fonts)
         {
             if (!File.Exists(Path.Combine(fontDirectory, file)))
             {
+                fallback.Dispose();
                 throw new TextUnavailableException($"{Capital(name)} ({file}) is missing.");
             }
         }
 
-        foreach (var library in new[] { FreeType, HarfBuzz, Fontconfig })
+        foreach (var library in new[] { FreeType, HarfBuzz })
         {
-            if (!NativeLibrary.TryLoad(library, out var handle))
+            if (!UnixLibraries.TryLoad(library))
             {
+                fallback.Dispose();
                 throw new TextUnavailableException($"{library} cannot be loaded.");
             }
+        }
 
-            NativeLibrary.Free(handle);
+        try
+        {
+            fallback.CheckLoadable();
+        }
+        catch
+        {
+            fallback.Dispose();
+            throw;
         }
 
         try

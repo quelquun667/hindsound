@@ -5,6 +5,7 @@ using System.Runtime.Versioning;
 using Hindsound.Linux.Window.Text;
 using Hindsound.Ui;
 using Hindsound.Ui.Window;
+using Hindsound.Unix.Window.Text;
 using Xunit.Abstractions;
 
 namespace Hindsound.Linux.Tests.Window.Text;
@@ -67,7 +68,7 @@ public sealed unsafe class FreeTypeTextOnLinuxTests(ITestOutputHelper output)
     [Fact]
     public void Selawik_and_Cascadia_Mono_keep_the_widths_of_the_Windows_text_within_3_percent()
     {
-        using var text = new FreeTypeText(Fonts);
+        using var text = LinuxText.Create(Fonts);
         var worst = new Dictionary<Face, (double Gap, string Where)>();
         var failures = new List<string>();
         foreach (var row in WindowsTextWidths.Rows)
@@ -111,7 +112,7 @@ public sealed unsafe class FreeTypeTextOnLinuxTests(ITestOutputHelper output)
     [Fact]
     public void The_line_height_follows_the_rule_of_the_Windows_text_from_the_fonts_own_tables()
     {
-        using var text = new FreeTypeText(Fonts);
+        using var text = LinuxText.Create(Fonts);
         foreach (var row in WindowsTextWidths.Rows)
         {
             var font = new FontSpec(row.Face, row.Size);
@@ -134,7 +135,7 @@ public sealed unsafe class FreeTypeTextOnLinuxTests(ITestOutputHelper output)
     [Fact]
     public void Measures_are_unrounded_count_trailing_spaces_and_kern()
     {
-        using var text = new FreeTypeText(Fonts);
+        using var text = LinuxText.Create(Fonts);
         var body = new FontSpec(Face.Body, 13);
 
         Assert.Equal(0, text.Measure(body, string.Empty));
@@ -185,7 +186,7 @@ public sealed unsafe class FreeTypeTextOnLinuxTests(ITestOutputHelper output)
     [Fact]
     public void The_offsets_read_in_FreeTypes_structures_match_the_library()
     {
-        using var text = new FreeTypeText(Fonts);
+        using var text = LinuxText.Create(Fonts);
 
         var (slotOfFace, pixelMode, grays, width, rows) = text.ProbeSlot(new FontSpec(Face.Body, 13), 'H');
 
@@ -199,7 +200,7 @@ public sealed unsafe class FreeTypeTextOnLinuxTests(ITestOutputHelper output)
     [Fact]
     public void Text_is_drawn_in_its_line_with_smooth_edges_and_the_baseline_on_a_whole_pixel()
     {
-        using var text = new FreeTypeText(Fonts);
+        using var text = LinuxText.Create(Fonts);
         var body = new FontSpec(Face.Body, 13);
         var line = (int)text.LineHeight(body);
         var bitmap = new Bitmap(120, 40);
@@ -237,7 +238,7 @@ public sealed unsafe class FreeTypeTextOnLinuxTests(ITestOutputHelper output)
     [Fact]
     public void A_fraction_of_x_moves_the_letters_by_a_fraction_of_a_pixel()
     {
-        using var text = new FreeTypeText(Fonts);
+        using var text = LinuxText.Create(Fonts);
         var body = new FontSpec(Face.Body, 13);
         var whole = new Bitmap(60, 30);
         var half = new Bitmap(60, 30);
@@ -259,7 +260,7 @@ public sealed unsafe class FreeTypeTextOnLinuxTests(ITestOutputHelper output)
     [InlineData(0f, 100f)]
     public void Text_across_any_edge_draws_only_on_the_bitmap(float x, float top)
     {
-        using var text = new FreeTypeText(Fonts);
+        using var text = LinuxText.Create(Fonts);
         var bitmap = new Bitmap(40, 16);
 
         bitmap.Draw(text, new FontSpec(Face.Title, 22), "Wg\u00C9jy", x, top, 0xFFFFFF);
@@ -271,7 +272,7 @@ public sealed unsafe class FreeTypeTextOnLinuxTests(ITestOutputHelper output)
     [Fact]
     public void A_character_the_fonts_lack_comes_from_a_font_of_the_system_without_a_crash()
     {
-        using var text = new FreeTypeText(Fonts);
+        using var text = LinuxText.Create(Fonts);
         var body = new FontSpec(Face.Body, 13);
         const string name = "Clip \u65E5\u672C\u8A9E \U0001F3B5";
         var bitmap = new Bitmap(200, 30);
@@ -289,7 +290,7 @@ public sealed unsafe class FreeTypeTextOnLinuxTests(ITestOutputHelper output)
     [Fact]
     public void The_glyph_cache_stays_within_its_bound()
     {
-        using var text = new FreeTypeText(Fonts);
+        using var text = LinuxText.Create(Fonts);
         var bitmap = new Bitmap(400, 200);
         const string all = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
@@ -306,7 +307,7 @@ public sealed unsafe class FreeTypeTextOnLinuxTests(ITestOutputHelper output)
     [Fact]
     public void Dispose_frees_once_and_a_disposed_text_refuses_work()
     {
-        var text = new FreeTypeText(Fonts);
+        var text = LinuxText.Create(Fonts);
         text.Measure(new FontSpec(Face.Body, 13), "Settings");
 
         text.Dispose();
@@ -320,7 +321,7 @@ public sealed unsafe class FreeTypeTextOnLinuxTests(ITestOutputHelper output)
     [Fact]
     public void Every_scene_of_the_pages_draws_its_text()
     {
-        var counting = new CountingText(new FreeTypeText(Fonts));
+        var counting = new CountingText(LinuxText.Create(Fonts));
         var scenes = new List<string>();
         var memory = new List<nint>();
         try

@@ -90,7 +90,7 @@ internal static class SettingsMapping
 
     private static bool IsDefaultFolder(string folder) => OperatingSystem.IsWindows()
         ? string.Equals(folder.Replace('/', '\\').TrimEnd('\\'), ExportSettings.DefaultFolder, StringComparison.OrdinalIgnoreCase)
-        : string.Equals(folder.TrimEnd('/'), ExportSettings.DefaultFolder, StringComparison.Ordinal);
+        : string.Equals(folder.TrimEnd('/'), ExportSettings.DefaultFolder, Hindsound.Library.PathRules.Comparison);
 
     /// <summary>The mode the updater runs on. The settings have been normalized, so anything else is a value set in code: no network.</summary>
     public static UpdateMode ToUpdateMode(GeneralSettings general) => general.Updates?.Mode switch

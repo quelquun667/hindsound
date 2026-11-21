@@ -52,10 +52,11 @@ internal static class SingleInstance
     /// <summary>
     /// A real launch keeps the plain name. A run with its own settings file gets a name of its own, so it can run beside the
     /// user's copy, and two runs on one file still refuse each other. The name has to be the same from one process to the next,
-    /// which rules out <see cref="string.GetHashCode()"/>; Windows paths ignore case, so must the name, and no other system's
-    /// do. It is a key, not a file name: a channel that needs a shorter or a per-user one derives it from this.
+    /// which rules out <see cref="string.GetHashCode()"/>; Windows and macOS paths ignore case (<see cref="Hindsound.Library.PathRules"/>),
+    /// so must the name there, and on Linux it does not. It is a key, not a file name: a channel that needs a shorter or a
+    /// per-user one derives it from this.
     /// </summary>
-    public static string NameFor(AppOptions options) => NameFor(options, ignoreCase: OperatingSystem.IsWindows());
+    public static string NameFor(AppOptions options) => NameFor(options, ignoreCase: Hindsound.Library.PathRules.IgnoresCase);
 
     /// <summary><see cref="NameFor(AppOptions)"/> with the case rule of the path given, for a test on any system.</summary>
     public static string NameFor(AppOptions options, bool ignoreCase)

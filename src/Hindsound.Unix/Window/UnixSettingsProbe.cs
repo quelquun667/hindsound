@@ -9,6 +9,7 @@ namespace Hindsound.Unix.Window;
 /// window's own queue. Never the real keyboard, and never another program's window: the PC may be in use.
 /// </summary>
 [SupportedOSPlatform("linux")]
+[SupportedOSPlatform("macos")]
 internal sealed class UnixSettingsProbe : ISettingsProbe
 {
     private const uint ScancodeMask = 1u << 30;

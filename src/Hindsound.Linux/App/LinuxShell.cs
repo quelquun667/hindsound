@@ -51,7 +51,7 @@ internal sealed class LinuxShell : IAppShell
     public IClipboardFiles Clipboard(IAppLoop loop) => new LinuxClipboard(log);
 
     public ISettingsWindow? NewSettingsWindow(SettingsWindowRequest request) =>
-        HasWindow && _loop is { } loop ? OpenOrNone(() => UnixSettingsWindow.Open(request, loop, () => new FreeTypeText()), log) : null;
+        HasWindow && _loop is { } loop ? OpenOrNone(() => UnixSettingsWindow.Open(request, loop, LinuxText.Create), log) : null;
 
     /// <summary>
     /// SDL loads, yet its video can still fail to start or make the window: no display reachable, no driver for the

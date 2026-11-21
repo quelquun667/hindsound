@@ -26,10 +26,26 @@ internal sealed class UnixLoop : IAppLoop
     private bool _quit;
     private bool _disposed;
     private Thread? _running;
+    private readonly ILoopPump? _idle;
     private ILoopPump? _pump;
 
     /// <param name="nowMs">The clock of the timers, in milliseconds. A monotonic count by default.</param>
-    public UnixLoop(Func<long>? nowMs = null) => _nowMs = nowMs ?? (static () => Environment.TickCount64);
+    public UnixLoop(Func<long>? nowMs = null)
+        : this(nowMs, idle: null)
+    {
+    }
+
+    /// <param name="nowMs">The clock of the timers, for tests.</param>
+    /// <param name="idle">
+    /// The pump the loop waits in while no window has set its own: on macOS, the run loop of the main thread, which must keep
+    /// turning for the icon of the menu bar and the Carbon shortcuts even with no window. Null on Linux, where the loop then
+    /// waits on its own lock, as it always has. Not disposed by the loop.
+    /// </param>
+    public UnixLoop(Func<long>? nowMs, ILoopPump? idle)
+    {
+        _nowMs = nowMs ?? (static () => Environment.TickCount64);
+        _idle = idle;
+    }
 
     public Action? CloseAsked { get; set; }
 
@@ -54,12 +70,13 @@ internal sealed class UnixLoop : IAppLoop
             ILoopPump? old;
             lock (_gate)
             {
-                old = _pump;
+                // The pump waited in until now: the window's, or the idle one when no window had set its own.
+                old = _pump ?? _idle;
                 _pump = value;
                 Monitor.PulseAll(_gate);
             }
 
-            if (old is not null && !ReferenceEquals(old, value))
+            if (old is not null && !ReferenceEquals(old, value ?? _idle))
             {
                 old.Wake();
             }
@@ -91,7 +108,7 @@ internal sealed class UnixLoop : IAppLoop
 
             _actions.Enqueue(action);
             Monitor.PulseAll(_gate);
-            pump = _pump;
+            pump = _pump ?? _idle;
         }
 
         pump?.Wake();
@@ -111,7 +128,7 @@ internal sealed class UnixLoop : IAppLoop
             // The order breaks ties: two timers due at the same moment run in the order they were set.
             _timers.Enqueue(action, (_nowMs() + Math.Max(0, milliseconds), _order++));
             Monitor.PulseAll(_gate);
-            pump = _pump;
+            pump = _pump ?? _idle;
         }
 
         pump?.Wake();
@@ -167,7 +184,7 @@ internal sealed class UnixLoop : IAppLoop
                 ready.Add(timer);
             }
 
-            pump = _pump;
+            pump = _pump ?? _idle;
         }
 
         foreach (var action in ready)
@@ -200,7 +217,7 @@ internal sealed class UnixLoop : IAppLoop
         {
             _quit = true;
             Monitor.PulseAll(_gate);
-            pump = _pump;
+            pump = _pump ?? _idle;
         }
 
         pump?.Wake();
@@ -222,7 +239,7 @@ internal sealed class UnixLoop : IAppLoop
             _actions.Clear();
             _timers.Clear();
             Monitor.PulseAll(_gate);
-            pump = _pump;
+            pump = _pump ?? _idle;
         }
 
         pump?.Wake();
@@ -262,7 +279,7 @@ internal sealed class UnixLoop : IAppLoop
                     wait = (int)Math.Min(left, int.MaxValue);
                 }
 
-                pump = _pump;
+                pump = _pump ?? _idle;
                 if (pump is null)
                 {
                     Monitor.Wait(_gate, wait);

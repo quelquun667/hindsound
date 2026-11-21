@@ -8,6 +8,7 @@ namespace Hindsound.Unix.Window.Input;
 /// tells the input method where to put its candidate list: under the field, at the caret.
 /// </summary>
 [SupportedOSPlatform("linux")]
+[SupportedOSPlatform("macos")]
 internal sealed unsafe class SdlTextInput
 {
     private readonly nint _window;
@@ -51,6 +52,7 @@ internal sealed unsafe class SdlTextInput
 
 /// <summary>Text on the desktop's clipboard, through SDL (the window must exist: SDL's video is on).</summary>
 [SupportedOSPlatform("linux")]
+[SupportedOSPlatform("macos")]
 internal static unsafe class SdlClipboardText
 {
     /// <summary>The text on the clipboard, or null when it holds none.</summary>

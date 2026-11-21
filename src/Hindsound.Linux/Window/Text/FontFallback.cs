@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
-using static Hindsound.Linux.Window.Text.TextNative;
+using Hindsound.Unix.Window.Text;
+using static Hindsound.Linux.Window.Text.FontconfigNative;
 
 namespace Hindsound.Linux.Window.Text;
 
@@ -7,12 +8,24 @@ namespace Hindsound.Linux.Window.Text;
 /// Asks fontconfig for a font of the system that has a character the fonts of the app lack (a clip named in Japanese).
 /// fontconfig is read only on the first such character: a page in Latin letters never scans the fonts of the system.
 /// </summary>
-internal sealed unsafe class FontFallback : IDisposable
+internal sealed unsafe class FontFallback : IFontFallback
 {
     // How many fonts of fontconfig's sorted list are looked at before giving up on a character.
     private const int Candidates = 64;
     private nint _config;
     private bool _started;
+
+    /// <summary>fontconfig is loaded by name from the system, after FreeType and HarfBuzz, as the text has always checked.</summary>
+    /// <exception cref="TextUnavailableException">libfontconfig.so.1 cannot be loaded.</exception>
+    public void CheckLoadable()
+    {
+        if (!NativeLibrary.TryLoad(Fontconfig, out var handle))
+        {
+            throw new TextUnavailableException($"{Fontconfig} cannot be loaded.");
+        }
+
+        NativeLibrary.Free(handle);
+    }
 
     /// <summary>The file and the face index of a font with outlines that has <paramref name="codePoint"/>, or null. The file
     /// is fontconfig's bytes ended by a zero, kept as they are: a name that is not valid UTF-8 still opens.</summary>

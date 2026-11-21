@@ -43,7 +43,7 @@ internal static class LinuxWindowSupport
 
         try
         {
-            using var text = new FreeTypeText();
+            using var text = LinuxText.Create();
         }
         catch (TextUnavailableException ex)
         {

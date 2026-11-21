@@ -61,6 +61,11 @@ internal sealed unsafe class LameLibrary
     /// </summary>
     public static IReadOnlyList<string> ProgramCandidates => Candidates(AppContext.BaseDirectory);
 
+    /// <summary>Where the app looks on this system: <see cref="ProgramCandidates"/> on Linux, the dylib of the bundle on macOS.</summary>
+    public static IReadOnlyList<string> LoadCandidates => OperatingSystem.IsMacOS()
+        ? Hindsound.Unix.Window.UnixLibraries.MacCandidates(AppContext.BaseDirectory, Hindsound.Unix.Window.UnixLibraries.MacFiles[SystemName])
+        : ProgramCandidates;
+
     /// <summary>The library of the app, loaded on first use. Null while it cannot be loaded, with the reason in <see cref="LastError"/>.</summary>
     public static LameLibrary? Shared
     {
@@ -72,7 +77,7 @@ internal sealed unsafe class LameLibrary
                 {
                     try
                     {
-                        _shared = Load(ProgramCandidates);
+                        _shared = Load(LoadCandidates);
                         LastError = null;
                     }
                     catch (DllNotFoundException ex)

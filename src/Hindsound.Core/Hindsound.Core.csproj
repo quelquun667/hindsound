@@ -25,6 +25,7 @@
     <!-- The Linux app, whose assembly is named after its program, and its tests. -->
     <InternalsVisibleTo Include="hindsound" />
     <InternalsVisibleTo Include="Hindsound.Linux.Tests" />
+    <InternalsVisibleTo Include="Hindsound.Mac.Tests" />
     <!-- The part the Linux app shares with the systems other than Windows. -->
     <InternalsVisibleTo Include="Hindsound.Unix" />
   </ItemGroup>
