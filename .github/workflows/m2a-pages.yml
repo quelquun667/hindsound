@@ -51,12 +51,14 @@ jobs:
           failed=0
           for scale in 1 1.5; do
             for side in base branch; do
+              # The same exe path for both: the Hotkeys and first-run pages show the command with the path of the program.
+              rm -rf "$RUNNER_TEMP/app" && cp -R "$RUNNER_TEMP/$side" "$RUNNER_TEMP/app"
               run="$RUNNER_TEMP/run-$side-$scale"
               mkdir -p "$run/png"
               printf '%s\n' '{"audio":{"micDeviceId":"disabled"}}' > "$run/settings.json"
               code=0
               FAKETIME_DONT_FAKE_MONOTONIC=1 HINDSOUND_FONT_DIR="$RUNNER_TEMP/fonts" SDL_VIDEO_DRIVER=offscreen \
-                timeout 300 faketime -f '@2026-11-21 12:00:00' "$RUNNER_TEMP/$side/hindsound" \
+                timeout 300 faketime -f "@2026-11-21 12:00:00" "$RUNNER_TEMP/app/hindsound" \
                 --settings "$run/settings.json" --no-mic --no-clipboard --no-hotkeys --offscreen \
                 --dump-settings "$run/png" --scale "$scale" || code=$?
               echo "$side at $scale: exit code $code, $(ls "$run/png" | grep -c '\.png$') PNG files"
