@@ -165,6 +165,9 @@ internal sealed unsafe partial class CoreTextFallback : IFontFallback
             return 0;
         }
 
+        // The FreeType of the app, never the runtime's own search for the Linux name (which finds nothing on macOS): this
+        // fallback may be asked before any FreeTypeText has installed the resolver.
+        Hindsound.Unix.Window.UnixLibraries.InstallResolver();
         if (_freeType == 0 && TextNative.FT_Init_FreeType(out _freeType) != 0)
         {
             _freeType = 0;
