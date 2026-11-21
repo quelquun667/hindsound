@@ -8,7 +8,8 @@ namespace Hindsound.Mac.Window;
 /// <summary>
 /// The fallback font of the text on macOS: CoreText picks the font of the system for a character (CTFontCreateForString,
 /// as the text of the system does), and its file is given to FreeType, with the face of that font in a collection (.ttc)
-/// found by its PostScript name. Used on the loop thread only.
+/// found by its PostScript name. A font the text cannot open (a private one of the system) is passed over for the next
+/// one of the cascade list. Used on the loop thread only.
 /// </summary>
 [SupportedOSPlatform("macos")]
 internal sealed unsafe partial class CoreTextFallback : IFontFallback
@@ -45,33 +46,96 @@ internal sealed unsafe partial class CoreTextFallback : IFontFallback
 
         var text = new Rune(codePoint).ToString();
         var str = CFString(text);
-        nint found = 0;
         try
         {
-            found = CTFontCreateForString(baseFont, str, new CFRange(0, text.Length));
-            if (found == 0)
+            // The font CoreText picks first. Some of its picks are private fonts of the system that FreeType cannot open
+            // (PingFangUI.ttc in FontServices.framework/Resources/Reserved, for U+65E5 on the runner macos-26): then the
+            // fonts of the cascade list of the base font, in order, the first one the text opens and that has the character.
+            var picked = CTFontCreateForString(baseFont, str, new CFRange(0, text.Length));
+            if (picked != 0)
+            {
+                try
+                {
+                    if (Usable(picked, codePoint) is { } found)
+                    {
+                        return found;
+                    }
+                }
+                finally
+                {
+                    CFRelease(picked);
+                }
+            }
+
+            var cascade = CTFontCopyDefaultCascadeListForLanguages(baseFont, 0);
+            if (cascade == 0)
             {
                 return null;
             }
 
-            var path = FileOf(found);
-            if (path is null)
+            try
             {
-                return null;
+                var count = CFArrayGetCount(cascade);
+                for (nint i = 0; i < count; i++)
+                {
+                    var font = CTFontCreateWithFontDescriptor(CFArrayGetValueAtIndex(cascade, i), 14, 0);
+                    if (font == 0)
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        if (Usable(font, codePoint) is { } found)
+                        {
+                            return found;
+                        }
+                    }
+                    finally
+                    {
+                        CFRelease(font);
+                    }
+                }
+            }
+            finally
+            {
+                CFRelease(cascade);
             }
 
-            var postScript = Text(CTFontCopyPostScriptName(found), release: true);
-            return (path, FaceIndex(path, postScript));
+            return null;
         }
         finally
         {
-            if (found != 0)
-            {
-                CFRelease(found);
-            }
-
             CFRelease(str);
         }
+    }
+
+    // The file and face of a CoreText font when the text can use it: FontFile opens it as FreeTypeText will, and it has
+    // the character. Null otherwise.
+    private (byte[] Path, int Index)? Usable(nint font, int codePoint)
+    {
+        var path = FileOf(font);
+        if (path is null || !StartFreeType())
+        {
+            return null;
+        }
+
+        var index = FaceIndex(path, Text(CTFontCopyPostScriptName(font), release: true));
+        using var file = FontFile.Open(_freeType, 0, path, index);
+        return file is not null && file.Covers(codePoint) ? (path, index) : null;
+    }
+
+    // The FreeType of this fallback, started once. The FreeType of the app, never the runtime's own search for the Linux
+    // name (which finds nothing on macOS): this fallback may be asked before any FreeTypeText has installed the resolver.
+    private bool StartFreeType()
+    {
+        Hindsound.Unix.Window.UnixLibraries.InstallResolver();
+        if (_freeType == 0 && TextNative.FT_Init_FreeType(out _freeType) != 0)
+        {
+            _freeType = 0;
+        }
+
+        return _freeType != 0;
     }
 
     public void Dispose()
@@ -165,12 +229,8 @@ internal sealed unsafe partial class CoreTextFallback : IFontFallback
             return 0;
         }
 
-        // The FreeType of the app, never the runtime's own search for the Linux name (which finds nothing on macOS): this
-        // fallback may be asked before any FreeTypeText has installed the resolver.
-        Hindsound.Unix.Window.UnixLibraries.InstallResolver();
-        if (_freeType == 0 && TextNative.FT_Init_FreeType(out _freeType) != 0)
+        if (!StartFreeType())
         {
-            _freeType = 0;
             return 0;
         }
 
@@ -253,6 +313,18 @@ internal sealed unsafe partial class CoreTextFallback : IFontFallback
 
     [LibraryImport(CoreText)]
     private static partial nint CTFontCopyPostScriptName(nint font);
+
+    [LibraryImport(CoreText)]
+    private static partial nint CTFontCopyDefaultCascadeListForLanguages(nint font, nint languagePrefList);
+
+    [LibraryImport(CoreText)]
+    private static partial nint CTFontCreateWithFontDescriptor(nint descriptor, double size, nint matrix);
+
+    [LibraryImport(CoreFoundation)]
+    private static partial nint CFArrayGetCount(nint array);
+
+    [LibraryImport(CoreFoundation)]
+    private static partial nint CFArrayGetValueAtIndex(nint array, nint index);
 
     [LibraryImport(CoreText)]
     private static partial nint CTFontCopyAttribute(nint font, nint attribute);
