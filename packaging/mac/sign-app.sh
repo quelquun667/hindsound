@@ -43,6 +43,9 @@ if [ -n "${HINDSOUND_SIGNING_P12:-}" ]; then
   security unlock-keychain -p "$password" "$keychain"
   # shellcheck disable=SC2086
   security list-keychains -d user -s "$keychain" $searched
+  # security import takes the password of a .p12 only as an argument (-P), or asks for it in a window: ps can read it
+  # while the import runs, about a second. Accepted: on the runner no other user shares the machine, and the password
+  # only opens the .p12, which release.yml deletes at the end of the step.
   security import "$HINDSOUND_SIGNING_P12" -k "$keychain" -P "$HINDSOUND_SIGNING_P12_PASSWORD" -T /usr/bin/codesign > /dev/null
   security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" > /dev/null
   # The certificate is made by its owner, not by Apple: find-identity calls it not trusted, but codesign signs with its

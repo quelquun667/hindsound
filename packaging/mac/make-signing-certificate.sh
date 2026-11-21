@@ -27,6 +27,8 @@ openssl="${OPENSSL:-openssl}"
 mkdir -p "$out"
 chmod 700 "$out"
 umask 077
+# The key in clear (-nodes) lives only between the two openssl commands: whatever happens, it goes with the script.
+trap 'rm -f "$out/key.pem" "$out/certificate.cnf"' EXIT
 # A file of settings rather than -subj, whose "/CN=" Git Bash would turn into a path of Windows.
 cat > "$out/certificate.cnf" << 'CONF'
 [req]

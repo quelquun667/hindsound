@@ -67,7 +67,8 @@ public sealed partial class ReleaseWorkflowTests
         var assembleSigned = Job(release, "assemble-signed");
 
         // The two secrets of the certificate, in the env of that one step, and nowhere else: not passed to release-files.yml.
-        Assert.Equal(2, Regex.Matches(release, @"secrets\.").Count);
+        // Every way to read a secret counts: secrets.NAME, secrets['NAME'], toJSON(secrets), secrets: inherit.
+        Assert.Equal(2, Regex.Matches(release, @"secrets\s*[.\[:}]|[(,]\s*secrets\b").Count);
         Assert.Contains("        env:\n          MACOS_SIGNING_P12: ${{ secrets.MACOS_SIGNING_P12 }}\n          MACOS_SIGNING_P12_PASSWORD: ${{ secrets.MACOS_SIGNING_P12_PASSWORD }}\n", signing, StringComparison.Ordinal);
         Assert.DoesNotContain("secrets", Job(release, "files"), StringComparison.Ordinal);
         Assert.DoesNotContain("secrets: inherit", release, StringComparison.Ordinal);
@@ -76,7 +77,23 @@ public sealed partial class ReleaseWorkflowTests
         Assert.Contains("\n    needs: [check, files]\n    runs-on: macos-26\n", signMac, StringComparison.Ordinal);
         Assert.Contains("\n    permissions:\n      contents: read\n", signMac, StringComparison.Ordinal);
         Assert.Contains("name: hindsound-macos-arm64\n          path: ${{ runner.temp }}/adhoc\n", Step(signMac, "Take the Mac app signed ad hoc"), StringComparison.Ordinal);
-        Assert.Contains("bash packaging/mac/resign-zip.sh \"$RUNNER_TEMP/adhoc/$zip\" \"$VERSION\" \"$RUNNER_TEMP/signed/$zip\" ", signing, StringComparison.Ordinal);
+        Assert.Contains("bash packaging/mac/resign-zip.sh \"$RUNNER_TEMP/adhoc/$zip\" \"$RUNNER_TEMP/signed/$zip\" \"$RUNNER_TEMP/resign-work\" \"$(tr -d '[:space:]' < packaging/mac/signing-certificate.sha1)\"\n", signing, StringComparison.Ordinal);
+
+        // The secrets live in the environment mac-signing, which only the tags v* reach: no workflow of a branch reads them.
+        Assert.Contains("\n    timeout-minutes: 30\n    environment: mac-signing\n", signMac, StringComparison.Ordinal);
+        Assert.Single(Regex.Matches(release, @"(?m)^\s*environment:"));
+
+        // With the SHA-1 of the certificate committed, a missing secret stops the release; the .p12 goes whatever happens.
+        Assert.Contains("if [ -s packaging/mac/signing-certificate.sha1 ]; then\n            [ -n \"$MACOS_SIGNING_P12\" ] && [ -n \"$MACOS_SIGNING_P12_PASSWORD\" ] || { echo \"::error ", signing, StringComparison.Ordinal);
+        Assert.Contains("signing=\"$(mktemp -d)\"\n            trap 'rm -rf \"$signing\"' EXIT\n", signing, StringComparison.Ordinal);
+
+        // The app is started in the next step only, which has no secret, once the .p12 and the keychain are gone.
+        var check = Step(signMac, "Check the signed Mac app");
+        Assert.DoesNotContain("check-zip", signing, StringComparison.Ordinal);
+        Assert.Contains("bash packaging/mac/check-zip.sh \"$RUNNER_TEMP/signed/$zip\" \"$VERSION\" \"$RUNNER_TEMP/zip-check\" \"$certificate\"\n", check, StringComparison.Ordinal);
+        Assert.DoesNotContain("secrets", check, StringComparison.Ordinal);
+        Assert.DoesNotContain("env:", check, StringComparison.Ordinal);
+        Assert.True(signMac.IndexOf("- name: Sign the Mac app", StringComparison.Ordinal) < signMac.IndexOf("- name: Check the signed Mac app", StringComparison.Ordinal));
         Assert.Contains("name: hindsound-macos-arm64-signed\n          path: ${{ runner.temp }}/signed/\n", Step(signMac, "Keep the signed Mac app"), StringComparison.Ordinal);
 
         // assemble-signed gathers the files around that zip, checks them, and the release sends what it kept.
@@ -170,7 +187,9 @@ public sealed partial class ReleaseWorkflowTests
         Assert.DoesNotContain("GH_TOKEN", text, StringComparison.Ordinal);
         Assert.DoesNotContain("github.token", text, StringComparison.Ordinal);
         Assert.DoesNotContain("contents: write", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("secrets.", text, StringComparison.Ordinal);
+        // Not even the word: neither secrets.NAME nor secrets['NAME'], toJSON(secrets) or secrets: inherit.
+        Assert.DoesNotContain("secrets", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("environment:", text, StringComparison.Ordinal);
         Assert.Contains("\npermissions:\n  contents: read\n", text, StringComparison.Ordinal);
     }
 

@@ -71,15 +71,19 @@ jobs:
     with:
       version: ${{ needs.check.outputs.version }}
 
-  # The Mac app of the files, signed ad hoc, signed again by the certificate of the repository when it has the secret
-  # MACOS_SIGNING_P12: macOS then keeps the permissions given to the version before. resign-zip.sh, which the job macos of
-  # release-files.yml also runs for every pull request with a throwaway certificate, makes the zip again and checks it.
-  # The secret reaches this one step only, and release-files.yml, which pull requests run, reads none. Without the secret,
-  # the zip signed ad hoc goes out as it is, with a warning in the log.
+  # The Mac app of the files, signed ad hoc, signed again by the certificate of the repository once
+  # packaging/mac/signing-certificate.sha1 names it: macOS then keeps the permissions given to the version before. Until that
+  # file exists, the zip signed ad hoc goes out as it is, with a warning in the log. Once it exists, a missing secret, or a
+  # .p12 of another certificate, stops the release. The secret MACOS_SIGNING_P12 and its password live in the environment
+  # mac-signing, which only the tags v* reach (tools/release/README.md): no workflow of a branch can read them. They reach one
+  # step, which runs nothing of the app; resign-zip.sh, which the job macos of release-files.yml also runs for every pull
+  # request with a throwaway certificate, signs and makes the zip again. The next step, without the secret, the .p12 gone,
+  # starts the app by check-zip.sh. release-files.yml, which pull requests run, reads no secret.
   sign-mac:
     needs: [check, files]
     runs-on: macos-26
     timeout-minutes: 30
+    environment: mac-signing
     permissions:
       contents: read
     env:
@@ -104,16 +108,28 @@ jobs:
         run: |
           zip="Hindsound-$VERSION-macos-arm64.zip"
           mkdir -p "$RUNNER_TEMP/signed"
-          if [ -n "$MACOS_SIGNING_P12" ]; then
+          if [ -s packaging/mac/signing-certificate.sha1 ]; then
+            [ -n "$MACOS_SIGNING_P12" ] && [ -n "$MACOS_SIGNING_P12_PASSWORD" ] || { echo "::error title=No certificate for the Mac app::packaging/mac/signing-certificate.sha1 names a certificate, but the environment mac-signing gives no MACOS_SIGNING_P12 or no MACOS_SIGNING_P12_PASSWORD. tools/release/README.md says how to set them."; exit 1; }
             signing="$(mktemp -d)"
             trap 'rm -rf "$signing"' EXIT
             printf '%s' "$MACOS_SIGNING_P12" | base64 --decode > "$signing/signing.p12"
             HINDSOUND_SIGNING_P12="$signing/signing.p12" HINDSOUND_SIGNING_P12_PASSWORD="$MACOS_SIGNING_P12_PASSWORD" \
-              bash packaging/mac/resign-zip.sh "$RUNNER_TEMP/adhoc/$zip" "$VERSION" "$RUNNER_TEMP/signed/$zip" "$RUNNER_TEMP/resign-work"
+              bash packaging/mac/resign-zip.sh "$RUNNER_TEMP/adhoc/$zip" "$RUNNER_TEMP/signed/$zip" "$RUNNER_TEMP/resign-work" "$(tr -d '[:space:]' < packaging/mac/signing-certificate.sha1)"
+            rm -rf "$signing"
           else
-            echo "::warning title=Mac app signed ad hoc::No secret MACOS_SIGNING_P12: Hindsound.app is signed ad hoc, and macOS will ask again for the permissions (sound of the system, microphone) after each update. tools/release/README.md says how to make the certificate."
+            echo "::warning title=Mac app signed ad hoc::No packaging/mac/signing-certificate.sha1: Hindsound.app is signed ad hoc, and macOS will ask again for the permissions (sound of the system, microphone) after each update. tools/release/README.md says how to make the certificate."
             cp -- "$RUNNER_TEMP/adhoc/$zip" "$RUNNER_TEMP/signed/$zip"
           fi
+
+      # The app is started here, in a step without the secret, once the .p12 and the keychain are gone: by the certificate of
+      # packaging/mac/signing-certificate.sha1 when it exists, ad hoc otherwise.
+      - name: Check the signed Mac app
+        timeout-minutes: 15
+        run: |
+          zip="Hindsound-$VERSION-macos-arm64.zip"
+          certificate=""
+          if [ -s packaging/mac/signing-certificate.sha1 ]; then certificate="$(tr -d '[:space:]' < packaging/mac/signing-certificate.sha1)"; fi
+          bash packaging/mac/check-zip.sh "$RUNNER_TEMP/signed/$zip" "$VERSION" "$RUNNER_TEMP/zip-check" "$certificate"
 
       - name: Keep the signed Mac app
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

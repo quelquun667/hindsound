@@ -23,44 +23,87 @@ app below, which is optional.
 
 ### The certificate of the Mac app
 
-Not made yet. Without it, the job `sign-mac` of `release.yml` sends `Hindsound.app` signed ad hoc, and its log says so in
-a warning (`Mac app signed ad hoc`): the release still goes out. An app signed ad hoc is a new app for macOS at each version, which
-asks again for the permissions (the sound of the system, the microphone) after each update. Signed by the same certificate,
-version after version, it keeps them: the probe of the CI showed it (version 2 signed by the certificate of version 1
-read its permission and captured the sound; signed ad hoc, it was stuck on a prompt). The certificate is made here, not by
-Apple: it does not remove the `Open Anyway` of the first launch, which only a paid Apple account and a notarization would.
+Not made yet: `packaging/mac/signing-certificate.sha1` does not exist, and the job `sign-mac` of `release.yml` sends
+`Hindsound.app` signed ad hoc, with a warning in its log (`Mac app signed ad hoc`): the release still goes out. An app
+signed ad hoc is a new app for macOS at each version, which asks again for the permissions (the sound of the system, the
+microphone) after each update. Signed by the same certificate, version after version, it keeps them: the probe of the CI
+showed it (version 2 signed by the certificate of version 1 read its permission and captured the sound; signed ad hoc, it
+was stuck on a prompt). The certificate is made here, not by Apple: it does not remove `Open Anyway`, which macOS asks for
+each version downloaded from the Release, certificate or not; only a paid Apple account and a notarization would.
 
-To make it, once, in Git Bash, from the root of the repo (OpenSSL 3, as Git for Windows has it; the folder must not
-exist):
+Once `packaging/mac/signing-certificate.sha1` is on `main`, every release must be signed by that certificate: a missing
+secret, or a `.p12` of another certificate, stops the job `sign-mac`, and nothing is published.
+
+The commands below were written on 2026-11-21 and have not been run yet. In Git Bash, from the root of the repo (OpenSSL 3,
+as Git for Windows has it; the folder must not exist):
 
 ```sh
+# 1. The certificate, once.
 bash packaging/mac/make-signing-certificate.sh ~/hindsound-signing
-gh secret set MACOS_SIGNING_P12 --repo quelquun667/hindsound < ~/hindsound-signing/hindsound-signing.p12.base64
-gh secret set MACOS_SIGNING_P12_PASSWORD --repo quelquun667/hindsound < ~/hindsound-signing/password.txt
-gh secret list --repo quelquun667/hindsound
+
+# 2. The environment mac-signing, which only the tags v* reach: a workflow pushed on a branch cannot read its secrets, as
+#    it could read a secret of the repository.
+gh api --method PUT repos/quelquun667/hindsound/environments/mac-signing --input - << 'JSON'
+{"deployment_branch_policy": {"protected_branches": false, "custom_branch_policies": true}}
+JSON
+gh api --method POST repos/quelquun667/hindsound/environments/mac-signing/deployment-branch-policies -f name='v*' -f type=tag
+gh api repos/quelquun667/hindsound/environments/mac-signing/deployment-branch-policies --jq '.branch_policies[] | .name + " " + .type'
+# Expected: v* tag
+
+# 3. The two secrets, in that environment only (never without --env: they would be secrets of the repository).
+gh secret set MACOS_SIGNING_P12 --env mac-signing --repo quelquun667/hindsound < ~/hindsound-signing/hindsound-signing.p12.base64
+gh secret set MACOS_SIGNING_P12_PASSWORD --env mac-signing --repo quelquun667/hindsound < ~/hindsound-signing/password.txt
+gh secret list --env mac-signing --repo quelquun667/hindsound
+# Expected: MACOS_SIGNING_P12 and MACOS_SIGNING_P12_PASSWORD
+
+# 4. The SHA-1 of the certificate, public, committed on a branch and merged by a pull request like any change.
+git fetch origin
+git switch -c mac-certificate origin/main
+openssl x509 -in ~/hindsound-signing/hindsound-signing.pem -noout -fingerprint -sha1 | sed 's/^.*=//; s/://g' | tr 'A-F' 'a-f' > packaging/mac/signing-certificate.sha1
+cat packaging/mac/signing-certificate.sha1
+# Expected: 40 hex digits, the SHA-1 make-signing-certificate.sh printed
+git add packaging/mac/signing-certificate.sha1
+git commit -m "Sign the Mac app with the certificate of the release"
+git push -u origin mac-certificate
+gh pr create --fill
 ```
 
-The script writes `hindsound-signing.p12` (a self-signed certificate with the extension `codeSigning`, valid 10 years,
-and its RSA key, encrypted in 3DES with a SHA-1 MAC, which `security import` of macOS reads; the defaults of OpenSSL 3 it
-refuses), the same in base64 on one line, its random password, and `hindsound-signing.pem`, the certificate alone. It
-prints the SHA-1 of the certificate: the log of a signed release gives the same in
+Optional, a reviewer for each release: GitHub then waits for an approval before `sign-mac` reads the secrets. The same `PUT`
+again, with the reviewer (it replaces the settings of step 2, which it repeats):
+
+```sh
+id="$(gh api users/quelquun667 --jq .id)"
+gh api --method PUT repos/quelquun667/hindsound/environments/mac-signing --input - << JSON
+{"deployment_branch_policy": {"protected_branches": false, "custom_branch_policies": true}, "reviewers": [{"type": "User", "id": $id}]}
+JSON
+```
+
+Then put `hindsound-signing.p12` and the text of `password.txt` in a password manager (an entry with the file attached),
+and delete the folder: `rm -rf ~/hindsound-signing`. Do not keep the `.p12` and its password side by side in a folder:
+`chmod` has no effect in Git Bash, and anything that reads the home folder would take both. GitHub never gives a secret
+back, and the certificate cannot be made again the same. A new certificate works too, but the users then give the
+permissions once more: run the four steps again, the same environment, with a new folder. Never commit the `.p12`, the
+base64 or the password: the key signs the app of every user.
+
+Until the pull request of step 4 is merged, a release ignores the secrets and goes out signed ad hoc, with the warning. The
+script prints the SHA-1 of the certificate; the log of a signed release gives the same twice, in
+`resign-zip: the certificate of the .p12 has the SHA-1 <sha1>, the one expected.` and in
 `designated requirement: identifier "io.github.quelquun667.hindsound" and certificate leaf = H"<sha1>"`.
 
-Keep the folder somewhere safe and private, outside the repo, or delete it: GitHub never gives a secret back, and the
-certificate cannot be made again the same. A new certificate works too, but the users then give the permissions once more.
-Never commit these files: the key signs the app of every user.
-
 What the release does with it: `release-files.yml`, which every pull request also runs, reads no secret and signs the
-app ad hoc. The two secrets reach only the step `Sign the Mac app with the certificate` of the job `sign-mac` of
-`release.yml`, which no pull request runs. That step decodes the `.p12` into a folder of its own, removed at the end of the
-step, and `packaging/mac/resign-zip.sh` unzips the zip of the job `macos`, has `packaging/mac/sign-app.sh` put the `.p12`
-in a keychain made for the run, sign each Mach-O then the bundle with its SHA-1, check the signature and the designated
-requirement, and delete the keychain whatever happens, then makes the zip again with `ditto` and checks it with
-`check-zip.sh`, which also requires the designated requirement to name the SHA-1 it reads from the `.p12`. The job
-`assemble-signed` then gathers the files again with that zip, so its manifest and `SHA256SUMS` follow it, and the job
-`release` sends those. Every pull request, in the job `macos`, also makes a throwaway certificate with
-`make-signing-certificate.sh` and runs `resign-zip.sh` with it, through the same base64: the commands above and the path
-of the release are tried before the secret exists.
+app ad hoc. The job `sign-mac` of `release.yml`, which no pull request runs, declares the environment `mac-signing`, and
+the two secrets reach only its step `Sign the Mac app with the certificate`. That step decodes the `.p12` into a folder of
+its own, removed at the end of the step whatever happens, and `packaging/mac/resign-zip.sh` compares the SHA-1 of the
+certificate of the `.p12` to `packaging/mac/signing-certificate.sha1`, unzips the zip of the job `macos`, has
+`packaging/mac/sign-app.sh` put the `.p12` in a keychain made for the run, sign each Mach-O then the bundle with its SHA-1,
+check the signature and the designated requirement, and delete the keychain whatever happens, then makes the zip again
+with `ditto`. Nothing of the app runs in that step. The next step, `Check the signed Mac app`, has no secret: there,
+`check-zip.sh` starts the app (`--prove-mp3`, `--dump-settings`) and requires the designated requirement to name the SHA-1
+of `packaging/mac/signing-certificate.sha1`. The job `assemble-signed` then gathers the files again with that zip, so its
+manifest and `SHA256SUMS` follow it, and the job `release` sends those. Every pull request, in the job `macos`, also makes
+a throwaway certificate with `make-signing-certificate.sh`, checks that `resign-zip.sh` refuses it for another SHA-1, signs
+the zip with it through the same base64, and checks that zip with `check-zip.sh` once the `.p12` is deleted: the path of the
+release is tried before the secret exists.
 
 ## Release a version
 
@@ -110,9 +153,11 @@ never published.
 | files, windows: Write the update manifest | `write-manifest.ps1`: `hindsound-update-win-x64.json`, read by the installed app. |
 | files, windows: Make the portable zip | `build-portable-zip.ps1`, from the folder the Setup was built from: the files the Setup installs, plus `packaging/windows/portable.txt` and `README.txt`, in one folder named like the zip. The zip is read back, entry by entry. |
 | files, linux | On ubuntu-22.04: the Linux app published, `build-lame-linux.sh`, then `packaging/linux/build-packages.sh` and `check-packages.sh`, which start both packages once (`--prove-mp3`), then `packaging/linux/build-deb.sh`, twice to the same bytes, and `check-deb.sh` (fields, files, what the programs link, lintian). Then the verified `lame-3.100.tar.gz`, and `fetch-runtime-sources.sh` for the source of the AppImage runtime and of the libraries linked into it, go into the artifact next to them. |
-| files, macos | On macos-26: `tools/mac/build-natives.sh` builds SDL3, FreeType, HarfBuzz and LAME from their pinned archives (no cache), `fetch-fonts.sh` the fonts, then `packaging/mac/build-app.sh` publishes the app for `osx-arm64` and makes `Hindsound.app` with its dylibs, fonts and licences, and `sign-app.sh` signs it, by the certificate above or ad hoc. `ditto -c -k --keepParent` makes `Hindsound-X.Y.Z-macos-arm64.zip`, and `packaging/mac/check-zip.sh` unzips it elsewhere: Hindsound.app alone, its signature (`codesign --verify --deep --strict`), nothing linked from Homebrew (`otool -L`), then the app started with `--prove-mp3` and `--dump-settings` (80 pages), each with the dylibs of the bundle. Last, the rehearsal of the certificate. |
+| files, macos | On macos-26: `tools/mac/build-natives.sh` builds SDL3, FreeType, HarfBuzz and LAME from their pinned archives (no cache), `fetch-fonts.sh` the fonts, then `packaging/mac/build-app.sh` publishes the app for `osx-arm64` and makes `Hindsound.app` with its dylibs, fonts and licences, and `sign-app.sh` signs it ad hoc (`sign-mac` signs it again by the certificate above). `ditto -c -k --keepParent` makes `Hindsound-X.Y.Z-macos-arm64.zip`, and `packaging/mac/check-zip.sh` unzips it elsewhere: Hindsound.app alone, its signature (`codesign --verify --deep --strict`), nothing linked from Homebrew (`otool -L`), then the app started with `--prove-mp3` and `--dump-settings` (80 pages), each with the dylibs of the bundle. Last, the rehearsal of the certificate: `resign-zip.sh` refuses a throwaway `.p12` for another SHA-1, signs with it for its own, and `check-zip.sh` checks that zip once the `.p12` is deleted. |
 | files, deb | In clean `ubuntu:22.04`, `ubuntu:24.04`, `debian:12` and `debian:13` containers, `packaging/linux/try-deb.sh`: `apt-get install` of the .deb with its Depends alone, `/usr/bin/hindsound --prove-mp3` and `--dump-settings` with the libraries and fonts of `/usr/lib/hindsound`, then `apt-get remove`, and nothing of the package left in `/usr`. The release job waits for it, as for every job of `release-files.yml`. |
 | files, assemble | `assemble-release.ps1`: the files of the three jobs, the same LAME source from Windows and Linux, the source of the AppImage runtime from the Linux job, the zip from the macOS job, `write-announce-manifest.ps1` for `hindsound-update-win-x64-portable.json`, `hindsound-update-linux-x64.json` and `hindsound-update-macos-arm64.json` (the page of the release, nothing to download), and one `SHA256SUMS` for every file. Then `check-release-files.ps1`, and the artifact `release-files`. |
+| sign-mac | On macos-26, in the environment `mac-signing`. With `packaging/mac/signing-certificate.sha1`: the secrets required, `resign-zip.sh` compares the SHA-1 of the `.p12` to that file, signs the zip of the job `macos` again and makes it again, the `.p12` deleted at the end of the step; then, in a step without secret, `check-zip.sh` starts the app and requires that certificate. Without the file: the zip signed ad hoc, a warning, and the same check. |
+| assemble-signed | `assemble-release.ps1` and `check-release-files.ps1` again, with the zip of `sign-mac`: the files the job `release` sends. |
 | release: Check the files of the release | `check-release-files.ps1` on the artifact, before anything goes up. |
 | release: Create the draft release | A draft, with the notes. |
 | release: Attach the files | The fifteen files, each named. Then they are downloaded back, and `check-release-files.ps1` wants exactly these fifteen, the .deb a Debian package, the Mac zip Hindsound.app alone with its program, dylibs and signature, the manifests right, `SHA256SUMS` right, the SHA-256 of the LAME source, the SHA-256 of `fuse-3.15.0.tar.xz` that `fetch-runtime-sources.sh` pins, in `type2-runtime-20251108-libraries-source.tar.gz` exactly the files of `LIBRARY_FILES` in that script, each with its SHA-256 there, and each file with the size and SHA-256 of the one sent. |

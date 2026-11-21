@@ -3,7 +3,7 @@
     Undoes the guards of the release scripts and workflows one at a time, on a copy, and fails if a test run does not notice.
 .DESCRIPTION
     Each entry replaces one piece of text, found exactly once, in a new copy of what test-release-scripts.ps1 reads: tools/release,
-    tools/mac, .github/workflows, licenses, LICENSE, THIRD-PARTY-NOTICES.md, packaging/windows/portable.txt and README.txt, and
+    tools/mac, .github/workflows, licenses, LICENSE, THIRD-PARTY-NOTICES.md, packaging/windows/portable.txt and README.txt, packaging/mac, and
     installer/Hindsound.iss, in a git repository of one empty commit (the date of the zip). It then runs test-release-scripts.ps1 from that copy. Nothing in the repository changes. Each entry
     takes about 20 to 60 s, depending on the load of the PC.
 .PARAMETER WorkFolder
@@ -151,7 +151,7 @@ $mutations = @(
     @($release, '--draft --verify-tag', '--verify-tag')
     @($release, '--draft --verify-tag', '--draft')
     @($release, "fetch-depth: 0`n          persist-credentials: false", "fetch-depth: 0`n          persist-credentials: true")
-    @($release, "with:`n          persist-credentials: false", "with:`n          persist-credentials: true")
+    @($release, "persist-credentials: false`n`n      - name: Write the release notes", "persist-credentials: true`n`n      - name: Write the release notes")
     @($release, "- 'v*'`n`npermissions: {}", "- 'v*'`n`npermissions: write-all")
     @($release, "timeout-minutes: 5`n    permissions: {}", "timeout-minutes: 5`n    permissions: write-all")
     @($release, 'run: dotnet test Hindsound.slnx', 'run: Write-Output Hindsound.slnx')
@@ -215,7 +215,30 @@ $mutations = @(
     @($release, ('      version: ${{ needs.check.outputs.version }}' + "`n`n" + '  # The Mac app'), ('      version: ${{ needs.check.outputs.version }}' + "`n" + '    secrets: inherit' + "`n`n" + '  # The Mac app'))
     @($release, 'needs: [check, files, sign-mac, assemble-signed, release]', 'needs: [check, files, release]')
     @('.github/workflows/release-files.yml', '        run: bash packaging/mac/build-app.sh', ('        env:' + "`n" + '          P12: ${{ secrets.MACOS_SIGNING_P12 }}' + "`n" + '        run: bash packaging/mac/build-app.sh'))
-    @('.github/workflows/release-files.yml', 'bash packaging/mac/resign-zip.sh "$RUNNER_TEMP/out/', 'echo packaging/mac/resign-zip.sh "$RUNNER_TEMP/out/')
+    @('.github/workflows/release-files.yml', 'bash packaging/mac/resign-zip.sh "$RUNNER_TEMP/out/$zip" "$RUNNER_TEMP/rehearsal/', 'echo packaging/mac/resign-zip.sh "$RUNNER_TEMP/out/$zip" "$RUNNER_TEMP/rehearsal/')
+    # The checkouts of sign-mac and assemble-signed keep the token out of git too
+    @($release, "persist-credentials: false`n`n      - name: Take the Mac app signed ad hoc", "persist-credentials: true`n`n      - name: Take the Mac app signed ad hoc")
+    @($release, "persist-credentials: false`n`n      - name: Take the Windows files", "persist-credentials: true`n`n      - name: Take the Windows files")
+    # The certificate lives in the environment mac-signing; the SHA-1 committed decides, and a missing secret stops the release
+    @($release, ('timeout-minutes: 30' + "`n" + '    environment: mac-signing' + "`n"), ('timeout-minutes: 30' + "`n"))
+    @($release, ('if [ -s packaging/mac/signing-certificate.sha1 ]; then' + "`n"), ('if false; then' + "`n"))
+    @($release, '[ -n "$MACOS_SIGNING_P12" ] && [ -n "$MACOS_SIGNING_P12_PASSWORD" ] ||', 'true ||')
+    # The app starts only in the step without the secret, once the .p12 is gone
+    @($release, 'bash packaging/mac/check-zip.sh "$RUNNER_TEMP/signed/$zip"', 'echo packaging/mac/check-zip.sh "$RUNNER_TEMP/signed/$zip"')
+    @($release, ('- name: Check the signed Mac app' + "`n" + '        timeout-minutes: 15' + "`n"), ('- name: Check the signed Mac app' + "`n" + '        timeout-minutes: 15' + "`n" + '        env:' + "`n" + '          P12: ${{ secrets[''MACOS_SIGNING_P12''] }}' + "`n"))
+    @($release, ('            rm -rf "$signing"' + "`n" + '          else'), ('            bash packaging/mac/check-zip.sh "$RUNNER_TEMP/signed/$zip" "$VERSION" "$RUNNER_TEMP/early-check"' + "`n" + '            rm -rf "$signing"' + "`n" + '          else'))
+    @($release, ('            trap ''rm -rf "$signing"'' EXIT' + "`n"), '')
+    @('packaging/mac/resign-zip.sh', 'echo "resign-zip: $(basename "$out")', ('bash "$here/check-zip.sh" "$out" 1.0.0 "$work/check" "$expected"' + "`n" + 'echo "resign-zip: $(basename "$out")'))
+    @('packaging/mac/resign-zip.sh', '[ "$certificate" = "$expected" ] || fail', 'true || fail')
+    @('.github/workflows/release-files.yml', ('"$RUNNER_TEMP/rehearsal-work" "$sha1"' + "`n" + '          rm -rf "$certificate"' + "`n"), ('"$RUNNER_TEMP/rehearsal-work" "$sha1"' + "`n"))
+    @('.github/workflows/release-files.yml', 'grep -F ''which is not the certificate', 'echo ''which is not the certificate')
+    # Every way to read a secret, in release.yml and in the CI of the pull requests
+    @($release, ('    environment: mac-signing' + "`n" + '    permissions:' + "`n" + '      contents: read' + "`n" + '    env:' + "`n"), ('    environment: mac-signing' + "`n" + '    permissions:' + "`n" + '      contents: read' + "`n" + '    env:' + "`n" + '      ALL: ${{ toJSON(secrets) }}' + "`n"))
+    @('.github/workflows/ci.yml', ('    uses: ./.github/workflows/release-files.yml' + "`n"), ('    uses: ./.github/workflows/release-files.yml' + "`n" + '    secrets: inherit' + "`n"))
+    # The keychain and the key in clear go whatever happens
+    @('packaging/mac/sign-app.sh', ('  trap cleanup EXIT' + "`n"), '')
+    @('packaging/mac/sign-app.sh', ('    security delete-keychain "$keychain" 2> /dev/null || true' + "`n"), '')
+    @('packaging/mac/make-signing-certificate.sh', ('trap ''rm -f "$out/key.pem" "$out/certificate.cnf"'' EXIT' + "`n"), '')
 )
 
 $repository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).ProviderPath
@@ -233,7 +256,7 @@ for ($index = $From; $index -le $last; $index++) {
     $copy = Join-Path $WorkFolder ('hindsound-mutation-' + [Guid]::NewGuid().ToString('N'))
     try {
         # What test-release-scripts.ps1 reads from the repository: the scripts, the workflows, and the files of the packages it compares.
-        foreach ($folder in 'tools/release', 'tools/mac', '.github/workflows', 'licenses', 'packaging/windows', 'installer') {
+        foreach ($folder in 'tools/release', 'tools/mac', '.github/workflows', 'licenses', 'packaging/windows', 'packaging/mac', 'installer') {
             $target = Join-Path $copy $folder
             New-Item -ItemType Directory -Force -Path $target | Out-Null
             Copy-Item -Path (Join-Path $repository "$folder/*") -Destination $target

@@ -222,7 +222,8 @@ jobs:
   # for every pull request, and reads no secret. The job sign-mac of release.yml, which no pull request reaches, signs it
   # again with the certificate of the repository. The zip is unzipped elsewhere and its program started (--prove-mp3, then
   # --dump-settings), as the .deb is tried. Last, resign-zip.sh, which sign-mac runs, signs it again here with a throwaway
-  # certificate made by make-signing-certificate.sh: the path of the release is tried before the secret exists.
+  # certificate made by make-signing-certificate.sh, then check-zip.sh checks that zip as the step after it does in sign-mac:
+  # the path of the release is tried before the secret exists.
   macos:
     runs-on: macos-26
     timeout-minutes: 60
@@ -275,17 +276,31 @@ jobs:
         run: bash packaging/mac/check-zip.sh "$RUNNER_TEMP/out/Hindsound-$HINDSOUND_VERSION-macos-arm64.zip" "$HINDSOUND_VERSION" "$RUNNER_TEMP/zip-check"
 
       # The commands of tools/release/README.md, with a certificate made here and thrown away: the base64 file goes back to a
-      # .p12 as the secret does in sign-mac, and resign-zip.sh signs the zip again, as there. The zip kept is the one checked
-      # above, signed ad hoc.
+      # .p12 as the secret does in sign-mac, its SHA-1 stands for packaging/mac/signing-certificate.sha1, and resign-zip.sh
+      # signs the zip again, as there; a SHA-1 of another certificate must stop it before it signs. As in sign-mac, the app is
+      # started by check-zip.sh only once the .p12 and its password are gone. The zip kept is the one checked above, signed
+      # ad hoc.
       - name: Rehearse the signing with a throwaway certificate
         timeout-minutes: 15
         run: |
           certificate="$RUNNER_TEMP/throwaway-certificate"
+          zip="Hindsound-$HINDSOUND_VERSION-macos-arm64.zip"
           bash packaging/mac/make-signing-certificate.sh "$certificate"
           base64 --decode -i "$certificate/hindsound-signing.p12.base64" -o "$certificate/from-secret.p12"
+          sha1="$(openssl x509 -in "$certificate/hindsound-signing.pem" -noout -fingerprint -sha1 | sed 's/^.*=//; s/://g' | tr 'A-F' 'a-f')"
+          if HINDSOUND_SIGNING_P12="$certificate/from-secret.p12" HINDSOUND_SIGNING_P12_PASSWORD="$(cat "$certificate/password.txt")" \
+            bash packaging/mac/resign-zip.sh "$RUNNER_TEMP/out/$zip" "$RUNNER_TEMP/other-certificate/$zip" "$RUNNER_TEMP/other-certificate-work" 0123456789abcdef0123456789abcdef01234567 2> "$RUNNER_TEMP/other-certificate.log"; then
+            echo "resign-zip.sh signed with a .p12 whose certificate is not the one expected." >&2
+            exit 1
+          fi
+          grep -F 'which is not the certificate 0123456789abcdef0123456789abcdef01234567' "$RUNNER_TEMP/other-certificate.log"
+          [ ! -e "$RUNNER_TEMP/other-certificate" ]
+          [ ! -e "$RUNNER_TEMP/other-certificate-work" ]
           HINDSOUND_SIGNING_P12="$certificate/from-secret.p12" HINDSOUND_SIGNING_P12_PASSWORD="$(cat "$certificate/password.txt")" \
-            bash packaging/mac/resign-zip.sh "$RUNNER_TEMP/out/Hindsound-$HINDSOUND_VERSION-macos-arm64.zip" "$HINDSOUND_VERSION" "$RUNNER_TEMP/rehearsal/Hindsound-$HINDSOUND_VERSION-macos-arm64.zip" "$RUNNER_TEMP/rehearsal-work"
-          rm -rf "$certificate" "$RUNNER_TEMP/rehearsal"
+            bash packaging/mac/resign-zip.sh "$RUNNER_TEMP/out/$zip" "$RUNNER_TEMP/rehearsal/$zip" "$RUNNER_TEMP/rehearsal-work" "$sha1"
+          rm -rf "$certificate"
+          bash packaging/mac/check-zip.sh "$RUNNER_TEMP/rehearsal/$zip" "$HINDSOUND_VERSION" "$RUNNER_TEMP/rehearsal-check" "$sha1"
+          rm -rf "$RUNNER_TEMP/rehearsal"
 
       - name: Keep the Mac files
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
