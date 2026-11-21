@@ -6,10 +6,18 @@ public class HotkeyNativeTests
 {
     private static readonly TimeSpan Short = TimeSpan.FromMilliseconds(200);
 
-    /// <summary>Keeps the hotkey thread busy until the gate opens, so later requests wait in the queue.</summary>
+    /// <summary>
+    /// Keeps the hotkey thread busy until the gate opens, so later requests wait in the queue. The blocking request is sent
+    /// from a thread of its own, not from the pool: on the Windows runner of the CI, the tests that run beside this one can
+    /// hold every thread of the pool for seconds, and a Task.Run there had not even sent the request 5 s later.
+    /// </summary>
     private static Task Block(Win32HotkeyNative native, ManualResetEventSlim gate, ManualResetEventSlim started)
     {
-        var task = Task.Run(() => native.Invoke(() => { started.Set(); gate.Wait(); return true; }, undo: null, abandonable: false));
+        var task = Task.Factory.StartNew(
+            () => native.Invoke(() => { started.Set(); gate.Wait(); return true; }, undo: null, abandonable: false),
+            CancellationToken.None,
+            TaskCreationOptions.LongRunning,
+            TaskScheduler.Default);
         Assert.True(started.Wait(TimeSpan.FromSeconds(5)));
         return task;
     }
