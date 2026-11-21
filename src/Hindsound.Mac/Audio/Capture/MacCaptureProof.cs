@@ -72,7 +72,7 @@ internal static unsafe class MacCaptureProof
             else
             {
                 pass &= Case(Log, "system_excl", factory, new CaptureRequest(AudioFlow.System, output, true), m => m.Tone1000 && m.A440Db < -50);
-                pass &= Case(Log, "system_plain", factory, new CaptureRequest(AudioFlow.System, output, false), m => m.Tone1000 && m.A440Db > -30);
+                pass &= Case(Log, "system_plain", factory, new CaptureRequest(AudioFlow.System, output, false), m => m.A1000Db > -20 && m.A440Db > -30);
                 var outputMain = new MacCaptureFactory(Log, processes, outputAsMain: true, deviceTapAlways: false, permission: null);
                 pass &= Case(Log, "system_excl_output_main", outputMain, new CaptureRequest(AudioFlow.System, output, true), m => m.Tone1000 && m.A440Db < -50);
                 var oneOutput = new MacCaptureFactory(Log, processes, outputAsMain: false, deviceTapAlways: true, permission: null);
@@ -84,7 +84,7 @@ internal static unsafe class MacCaptureProof
 
                 pass &= Case(Log, "app_silent", factory, new CaptureRequest(AudioFlow.System, output, false, silent.Id, "afplay"), m => m.ExactZero);
                 pass &= FamilyCase(Log, factory, output, tone, children);
-                pass &= Case(Log, "mic", factory, new CaptureRequest(AudioFlow.Mic, input, false), m => m.Tone1000);
+                pass &= Case(Log, "mic", factory, new CaptureRequest(AudioFlow.Mic, input, false), m => m.Verdict == "SIGNAL" && m.A1000Db > -20);
             }
         }
         catch (Exception exception)
@@ -113,7 +113,9 @@ internal static unsafe class MacCaptureProof
             }
         }
 
+        // Launched through Launch Services (its own responsible process for TCC), the app's exit code does not reach the CI: the file does.
         Log("result " + (pass ? "pass" : "FAIL"));
+        File.WriteAllText(Path.Combine(folder, denied ? "denied.result" : "granted.result"), pass ? "pass\n" : "FAIL\n");
         return pass ? 0 : ExitFailed;
     }
 

@@ -546,18 +546,22 @@ jobs:
             killall tccd 2> /dev/null || true
             sleep 2
           }
+          # Through Launch Services, as the probe did: launched from this shell, the runner would be the process TCC asks
+          # about (run 44940346633: the microphone granted to it, the audio capture undecided, each tap stuck 60 s).
+          prove() {
+            rm -f "$folder/$1.result"
+            perl -e 'alarm shift; exec @ARGV' "$2" open -n -W --stdout "$folder/$1.out" --stderr "$folder/$1.err" "$app" --args "${@:3}"               || { echo "prove-capture $1: open ended by the time limit"; pkill -f 'Hindsound.app/Contents/MacOS/hindsound' || true; }
+            cat "$folder/$1.out" "$folder/$1.err" 2> /dev/null || true
+            echo "prove-capture $1: $(cat "$folder/$1.result" 2> /dev/null || echo 'no result')"
+          }
           grant 2
-          code=0
-          perl -e 'alarm shift; exec @ARGV' 180 "$program" --prove-capture "$folder" || code=$?
-          echo "prove-capture: exit code $code"
+          prove granted 240 --prove-capture "$folder"
           sudo killall coreaudiod
           sleep 5
           echo "after the restart of coreaudiod: output $(SwitchAudioSource -t output -c), input $(SwitchAudioSource -t input -c)"
           grant 0
-          denied=0
-          perl -e 'alarm shift; exec @ARGV' 120 "$program" --prove-capture "$folder" --denied || denied=$?
-          echo "prove-capture --denied: exit code $denied"
-          [ "$code" -eq 0 ] && [ "$denied" -eq 0 ]
+          prove denied 150 --prove-capture "$folder" --denied
+          grep -qx pass "$folder/granted.result" && grep -qx pass "$folder/denied.result"
 
       - name: Keep the pages of the window
         if: always()
