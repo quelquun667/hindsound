@@ -13,7 +13,7 @@ namespace Hindsound.Mac.Audio.Capture;
 /// default output and input, and the permissions written in TCC before anything opened a device. The app plays a 440 Hz tone
 /// of its own, starts <c>afplay</c> on each file, and measures each capture (level in dBFS, dominant frequency, exact
 /// zeros): the sound of the PC with this app left out (the 1 kHz without the 440 Hz), and without (both), with the output
-/// as the aggregate's main device, one output alone; one application (the silent <c>afplay</c>: exact zeros; a shell whose
+/// as the aggregate's main device, one output alone (BlackHole: both; the Null Audio Device: only a 440 Hz the app plays there); one application (the silent <c>afplay</c>: exact zeros; a shell whose
 /// child starts <c>afplay</c> 2 s after the tap opened: zeros, then the 1 kHz); the microphone (BlackHole gives back the 1 kHz).
 /// With <c>--denied</c> (the permissions written refused), the sound of the PC and the microphone give exact zeros and the
 /// capture ends saying the permission is refused. 0 when every case passes, 3 otherwise.
@@ -24,8 +24,9 @@ internal static unsafe class MacCaptureProof
     private const int ExitFailed = 3;
     private const double CaseSeconds = 3.5;
 
-    private static double _phase;
-    private static double _step;
+    // One tone per slot: 0 on the default output, 1 on the Null Audio Device.
+    private static readonly double[] Phases = new double[2];
+    private static readonly double[] Steps = new double[2];
 
     public static int Run(string folder, bool denied, Action<string> say)
     {
@@ -55,7 +56,8 @@ internal static unsafe class MacCaptureProof
 
             if (!denied)
             {
-                (selfTone, toneDevice) = StartSelfTone(Log);
+                toneDevice = CoreAudio.GetUInt(CoreAudio.SystemObject, CoreAudio.DefaultOutputDevice);
+                selfTone = StartSelfTone(Log, toneDevice, 0);
             }
 
             children.Add(Start(Log, "/usr/bin/afplay", tone));
@@ -79,7 +81,21 @@ internal static unsafe class MacCaptureProof
                 pass &= Case(Log, "system_one_output", oneOutput, new CaptureRequest(AudioFlow.System, output, false), m => m.Tone1000);
                 if (nullPresent)
                 {
-                    pass &= Case(Log, "system_other_output", factory, new CaptureRequest(AudioFlow.System, CoreAudioNames.NullDeviceUid, false), m => m.ExactZero);
+                    // Another output, where only this app plays (its 440 Hz): the tap hears it, and not the 1 kHz of BlackHole.
+                    // With nothing playing there, the tap sends no packet at all (run 44942041149).
+                    var nullDevice = CoreAudio.DeviceOf(CoreAudioNames.NullDeviceUid);
+                    var nullTone = StartSelfTone(Log, nullDevice, 1);
+                    try
+                    {
+                        Thread.Sleep(500);
+                        pass &= Case(Log, "system_other_output", factory, new CaptureRequest(AudioFlow.System, CoreAudioNames.NullDeviceUid, false),
+                            m => m.Verdict == "SIGNAL" && m.A440Db > -20 && m.A1000Db < -50);
+                    }
+                    finally
+                    {
+                        CoreAudio.AudioDeviceStop(nullDevice, nullTone);
+                        CoreAudio.AudioDeviceDestroyIOProcID(nullDevice, nullTone);
+                    }
                 }
 
                 pass &= Case(Log, "app_silent", factory, new CaptureRequest(AudioFlow.System, output, false, silent.Id, "afplay"), m => m.ExactZero);
@@ -218,17 +234,17 @@ internal static unsafe class MacCaptureProof
         return process;
     }
 
-    // The app's own sound: 440 Hz at -6 dBFS on the default output, through an IOProc of its own.
-    private static (nint Proc, uint Device) StartSelfTone(Action<string> log)
+    // The app's own sound: 440 Hz at -6 dBFS on a device, through an IOProc of its own; slot 0 or 1 holds its phase.
+    private static nint StartSelfTone(Action<string> log, uint device, int slot)
     {
-        var device = CoreAudio.GetUInt(CoreAudio.SystemObject, CoreAudio.DefaultOutputDevice);
         var rate = CoreAudio.GetDouble(device, CoreAudio.NominalSampleRate);
-        _step = 2 * Math.PI * 440 / (rate > 0 ? rate : 48000);
+        Steps[slot] = 2 * Math.PI * 440 / (rate > 0 ? rate : 48000);
+        Phases[slot] = 0;
         nint proc = 0;
-        CoreAudio.Check(CoreAudio.AudioDeviceCreateIOProcID(device, (nint)(delegate* unmanaged[Cdecl]<uint, AudioTimeStamp*, AudioBufferList*, AudioTimeStamp*, AudioBufferList*, AudioTimeStamp*, nint, int>)&OnTone, 0, &proc), "the tone's IOProc");
+        CoreAudio.Check(CoreAudio.AudioDeviceCreateIOProcID(device, (nint)(delegate* unmanaged[Cdecl]<uint, AudioTimeStamp*, AudioBufferList*, AudioTimeStamp*, AudioBufferList*, AudioTimeStamp*, nint, int>)&OnTone, slot, &proc), "the tone's IOProc");
         CoreAudio.Check(CoreAudio.AudioDeviceStart(device, proc), "the tone");
         log($"own tone: 440 Hz on device {device} at {rate} Hz");
-        return (proc, device);
+        return proc;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -239,7 +255,8 @@ internal static unsafe class MacCaptureProof
             return 0;
         }
 
-        var start = _phase;
+        var slot = (int)key;
+        var start = Phases[slot];
         var end = start;
         for (var i = 0; i < (int)output->NumberBuffers; i++)
         {
@@ -248,7 +265,7 @@ internal static unsafe class MacCaptureProof
             var frames = (int)(buffer.DataByteSize / (sizeof(float) * channels));
             var data = (float*)buffer.Data;
             var phase = start;
-            for (var f = 0; f < frames && data != null; f++, phase += _step)
+            for (var f = 0; f < frames && data != null; f++, phase += Steps[slot])
             {
                 var value = (float)(0.5 * Math.Sin(phase));
                 for (var c = 0; c < channels; c++)
@@ -260,7 +277,7 @@ internal static unsafe class MacCaptureProof
             end = phase;
         }
 
-        _phase = end % (2 * Math.PI);
+        Phases[slot] = end % (2 * Math.PI);
         return 0;
     }
 
