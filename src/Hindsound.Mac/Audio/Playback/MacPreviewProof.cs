@@ -114,9 +114,10 @@ internal static class MacPreviewProof
         {
             var full = Path.GetFullPath(folder);
             Directory.CreateDirectory(full);
+            // Not normalized: the export aims at -16 LUFS by default, which would take the tone 10 dB down.
             var saved = new ClipSaver(Path.Combine(full, "rescued")).Save(
                 new AudioSnapshot(Tone(), []),
-                new ExportOptions { Format = ExportFormat.Mp3, TrackMode = TrackMode.Mix, OutputFolder = full });
+                new ExportOptions { Format = ExportFormat.Mp3, TrackMode = TrackMode.Mix, Normalization = NormalizationMode.Off, OutputFolder = full });
             if (saved.FellBackToWav || saved.Rescued || saved.Paths.Count != 1)
             {
                 Say($"the tone was not written as one MP3 (fell back to WAV {saved.FellBackToWav}, rescued {saved.Rescued})");
