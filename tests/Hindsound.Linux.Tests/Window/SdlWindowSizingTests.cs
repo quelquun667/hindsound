@@ -3,8 +3,8 @@ using Hindsound.Input;
 using Hindsound.Linux.Window;
 using Hindsound.Ui;
 using Hindsound.Ui.Window;
-using Hindsound.Unix.Window.Input;
 using Hindsound.Unix.Window;
+using Hindsound.Unix.Window.Input;
 
 namespace Hindsound.Linux.Tests.Window;
 

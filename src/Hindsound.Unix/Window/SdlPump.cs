@@ -1,6 +1,5 @@
 using System.Runtime.Versioning;
 using Hindsound.Unix.App;
-using Hindsound.Unix.App;
 
 namespace Hindsound.Unix.Window;
 

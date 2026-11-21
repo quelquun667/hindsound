@@ -2,11 +2,10 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Hindsound.App;
 using Hindsound.Input;
-using Hindsound.Unix.App;
-using Hindsound.Unix.Window.Input;
 using Hindsound.Ui;
 using Hindsound.Ui.Window;
 using Hindsound.Unix.App;
+using Hindsound.Unix.Window.Input;
 
 namespace Hindsound.Unix.Window;
 

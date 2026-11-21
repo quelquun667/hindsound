@@ -145,7 +145,7 @@ if [ "$soname" != "libmp3lame.so.0" ]; then
   exit 1
 fi
 
-# What the app calls (src/Hindsound.Linux/Export/LameLibrary.cs).
+# What the app calls (src/Hindsound.Unix/Export/LameLibrary.cs).
 exports="$(nm -D --defined-only "$library" | awk '{print $3}')"
 for name in lame_init lame_close lame_set_in_samplerate lame_set_num_channels lame_set_brate lame_init_params \
   lame_encode_buffer lame_encode_buffer_interleaved lame_encode_flush lame_get_lametag_frame get_lame_version; do
