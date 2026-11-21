@@ -1,7 +1,7 @@
 using Hindsound.Library;
 using NLayer;
 
-namespace Hindsound.Linux.Library;
+namespace Hindsound.Unix.Library;
 
 /// <summary>
 /// An mp3 read through NLayer's frame decoder (managed code, MIT). The frames are found and fed one at a time here, not

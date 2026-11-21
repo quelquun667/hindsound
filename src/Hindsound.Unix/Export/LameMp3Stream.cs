@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace Hindsound.Linux.Export;
+namespace Hindsound.Unix.Export;
 
 /// <summary>
 /// A write-only stream that takes 16-bit little-endian PCM (interleaved if stereo) and writes constant-bitrate MP3 to

@@ -1,6 +1,6 @@
 using NLayer;
 
-namespace Hindsound.Linux.Library;
+namespace Hindsound.Unix.Library;
 
 /// <summary>The four bytes that open a frame of an mp3 of layer III, read: what the frame holds, and how long it is.</summary>
 internal readonly struct ClipDecoderMp3Header

@@ -1,4 +1,4 @@
-using Hindsound.Linux.Export;
+using Hindsound.Unix.Export;
 
 namespace Hindsound.Linux.Tests.Export;
 

@@ -2,9 +2,9 @@ using System.Runtime.Versioning;
 using Hindsound.App;
 using Hindsound.Linux.App;
 using Hindsound.Linux.Desktop;
-using Hindsound.Linux.Export;
-using Hindsound.Linux.Library;
 using Hindsound.Linux.Window;
+using Hindsound.Unix.Export;
+using Hindsound.Unix.Library;
 
 namespace Hindsound.Linux;
 
@@ -46,7 +46,7 @@ internal static class Program
         if (options.ProveMp3Folder is not null)
         {
             var proof = Mp3Proof.Write(options.ProveMp3Folder, journal);
-            return proof == 0 ? Mp3ReadBack.Check(options.ProveMp3Folder, new LinuxClipDecoder(), journal.Write) : proof;
+            return proof == 0 ? Mp3ReadBack.Check(options.ProveMp3Folder, new UnixClipDecoder(), journal.Write) : proof;
         }
 
         using var instance = LinuxInstanceChannel.Take(options, journal.Write);

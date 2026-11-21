@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using Hindsound.Library;
 
-namespace Hindsound.Linux.Library;
+namespace Hindsound.Unix.Library;
 
 /// <summary>
 /// A RIFF/WAVE file read in portable code: integer PCM at 8, 16, 24 or 32 bits and float at 32 or 64 bits, any rate and up to

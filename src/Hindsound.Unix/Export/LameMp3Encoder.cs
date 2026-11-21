@@ -1,6 +1,6 @@
 using Hindsound.Audio;
 
-namespace Hindsound.Linux.Export;
+namespace Hindsound.Unix.Export;
 
 /// <summary>
 /// The MP3 encoder of <see cref="Hindsound.App.PlatformDefaults.Mp3Encoder"/>, through the libmp3lame.so.0 shipped with the

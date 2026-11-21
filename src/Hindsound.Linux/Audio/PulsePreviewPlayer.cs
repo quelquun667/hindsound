@@ -35,7 +35,7 @@ internal sealed class PulsePreviewPlayer : IPreviewPlayer, IDisposable
     private IPulsePlaybackOutput? _output;
     private bool _disposed;
 
-    /// <param name="decoder">Reads the files: <c>LinuxClipDecoder</c> in the app.</param>
+    /// <param name="decoder">Reads the files: <c>UnixClipDecoder</c> in the app.</param>
     /// <param name="silence">The silence the capture of the PC's sound reads; the same one the capture factory was given.</param>
     /// <param name="log">The log of the run.</param>
     public PulsePreviewPlayer(IClipDecoder decoder, PulsePlaybackSilence silence, Action<string>? log = null)

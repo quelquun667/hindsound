@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 
-namespace Hindsound.Linux.Library;
+namespace Hindsound.Unix.Library;
 
 /// <summary>
 /// Where the frames of an mp3 really are, from the Xing or Info frame and its LAME tag (LAME and FFmpeg write one): the frame

@@ -4,9 +4,9 @@ using Hindsound.Linux.App;
 using Hindsound.Linux.Audio;
 using Hindsound.Linux.DBus;
 using Hindsound.Linux.Desktop;
-using Hindsound.Linux.Export;
 using Hindsound.Linux.Input;
 using Hindsound.Linux.Updates;
+using Hindsound.Unix.Export;
 using Tmds.DBus.Protocol;
 
 namespace Hindsound.Linux;
@@ -31,7 +31,7 @@ namespace Hindsound.Linux;
 //             LinuxDump.cs               --dump-settings, on the text of the window
 //             Text/FreeTypeText.cs       the text of the window, with the fonts shipped with the app
 //             Input/                     the keys, the text field, the clipboard text and the folder dialog of the window
-//   Library/  LinuxClipDecoder.cs        reading a clip back for the editor and the listening (LinuxShell)
+//   Library/  UnixClipDecoder.cs        reading a clip back for the editor and the listening (LinuxShell)
 //   Desktop/  FreedesktopNotification.cs the notification, silent, with "Show in folder" (LinuxShell)
 //             LinuxClipboard.cs          the clip on the clipboard as text/uri-list (LinuxShell)
 //             LinuxFolderShell.cs        the folder of the clips, the clip selected (LinuxShell)

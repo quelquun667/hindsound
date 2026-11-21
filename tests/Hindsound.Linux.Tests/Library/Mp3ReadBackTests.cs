@@ -1,6 +1,6 @@
 using System.Text;
-using Hindsound.Linux.Library;
 using Hindsound.Linux.Tests.Export;
+using Hindsound.Unix.Library;
 
 namespace Hindsound.Linux.Tests.Library;
 
@@ -8,7 +8,7 @@ namespace Hindsound.Linux.Tests.Library;
 public sealed class Mp3ReadBackTests : IDisposable
 {
     private readonly TestFolder _folder = new();
-    private readonly LinuxClipDecoder _decoder = new();
+    private readonly UnixClipDecoder _decoder = new();
     private readonly List<string> _log = [];
 
     public void Dispose() => _folder.Dispose();

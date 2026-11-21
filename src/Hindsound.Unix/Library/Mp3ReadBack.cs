@@ -2,7 +2,7 @@ using System.Globalization;
 using Hindsound.Audio;
 using Hindsound.Library;
 
-namespace Hindsound.Linux.Library;
+namespace Hindsound.Unix.Library;
 
 /// <summary>
 /// After <c>--prove-mp3</c> on Linux, the MP3 it wrote is read back by the decoder of the preview and the editor, in the

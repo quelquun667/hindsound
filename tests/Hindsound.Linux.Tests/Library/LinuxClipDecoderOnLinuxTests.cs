@@ -1,9 +1,9 @@
 using System.Runtime.Versioning;
 using Hindsound.App;
 using Hindsound.Export;
-using Hindsound.Linux.Export;
-using Hindsound.Linux.Library;
 using Hindsound.Linux.Tests.Export;
+using Hindsound.Unix.Export;
+using Hindsound.Unix.Library;
 using static Hindsound.Linux.Tests.Library.ClipSignals;
 
 namespace Hindsound.Linux.Tests.Library;
@@ -17,7 +17,7 @@ namespace Hindsound.Linux.Tests.Library;
 [Trait("Category", "Linux")]
 [SupportedOSPlatform("linux")]
 [Collection(PlatformDefaultsCollection.Name)]
-public sealed class LinuxClipDecoderOnLinuxTests
+public sealed class UnixClipDecoderOnLinuxTests
 {
     private static readonly string? BuiltDirectory = Environment.GetEnvironmentVariable("HINDSOUND_LAME_DIR") is { Length: > 0 } dir ? dir : null;
 
@@ -58,7 +58,7 @@ public sealed class LinuxClipDecoderOnLinuxTests
         using var folder = new TestFolder();
         var path = WriteMp3(folder, "tone.mp3", Sine(Rate, channels, 3), channels, kbps);
 
-        using var stream = new LinuxClipDecoder().Open(path);
+        using var stream = new UnixClipDecoder().Open(path);
         var samples = ReadAll(stream);
 
         Assert.Equal(channels, stream.Channels);
@@ -86,7 +86,7 @@ public sealed class LinuxClipDecoderOnLinuxTests
         var reference = Chirp(2);
         var path = WriteMp3(folder, "chirp.mp3", reference, 1, 192);
 
-        using var stream = new LinuxClipDecoder().Open(path);
+        using var stream = new UnixClipDecoder().Open(path);
         var samples = ReadAll(stream);
 
         Assert.Equal(reference.Length, samples.Length);

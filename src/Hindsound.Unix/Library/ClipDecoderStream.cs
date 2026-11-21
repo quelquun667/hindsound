@@ -1,7 +1,7 @@
 using Hindsound.Audio;
 using Hindsound.Library;
 
-namespace Hindsound.Linux.Library;
+namespace Hindsound.Unix.Library;
 
 /// <summary>
 /// One open file for the app: the frames of an <see cref="IClipDecoderSource"/>, mixed down to stereo if it has more than two

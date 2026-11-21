@@ -3,11 +3,11 @@ using Hindsound.App;
 using Hindsound.Library;
 using Hindsound.Linux.Audio;
 using Hindsound.Linux.Desktop;
-using Hindsound.Linux.Library;
 using Hindsound.Linux.Tray;
 using Hindsound.Linux.Window;
 using Hindsound.Linux.Window.Text;
 using Hindsound.Ui;
+using Hindsound.Unix.Library;
 
 namespace Hindsound.Linux.App;
 
@@ -71,11 +71,11 @@ internal sealed class LinuxShell : IAppShell
 
     public IFolderShell NewFolderShell() => new LinuxFolderShell(log);
 
-    public IPreviewPlayer NewPreviewPlayer() => new PulsePreviewPlayer(new LinuxClipDecoder(), silence, log);
+    public IPreviewPlayer NewPreviewPlayer() => new PulsePreviewPlayer(new UnixClipDecoder(), silence, log);
 
     public IRecycleBin NewRecycleBin(Action<string> journal) => FreedesktopTrash.ForUser(journal);
 
-    public IClipDecoder NewClipDecoder() => new LinuxClipDecoder();
+    public IClipDecoder NewClipDecoder() => new UnixClipDecoder();
 
     public IAudioChoices AudioChoices { get; }
 

@@ -2,8 +2,8 @@ using System.Text;
 using Hindsound.Audio;
 using Hindsound.Export;
 using Hindsound.Library;
-using Hindsound.Linux.Library;
 using Hindsound.Linux.Tests.Export;
+using Hindsound.Unix.Library;
 using static Hindsound.Linux.Tests.Library.ClipSignals;
 
 namespace Hindsound.Linux.Tests.Library;
@@ -79,13 +79,13 @@ internal static class ClipSignals
 /// The clips of the library read back by the decoder of the Linux app: the length, the channels, the rate of 48 kHz, the level,
 /// the pitch, the frame a cut lands on, and what can't be read. It runs on Windows too: the decoder is portable code.
 /// </summary>
-public sealed class LinuxClipDecoderTests : IDisposable
+public sealed class UnixClipDecoderTests : IDisposable
 {
     private const int Rate = ClipSignals.Rate;
     private const double Amplitude = ClipSignals.Amplitude;
 
     private readonly TestFolder _folder = new();
-    private readonly LinuxClipDecoder _decoder = new();
+    private readonly UnixClipDecoder _decoder = new();
 
     public void Dispose() => _folder.Dispose();
 

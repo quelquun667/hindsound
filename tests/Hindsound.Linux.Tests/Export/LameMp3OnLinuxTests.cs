@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Runtime.Versioning;
 using Hindsound.App;
 using Hindsound.Export;
-using Hindsound.Linux.Export;
+using Hindsound.Unix.Export;
 
 namespace Hindsound.Linux.Tests.Export;
 

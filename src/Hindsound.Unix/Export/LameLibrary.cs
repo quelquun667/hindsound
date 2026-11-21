@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace Hindsound.Linux.Export;
+namespace Hindsound.Unix.Export;
 
 /// <summary>
 /// The few functions of libmp3lame the app calls, found by name in the library once it is loaded. Reached through function

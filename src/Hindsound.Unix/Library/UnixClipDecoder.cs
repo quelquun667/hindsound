@@ -1,13 +1,13 @@
 using Hindsound.Library;
 
-namespace Hindsound.Linux.Library;
+namespace Hindsound.Unix.Library;
 
 /// <summary>
 /// Reads a clip of the library back to float samples on Linux, in code that runs anywhere: a wav by <see cref="ClipDecoderWav"/>,
 /// an mp3 by NLayer (<see cref="ClipDecoderMp3"/>). What the app reads is stereo or mono at 48 kHz, as the Windows decoder
 /// gives it, and the start and the end of an mp3 are cut at the same frames.
 /// </summary>
-internal sealed class LinuxClipDecoder : IClipDecoder
+internal sealed class UnixClipDecoder : IClipDecoder
 {
     public IDecodedStream Open(string path)
     {

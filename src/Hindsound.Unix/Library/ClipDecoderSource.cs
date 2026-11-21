@@ -1,4 +1,4 @@
-namespace Hindsound.Linux.Library;
+namespace Hindsound.Unix.Library;
 
 /// <summary>
 /// A file of the library read back at its own rate and channel count, to the frame: the part of a decoder that knows a
