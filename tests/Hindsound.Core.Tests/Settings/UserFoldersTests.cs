@@ -95,14 +95,23 @@ public sealed class UserFoldersTests
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var music = Environment.GetFolderPath(Environment.SpecialFolder.MyMusic);
 
-        if (roaming.Length > 0)
+        // macOS has no "before": the Mac app keeps its settings in ~/Library/Application Support (what .NET gives for the
+        // local data; for the roaming data it gives ~/.config, as on Linux) and its log in ~/Library/Logs, where Console.app
+        // looks. Windows and Linux keep the folders they always had.
+        var mac = OperatingSystem.IsMacOS();
+        var settingsRoot = mac ? local : roaming;
+        var log = mac
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "Logs", "Hindsound", "hindsound.log")
+            : Path.Combine(local, "Hindsound", "hindsound.log");
+
+        if (settingsRoot.Length > 0)
         {
-            Assert.Equal(Path.Combine(roaming, "Hindsound", "settings.json"), SettingsStore.DefaultPath);
+            Assert.Equal(Path.Combine(settingsRoot, "Hindsound", "settings.json"), SettingsStore.DefaultPath);
         }
 
         if (local.Length > 0)
         {
-            Assert.Equal(Path.Combine(local, "Hindsound", "hindsound.log"), Journal.PathFor(null));
+            Assert.Equal(log, Journal.PathFor(null));
             Assert.Equal(Path.Combine(local, "Hindsound", "Rescued"), ClipSaver.DefaultRescueFolder);
             Assert.Equal(Path.Combine(local, "Hindsound", "updates"), UpdateStateStore.DefaultFolder);
         }
