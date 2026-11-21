@@ -559,26 +559,42 @@ public sealed class TextLeakCollection
 [Collection(TextLeakCollection.Name)]
 public class TextLeakTests
 {
+    private const int MaxMeasures = 5;
+
+    // Even alone, the count of USER objects is not only ours: a thread of an earlier test that used user32 takes its own with
+    // it when it ends, on its own schedule. On the Windows runner of the CI it fell by one during the drawings (11 then 10,
+    // 12 then 11). The drawings can only add to it, so a count that fell was moved from elsewhere: only then is the measure
+    // taken again. A leak raises the count, and that is checked at once, never measured again.
     [Fact]
     public void Two_hundred_drawings_leave_no_GDI_USER_or_COM_object_behind()
     {
         using var engine = TextEngine.TryCreate(_ => { }, missingForTests: [])!;
         var process = Native.GetCurrentProcess();
         Draw(engine);
-        var references = engine.FactoryReferences();
-        var gdi = Native.GetGuiResources(process, Native.GR_GDIOBJECTS);
-        var user = Native.GetGuiResources(process, Native.GR_USEROBJECTS);
-
-        for (var i = 0; i < 200; i++)
+        for (var measure = 1; ; measure++)
         {
-            Draw(engine);
-        }
+            var references = engine.FactoryReferences();
+            var gdi = Native.GetGuiResources(process, Native.GR_GDIOBJECTS);
+            var user = Native.GetGuiResources(process, Native.GR_USEROBJECTS);
 
-        Assert.Equal(references, engine.FactoryReferences());
-        Assert.Equal(gdi, Native.GetGuiResources(process, Native.GR_GDIOBJECTS));
-        Assert.Equal(user, Native.GetGuiResources(process, Native.GR_USEROBJECTS));
-        // Every target, brush and layout given back, to its last reference: a kept one leaks nothing the counts above see.
-        Assert.Equal(0, engine.HeldForTests);
+            for (var i = 0; i < 200; i++)
+            {
+                Draw(engine);
+            }
+
+            var userAfter = Native.GetGuiResources(process, Native.GR_USEROBJECTS);
+            if (userAfter < user && measure < MaxMeasures)
+            {
+                continue;
+            }
+
+            Assert.Equal(references, engine.FactoryReferences());
+            Assert.Equal(gdi, Native.GetGuiResources(process, Native.GR_GDIOBJECTS));
+            Assert.Equal(user, userAfter);
+            // Every target, brush and layout given back, to its last reference: a kept one leaks nothing the counts above see.
+            Assert.Equal(0, engine.HeldForTests);
+            return;
+        }
     }
 
     // The counts of USER objects here are those of the whole process, and a pool thread that called user32 takes its own with it
