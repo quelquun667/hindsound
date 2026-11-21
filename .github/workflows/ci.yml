@@ -315,13 +315,11 @@ jobs:
           program="$app/Contents/MacOS/hindsound"
           folder="$RUNNER_TEMP/mac-loop"
           mkdir -p "$folder"
-          printf '%s
-' '{"audio":{"micDeviceId":"disabled"}}' > "$folder/settings.json"
+          printf '%s\n' '{"audio":{"micDeviceId":"disabled"}}' > "$folder/settings.json"
           requirement=$(codesign -d -r- "$app" 2>&1 | sed -n 's/^#* *designated => //p' | head -n 1)
           echo "designated requirement: $requirement"
           if csreq -r "=$requirement" -b "$folder/csreq.bin"; then
-            hex=$(xxd -p "$folder/csreq.bin" | tr -d '
-')
+            hex=$(xxd -p "$folder/csreq.bin" | tr -d '\n')
             for db in "/Library/Application Support/com.apple.TCC/TCC.db" "$HOME/Library/Application Support/com.apple.TCC/TCC.db"; do
               for service in kTCCServicePostEvent kTCCServiceAccessibility; do
                 sudo sqlite3 "$db" "insert or replace into access (service, client, client_type, auth_value, auth_reason, auth_version, csreq, flags, last_modified) values ('$service', 'io.github.quelquun667.hindsound', 0, 2, 3, 1, X'$hex', 0, CAST(strftime('%s','now') AS INTEGER));"                   && echo "tcc: $service written in $db" || echo "tcc: $service not written in $db"
