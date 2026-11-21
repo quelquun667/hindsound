@@ -76,7 +76,7 @@ public sealed class MacAudioListsTests
     [Theory]
     [InlineData("dev")]
     [InlineData("devs#")]
-    [InlineData("dév#")]
+    [InlineData("d\u00e9v#")]
     public void A_code_is_four_ascii_characters(string text) =>
         Assert.Throws<ArgumentException>(() => HalCodes.Code(text));
 
