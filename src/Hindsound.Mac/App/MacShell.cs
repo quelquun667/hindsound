@@ -2,11 +2,13 @@ using System.Runtime.Versioning;
 using Hindsound.App;
 using Hindsound.Library;
 using Hindsound.Mac.Desktop;
+using Hindsound.Mac.Notification;
 using Hindsound.Mac.Tray;
 using Hindsound.Mac.Window;
 using Hindsound.Ui;
 using Hindsound.Unix.App;
 using Hindsound.Unix.Library;
+using Hindsound.Unix.Notification;
 using Hindsound.Unix.Window;
 
 namespace Hindsound.Mac.App;
@@ -36,7 +38,9 @@ internal sealed class MacShell(Action<string> log) : IAppShell
         return new MacAppLoop(_loop, _idle);
     }
 
-    public INotificationView NewNotification(IAppLoop loop, bool offscreen) => throw Later("the notification", "M2b");
+    /// <summary>The notification drawn by the app, in an SDL window that takes no focus; <paramref name="offscreen"/> shows nothing and keeps the times.</summary>
+    public INotificationView NewNotification(IAppLoop loop, bool offscreen) =>
+        new NotificationPresenter(loop, offscreen ? null : static () => new SdlNotificationSurface(new MacNotificationHook()), MacText.Create, log);
 
     public ITrayIcon NewTray(IAppLoop loop) =>
         MacStatusItem.TryCreate(loop, log) ?? throw new NotSupportedException("the icon of the menu bar needs the main thread");

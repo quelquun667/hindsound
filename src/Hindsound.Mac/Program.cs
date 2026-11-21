@@ -1,6 +1,7 @@
 using System.Runtime.Versioning;
 using Hindsound.App;
 using Hindsound.Mac.App;
+using Hindsound.Mac.Notification;
 using Hindsound.Mac.Window;
 using Hindsound.Unix.App;
 using Hindsound.Unix.Export;
@@ -22,6 +23,11 @@ internal static class Program
 
     private static int Main(string[] args)
     {
+        if (MacNotificationProof.Folder(args) is { } notificationProof)
+        {
+            return MacNotificationProof.Run(notificationProof, Console.WriteLine);
+        }
+
         var launch = MacLaunch.Read(args);
         var options = AppOptions.Parse(launch.Rest);
         var journal = new Journal(Journal.PathFor(options.SettingsPath));

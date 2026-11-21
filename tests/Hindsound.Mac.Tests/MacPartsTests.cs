@@ -58,8 +58,8 @@ public sealed class MacPartsTests
         var features = PlatformFeatures.Mac(() => "/Applications/Hindsound.app/Contents/MacOS/hindsound --save");
 
         Assert.False(features.SingleApp);
-        Assert.False(features.NotificationLook);
-        Assert.False(features.TestNotification);
+        Assert.True(features.NotificationLook);
+        Assert.True(features.TestNotification);
         Assert.False(features.ConfirmSound);
         Assert.Equal(ShortcutMode.Command, features.Shortcuts());
         Assert.Equal("Open at login", features.StartupLabel);
