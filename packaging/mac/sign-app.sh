@@ -60,7 +60,8 @@ codesign --force --timestamp=none --sign "$identity" ${keychain_args[@]+"${keych
 codesign --verify --deep --strict --verbose=2 "$app"
 codesign -dvv "$app" 2>&1 | grep -E '^(Identifier|Format|Signature|Authority|CodeDirectory)' || true
 
-requirement="$(codesign -d -r- "$app" 2>&1 | sed -n 's/^designated => //p')"
+# An implicit requirement is written "# designated => ...": the same reading as the jobs of ci.yml.
+requirement="$(codesign -d -r- "$app" 2>&1 | sed -n 's/^#* *designated => //p' | head -n 1)"
 echo "sign-app: designated requirement: $requirement"
 if [ "$identity" = - ]; then
   [[ "$requirement" == cdhash* ]] || { echo "An ad hoc signature should be required by its cdhash." >&2; exit 1; }

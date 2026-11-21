@@ -10,7 +10,7 @@
 #   password.txt                  its password, random: the secret MACOS_SIGNING_P12_PASSWORD
 #   hindsound-signing.pem         the certificate alone, without the key, to read its SHA-1 later
 # tools/release/README.md says what to do with them. The CI runs this script too (job macos of release-files.yml), with a
-# throwaway OUT_DIR, to sign a copy of the app with what it makes.
+# throwaway OUT_DIR, and signs the zip again with what it makes through resign-zip.sh, as the release does.
 #
 # Usage: make-signing-certificate.sh OUT_DIR
 # OPENSSL may name another openssl program. Works with OpenSSL 3 (Git Bash on Windows, Homebrew) and LibreSSL (macOS).

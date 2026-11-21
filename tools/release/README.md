@@ -23,8 +23,8 @@ app below, which is optional.
 
 ### The certificate of the Mac app
 
-Not made yet. Without it, the job `macos` signs `Hindsound.app` ad hoc, and its log says so in a warning
-(`Mac app signed ad hoc`): the release still goes out. An app signed ad hoc is a new app for macOS at each version, which
+Not made yet. Without it, the job `sign-mac` of `release.yml` sends `Hindsound.app` signed ad hoc, and its log says so in
+a warning (`Mac app signed ad hoc`): the release still goes out. An app signed ad hoc is a new app for macOS at each version, which
 asks again for the permissions (the sound of the system, the microphone) after each update. Signed by the same certificate,
 version after version, it keeps them: the probe of the CI showed it (version 2 signed by the certificate of version 1
 read its permission and captured the sound; signed ad hoc, it was stuck on a prompt). The certificate is made here, not by
@@ -50,13 +50,17 @@ Keep the folder somewhere safe and private, outside the repo, or delete it: GitH
 certificate cannot be made again the same. A new certificate works too, but the users then give the permissions once more.
 Never commit these files: the key signs the app of every user.
 
-What the job does with it: `release.yml` passes the two secrets to `release-files.yml`, and only to its step
-`Assemble and sign Hindsound.app`; `ci.yml` passes none, so a pull request never reads them. That step decodes the `.p12`
-into a folder of its own, removed at the end of the step, and `packaging/mac/sign-app.sh` puts it in a keychain made for
-the run, signs each Mach-O then the bundle with its SHA-1, checks the signature and the designated requirement, and
-deletes the keychain whatever happens. Every run, with the secrets or not, also makes a throwaway certificate with
-`make-signing-certificate.sh` and signs a copy of the app with it, through the same base64 and `sign-app.sh`: the commands
-above are tried on every pull request.
+What the release does with it: `release-files.yml`, which every pull request also runs, reads no secret and signs the
+app ad hoc. The two secrets reach only the step `Sign the Mac app with the certificate` of the job `sign-mac` of
+`release.yml`, which no pull request runs. That step decodes the `.p12` into a folder of its own, removed at the end of the
+step, and `packaging/mac/resign-zip.sh` unzips the zip of the job `macos`, has `packaging/mac/sign-app.sh` put the `.p12`
+in a keychain made for the run, sign each Mach-O then the bundle with its SHA-1, check the signature and the designated
+requirement, and delete the keychain whatever happens, then makes the zip again with `ditto` and checks it with
+`check-zip.sh`, which also requires the designated requirement to name the SHA-1 it reads from the `.p12`. The job
+`assemble-signed` then gathers the files again with that zip, so its manifest and `SHA256SUMS` follow it, and the job
+`release` sends those. Every pull request, in the job `macos`, also makes a throwaway certificate with
+`make-signing-certificate.sh` and runs `resign-zip.sh` with it, through the same base64: the commands above and the path
+of the release are tried before the secret exists.
 
 ## Release a version
 

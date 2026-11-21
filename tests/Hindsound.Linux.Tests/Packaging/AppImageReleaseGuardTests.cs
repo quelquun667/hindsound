@@ -51,7 +51,7 @@ public sealed class AppImageReleaseGuardTests
         Assert.Contains("$fuseName = '" + RuntimeSources[0] + "'\n", check, StringComparison.Ordinal);
         Assert.Contains("$runtimeSourceName = '" + RuntimeSources[1] + "'\n", check, StringComparison.Ordinal);
         Assert.Contains("$librariesSourceName = '" + RuntimeSources[2] + "'\n", check, StringComparison.Ordinal);
-        Assert.Contains("$manifestName, $announceNames[0], $announceNames[1], $lameName, $fuseName, $runtimeSourceName, $librariesSourceName,\n    $sumsName\n)", check, StringComparison.Ordinal);
+        Assert.Contains("$macZipName, $manifestName, $announceNames[0], $announceNames[1], $announceNames[2], $lameName, $fuseName,\n    $runtimeSourceName, $librariesSourceName, $sumsName\n)", check, StringComparison.Ordinal);
     }
 
     [Fact]

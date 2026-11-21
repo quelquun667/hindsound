@@ -6,7 +6,8 @@ namespace Hindsound.Linux.Tests.Packaging;
 /// The Setup and the portable zip take the texts at the top of licenses/, so that top keeps exactly the texts of the
 /// Windows build of 0.5.0: an installed copy gets the same licence files as before. A text that only the Linux packages
 /// need (a row of the notices whose "In" cell names Linux and not Windows) lives in licenses/linux/, which both Linux
-/// packages carry and no Windows copy does.
+/// packages carry and no Windows copy does. A text that only the Mac app needs (FreeType, HarfBuzz) lives in licenses/mac/,
+/// which only the Mac app carries.
 /// </summary>
 public sealed partial class LicenceFolderSplitTests
 {
@@ -35,7 +36,7 @@ public sealed partial class LicenceFolderSplitTests
         var folders = Directory.GetDirectories(licences).Select(path => Path.GetFileName(path)!).ToList();
 
         Assert.Equal(WindowsTexts, files);
-        Assert.Equal(["linux"], folders);
+        Assert.Equal(["linux", "mac"], folders.Order(StringComparer.Ordinal).ToList());
     }
 
     [Fact]

@@ -3,26 +3,32 @@
 #   - its name, Hindsound-<version>-macos-arm64.zip, and its entries: Hindsound.app and nothing else, no AppleDouble file
 #     (._*) nor __MACOSX;
 #   - the bundle: its Info.plist and version, the program, the four dylibs, the fonts, the licences;
-#   - its signature: codesign --verify --deep --strict, and what signed it (sign-app.sh printed the same);
+#   - its signature: codesign --verify --deep --strict, and what signed it (sign-app.sh printed the same): ad hoc (the
+#     designated requirement is a cdhash), or, with CERTIFICATE_SHA1, the certificate of that SHA-1 (the requirement
+#     names it);
 #   - what each Mach-O links: the system and the bundle only, nothing of Homebrew (/opt/homebrew, /usr/local);
 #   - the app started for real: --prove-mp3 (one second of a sine as an MP3 through the path of a clip, read back) with
 #     the LAME of the bundle, then --dump-settings (the 80 pages of the window, off screen) with the SDL, FreeType and
 #     HarfBuzz of the bundle and its fonts, the microphone, the clipboard and the shortcuts off.
 #
-# Usage: check-zip.sh ZIP VERSION WORK_DIR
-#   WORK_DIR  must not exist; the zip is unzipped there, and the runs keep their logs and pages there
+# Usage: check-zip.sh ZIP VERSION WORK_DIR [CERTIFICATE_SHA1]
+#   WORK_DIR          must not exist; the zip is unzipped there, and the runs keep their logs and pages there
+#   CERTIFICATE_SHA1  the SHA-1 of the certificate that must have signed the app, 40 hex digits; without it, the app must
+#                     be signed ad hoc
 # Last checked: 21/11/2026, on the runner macos-26 (job macos of release-files.yml).
 
 set -euo pipefail
 
-[ "$#" -eq 3 ] || { echo "Usage: $0 ZIP VERSION WORK_DIR" >&2; exit 2; }
+[ "$#" -eq 3 ] || [ "$#" -eq 4 ] || { echo "Usage: $0 ZIP VERSION WORK_DIR [CERTIFICATE_SHA1]" >&2; exit 2; }
 zip="$1"
 version="$2"
 work="$3"
+certificate="$(tr 'A-F' 'a-f' <<< "${4:-}")"
 readonly PAGES=80
 fail() { echo "check-zip: $*" >&2; exit 1; }
 
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "the version '$version' is not x.y.z"
+[ -z "$certificate" ] || [[ "$certificate" =~ ^[0-9a-f]{40}$ ]] || fail "the SHA-1 '$4' is not 40 hex digits"
 [ "$(basename "$zip")" = "Hindsound-$version-macos-arm64.zip" ] || fail "$(basename "$zip") is not Hindsound-$version-macos-arm64.zip"
 [ ! -e "$work" ] || fail "$work exists"
 mkdir -p "$work"
@@ -53,7 +59,17 @@ done
 
 codesign --verify --deep --strict --verbose=2 "$app"
 codesign -dvv "$app" 2>&1 | grep -E '^(Identifier|Signature|Authority)' | sed 's/^/check-zip: signature: /' || true
-codesign -d -r- "$app" 2>&1 | sed -n 's/^designated => /check-zip: designated requirement: /p'
+# An implicit requirement is written "# designated => ...": the same reading as sign-app.sh and the jobs of ci.yml.
+requirement="$(codesign -d -r- "$app" 2>&1 | sed -n 's/^#* *designated => //p' | head -n 1)"
+echo "check-zip: designated requirement: $requirement"
+if [ -z "$certificate" ]; then
+  [[ "$requirement" == cdhash* ]] || fail "the app is not signed ad hoc: its designated requirement is '$requirement'"
+  echo "check-zip: signed ad hoc."
+else
+  [ "$requirement" = "identifier \"io.github.quelquun667.hindsound\" and certificate leaf = H\"$certificate\"" ] \
+    || fail "the designated requirement '$requirement' does not name the certificate $certificate"
+  echo "check-zip: signed by the certificate with the SHA-1 $certificate."
+fi
 
 failed=0
 while IFS= read -r file; do

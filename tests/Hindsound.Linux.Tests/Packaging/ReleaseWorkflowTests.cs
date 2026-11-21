@@ -3,9 +3,10 @@ using System.Text.RegularExpressions;
 namespace Hindsound.Linux.Tests.Packaging;
 
 /// <summary>
-/// The rules of the release, read from the workflows: the release waits for the Linux job, sends every file of the
-/// release and checks each one downloaded back before it publishes, and the rehearsal of every pull request builds the same
-/// files with the same workflow without any way to publish them.
+/// The rules of the release, read from the workflows: the release waits for the Linux and the macOS jobs, sends every file
+/// of the release and checks each one downloaded back before it publishes, and the rehearsal of every pull request builds
+/// the same files with the same workflow without any way to publish them, nor to read a secret. The certificate of the Mac
+/// app is read by release.yml only, in one step of its job sign-mac.
 /// </summary>
 public sealed partial class ReleaseWorkflowTests
 {
@@ -18,9 +19,11 @@ public sealed partial class ReleaseWorkflowTests
         "Hindsound-$env:VERSION-win-x64-portable.zip",
         "hindsound-$env:VERSION-linux-x64.AppImage",
         "hindsound-$env:VERSION-linux-x64.tar.gz",
+        "Hindsound-$env:VERSION-macos-arm64.zip",
         "hindsound-update-win-x64.json",
         "hindsound-update-win-x64-portable.json",
         "hindsound-update-linux-x64.json",
+        "hindsound-update-macos-arm64.json",
         "lame-3.100.tar.gz",
         "fuse-3.15.0.tar.xz",
         "type2-runtime-20251108-source.tar.gz",
@@ -36,9 +39,9 @@ public sealed partial class ReleaseWorkflowTests
         var release = Read("release.yml");
         var files = Read("release-files.yml");
 
-        Assert.Contains("\n  release:\n    needs: [check, files]\n", release, StringComparison.Ordinal);
+        Assert.Contains("\n  release:\n    needs: [check, files, sign-mac, assemble-signed]\n", release, StringComparison.Ordinal);
         Assert.Contains("\n  files:\n    needs: check\n    permissions:\n      contents: read\n    uses: ./.github/workflows/release-files.yml\n", release, StringComparison.Ordinal);
-        Assert.Contains("\n  assemble:\n    needs: [windows, linux]\n", files, StringComparison.Ordinal);
+        Assert.Contains("\n  assemble:\n    needs: [windows, linux, macos]\n", files, StringComparison.Ordinal);
 
         var linux = Job(files, "linux");
         Assert.Contains("\n    runs-on: ubuntu-22.04\n", linux, StringComparison.Ordinal);
@@ -46,6 +49,50 @@ public sealed partial class ReleaseWorkflowTests
         Assert.Contains("bash packaging/linux/check-packages.sh ", linux, StringComparison.Ordinal);
         Assert.Contains("name: hindsound-linux-x64\n", linux, StringComparison.Ordinal);
         Assert.Contains("name: hindsound-linux-x64\n", Job(files, "assemble"), StringComparison.Ordinal);
+
+        var macos = Job(files, "macos");
+        Assert.Contains("\n    runs-on: macos-26\n", macos, StringComparison.Ordinal);
+        Assert.Contains("bash packaging/mac/build-app.sh ", macos, StringComparison.Ordinal);
+        Assert.Contains("bash packaging/mac/check-zip.sh ", macos, StringComparison.Ordinal);
+        Assert.Contains("name: hindsound-macos-arm64\n", macos, StringComparison.Ordinal);
+        Assert.Contains("name: hindsound-macos-arm64\n", Job(files, "assemble"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Only_the_release_signs_the_Mac_app_with_the_certificate_and_sends_that_zip()
+    {
+        var release = Read("release.yml");
+        var signMac = Job(release, "sign-mac");
+        var signing = Step(signMac, "Sign the Mac app with the certificate");
+        var assembleSigned = Job(release, "assemble-signed");
+
+        // The two secrets of the certificate, in the env of that one step, and nowhere else: not passed to release-files.yml.
+        Assert.Equal(2, Regex.Matches(release, @"secrets\.").Count);
+        Assert.Contains("        env:\n          MACOS_SIGNING_P12: ${{ secrets.MACOS_SIGNING_P12 }}\n          MACOS_SIGNING_P12_PASSWORD: ${{ secrets.MACOS_SIGNING_P12_PASSWORD }}\n", signing, StringComparison.Ordinal);
+        Assert.DoesNotContain("secrets", Job(release, "files"), StringComparison.Ordinal);
+        Assert.DoesNotContain("secrets: inherit", release, StringComparison.Ordinal);
+
+        // sign-mac signs again the zip of the job macos, and only reads.
+        Assert.Contains("\n    needs: [check, files]\n    runs-on: macos-26\n", signMac, StringComparison.Ordinal);
+        Assert.Contains("\n    permissions:\n      contents: read\n", signMac, StringComparison.Ordinal);
+        Assert.Contains("name: hindsound-macos-arm64\n          path: ${{ runner.temp }}/adhoc\n", Step(signMac, "Take the Mac app signed ad hoc"), StringComparison.Ordinal);
+        Assert.Contains("bash packaging/mac/resign-zip.sh \"$RUNNER_TEMP/adhoc/$zip\" \"$VERSION\" \"$RUNNER_TEMP/signed/$zip\" ", signing, StringComparison.Ordinal);
+        Assert.Contains("name: hindsound-macos-arm64-signed\n          path: ${{ runner.temp }}/signed/\n", Step(signMac, "Keep the signed Mac app"), StringComparison.Ordinal);
+
+        // assemble-signed gathers the files around that zip, checks them, and the release sends what it kept.
+        Assert.Contains("\n    needs: [check, sign-mac]\n", assembleSigned, StringComparison.Ordinal);
+        Assert.Contains("\n    permissions:\n      contents: read\n", assembleSigned, StringComparison.Ordinal);
+        Assert.Contains("name: hindsound-macos-arm64-signed\n          path: ${{ runner.temp }}/macos\n", Step(assembleSigned, "Take the signed Mac app"), StringComparison.Ordinal);
+        Assert.Contains("-MacFolder \"$env:RUNNER_TEMP/macos\" -OutFolder \"$env:RUNNER_TEMP/release\"", Step(assembleSigned, "Gather the files of the release"), StringComparison.Ordinal);
+        Assert.Contains("./tools/release/check-release-files.ps1 -Folder \"$env:RUNNER_TEMP/release\" ", Step(assembleSigned, "Check the files of the release"), StringComparison.Ordinal);
+        Assert.Contains("name: release-files-signed\n          path: ${{ runner.temp }}/release/\n", Step(assembleSigned, "Keep the files of the release"), StringComparison.Ordinal);
+        Assert.Contains("name: release-files-signed\n          path: ${{ runner.temp }}/out\n", Step(Job(release, "release"), "Take the files of the release"), StringComparison.Ordinal);
+        foreach (var job in new[] { signMac, assembleSigned })
+        {
+            Assert.DoesNotContain("GH_TOKEN", job, StringComparison.Ordinal);
+            Assert.DoesNotContain("github.token", job, StringComparison.Ordinal);
+            Assert.DoesNotContain("gh release", job, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
@@ -104,7 +151,7 @@ public sealed partial class ReleaseWorkflowTests
         var report = Job(release, "report-failure");
 
         Assert.Equal(new[] { "    if: failure()" }, release.Split('\n').Where(line => line.TrimStart().StartsWith("if:", StringComparison.Ordinal)));
-        Assert.Contains("\n    needs: [check, files, release]\n", report, StringComparison.Ordinal);
+        Assert.Contains("\n    needs: [check, files, sign-mac, assemble-signed, release]\n", report, StringComparison.Ordinal);
         Assert.Contains("\n    permissions: {}\n", report, StringComparison.Ordinal);
         Assert.Contains("::error::", report, StringComparison.Ordinal);
         Assert.DoesNotContain("GH_TOKEN", report, StringComparison.Ordinal);

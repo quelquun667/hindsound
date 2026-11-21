@@ -208,6 +208,14 @@ $mutations = @(
     @($assets, 'if ($entry -cmatch ''(^|/)\._|__MACOSX'') {', 'if ($false) {')
     @($release, ' "$env:RUNNER_TEMP/out/Hindsound-$env:VERSION-macos-arm64.zip"', '')
     @('.github/workflows/release-files.yml', 'run: bash packaging/mac/check-zip.sh', 'run: echo packaging/mac/check-zip.sh')
+    # The certificate of the Mac app, read by sign-mac of release.yml only, and the zip it signs, the one sent
+    @($release, ('name: release-files-signed' + "`n" + '          path: ${{ runner.temp }}/out'), ('name: release-files' + "`n" + '          path: ${{ runner.temp }}/out'))
+    @($release, ('name: hindsound-macos-arm64-signed' + "`n" + '          path: ${{ runner.temp }}/macos'), ('name: hindsound-macos-arm64' + "`n" + '          path: ${{ runner.temp }}/macos'))
+    @($release, 'bash packaging/mac/resign-zip.sh "$RUNNER_TEMP/adhoc/$zip"', 'echo packaging/mac/resign-zip.sh "$RUNNER_TEMP/adhoc/$zip"')
+    @($release, ('      version: ${{ needs.check.outputs.version }}' + "`n`n" + '  # The Mac app'), ('      version: ${{ needs.check.outputs.version }}' + "`n" + '    secrets: inherit' + "`n`n" + '  # The Mac app'))
+    @($release, 'needs: [check, files, sign-mac, assemble-signed, release]', 'needs: [check, files, release]')
+    @('.github/workflows/release-files.yml', '        run: bash packaging/mac/build-app.sh', ('        env:' + "`n" + '          P12: ${{ secrets.MACOS_SIGNING_P12 }}' + "`n" + '        run: bash packaging/mac/build-app.sh'))
+    @('.github/workflows/release-files.yml', 'bash packaging/mac/resign-zip.sh "$RUNNER_TEMP/out/', 'echo packaging/mac/resign-zip.sh "$RUNNER_TEMP/out/')
 )
 
 $repository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).ProviderPath

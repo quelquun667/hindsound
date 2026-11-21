@@ -6,7 +6,8 @@
 #      fonts of tools/linux/fetch-fonts.sh, Contents/Resources/ LICENSE, THIRD-PARTY-NOTICES.md and, in licenses/ laid out
 #      as in the repository (the notices link to them), the licences of what the bundle carries, Contents/Info.plist from
 #      Info.plist.in with the version;
-#   3. signs it with sign-app.sh: by the certificate of HINDSOUND_SIGNING_P12 when it is set (the release), ad hoc
+#   3. signs it with sign-app.sh: ad hoc in the CI and in release-files.yml (resign-zip.sh signs the zip again with the
+#      certificate in the job sign-mac of release.yml), by the certificate of HINDSOUND_SIGNING_P12 when it is set, ad hoc
 #      otherwise;
 #   4. checks: plutil -lint, codesign --verify --deep --strict, and otool -L of every Mach-O: no path of Homebrew
 #      (/opt/homebrew, /usr/local) nor of the build machine, only the system and @rpath/@executable_path.
