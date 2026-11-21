@@ -82,7 +82,7 @@ release holds:
 | `hindsound-X.Y.Z-linux-x64.AppImage` | Linux: one file to run. See [Linux](#linux). |
 | `hindsound-X.Y.Z-linux-x64.tar.gz` | Linux, where the AppImage does not run: a folder to unpack. See [Linux](#linux). |
 | `hindsound_X.Y.Z_amd64.deb` | Ubuntu 22.04 and later, Debian 12 and later: a package to install with `apt`. See [Linux](#linux). |
-| `Hindsound-X.Y.Z-macos-arm64.zip` | macOS 14.4 and later, on a Mac with Apple silicon: the app, in a zip. See [macOS](#macos). |
+| `Hindsound-X.Y.Z-macos-arm64.zip` | macOS 14.4 and later (tried on macOS 26 only), on a Mac with Apple silicon: the app, in a zip. See [macOS](#macos). |
 | `SHA256SUMS` | The SHA-256 of every file of the release. |
 
 The portable zip, the AppImage and the tar.gz come with the releases after 0.5.0, and the `.deb` with the releases after
@@ -330,8 +330,10 @@ its own notification, as on Windows, and puts the clip on the clipboard as a fil
 **No one has tried it on a real Mac yet.** Everything in this section has only run on the macOS machines of GitHub's CI
 (macOS 26 on Apple silicon): the app is built, signed, unzipped and started there, its window drawn off screen, its MP3
 encoder and its capture checked with a test tone played through a virtual sound device, the permissions written by the CI
-itself. Pasting into a real app, a real hotkey pressed on a real keyboard, the prompts of macOS answered by a person and a
-real game or call have not been tried. If something does not work, the log is in
+itself. Pasting into a real app, a real hotkey pressed on a real keyboard (and on a keyboard other than the US one), the
+prompts of macOS answered by a person, a click on the notification of a clip (it may bring Hindsound to the front), a
+change of the sound output while Hindsound records, macOS 14 and 15 (only macOS 26 has run it), and a real game or call
+have not been tried. If something does not work, the log is in
 `~/Library/Logs/Hindsound/hindsound.log`; an issue with it helps.
 
 **Download.** `Hindsound-<version>-macos-arm64.zip` from the
@@ -341,8 +343,8 @@ on `main`, and download the `hindsound-macos-arm64` artifact (GitHub asks you to
 Open the zip in the Finder, and move `Hindsound.app` to `Applications`.
 
 **The first launch.** Hindsound is not signed by an Apple developer account nor notarized, so macOS blocks it the first
-time with a message that it could not verify it. Click `Done`, then open System Settings > Privacy & Security, scroll to
-the message about Hindsound, click `Open Anyway`, and confirm with your password. Each new version asks this once again.
+time with a message that it could not verify it. Click `Done`, then open System Settings > Privacy & Security (the names
+of macOS 15 and later; they may differ on macOS 14), scroll to the message about Hindsound, click `Open Anyway`, and confirm with your password. Each new version asks this once again.
 Or, in Terminal, remove the mark that the download put on the app, then open it as any other:
 
 ```sh
@@ -351,10 +353,16 @@ xattr -dr com.apple.quarantine /Applications/Hindsound.app
 
 **Two permissions.** At its first capture, macOS asks whether Hindsound may record the sound of the system (`System Audio
 Recording`), and, if your settings name a microphone, whether it may use the microphone. Without them, macOS gives
-Hindsound silence: after 2 seconds of it, Hindsound stops that capture and says which permission is missing. To give them
-back, or to take them away, open System Settings > Privacy & Security > Screen & System Audio Recording (the list
-`System Audio Recording Only`), and Privacy & Security > Microphone, then quit and start Hindsound again. If macOS asks
-again after an update, answer as the first time.
+Hindsound silence. After 2 seconds of it, if macOS reports the permission refused, Hindsound stops that capture; the window
+only shows that it is not capturing, and the log (`~/Library/Logs/Hindsound/hindsound.log`) says which permission is
+missing. To give them back, or to take them away, open System Settings > Privacy & Security > Screen & System Audio
+Recording (the list `System Audio Recording Only`), and Privacy & Security > Microphone, then quit and start Hindsound
+again (the names of macOS 15 and later; they may differ on macOS 14).
+
+macOS keeps these permissions for one signature of the app. For now each version is signed ad hoc, so macOS takes it for
+another app and asks again for both permissions after every update: answer as the first time. Once the releases are signed
+with the certificate of Hindsound, an update keeps them. To see which one you have, run
+`codesign -dv /Applications/Hindsound.app` in Terminal: `Signature=adhoc` is the first kind.
 
 **The icon and the hotkey.** Hindsound has no icon in the Dock: it is in the menu bar, with the same menu as on Windows.
 The hotkeys are set in Settings > Hotkeys, as on Windows, with `Control`, `Option`, `Shift` and `Cmd`. To save a clip from elsewhere, such as a shortcut of the Shortcuts app or of another keyboard tool, run the program inside
@@ -364,7 +372,8 @@ the app with `--save`:
 /Applications/Hindsound.app/Contents/MacOS/hindsound --save
 ```
 
-It reaches the Hindsound that is running; if none is, it starts one.
+It reaches the Hindsound that is running. If none is, it opens `Hindsound.app` as the Finder does, so that Hindsound
+does not depend on Terminal or on the Shortcuts app, and leaves: the next `--save` saves a clip.
 
 **Where things are.** Settings in `~/Library/Application Support/Hindsound/settings.json`, the same file as on Windows (see
 [Settings](#settings)); the log in `~/Library/Logs/Hindsound`; clips in `~/Music/Hindsound`. `Open at login`, in Settings > General, adds Hindsound

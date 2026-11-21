@@ -2,7 +2,9 @@
 # Checks the zip of the Mac app as a user gets it, unzipped in a new folder:
 #   - its name, Hindsound-<version>-macos-arm64.zip, and its entries: Hindsound.app and nothing else, no AppleDouble file
 #     (._*) nor __MACOSX;
-#   - the bundle: its Info.plist and version, the program, the four dylibs, the fonts, the licences;
+#   - the bundle: its Info.plist (version, identifier, minimum macOS, icon, and the two texts macOS shows when it asks for
+#     the permissions: without them it refuses the capture), the program, the four dylibs, the fonts, the icon, the
+#     licences (NLayer's among them: the program carries it);
 #   - its signature: codesign --verify --deep --strict, and what signed it (sign-app.sh printed the same): ad hoc (the
 #     designated requirement is a cdhash), or, with CERTIFICATE_SHA1, the certificate of that SHA-1 (the requirement
 #     names it);
@@ -47,13 +49,20 @@ contents="$app/Contents"
 plutil -lint "$contents/Info.plist"
 [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$contents/Info.plist")" = "$version" ] || fail "the Info.plist does not give $version"
 [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$contents/Info.plist")" = io.github.quelquun667.hindsound ] || fail "the Info.plist does not give the identifier of Hindsound"
+plist() { /usr/libexec/PlistBuddy -c "Print :$1" "$contents/Info.plist" 2> /dev/null || true; }
+[ "$(plist LSMinimumSystemVersion)" = 14.4 ] || fail "the Info.plist does not give macOS 14.4 as the minimum"
+[ "$(plist CFBundleIconFile)" = Hindsound ] || fail "the Info.plist does not name the icon Hindsound"
+for key in NSMicrophoneUsageDescription NSAudioCaptureUsageDescription; do
+  [[ "$(plist "$key")" == Hindsound\ keeps\ * ]] || fail "the Info.plist has no $key"
+done
 [ -x "$contents/MacOS/hindsound" ] || fail "the program is missing or not executable"
 for file in Frameworks/libSDL3.0.dylib Frameworks/libfreetype.6.dylib Frameworks/libharfbuzz.0.dylib Frameworks/libmp3lame.0.dylib \
             Resources/fonts/Selawik-Regular.ttf Resources/fonts/Selawik-Semibold.ttf Resources/fonts/BarlowSemiCondensed-SemiBold.ttf \
             Resources/fonts/CascadiaMono-Regular.ttf Resources/LICENSE Resources/THIRD-PARTY-NOTICES.md \
             Resources/licenses/LAME-COPYING.txt Resources/licenses/dotnet-runtime-LICENSE.txt Resources/licenses/linux/SDL3-LICENSE.txt \
             Resources/licenses/mac/FreeType-FTL.txt Resources/licenses/mac/HarfBuzz-COPYING.txt \
-            Resources/licenses/linux/Selawik-LICENSE.txt _CodeSignature/CodeResources; do
+            Resources/licenses/linux/Selawik-LICENSE.txt Resources/licenses/linux/NLayer-LICENSE.txt Resources/Hindsound.icns \
+            _CodeSignature/CodeResources; do
   [ -f "$contents/$file" ] || fail "the bundle has no Contents/$file"
 done
 

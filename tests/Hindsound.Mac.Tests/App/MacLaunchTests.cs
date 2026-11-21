@@ -31,6 +31,36 @@ public sealed class MacLaunchTests
         Assert.Equal("--save", MacLaunch.SaveOption);
     }
 
+    [Theory]
+    [InlineData("/Applications/Hindsound.app/Contents/MacOS/hindsound", "/Applications/Hindsound.app")]
+    [InlineData("/Users/me/Applications/My Apps/Hindsound.app/Contents/MacOS/hindsound", "/Users/me/Applications/My Apps/Hindsound.app")]
+    [InlineData("/tmp/out/Hindsound.APP/Contents/MacOS/hindsound", "/tmp/out/Hindsound.APP")]
+    public void A_program_inside_a_bundle_names_its_bundle(string program, string bundle) =>
+        Assert.Equal(bundle, MacLaunch.BundleOf(program));
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("/src/Hindsound.Mac/bin/Release/net10.0/osx-arm64/hindsound")]
+    [InlineData("/Applications/Hindsound/Contents/MacOS/hindsound")]
+    [InlineData("/Applications/Hindsound.app/Contents/MacOS/")]
+    [InlineData("/Applications/Hindsound.app/Contents/MacOS/sub/hindsound")]
+    [InlineData("/.app/Contents/MacOS/hindsound")]
+    [InlineData("Hindsound.app/Contents/MacOS/hindsound")]
+    public void A_program_outside_a_bundle_has_none(string? program) =>
+        Assert.Null(MacLaunch.BundleOf(program));
+
+    [Fact]
+    public void The_bundle_is_started_again_as_a_new_process_with_the_options_of_the_launch_but_not_save()
+    {
+        var launch = MacLaunch.Read(["--save", "--settings", "/tmp/my settings.json"]);
+
+        Assert.Equal(["-n", "/Applications/Hindsound.app", "--args", "--settings", "/tmp/my settings.json"],
+            MacLaunch.RelaunchArguments("/Applications/Hindsound.app", launch.Rest));
+        Assert.Equal(["-n", "/Applications/Hindsound.app"], MacLaunch.RelaunchArguments("/Applications/Hindsound.app", MacLaunch.Read(["--save"]).Rest));
+        Assert.Equal("/usr/bin/open", MacLaunch.OpenProgram);
+    }
+
     [Fact]
     public void The_menu_read_back_matches_only_when_every_line_is_the_one_of_the_app()
     {

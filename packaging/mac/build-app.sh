@@ -4,8 +4,8 @@
 #   2. lays out the bundle: Contents/MacOS/hindsound (and any other Mach-O the publish left: code only, or the signature
 #      breaks), Contents/Frameworks/ the four dylibs of tools/mac/build-natives.sh, Contents/Resources/fonts/ the four
 #      fonts of tools/linux/fetch-fonts.sh, Contents/Resources/ LICENSE, THIRD-PARTY-NOTICES.md and, in licenses/ laid out
-#      as in the repository (the notices link to them), the licences of what the bundle carries, Contents/Info.plist from
-#      Info.plist.in with the version;
+#      as in the repository (the notices link to them), the licences of what the bundle carries, and Hindsound.icns made
+#      from assets/logo.png; Contents/Info.plist from Info.plist.in with the version;
 #   3. signs it with sign-app.sh: ad hoc in the CI and in release-files.yml (resign-zip.sh signs the zip again with the
 #      certificate in the job sign-mac of release.yml), by the certificate of HINDSOUND_SIGNING_P12 when it is set, ad hoc
 #      otherwise;
@@ -57,16 +57,28 @@ done
 for font in Selawik-Regular.ttf Selawik-Semibold.ttf BarlowSemiCondensed-SemiBold.ttf CascadiaMono-Regular.ttf; do
   cp "$fonts/$font" "$app/Contents/Resources/fonts/"
 done
-# The licences: of Hindsound, of the .NET runtime and of LAME (licenses/), of SDL and of the fonts (licenses/linux/, the
-# same files as on Linux), of FreeType and HarfBuzz (licenses/mac/). THIRD-PARTY-NOTICES.md says where each comes from.
+# The licences: of Hindsound, of the .NET runtime, of NAudio, NAudio.Lame and LAME (licenses/), of SDL, of the fonts and
+# of NLayer, the MP3 decoder of Hindsound.Unix (licenses/linux/, the same files as on Linux), of FreeType and HarfBuzz
+# (licenses/mac/). THIRD-PARTY-NOTICES.md says where each comes from.
 resources="$app/Contents/Resources"
 mkdir -p "$resources/licenses/linux" "$resources/licenses/mac"
 cp "$root/LICENSE" "$root/THIRD-PARTY-NOTICES.md" "$resources/"
 cp "$root"/licenses/*.txt "$resources/licenses/"
 cp "$root"/licenses/mac/*.txt "$resources/licenses/mac/"
-for notice in SDL3-LICENSE.txt SDL3-yuv2rgb-LICENSE.txt Selawik-LICENSE.txt CascadiaCode-LICENSE.txt Barlow-OFL.txt; do
+for notice in SDL3-LICENSE.txt SDL3-yuv2rgb-LICENSE.txt Selawik-LICENSE.txt CascadiaCode-LICENSE.txt Barlow-OFL.txt NLayer-LICENSE.txt; do
   cp "$root/licenses/linux/$notice" "$resources/licenses/linux/"
 done
+# The icon of the Finder, of the dialogs of macOS and of System Settings: assets/logo.png (512 x 512) scaled down by sips
+# to the sizes of an iconset, made into Hindsound.icns by iconutil. No 512@2x: the logo has no 1024 x 1024 version.
+iconset="$out/Hindsound.iconset"
+rm -rf "$iconset"
+mkdir -p "$iconset"
+for size in 16 32 128 256 512; do
+  sips -z "$size" "$size" "$root/assets/logo.png" --out "$iconset/icon_${size}x${size}.png" > /dev/null
+  [ "$size" -eq 512 ] || sips -z $((size * 2)) $((size * 2)) "$root/assets/logo.png" --out "$iconset/icon_${size}x${size}@2x.png" > /dev/null
+done
+iconutil -c icns "$iconset" -o "$resources/Hindsound.icns"
+rm -rf "$iconset"
 sed -e "s/@VERSION@/$version/g" "$here/Info.plist.in" > "$app/Contents/Info.plist"
 plutil -lint "$app/Contents/Info.plist"
 

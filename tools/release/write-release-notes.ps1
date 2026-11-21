@@ -48,7 +48,8 @@ $downloads = @"
 
 Hindsound is not signed: Windows will probably show **Windows protected your PC** for the Setup and for the program of the
 zip. Click **More info**, then **Run anyway**. On macOS, Hindsound is not notarized by Apple, so the first launch is
-blocked: open **System Settings** > **Privacy & Security**, and click **Open Anyway** next to the message about Hindsound.
+blocked: try to open it once, then open **System Settings** > **Privacy & Security**, and click **Open Anyway** next to the
+message about Hindsound (the README gives a Terminal command too).
 "@
 
 $notes = $changelog + "`n`n" + $downloads.Replace("`r`n", "`n").Trim() + "`n"
