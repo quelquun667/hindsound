@@ -36,6 +36,22 @@ internal static class PulseAppRules
     /// <summary>How long a process name is in /proc: the kernel keeps the first 15 bytes of the program's file name.</summary>
     public const int KernelNameBytes = 15;
 
+    /// <summary>
+    /// How long a recording that failed waits before it is tried again, doubled at each try, and how many times it is: a
+    /// stream the server moves because its output went away (a headset unplugged) may refuse a recording for a moment.
+    /// </summary>
+    public const int RetryMilliseconds = 1000;
+
+    public const int MaxRetries = 4;
+
+    /// <summary>
+    /// How long the server must have had a recording ready for its tries to count from zero again when it ends. Twice the
+    /// 15 seconds all the waits between tries add up to (1 + 2 + 4 + 8): a recording the server ends again and again within
+    /// the time of its own tries still runs out of them, while a stream that plays for hours (a call) and is ended a few times
+    /// in those hours is recorded again each time. Half a minute without sound from it costs little next to such a stream.
+    /// </summary>
+    public const int SteadyMilliseconds = 30_000;
+
     private const uint FacilityMask = 0x000F;
     private const uint FacilitySink = 0x0000;
     private const uint FacilitySinkInput = 0x0002;
@@ -223,6 +239,18 @@ internal static class PulseAppRules
 
         return byId;
     }
+
+    /// <summary>
+    /// How many tries a recording that ended counts, for its next try: those it had, or none again when the server had it ready
+    /// for at least <paramref name="steady"/>. A recording that ends after it held so long has not failed again and again: a
+    /// stream that plays for hours (a call) may be ended by the server a few times in those hours, and is recorded again each
+    /// time. One that ends quickly, or never started, keeps its count, so quick failures still stop after the last try.
+    /// </summary>
+    /// <param name="tries">The tries it had before this one.</param>
+    /// <param name="held">How long the server had it ready before it ended; null if it never was.</param>
+    /// <param name="steady">How long it must have held for its count to start again.</param>
+    public static int TriesAfterEnd(int tries, TimeSpan? held, TimeSpan steady) =>
+        held is { } time && time >= steady ? 0 : tries;
 
     // The highest ancestor of a process, itself included, that bears the program's name; the process itself if none does.
     private static int ProgramOf(int owner, string? name, Dictionary<int, ProcessEntry> byId)
