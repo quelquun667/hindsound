@@ -17,7 +17,7 @@ namespace Hindsound.Mac;
 /// <summary>
 /// The entry point of the macOS app: one instance at a time, its loop on the main thread (the thread <c>Main</c> runs on,
 /// which AppKit, the icon of the menu bar and the Carbon shortcuts need), and <c>hindsound --save</c> from a second launch.
-/// The proofs of the CI (<c>--prove-…</c>, <c>--dump-settings</c>) run before it and leave.
+/// The proofs of the CI (<c>--prove-*</c>, <c>--dump-settings</c>) run before it and leave.
 /// </summary>
 [SupportedOSPlatform("macos")]
 internal static class Program
