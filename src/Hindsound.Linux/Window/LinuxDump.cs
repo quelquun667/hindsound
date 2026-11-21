@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using Hindsound.Linux.Window.Text;
 using Hindsound.Ui.Window;
+using Hindsound.Unix.Window.Text;
 
 namespace Hindsound.Linux.Window;
 

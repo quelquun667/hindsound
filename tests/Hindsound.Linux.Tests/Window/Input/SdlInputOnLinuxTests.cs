@@ -2,7 +2,8 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Hindsound.Linux.Window;
-using Hindsound.Linux.Window.Input;
+using Hindsound.Unix.Window.Input;
+using Hindsound.Unix.Window;
 
 namespace Hindsound.Linux.Tests.Window.Input;
 

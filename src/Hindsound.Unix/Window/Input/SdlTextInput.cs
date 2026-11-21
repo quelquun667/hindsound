@@ -1,6 +1,6 @@
 using System.Runtime.Versioning;
 
-namespace Hindsound.Linux.Window.Input;
+namespace Hindsound.Unix.Window.Input;
 
 /// <summary>
 /// The text input of one SDL window: on while a text field has the keyboard, so typed characters and the input method's
@@ -19,10 +19,10 @@ internal sealed unsafe class SdlTextInput
     public bool On => _on;
 
     /// <summary>Follows the field: call it after each key, text and paint. Calls SDL only when something changed.</summary>
-    /// <param name="wanted">A field is shown and has the keyboard (<see cref="LinuxTextField.WantsTextInput"/>).</param>
+    /// <param name="wanted">A field is shown and has the keyboard (<see cref="UnixTextField.WantsTextInput"/>).</param>
     /// <param name="x">
     /// The field's box in window coordinates, the unit of SDL_SetTextInputArea: the physical pixels of
-    /// <see cref="LinuxTextField.InputArea"/> divided by the pixel density of the window, as the window does.
+    /// <see cref="UnixTextField.InputArea"/> divided by the pixel density of the window, as the window does.
     /// </param>
     /// <param name="cursor">The caret, in window coordinates from the left of the box.</param>
     public void Update(bool wanted, int x, int y, int w, int h, int cursor)

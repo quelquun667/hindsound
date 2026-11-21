@@ -1,7 +1,7 @@
 using Hindsound.Input;
 using Hindsound.Ui.Window;
 
-namespace Hindsound.Linux.Window.Input;
+namespace Hindsound.Unix.Window.Input;
 
 /// <summary>
 /// The keys of SDL 3.2 as the screen knows them: the Windows virtual keys and the <see cref="HotkeyGesture"/> modifier flags

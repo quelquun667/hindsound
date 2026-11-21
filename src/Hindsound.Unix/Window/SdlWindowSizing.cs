@@ -1,7 +1,7 @@
 using Hindsound.Ui;
 using Hindsound.Ui.Window;
 
-namespace Hindsound.Linux.Window;
+namespace Hindsound.Unix.Window;
 
 /// <summary>The frame the desktop draws around a window, in window coordinates. Zero when the desktop does not say.</summary>
 internal readonly record struct WindowBorders(int Top, int Left, int Bottom, int Right);

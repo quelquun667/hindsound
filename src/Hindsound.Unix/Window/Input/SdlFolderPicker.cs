@@ -2,7 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
-namespace Hindsound.Linux.Window.Input;
+namespace Hindsound.Unix.Window.Input;
 
 /// <summary>
 /// "Choose the clips folder" through SDL's folder dialog: the desktop's own (the XDG portal, else zenity). The call waits for

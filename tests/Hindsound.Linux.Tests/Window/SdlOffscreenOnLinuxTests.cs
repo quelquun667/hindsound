@@ -2,6 +2,7 @@ using System.Runtime.Versioning;
 using Hindsound.Linux.App;
 using Hindsound.Linux.Window;
 using Hindsound.Unix.App;
+using Hindsound.Unix.Window;
 
 namespace Hindsound.Linux.Tests.Window;
 

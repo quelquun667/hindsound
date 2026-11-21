@@ -1,4 +1,5 @@
 using Hindsound.Linux.Window;
+using Hindsound.Unix.Window;
 
 namespace Hindsound.Linux.Tests.Window;
 

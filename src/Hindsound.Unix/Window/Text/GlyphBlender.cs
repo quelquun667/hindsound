@@ -1,6 +1,6 @@
 using Hindsound.Ui;
 
-namespace Hindsound.Linux.Window.Text;
+namespace Hindsound.Unix.Window.Text;
 
 /// <summary>
 /// Lays the grayscale coverage of one glyph over a bitmap, clipped to it, the way DirectWrite's grayscale text lands on the

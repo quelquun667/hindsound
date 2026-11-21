@@ -1,3 +1,4 @@
+using Hindsound.Unix.Window.Text;
 using static Hindsound.Linux.Window.Text.TextNative;
 
 namespace Hindsound.Linux.Window.Text;

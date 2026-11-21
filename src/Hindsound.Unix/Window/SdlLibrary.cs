@@ -1,7 +1,7 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
 
-namespace Hindsound.Linux.Window;
+namespace Hindsound.Unix.Window;
 
 /// <summary>
 /// Where libSDL3.so.0 comes from: next to the program first (the app ships its own, as most systems have no SDL 3 yet),

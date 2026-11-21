@@ -6,6 +6,7 @@ using Hindsound.Settings;
 using Hindsound.Ui;
 using Hindsound.Ui.Window;
 using Hindsound.Unix.App;
+using Hindsound.Unix.Window;
 
 namespace Hindsound.Linux.Tests.Window;
 
@@ -16,7 +17,7 @@ namespace Hindsound.Linux.Tests.Window;
 /// <remarks>In the SDL collection: the counts of open windows and bitmaps are the process's.</remarks>
 [SupportedOSPlatform("linux")]
 [Collection(SdlCollection.Name)]
-public sealed unsafe class LinuxSettingsWindowTests
+public sealed unsafe class UnixSettingsWindowTests
 {
     [Fact]
     public void An_offscreen_window_is_the_design_size_on_a_made_up_screen_and_never_shown()
@@ -89,7 +90,7 @@ public sealed unsafe class LinuxSettingsWindowTests
         rig.Drain();
         var before = rig.Window.Screen.Focus?.Id;
 
-        new LinuxSettingsProbe().Key(rig.Window, Vk.Tab);
+        new UnixSettingsProbe().Key(rig.Window, Vk.Tab);
         Assert.Single(rig.Video.Queue);
         rig.Drain();
 
@@ -150,8 +151,8 @@ public sealed unsafe class LinuxSettingsWindowTests
     {
         var video = new FakeVideo { NewPumpFails = new InvalidOperationException("no event type left") };
         using var loop = new UnixLoop(() => video.Clock);
-        var windows = LinuxSettingsWindow.OpenWindows;
-        var bitmaps = LinuxSettingsWindow.LiveBitmaps;
+        var windows = UnixSettingsWindow.OpenWindows;
+        var bitmaps = UnixSettingsWindow.LiveBitmaps;
         var closed = 0;
 
         var error = Assert.Throws<InvalidOperationException>(() => OpenOn(video, loop, () => closed++));
@@ -159,8 +160,8 @@ public sealed unsafe class LinuxSettingsWindowTests
         Assert.Equal("no event type left", error.Message);
         Assert.Equal(1, video.Closes);
         Assert.Null(loop.Pump);
-        Assert.Equal(windows, LinuxSettingsWindow.OpenWindows);
-        Assert.Equal(bitmaps, LinuxSettingsWindow.LiveBitmaps);
+        Assert.Equal(windows, UnixSettingsWindow.OpenWindows);
+        Assert.Equal(bitmaps, UnixSettingsWindow.LiveBitmaps);
         Assert.Equal(0, closed);
     }
 
@@ -172,21 +173,21 @@ public sealed unsafe class LinuxSettingsWindowTests
 
         // The wait the loop had before throws when the window's pump replaces it: the window has taken the loop's wait by then.
         loop.Pump = new FailingWakePump();
-        var windows = LinuxSettingsWindow.OpenWindows;
-        var bitmaps = LinuxSettingsWindow.LiveBitmaps;
+        var windows = UnixSettingsWindow.OpenWindows;
+        var bitmaps = UnixSettingsWindow.LiveBitmaps;
 
         Assert.Throws<InvalidOperationException>(() => OpenOn(video, loop, () => { }));
 
         Assert.Null(loop.Pump);
         Assert.Equal(1, video.Closes);
-        Assert.Equal(windows, LinuxSettingsWindow.OpenWindows);
-        Assert.Equal(bitmaps, LinuxSettingsWindow.LiveBitmaps);
+        Assert.Equal(windows, UnixSettingsWindow.OpenWindows);
+        Assert.Equal(bitmaps, UnixSettingsWindow.LiveBitmaps);
     }
 
-    private static LinuxSettingsWindow OpenOn(FakeVideo video, UnixLoop loop, Action closed)
+    private static UnixSettingsWindow OpenOn(FakeVideo video, UnixLoop loop, Action closed)
     {
         var request = new SettingsWindowRequest(new AppSettings().Normalize(), new CountingBackend(), () => 0f, false, true, default, closed);
-        return new LinuxSettingsWindow(request, loop, () => new BlockText(), video);
+        return new UnixSettingsWindow(request, loop, () => new BlockText(), video);
     }
 
     private sealed class FailingWakePump : ILoopPump
@@ -205,7 +206,7 @@ public sealed unsafe class LinuxSettingsWindowTests
         rig.Window.Show();
         rig.Drain();
         var first = rig.Window.Bitmap;
-        var bitmaps = LinuxSettingsWindow.LiveBitmaps;
+        var bitmaps = UnixSettingsWindow.LiveBitmaps;
 
         rig.Window.ProbeScaleChange(192);
         rig.Drain();
@@ -214,7 +215,7 @@ public sealed unsafe class LinuxSettingsWindowTests
         Assert.Equal(1520, rig.Video.Places[^1].W);
         Assert.Equal((0, 0, 1520, 976), rig.Video.Presents[^1]);
         Assert.NotEqual(first, rig.Window.Bitmap);
-        Assert.Equal(bitmaps, LinuxSettingsWindow.LiveBitmaps);
+        Assert.Equal(bitmaps, UnixSettingsWindow.LiveBitmaps);
         Assert.Equal(2f, rig.Window.Scale);
     }
 
@@ -265,13 +266,13 @@ public sealed unsafe class LinuxSettingsWindowTests
     [Fact]
     public void Close_ends_the_window_once_frees_its_bitmap_and_gives_the_loop_back_and_a_new_one_opens_after()
     {
-        var windows = LinuxSettingsWindow.OpenWindows;
-        var bitmaps = LinuxSettingsWindow.LiveBitmaps;
+        var windows = UnixSettingsWindow.OpenWindows;
+        var bitmaps = UnixSettingsWindow.LiveBitmaps;
         var texts = BlockText.Disposed;
         using (var rig = new WindowRig())
         {
-            Assert.Equal(windows + 1, LinuxSettingsWindow.OpenWindows);
-            Assert.Equal(bitmaps + 1, LinuxSettingsWindow.LiveBitmaps);
+            Assert.Equal(windows + 1, UnixSettingsWindow.OpenWindows);
+            Assert.Equal(bitmaps + 1, UnixSettingsWindow.LiveBitmaps);
             rig.Window.Show();
             rig.Window.MeterWanted(true);
             rig.Send(rig.WindowEvent(SdlNative.EventWindowCloseRequested));
@@ -283,8 +284,8 @@ public sealed unsafe class LinuxSettingsWindowTests
             Assert.Equal(1, rig.Video.Closes);
             Assert.Null(rig.Loop.Pump);
             Assert.Equal(0, rig.Window.Bitmap);
-            Assert.Equal(windows, LinuxSettingsWindow.OpenWindows);
-            Assert.Equal(bitmaps, LinuxSettingsWindow.LiveBitmaps);
+            Assert.Equal(windows, UnixSettingsWindow.OpenWindows);
+            Assert.Equal(bitmaps, UnixSettingsWindow.LiveBitmaps);
             Assert.True(BlockText.Disposed > texts);
 
             rig.Window.Close();
@@ -298,7 +299,7 @@ public sealed unsafe class LinuxSettingsWindowTests
         using var again = new WindowRig();
         again.Window.Show();
         again.Drain();
-        Assert.Equal(windows + 1, LinuxSettingsWindow.OpenWindows);
+        Assert.Equal(windows + 1, UnixSettingsWindow.OpenWindows);
         Assert.NotEmpty(again.Video.Presents);
     }
 
@@ -329,7 +330,7 @@ public sealed unsafe class LinuxSettingsWindowTests
     {
         using var rig = new WindowRig();
         rig.Window.SetIcon(0x22C55E);
-        Assert.Equal("(64, 64)", new LinuxSettingsProbe().IconWidths(rig.Window));
+        Assert.Equal("(64, 64)", new UnixSettingsProbe().IconWidths(rig.Window));
 
         rig.Window.ProbeScaleChange(144);
         Assert.Equal(2, rig.Video.Icons);
@@ -344,7 +345,7 @@ public sealed unsafe class LinuxSettingsWindowTests
         rig.Window.Activated = () => activated++;
         rig.Window.CaptureMouse();
 
-        new LinuxSettingsProbe().Activate(rig.Window);
+        new UnixSettingsProbe().Activate(rig.Window);
         rig.Drain();
         Assert.Equal(1, activated);
 

@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text;
 
-namespace Hindsound.Linux.Window.Text;
+namespace Hindsound.Unix.Window.Text;
 
 /// <summary>One stretch of a string drawn with one font: the font of the page, or a font of the system for what it lacks.</summary>
 internal readonly record struct TextRun(int Start, int Length, int Font);

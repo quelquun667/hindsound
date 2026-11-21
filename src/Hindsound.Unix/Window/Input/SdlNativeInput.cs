@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
-namespace Hindsound.Linux.Window;
+namespace Hindsound.Unix.Window;
 
 /// <summary>
 /// The calls of SDL 3.2 for the keyboard text, the clipboard text and the folder dialog. Every one of them is in SDL 3.2.0.

@@ -1,12 +1,12 @@
 using Hindsound.Input;
-using Hindsound.Linux.Window.Input;
 using Hindsound.Ui;
 using Hindsound.Ui.Window;
+using Hindsound.Unix.Window.Input;
 
 namespace Hindsound.Linux.Tests.Window.Input;
 
 /// <summary>The drawn text field of the Linux window: what it takes, what it gives back, and where it draws.</summary>
-public class LinuxTextFieldTests
+public class UnixTextFieldTests
 {
     private const uint Ctrl = HotkeyGesture.ModControl, Shift = HotkeyGesture.ModShift;
 
@@ -19,9 +19,9 @@ public class LinuxTextFieldTests
     private readonly List<string> _changes = [];
     private int _repaints;
 
-    private LinuxTextField Field(string text = "hello", bool focus = true)
+    private UnixTextField Field(string text = "hello", bool focus = true)
     {
-        var field = new LinuxTextField(() => _clipboard, t => _clipboard = t)
+        var field = new UnixTextField(() => _clipboard, t => _clipboard = t)
         {
             Changed = _changes.Add,
             Repaint = () => _repaints++,
@@ -35,7 +35,7 @@ public class LinuxTextFieldTests
         return field;
     }
 
-    private static RecordingCanvas Paint(LinuxTextField field, double scale = 1)
+    private static RecordingCanvas Paint(UnixTextField field, double scale = 1)
     {
         var canvas = new RecordingCanvas { Scale = scale };
         field.Paint(canvas);
@@ -147,14 +147,14 @@ public class LinuxTextFieldTests
     {
         var field = Field("hello", focus: false);
         var canvas = Paint(field);
-        Assert.DoesNotContain(canvas.Rects, r => r.Rgb == LinuxTextField.Highlight);
+        Assert.DoesNotContain(canvas.Rects, r => r.Rgb == UnixTextField.Highlight);
         Assert.Equal("hello", Assert.Single(canvas.Texts).Text);
 
         field.Focus();
         canvas = Paint(field);
-        var highlight = Assert.Single(canvas.Rects, r => r.Rgb == LinuxTextField.Highlight);
+        var highlight = Assert.Single(canvas.Rects, r => r.Rgb == UnixTextField.Highlight);
         Assert.Equal(5 * Advance, highlight.Box.W, 3);
-        Assert.Equal(LinuxTextField.HighlightText, Assert.Single(canvas.Texts).Rgb);
+        Assert.Equal(UnixTextField.HighlightText, Assert.Single(canvas.Texts).Rgb);
     }
 
     [Fact]
@@ -166,7 +166,7 @@ public class LinuxTextFieldTests
         Assert.Equal(new[] { "h", "el", "lo" }, texts.Select(t => t.Text));
         Assert.Equal(Advance, texts[1].X - texts[0].X, 3);
         Assert.Equal(2 * Advance, texts[2].X - texts[1].X, 3);
-        Assert.Equal(new[] { Theme.Text, LinuxTextField.HighlightText, Theme.Text }, texts.Select(t => t.Rgb));
+        Assert.Equal(new[] { Theme.Text, UnixTextField.HighlightText, Theme.Text }, texts.Select(t => t.Rgb));
     }
 
     [Fact]

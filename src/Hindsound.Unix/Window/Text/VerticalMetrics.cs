@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 
-namespace Hindsound.Linux.Window.Text;
+namespace Hindsound.Unix.Window.Text;
 
 /// <summary>
 /// The height of a line of one font, by the rule of the Windows text (ICanvasText.LineHeight): the ascent and the descent are

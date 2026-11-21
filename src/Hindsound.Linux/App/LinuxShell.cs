@@ -9,6 +9,7 @@ using Hindsound.Linux.Window.Text;
 using Hindsound.Ui;
 using Hindsound.Unix.App;
 using Hindsound.Unix.Library;
+using Hindsound.Unix.Window;
 
 namespace Hindsound.Linux.App;
 
@@ -50,7 +51,7 @@ internal sealed class LinuxShell : IAppShell
     public IClipboardFiles Clipboard(IAppLoop loop) => new LinuxClipboard(log);
 
     public ISettingsWindow? NewSettingsWindow(SettingsWindowRequest request) =>
-        HasWindow && _loop is { } loop ? OpenOrNone(() => LinuxSettingsWindow.Open(request, loop, () => new FreeTypeText()), log) : null;
+        HasWindow && _loop is { } loop ? OpenOrNone(() => UnixSettingsWindow.Open(request, loop, () => new FreeTypeText()), log) : null;
 
     /// <summary>
     /// SDL loads, yet its video can still fail to start or make the window: no display reachable, no driver for the
@@ -80,7 +81,7 @@ internal sealed class LinuxShell : IAppShell
 
     public IAudioChoices AudioChoices { get; }
 
-    public ISettingsProbe Probe => _probe ??= HasWindow ? new LinuxSettingsProbe() : new NoSettingsProbe();
+    public ISettingsProbe Probe => _probe ??= HasWindow ? new UnixSettingsProbe() : new NoSettingsProbe();
 
     public bool HasWindow => LinuxWindowSupport.Available(log);
 }

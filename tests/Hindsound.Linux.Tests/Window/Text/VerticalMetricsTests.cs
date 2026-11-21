@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using Hindsound.Linux.Window.Text;
+using Hindsound.Unix.Window.Text;
 
 namespace Hindsound.Linux.Tests.Window.Text;
 

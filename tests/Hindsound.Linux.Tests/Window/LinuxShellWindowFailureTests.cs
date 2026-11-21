@@ -4,6 +4,7 @@ using Hindsound.Linux.App;
 using Hindsound.Linux.Window;
 using Hindsound.Settings;
 using Hindsound.Unix.App;
+using Hindsound.Unix.Window;
 
 namespace Hindsound.Linux.Tests.Window;
 
@@ -21,13 +22,13 @@ public sealed class LinuxShellWindowFailureTests
     {
         var video = new FakeVideo { StartFails = "x11 not available" };
         var lines = new List<string>();
-        var windows = LinuxSettingsWindow.OpenWindows;
+        var windows = UnixSettingsWindow.OpenWindows;
 
         var window = LinuxShell.OpenOrNone(() => NewWindow(video), lines.Add);
 
         Assert.Null(window);
         Assert.Equal(["window: none, SDL video did not start: x11 not available"], lines);
-        Assert.Equal(windows, LinuxSettingsWindow.OpenWindows);
+        Assert.Equal(windows, UnixSettingsWindow.OpenWindows);
     }
 
     [Fact]
@@ -35,19 +36,19 @@ public sealed class LinuxShellWindowFailureTests
     {
         var video = new FakeVideo { CreateFails = "no compositor" };
         var lines = new List<string>();
-        var windows = LinuxSettingsWindow.OpenWindows;
+        var windows = UnixSettingsWindow.OpenWindows;
 
         var window = LinuxShell.OpenOrNone(() => NewWindow(video), lines.Add);
 
         Assert.Null(window);
         Assert.Equal(["window: none, SDL made no window: no compositor"], lines);
         Assert.Equal(1, video.Closes);
-        Assert.Equal(windows, LinuxSettingsWindow.OpenWindows);
+        Assert.Equal(windows, UnixSettingsWindow.OpenWindows);
     }
 
-    private static LinuxSettingsWindow NewWindow(FakeVideo video)
+    private static UnixSettingsWindow NewWindow(FakeVideo video)
     {
         var request = new SettingsWindowRequest(new AppSettings().Normalize(), new CountingBackend(), () => 0f, false, true, default, () => { });
-        return new LinuxSettingsWindow(request, new UnixLoop(() => video.Clock), () => new BlockText(), video);
+        return new UnixSettingsWindow(request, new UnixLoop(() => video.Clock), () => new BlockText(), video);
     }
 }

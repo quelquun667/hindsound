@@ -1,4 +1,4 @@
-namespace Hindsound.Linux.Window.Text;
+namespace Hindsound.Unix.Window.Text;
 
 /// <summary>
 /// The text of the window cannot start: a library of the system is missing, or a font the app ships. The message names the

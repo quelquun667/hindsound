@@ -27,7 +27,7 @@ namespace Hindsound.Linux;
 //             LaunchPaths.cs             the file the session starts again: done
 //             LinuxWindowSupport.cs      whether the window can be drawn here: SDL, FreeType, HarfBuzz, fontconfig, the fonts
 //             NoSettingsProbe.cs         --settings-probe where the window cannot be drawn
-//   Window/   LinuxSettingsWindow.cs     the settings window, on SDL (LinuxShell); LinuxSettingsProbe.cs, its probe
+//   Window/   UnixSettingsWindow.cs     the settings window, on SDL (LinuxShell); UnixSettingsProbe.cs, its probe
 //             SdlNative.cs, SdlVideo.cs, SdlPump.cs, SdlLibrary.cs, SdlWindowSizing.cs   SDL 3.2 and the arithmetic of the window
 //             LinuxDump.cs               --dump-settings, on the text of the window
 //             Text/FreeTypeText.cs       the text of the window, with the fonts shipped with the app

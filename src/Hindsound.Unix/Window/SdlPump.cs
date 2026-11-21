@@ -1,8 +1,8 @@
 using System.Runtime.Versioning;
-using Hindsound.Linux.App;
+using Hindsound.Unix.App;
 using Hindsound.Unix.App;
 
-namespace Hindsound.Linux.Window;
+namespace Hindsound.Unix.Window;
 
 /// <summary>The window's handler of one SDL event, on the loop thread. What the event points to is valid only during the call.</summary>
 internal delegate void SdlEventHandler(in SdlNative.Event e);

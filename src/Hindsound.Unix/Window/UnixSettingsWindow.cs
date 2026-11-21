@@ -2,13 +2,13 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Hindsound.App;
 using Hindsound.Input;
-using Hindsound.Linux.App;
-using Hindsound.Linux.Window.Input;
+using Hindsound.Unix.App;
+using Hindsound.Unix.Window.Input;
 using Hindsound.Ui;
 using Hindsound.Ui.Window;
 using Hindsound.Unix.App;
 
-namespace Hindsound.Linux.Window;
+namespace Hindsound.Unix.Window;
 
 /// <summary>
 /// The window of the settings and the Library on Linux: one SDL window around one bitmap the window owns, drawn by the same
@@ -20,7 +20,7 @@ namespace Hindsound.Linux.Window;
 /// the loop's actions take turns. Paints are put off to the loop, as WM_PAINT is on Windows: many asks make one paint.
 /// </remarks>
 [SupportedOSPlatform("linux")]
-internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
+internal sealed unsafe class UnixSettingsWindow : IWindowHost, ISettingsWindow
 {
     public const int MeterIntervalMs = 100;
     public const int WaveIntervalMs = 100;
@@ -39,7 +39,7 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
     private readonly Func<ICanvasText> _newText;
     private readonly Func<float> _readMicPeak;
     private readonly bool _offscreen;
-    private readonly LinuxTextField _field;
+    private readonly UnixTextField _field;
     private readonly ILoopPump _pump;
 
     private PixelCanvas _canvas;
@@ -70,7 +70,7 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
 
     /// <summary>Opens SDL's video and makes the window, hidden until <see cref="Show"/>.</summary>
     /// <param name="newText">Makes the text of a bitmap: each bitmap gets its own, and frees it with itself.</param>
-    public LinuxSettingsWindow(SettingsWindowRequest request, UnixLoop loop, Func<ICanvasText> newText, ISdlVideo video)
+    public UnixSettingsWindow(SettingsWindowRequest request, UnixLoop loop, Func<ICanvasText> newText, ISdlVideo video)
     {
         Closed = request.Closed;
         _loop = loop;
@@ -108,7 +108,7 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
             }
 
             _canvas = NewCanvas(out _bits, out _width, out _height);
-            _field = new LinuxTextField(_video.ClipboardText, _video.SetClipboardText) { Repaint = FieldRepaint };
+            _field = new UnixTextField(_video.ClipboardText, _video.SetClipboardText) { Repaint = FieldRepaint };
             _pump = _video.NewPump(Handle);
             _loop.Pump = _pump;
             Screen = new SettingsScreen(request.Settings, request.Backend, this, _canvas, request.FirstRun);
@@ -132,7 +132,7 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
     }
 
     /// <summary>Opens a window on SDL itself.</summary>
-    public static LinuxSettingsWindow Open(SettingsWindowRequest request, UnixLoop loop, Func<ICanvasText> newText) =>
+    public static UnixSettingsWindow Open(SettingsWindowRequest request, UnixLoop loop, Func<ICanvasText> newText) =>
         new(request, loop, newText, new SdlVideo());
 
     /// <summary>The windows open in this process, for <c>--settings-probe</c>.</summary>
@@ -153,7 +153,7 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
     /// <summary>What a design pixel is in pixels now: the display scale, then the zoom.</summary>
     internal float Scale => (float)SdlWindowSizing.Scale(_displayScale, _zoom);
 
-    internal LinuxTextField Field => _field;
+    internal UnixTextField Field => _field;
 
     internal bool IsClosed => _closed;
 
@@ -571,7 +571,7 @@ internal sealed unsafe class LinuxSettingsWindow : IWindowHost, ISettingsWindow
         {
             _blinkOn = true;
             var run = ++_blinkRun;
-            Every(LinuxTextField.BlinkMilliseconds, () => run == _blinkRun && (_blinkOn = _field.WantsTextInput), _field.Blink);
+            Every(UnixTextField.BlinkMilliseconds, () => run == _blinkRun && (_blinkOn = _field.WantsTextInput), _field.Blink);
         }
     }
 

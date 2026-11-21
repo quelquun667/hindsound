@@ -1,10 +1,10 @@
 using System.Runtime.Versioning;
-using Hindsound.Linux.App;
-using Hindsound.Linux.Window.Input;
+using Hindsound.Unix.App;
+using Hindsound.Unix.Window.Input;
 using Hindsound.Ui;
 using Hindsound.Unix.App;
 
-namespace Hindsound.Linux.Window;
+namespace Hindsound.Unix.Window;
 
 /// <summary>
 /// What the settings window asks of SDL, for one window. The window's logic talks only to this, so it is tested with a fake

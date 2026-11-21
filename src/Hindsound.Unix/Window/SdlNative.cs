@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
-namespace Hindsound.Linux.Window;
+namespace Hindsound.Unix.Window;
 
 /// <summary>
 /// The calls of SDL 3.2 the window makes, as declared in SDL3/SDL_init.h, SDL_hints.h, SDL_video.h, SDL_surface.h,

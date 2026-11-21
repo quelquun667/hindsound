@@ -1,6 +1,6 @@
 using Hindsound.Ui.Window;
 
-namespace Hindsound.Linux.Window.Input;
+namespace Hindsound.Unix.Window.Input;
 
 /// <summary>
 /// The text field of the Linux window, drawn on the page where Windows puts its native EDIT box, and looking as that box
@@ -14,7 +14,7 @@ namespace Hindsound.Linux.Window.Input;
 /// key while it does not have the keyboard) goes to the screen, as on Windows.
 /// </para>
 /// </summary>
-internal sealed class LinuxTextField
+internal sealed class UnixTextField
 {
     /// <summary>The caret blink of Windows (GetCaretBlinkTime): the window calls <see cref="Blink"/> this often.</summary>
     public const int BlinkMilliseconds = 530;
@@ -45,7 +45,7 @@ internal sealed class LinuxTextField
 
     /// <param name="readClipboard">The text on the clipboard, or null (<c>SdlClipboardText.Get</c>).</param>
     /// <param name="writeClipboard">Puts text on the clipboard (<c>SdlClipboardText.Set</c>).</param>
-    public LinuxTextField(Func<string?> readClipboard, Action<string> writeClipboard) =>
+    public UnixTextField(Func<string?> readClipboard, Action<string> writeClipboard) =>
         _model = new TextFieldModel(readClipboard, writeClipboard);
 
     /// <summary>The user changed the text: the window passes it to <c>SettingsScreen.EditChanged</c>, as EN_CHANGE does.</summary>

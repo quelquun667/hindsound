@@ -1,5 +1,6 @@
 using Hindsound.Linux.Window.Text;
 using Hindsound.Ui;
+using Hindsound.Unix.Window.Text;
 
 namespace Hindsound.Linux.Tests.Window.Text;
 

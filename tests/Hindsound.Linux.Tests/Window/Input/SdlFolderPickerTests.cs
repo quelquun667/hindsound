@@ -1,5 +1,5 @@
 using System.Runtime.InteropServices;
-using Hindsound.Linux.Window.Input;
+using Hindsound.Unix.Window.Input;
 
 namespace Hindsound.Linux.Tests.Window.Input;
 

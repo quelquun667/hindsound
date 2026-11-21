@@ -1,9 +1,10 @@
 using System.Runtime.Versioning;
 using Hindsound.Input;
 using Hindsound.Linux.Window;
-using Hindsound.Linux.Window.Input;
 using Hindsound.Ui;
 using Hindsound.Ui.Window;
+using Hindsound.Unix.Window.Input;
+using Hindsound.Unix.Window;
 
 namespace Hindsound.Linux.Tests.Window;
 
@@ -103,7 +104,7 @@ public sealed class SdlWindowSizingTests
     [SupportedOSPlatform("linux")]
     public void Each_key_the_probe_sends_is_read_back_as_that_virtual_key(uint vk)
     {
-        var key = LinuxSettingsProbe.KeyFor(vk);
+        var key = UnixSettingsProbe.KeyFor(vk);
         Assert.NotNull(key);
         Assert.Equal(vk, SdlKeys.VirtualKey(key.Value.Scancode, key.Value.Keycode, 0));
     }

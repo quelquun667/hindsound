@@ -1,6 +1,6 @@
 using Hindsound.Input;
-using Hindsound.Linux.Window.Input;
 using Hindsound.Ui.Window;
+using Hindsound.Unix.Window.Input;
 
 namespace Hindsound.Linux.Tests.Window.Input;
 

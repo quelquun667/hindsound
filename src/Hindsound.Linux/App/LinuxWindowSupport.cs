@@ -2,6 +2,8 @@ using System.Runtime.Versioning;
 using System.Text.RegularExpressions;
 using Hindsound.Linux.Window;
 using Hindsound.Linux.Window.Text;
+using Hindsound.Unix.Window.Text;
+using Hindsound.Unix.Window;
 
 namespace Hindsound.Linux.App;
 

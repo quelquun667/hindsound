@@ -1,22 +1,22 @@
 using System.Runtime.Versioning;
 using Hindsound.App;
-using Hindsound.Linux.Window.Input;
+using Hindsound.Unix.Window.Input;
 
-namespace Hindsound.Linux.Window;
+namespace Hindsound.Unix.Window;
 
 /// <summary>
 /// What <c>--settings-probe</c> reads and sends on Linux: the windows and bitmaps the process holds, and events pushed to the
 /// window's own queue. Never the real keyboard, and never another program's window: the PC may be in use.
 /// </summary>
 [SupportedOSPlatform("linux")]
-internal sealed class LinuxSettingsProbe : ISettingsProbe
+internal sealed class UnixSettingsProbe : ISettingsProbe
 {
     private const uint ScancodeMask = 1u << 30;
 
     /// <summary>The bitmaps of the windows: what a window that leaks would leave behind.</summary>
-    public uint DrawingObjects() => (uint)Math.Max(0, LinuxSettingsWindow.LiveBitmaps);
+    public uint DrawingObjects() => (uint)Math.Max(0, UnixSettingsWindow.LiveBitmaps);
 
-    public uint WindowObjects() => (uint)Math.Max(0, LinuxSettingsWindow.OpenWindows);
+    public uint WindowObjects() => (uint)Math.Max(0, UnixSettingsWindow.OpenWindows);
 
     public void Key(ISettingsWindow window, uint vk)
     {
@@ -73,6 +73,6 @@ internal sealed class LinuxSettingsProbe : ISettingsProbe
         return null;
     }
 
-    private static LinuxSettingsWindow Of(ISettingsWindow window) =>
-        window as LinuxSettingsWindow ?? throw new ArgumentException("not a window of the Linux shell", nameof(window));
+    private static UnixSettingsWindow Of(ISettingsWindow window) =>
+        window as UnixSettingsWindow ?? throw new ArgumentException("not a window of the Linux shell", nameof(window));
 }

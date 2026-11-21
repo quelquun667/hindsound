@@ -9,6 +9,7 @@ using Hindsound.Settings;
 using Hindsound.Ui;
 using Hindsound.Ui.Window;
 using Hindsound.Unix.App;
+using Hindsound.Unix.Window;
 
 namespace Hindsound.Linux.Tests.Window;
 
@@ -250,7 +251,7 @@ internal sealed unsafe class WindowRig : IDisposable
         Settings = new AppSettings().Normalize();
         Settings.General.WindowZoom = zoom;
         var request = new SettingsWindowRequest(Settings, Backend, () => { MicReads++; return 0.5f; }, false, offscreen, default, () => ClosedCount++);
-        Window = new LinuxSettingsWindow(request, Loop, () => new BlockText(), Video);
+        Window = new UnixSettingsWindow(request, Loop, () => new BlockText(), Video);
     }
 
     public FakeVideo Video { get; }
@@ -261,7 +262,7 @@ internal sealed unsafe class WindowRig : IDisposable
 
     public CountingBackend Backend { get; } = new();
 
-    public LinuxSettingsWindow Window { get; }
+    public UnixSettingsWindow Window { get; }
 
     public int MicReads { get; private set; }
 

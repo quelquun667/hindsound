@@ -5,6 +5,7 @@ using Hindsound.Linux.Window;
 using Hindsound.Settings;
 using Hindsound.Ui.Window;
 using Hindsound.Unix.App;
+using Hindsound.Unix.Window;
 
 namespace Hindsound.Linux.Tests.Window;
 
@@ -15,7 +16,7 @@ namespace Hindsound.Linux.Tests.Window;
 [Trait("Category", "Linux")]
 [SupportedOSPlatform("linux")]
 [Collection(SdlCollection.Name)]
-public sealed unsafe class LinuxSettingsWindowOnLinuxTests
+public sealed unsafe class UnixSettingsWindowOnLinuxTests
 {
     private const int GuardMs = 10_000;
 
@@ -33,16 +34,16 @@ public sealed unsafe class LinuxSettingsWindowOnLinuxTests
         Assert.False(guarded, "the loop had to be stopped by the guard");
     }
 
-    private static LinuxSettingsWindow Open(UnixLoop loop, Action closed)
+    private static UnixSettingsWindow Open(UnixLoop loop, Action closed)
     {
         // The first size follows the zoom of the settings, 120 % by default as on Windows: the test states 100 %, the design size.
         var settings = new AppSettings().Normalize();
         settings.General.WindowZoom = 100;
         var request = new SettingsWindowRequest(settings, new CountingBackend(), () => 0f, false, true, default, closed);
-        return LinuxSettingsWindow.Open(request, loop, () => new BlockText());
+        return UnixSettingsWindow.Open(request, loop, () => new BlockText());
     }
 
-    private static void PushClick(LinuxSettingsWindow window, uint windowId, float x, float y)
+    private static void PushClick(UnixSettingsWindow window, uint windowId, float x, float y)
     {
         foreach (var type in new[] { SdlNative.EventMouseButtonDown, SdlNative.EventMouseButtonUp })
         {
@@ -61,7 +62,7 @@ public sealed unsafe class LinuxSettingsWindowOnLinuxTests
     public void The_window_opens_draws_takes_a_click_and_a_key_writes_its_picture_and_closes_with_nothing_left()
     {
         Assert.True(SdlLibrary.TryLoad(), SdlLibrary.LastError);
-        var bitmaps = LinuxSettingsWindow.LiveBitmaps;
+        var bitmaps = UnixSettingsWindow.LiveBitmaps;
         var folder = Directory.CreateTempSubdirectory("hindsound-window-");
         using var loop = new UnixLoop();
         try
@@ -92,7 +93,7 @@ public sealed unsafe class LinuxSettingsWindowOnLinuxTests
             Assert.True(seen.Count >= 3, "pages seen: " + string.Join(", ", seen));
 
             var focus = window.Screen.Focus?.Id;
-            new LinuxSettingsProbe().Key(window, Vk.Tab);
+            new UnixSettingsProbe().Key(window, Vk.Tab);
             Turn(loop);
             Assert.NotEqual(focus, window.Screen.Focus?.Id);
 
@@ -101,7 +102,7 @@ public sealed unsafe class LinuxSettingsWindowOnLinuxTests
             Assert.Equal(1, closed);
             Assert.True(window.IsClosed);
             Assert.Null(loop.Pump);
-            Assert.Equal(bitmaps, LinuxSettingsWindow.LiveBitmaps);
+            Assert.Equal(bitmaps, UnixSettingsWindow.LiveBitmaps);
             Assert.Equal(0u, SdlNative.WasInit(SdlNative.InitVideo));
 
             var again = Open(loop, () => closed++);
@@ -123,7 +124,7 @@ public sealed unsafe class LinuxSettingsWindowOnLinuxTests
     public void Posts_from_another_thread_while_the_window_opens_and_closes_leave_SDL_stopped()
     {
         Assert.True(SdlLibrary.TryLoad(), SdlLibrary.LastError);
-        var bitmaps = LinuxSettingsWindow.LiveBitmaps;
+        var bitmaps = UnixSettingsWindow.LiveBitmaps;
         using var loop = new UnixLoop();
         var stop = false;
         var posts = 0;
@@ -158,7 +159,7 @@ public sealed unsafe class LinuxSettingsWindowOnLinuxTests
 
         Assert.True(posts > 0);
         Assert.Null(loop.Pump);
-        Assert.Equal(bitmaps, LinuxSettingsWindow.LiveBitmaps);
+        Assert.Equal(bitmaps, UnixSettingsWindow.LiveBitmaps);
         Assert.Equal(0u, SdlNative.WasInit(SdlNative.InitVideo));
     }
 
@@ -176,5 +177,5 @@ public sealed unsafe class LinuxSettingsWindowOnLinuxTests
         Assert.False(guarded, "the loop had to be stopped by the guard");
     }
 
-    private static uint IdOf(LinuxSettingsWindow window) => window.WindowId;
+    private static uint IdOf(UnixSettingsWindow window) => window.WindowId;
 }
