@@ -13,8 +13,8 @@ namespace Hindsound.Mac.Audio.Capture;
 /// default output and input, and the permissions written in TCC before anything opened a device. The app plays a 440 Hz tone
 /// of its own, starts <c>afplay</c> on each file, and measures each capture (level in dBFS, dominant frequency, exact
 /// zeros): the sound of the PC with this app left out (the 1 kHz without the 440 Hz), and without (both), with the output
-/// as the aggregate's main device, one output alone (BlackHole: both; the Null Audio Device: only a 440 Hz the app plays there); one application (the silent <c>afplay</c>: exact zeros; a shell whose
-/// child starts <c>afplay</c> 2 s after the tap opened: zeros, then the 1 kHz); the microphone (BlackHole gives back the 1 kHz).
+/// as the aggregate's main device, one output alone (BlackHole: both; the Null Audio Device: only a 440 Hz the app plays
+/// there); one application (the silent <c>afplay</c>: exact zeros; a shell whose child starts <c>afplay</c> 2 s after the tap opened: zeros, then the 1 kHz); the microphone (BlackHole gives back the 1 kHz).
 /// With <c>--denied</c> (the permissions written refused), the sound of the PC and the microphone give exact zeros and the
 /// capture ends saying the permission is refused. 0 when every case passes, 3 otherwise.
 /// </summary>
