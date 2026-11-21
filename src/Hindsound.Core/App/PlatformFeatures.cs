@@ -22,6 +22,10 @@ internal enum ShortcutMode
 /// </summary>
 internal sealed record PlatformFeatures
 {
+    // Before Windows below: the static fields are set in the order of the file, and the defaults of an instance read these.
+    private static readonly string[] WindowsModifierNames = ["Ctrl", "Alt", "Shift", "Win"];
+    private static readonly string[] WindowsPasteKeys = ["Ctrl", "V"];
+
     /// <summary>The command a desktop's keyboard settings are told to run when nothing grabs a key.</summary>
     public const string DefaultSaveCommand = "hindsound --save";
 
@@ -118,9 +122,6 @@ internal sealed record PlatformFeatures
 
     /// <summary>The keys that paste, in this system's words, as the notification draws them.</summary>
     public IReadOnlyList<string> PasteKeys { get; init; } = WindowsPasteKeys;
-
-    private static readonly string[] WindowsModifierNames = ["Ctrl", "Alt", "Shift", "Win"];
-    private static readonly string[] WindowsPasteKeys = ["Ctrl", "V"];
 
     /// <summary>
     /// A gesture in the app's own text (<c>Ctrl+Shift+F10</c>, as the settings keep it) in this system's words, for the eye only:
