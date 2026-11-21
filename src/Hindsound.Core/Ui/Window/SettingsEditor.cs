@@ -1,5 +1,6 @@
 using System.Globalization;
 using Hindsound.App;
+using Hindsound.Audio;
 using Hindsound.Export;
 using Hindsound.Input;
 using Hindsound.Library;
@@ -334,7 +335,7 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
         if (!string.IsNullOrEmpty(selected) && !items.Any(i => string.Equals(i.Value, selected, StringComparison.OrdinalIgnoreCase)))
         {
             // An app that has not played anything yet has no session, so it can be running and still not be listed.
-            items.Add(new DropItem(selected, selectedRunning ? Path.GetFileNameWithoutExtension(selected) : selected + " (not running)"));
+            items.Add(new DropItem(selected, selectedRunning ? AudioAppList.NameOf(selected) : selected + " (not running)"));
         }
 
         return items;

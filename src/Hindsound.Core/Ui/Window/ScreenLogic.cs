@@ -181,7 +181,7 @@ internal static class StatusText
 
     private static (StatusMark Mark, string Title) Headline(AudioEngineStatus status)
     {
-        var app = status.SourceApp is { } exe ? Path.GetFileNameWithoutExtension(exe) : null;
+        var app = status.SourceApp is { } exe ? AudioAppList.NameOf(exe) : null;
         return status.Activity switch
         {
             CaptureActivity.Paused => (StatusMark.Pause, "Paused"),
