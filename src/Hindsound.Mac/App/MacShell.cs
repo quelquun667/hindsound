@@ -1,6 +1,7 @@
 using System.Runtime.Versioning;
 using Hindsound.App;
 using Hindsound.Library;
+using Hindsound.Mac.Audio.Devices;
 using Hindsound.Mac.Desktop;
 using Hindsound.Mac.Notification;
 using Hindsound.Mac.Tray;
@@ -60,7 +61,7 @@ internal sealed class MacShell(Action<string> log) : IAppShell
 
     public IClipDecoder NewClipDecoder() => new UnixClipDecoder();
 
-    public IAudioChoices AudioChoices => throw Later("the devices and the applications", "M3");
+    public IAudioChoices AudioChoices { get; } = new MacAudioChoices(log);
 
     public ISettingsProbe Probe => HasWindow ? new UnixSettingsProbe() : throw Later("the probe without a window", "M2b");
 

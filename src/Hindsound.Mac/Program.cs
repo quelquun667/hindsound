@@ -2,6 +2,7 @@ using System.Runtime.Versioning;
 using Hindsound.App;
 using Hindsound.Mac.App;
 using Hindsound.Mac.Audio.Capture;
+using Hindsound.Mac.Audio.Devices;
 using Hindsound.Mac.Notification;
 using Hindsound.Mac.Window;
 using Hindsound.Unix.App;
@@ -32,6 +33,11 @@ internal static class Program
         if (MacCaptureProofOptions.Read(args) is { } captureProof)
         {
             return MacCaptureProof.Run(captureProof.Folder, captureProof.Denied, Console.WriteLine);
+        }
+
+        if (MacDevicesProof.Folder(args) is { } devicesProof)
+        {
+            return MacDevicesProof.Run(devicesProof, Console.WriteLine);
         }
 
         var launch = MacLaunch.Read(args);
