@@ -168,7 +168,8 @@ internal static class NotificationStates
     /// <param name="saveHotkeyProblem">Said instead of the keys when pressing them would do nothing: the user finds out now, not when the moment is gone.</param>
     /// <param name="updatedTo">The version an update just installed: said in the title, the rest is the usual line.</param>
     /// <param name="keptSeconds">What the memory holds now; null when nothing has said yet.</param>
-    public static NotificationContent CaptureOn(int bufferSeconds, string? saveGesture, string? saveHotkeyProblem = null, string? updatedTo = null, int? keptSeconds = null)
+    /// <param name="features">The system, whose words name the keys; the one installed when not given, Windows when none is.</param>
+    public static NotificationContent CaptureOn(int bufferSeconds, string? saveGesture, string? saveHotkeyProblem = null, string? updatedTo = null, int? keptSeconds = null, PlatformFeatures? features = null)
     {
         var title = updatedTo is null ? "Capture on" : $"Updated to {updatedTo}";
         var kept = KeptLine(bufferSeconds, keptSeconds);
@@ -181,7 +182,7 @@ internal static class NotificationStates
             };
         }
 
-        var keys = string.IsNullOrWhiteSpace(saveGesture) ? [] : saveGesture.Split('+');
+        var keys = string.IsNullOrWhiteSpace(saveGesture) ? [] : (features ?? PlatformDefaults.Features ?? PlatformFeatures.Windows).KeyText(saveGesture).Split('+');
         var body = keys.Length == 0 ? kept : $"{kept}. Save:";
         return new NotificationContent(NotificationKind.CaptureOn, title, body, keys, NotificationPalette.Hot, NotificationVisual.Dot, NotificationPalette.Hot, NoBars);
     }

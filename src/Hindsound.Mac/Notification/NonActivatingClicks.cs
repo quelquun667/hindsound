@@ -20,6 +20,13 @@ internal static unsafe partial class NonActivatingClicks
     private const string Runtime = "/usr/lib/libobjc.A.dylib";
     private static readonly Lock Gate = new();
     private static readonly Dictionary<nint, nint> Made = [];
+    private static int s_delaysAsked, s_mouseDowns;
+
+    /// <summary>How many times AppKit asked a view given the clicks whether to delay the ordering of its window.</summary>
+    public static int DelaysAsked => Volatile.Read(ref s_delaysAsked);
+
+    /// <summary>How many mouse-downs reached a view given the clicks.</summary>
+    public static int MouseDowns => Volatile.Read(ref s_mouseDowns);
 
     /// <summary>
     /// Gives <paramref name="view"/> the clicks that do not activate the app. False, and the view untouched, when the runtime
@@ -72,7 +79,7 @@ internal static unsafe partial class NonActivatingClicks
                     return 0;
                 }
 
-                var added = class_addMethod(subclass, sel_registerName("shouldDelayWindowOrderingForEvent:"), (nint)(delegate* unmanaged<nint, nint, nint, byte>)&Yes, "B@:@") != 0
+                var added = class_addMethod(subclass, sel_registerName("shouldDelayWindowOrderingForEvent:"), (nint)(delegate* unmanaged<nint, nint, nint, byte>)&Delay, "B@:@") != 0
                     && class_addMethod(subclass, sel_registerName("acceptsFirstMouse:"), (nint)(delegate* unmanaged<nint, nint, nint, byte>)&Yes, "B@:@") != 0
                     && class_addMethod(subclass, sel_registerName("mouseDown:"), (nint)(delegate* unmanaged<nint, nint, nint, void>)&MouseDown, "v@:@") != 0;
                 if (!added)
@@ -92,10 +99,37 @@ internal static unsafe partial class NonActivatingClicks
     [UnmanagedCallersOnly]
     private static byte Yes(nint self, nint selector, nint ev) => 1;
 
+    [UnmanagedCallersOnly]
+    private static byte Delay(nint self, nint selector, nint ev)
+    {
+        Interlocked.Increment(ref s_delaysAsked);
+        return 1;
+    }
+
+    /// <summary>The view and every view under it, as deep as they go: the click goes to the deepest one under the pointer.</summary>
+    public static int ApplyToTree(nint view)
+    {
+        if (view == 0)
+        {
+            return 0;
+        }
+
+        var given = Apply(view) ? 1 : 0;
+        var subviews = ((delegate* unmanaged<nint, nint, nint>)MsgSend)(view, sel_registerName("subviews"));
+        var count = subviews == 0 ? 0 : (long)((delegate* unmanaged<nint, nint, nuint>)MsgSend)(subviews, sel_registerName("count"));
+        for (nuint i = 0; i < (nuint)count; i++)
+        {
+            given += ApplyToTree(((delegate* unmanaged<nint, nint, nuint, nint>)MsgSend)(subviews, sel_registerName("objectAtIndex:"), i));
+        }
+
+        return given;
+    }
+
     /// <summary>No ordering and no activation for this mouse-down, then the view's own handling of it, which SDL reads.</summary>
     [UnmanagedCallersOnly]
     private static void MouseDown(nint self, nint selector, nint ev)
     {
+        Interlocked.Increment(ref s_mouseDowns);
         var application = ((delegate* unmanaged<nint, nint, nint>)MsgSend)(objc_getClass("NSApplication"), sel_registerName("sharedApplication"));
         if (application != 0)
         {

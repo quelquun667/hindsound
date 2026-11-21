@@ -682,7 +682,7 @@ jobs:
           echo "whole app: pid ${pid:-none}"
           perl -e 'alarm shift; exec @ARGV' 30 afplay "$folder/tone.wav" &
           player=$!
-          sleep 6
+          sleep 11
           [ -n "$pid" ] && echo "whole app: resident memory while capturing $(ps -o rss= -p "$pid" | tr -d ' ') KB (ps)"
           code=0
           perl -e 'alarm shift; exec @ARGV' 30 "$program" --settings "$folder/settings.json" --save || code=$?

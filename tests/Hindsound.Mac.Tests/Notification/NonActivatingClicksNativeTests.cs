@@ -45,6 +45,7 @@ public sealed class NonActivatingClicksNativeTests
     public void Nothing_to_give_the_clicks_to_is_said()
     {
         Assert.False(NonActivatingClicks.Apply(0));
+        Assert.Equal(0, NonActivatingClicks.ApplyToTree(0));
     }
 
     private static nint NewResponder() => ObjC.Send(ObjC.Send(ObjC.Class("NSResponder"), "alloc"), "init");

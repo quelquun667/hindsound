@@ -25,10 +25,16 @@ internal sealed unsafe class MacNotificationHook : INotificationWindowHook
         Messages.SendUInt(nativeWindow, "setCollectionBehavior:", Behavior);
         Messages.SendInt(nativeWindow, "setLevel:", Level);
         Messages.SendBool(nativeWindow, "setHidesOnDeactivate:", false);
-        NonActivatingClicks.Apply(Messages.Send(nativeWindow, "contentView"));
+        NonActivatingClicks.ApplyToTree(Messages.Send(nativeWindow, "contentView"));
     }
 
-    public void ClickThrough(nint nativeWindow, bool on) => Messages.SendBool(nativeWindow, "setIgnoresMouseEvents:", on);
+    public void ClickThrough(nint nativeWindow, bool on)
+    {
+        Messages.SendBool(nativeWindow, "setIgnoresMouseEvents:", on);
+
+        // Again at each opening: the view of the renderer is added under the content view after the window is made.
+        NonActivatingClicks.ApplyToTree(Messages.Send(nativeWindow, "contentView"));
+    }
 
     /// <summary>objc_msgSend cast to the exact prototype of each call, as the Objective-C calls of the app do.</summary>
     internal static class Messages

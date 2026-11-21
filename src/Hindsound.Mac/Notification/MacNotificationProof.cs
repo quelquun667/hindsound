@@ -100,7 +100,7 @@ internal static unsafe partial class MacNotificationProof
                 loop.After(1200, () =>
                 {
                     Log($"click.received {clicks}");
-                    Log($"focus.after_click app_active={(AppActive() ? 1 : 0)} front={Frontmost().Name}");
+                    Log($"focus.after_click app_active={(AppActive() ? 1 : 0)} front={Frontmost().Name} delays_asked={NonActivatingClicks.DelaysAsked} mouse_downs={NonActivatingClicks.MouseDowns}");
                     view.HoldOpen = false;
                 });
             });

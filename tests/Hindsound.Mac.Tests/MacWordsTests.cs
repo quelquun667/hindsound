@@ -65,4 +65,13 @@ public sealed class MacWordsTests
         Assert.Empty(notCopied.Keys);
         Assert.False(NotificationStates.SaysPaste(notCopied));
     }
+
+    [Fact]
+    public void The_notification_of_the_capture_names_the_keys_of_the_shortcut_as_the_system_does()
+    {
+        Assert.Equal(["Control", "Shift", "S"], NotificationStates.CaptureOn(300, "Ctrl+Shift+S", features: Mac).Keys);
+        Assert.Equal(["Option", "Cmd", "F10"], NotificationStates.CaptureOn(300, "Alt+Win+F10", features: Mac).Keys);
+        Assert.Equal(["Ctrl", "Shift", "S"], NotificationStates.CaptureOn(300, "Ctrl+Shift+S", features: PlatformFeatures.Windows).Keys);
+        Assert.Empty(NotificationStates.CaptureOn(300, null, features: Mac).Keys);
+    }
 }
