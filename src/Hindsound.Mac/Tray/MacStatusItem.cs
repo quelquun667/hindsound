@@ -35,7 +35,9 @@ internal sealed unsafe class MacStatusItem : ITrayIcon
     private readonly nint _target;
     private readonly nint _menu;
     private nint _item;
-    private bool _chosenSinceOpen;
+    // Each opening of the menu has its number; a line chosen keeps the number of the opening it was chosen in.
+    private long _opening;
+    private long _chosenIn;
     private bool _disposed;
 
     private MacStatusItem(IAppLoop loop, Action<string> log)
@@ -261,7 +263,7 @@ internal sealed unsafe class MacStatusItem : ITrayIcon
             return;
         }
 
-        icon._chosenSinceOpen = false;
+        icon._opening++;
         try
         {
             icon.Gesture?.Invoke(TrayGesture.Menu);
@@ -282,9 +284,12 @@ internal sealed unsafe class MacStatusItem : ITrayIcon
             return;
         }
 
+        // Read when the post runs, not now: AppKit sends the action after this. The number of the opening is taken now, so a
+        // menu opened again before the post runs does not hide that this one closed with nothing chosen.
+        var opening = icon._opening;
         icon._loop.Post(() =>
         {
-            if (!icon._chosenSinceOpen)
+            if (icon._chosenIn != opening)
             {
                 icon.Chosen?.Invoke(TrayCommand.None);
             }
@@ -299,7 +304,7 @@ internal sealed unsafe class MacStatusItem : ITrayIcon
             return;
         }
 
-        icon._chosenSinceOpen = true;
+        icon._chosenIn = icon._opening;
         var chosen = (TrayCommand)Cocoa.ReadInt(sender, "tag");
         icon._loop.Post(() => icon.Chosen?.Invoke(chosen));
     }
