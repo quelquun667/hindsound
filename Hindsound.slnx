@@ -1,9 +1,11 @@
 <Solution>
   <Project Path="tests/Hindsound.Core.Tests/Hindsound.Core.Tests.csproj" />
   <Project Path="tests/Hindsound.Linux.Tests/Hindsound.Linux.Tests.csproj" />
+  <Project Path="tests/Hindsound.Mac.Tests/Hindsound.Mac.Tests.csproj" />
   <Project Path="tests/Hindsound.Tests/Hindsound.Tests.csproj" />
   <Project Path="src/Hindsound.Core/Hindsound.Core.csproj" />
   <Project Path="src/Hindsound.Linux/Hindsound.Linux.csproj" />
+  <Project Path="src/Hindsound.Mac/Hindsound.Mac.csproj" />
   <Project Path="src/Hindsound.Unix/Hindsound.Unix.csproj" />
   <Project Path="src/Hindsound/Hindsound.csproj" />
 </Solution>

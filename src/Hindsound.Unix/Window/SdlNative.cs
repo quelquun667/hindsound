@@ -14,6 +14,7 @@ namespace Hindsound.Unix.Window;
 /// own memory, so it comes back as a pointer, read with <see cref="Utf8"/>, never freed by the marshaller.
 /// </remarks>
 [SupportedOSPlatform("linux")]
+[SupportedOSPlatform("macos")]
 internal static unsafe partial class SdlNative
 {
     private const string Library = SdlLibrary.SystemName;

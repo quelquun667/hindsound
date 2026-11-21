@@ -13,6 +13,7 @@ internal delegate void SdlEventHandler(in SdlNative.Event e);
 /// </summary>
 /// <remarks>Made after SDL's events (or video) are initialised, and used while they are, on the thread that initialised video.</remarks>
 [SupportedOSPlatform("linux")]
+[SupportedOSPlatform("macos")]
 internal sealed unsafe class SdlPump : ILoopPump
 {
     /// <summary>The most events one wait hands out; the rest are for the next wait, which returns at once.</summary>

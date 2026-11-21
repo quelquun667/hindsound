@@ -1,7 +1,6 @@
-using Hindsound.Unix.Window.Text;
-using static Hindsound.Linux.Window.Text.TextNative;
+using static Hindsound.Unix.Window.Text.TextNative;
 
-namespace Hindsound.Linux.Window.Text;
+namespace Hindsound.Unix.Window.Text;
 
 /// <summary>
 /// One font file, opened twice over the same file: by FreeType, which draws its glyphs, and by HarfBuzz, which places them.

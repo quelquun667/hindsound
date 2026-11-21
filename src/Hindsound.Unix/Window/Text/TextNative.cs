@@ -1,16 +1,18 @@
 using System.Runtime.InteropServices;
+using Hindsound.Unix.Window;
 
-namespace Hindsound.Linux.Window.Text;
+namespace Hindsound.Unix.Window.Text;
 
 /// <summary>
-/// The calls of FreeType (2.11), HarfBuzz (2.7.4) and fontconfig the Linux text makes, none newer than those versions (the
-/// ones of Ubuntu 22.04). Types as on 64-bit Linux: FT_Long, FT_ULong and FT_Pos are 8 bytes, FT_Int and FT_UInt 4.
+/// The calls of FreeType (2.11) and HarfBuzz (2.7.4) the text of the window makes, none newer than those versions (the ones
+/// of Ubuntu 22.04). Types as on LP64, 64-bit Linux and macOS alike: FT_Long, FT_ULong and FT_Pos are 8 bytes, FT_Int and
+/// FT_UInt 4. The names are those of Linux; on macOS the resolver of <see cref="UnixLibraries"/> answers them with the
+/// dylib shipped in the app.
 /// </summary>
 internal static unsafe partial class TextNative
 {
-    public const string FreeType = "libfreetype.so.6";
-    public const string HarfBuzz = "libharfbuzz.so.0";
-    public const string Fontconfig = "libfontconfig.so.1";
+    public const string FreeType = UnixLibraries.FreeType;
+    public const string HarfBuzz = UnixLibraries.HarfBuzz;
 
     // FT_LOAD_RENDER, FT_LOAD_NO_BITMAP and FT_LOAD_TARGET_LIGHT (FT_RENDER_MODE_LIGHT = 1, shifted by 16).
     public const int LoadRender = 1 << 2;
@@ -55,10 +57,6 @@ internal static unsafe partial class TextNative
     public const int BitmapBufferOffset = 16;
     public const int BitmapNumGraysOffset = 24;
     public const int BitmapPixelModeOffset = 26;
-
-    // FcResultMatch, FcMatchPattern.
-    public const int FcResultMatch = 0;
-    public const int FcMatchPattern = 0;
 
     [StructLayout(LayoutKind.Sequential)]
     public struct FtVector
@@ -181,65 +179,6 @@ internal static unsafe partial class TextNative
 
     [LibraryImport(HarfBuzz)]
     public static partial void hb_buffer_destroy(nint buffer);
-
-    // fontconfig
-
-    [LibraryImport(Fontconfig)]
-    public static partial nint FcInitLoadConfigAndFonts();
-
-    [LibraryImport(Fontconfig)]
-    public static partial void FcConfigDestroy(nint config);
-
-    [LibraryImport(Fontconfig)]
-    public static partial nint FcPatternCreate();
-
-    [LibraryImport(Fontconfig)]
-    public static partial void FcPatternDestroy(nint pattern);
-
-    [LibraryImport(Fontconfig, StringMarshalling = StringMarshalling.Utf8)]
-    public static partial int FcPatternAddCharSet(nint pattern, string obj, nint charset);
-
-    [LibraryImport(Fontconfig, StringMarshalling = StringMarshalling.Utf8)]
-    public static partial int FcPatternAddBool(nint pattern, string obj, int value);
-
-    [LibraryImport(Fontconfig, StringMarshalling = StringMarshalling.Utf8)]
-    public static partial int FcPatternAddInteger(nint pattern, string obj, int value);
-
-    [LibraryImport(Fontconfig, StringMarshalling = StringMarshalling.Utf8)]
-    public static partial int FcPatternGetCharSet(nint pattern, string obj, int n, out nint charset);
-
-    [LibraryImport(Fontconfig, StringMarshalling = StringMarshalling.Utf8)]
-    public static partial int FcPatternGetString(nint pattern, string obj, int n, out byte* value);
-
-    [LibraryImport(Fontconfig, StringMarshalling = StringMarshalling.Utf8)]
-    public static partial int FcPatternGetInteger(nint pattern, string obj, int n, out int value);
-
-    [LibraryImport(Fontconfig, StringMarshalling = StringMarshalling.Utf8)]
-    public static partial int FcPatternGetBool(nint pattern, string obj, int n, out int value);
-
-    [LibraryImport(Fontconfig)]
-    public static partial nint FcCharSetCreate();
-
-    [LibraryImport(Fontconfig)]
-    public static partial int FcCharSetAddChar(nint charset, uint ucs4);
-
-    [LibraryImport(Fontconfig)]
-    public static partial int FcCharSetHasChar(nint charset, uint ucs4);
-
-    [LibraryImport(Fontconfig)]
-    public static partial void FcCharSetDestroy(nint charset);
-
-    [LibraryImport(Fontconfig)]
-    public static partial int FcConfigSubstitute(nint config, nint pattern, int kind);
-
-    [LibraryImport(Fontconfig)]
-    public static partial void FcDefaultSubstitute(nint pattern);
-
-    [LibraryImport(Fontconfig)]
-    public static partial nint FcFontSort(nint config, nint pattern, int trim, nint charsets, out int result);
-
-    [LibraryImport(Fontconfig)]
-    public static partial void FcFontSetDestroy(nint fontSet);
 
     /// <summary>An OpenType table tag, as HarfBuzz takes it: the four letters, the first in the high byte.</summary>
     public static uint Tag(string name) => ((uint)name[0] << 24) | ((uint)name[1] << 16) | ((uint)name[2] << 8) | name[3];

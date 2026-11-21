@@ -46,6 +46,26 @@ internal sealed record PlatformFeatures
         SaveCommand = saveCommand ?? (() => DefaultSaveCommand),
     };
 
+    /// <summary>
+    /// macOS, as far as the Mac app goes today: its pages, its folders and the MP3. What it does not do yet is off, never
+    /// shown as working: no capture of one application, no notification of its own (so no look and no test of it), no
+    /// confirmation sound, and the shortcut is a command to bind (<c>hindsound --save</c> inside the bundle), as on a Linux
+    /// desktop without a portal, until the Carbon shortcuts come. The words are those of macOS.
+    /// </summary>
+    /// <param name="saveCommand">The command that saves a clip, or null when the path of the program cannot be written as one.</param>
+    public static PlatformFeatures Mac(Func<string?> saveCommand) => new()
+    {
+        SingleApp = false,
+        NotificationLook = false,
+        TestNotification = false,
+        ConfirmSound = false,
+        StartupLabel = "Open at login",
+        TrashName = "Trash",
+        ReservedNameText = "This name is reserved",
+        Shortcuts = static () => ShortcutMode.Command,
+        SaveCommand = saveCommand,
+    };
+
     /// <summary>The choice of one application to capture, in place of the whole PC sound.</summary>
     public bool SingleApp { get; init; } = true;
 

@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The macOS app, Apple silicon first (osx-arm64), macOS 14.4 or later. It shares with Linux everything of
+    Hindsound.Unix (the SDL 3 window, FreeType and HarfBuzz, the loop, the single instance, the decoder, LAME, HTTP) and
+    adds what is its own: the folders of macOS, CoreText for the fallback font, the run loop of the main thread, and the
+    small Objective-C helper the later parts (menu bar, pasteboard, Trash) are built on. MacPlatform.cs says which part is
+    there and which is still off. It builds on any system, so its pure logic is tested on Windows and Linux too; what
+    touches macOS is marked [SupportedOSPlatform("macos")].
+    Published by packaging/mac/build-app.sh, with the options of the Linux app:
+      dotnet publish src/Hindsound.Mac/Hindsound.Mac.csproj -c Release -r osx-arm64 -self-contained
+        -p:PublishSingleFile=true -p:PublishTrimmed=true
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>hindsound</AssemblyName>
+    <RootNamespace>Hindsound</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- A Windows-only call stops the build; a macOS-only one needs calling code marked for macOS too. -->
+    <WarningsAsErrors>$(WarningsAsErrors);CA1416</WarningsAsErrors>
+    <TrimMode>full</TrimMode>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <TieredPGO>false</TieredPGO>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+    <EventSourceSupport>false</EventSourceSupport>
+    <DebuggerSupport>false</DebuggerSupport>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Hindsound.Mac.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Hindsound.Core\Hindsound.Core.csproj" />
+    <ProjectReference Include="..\Hindsound.Unix\Hindsound.Unix.csproj" />
+  </ItemGroup>
+
+  <!-- The two Windows DLLs of NAudio.Lame are no use on macOS: the MP3 encoder is libmp3lame.0.dylib. As in Hindsound.Linux. -->
+  <Target Name="LeaveOutWindowsLame" AfterTargets="ResolveAssemblyReferences;AssignTargetPaths">
+    <ItemGroup>
+      <None Remove="@(None)" Condition="'%(Filename)%(Extension)' == 'libmp3lame.32.dll' Or '%(Filename)%(Extension)' == 'libmp3lame.64.dll'" />
+      <ContentWithTargetPath Remove="@(ContentWithTargetPath)" Condition="'%(Filename)%(Extension)' == 'libmp3lame.32.dll' Or '%(Filename)%(Extension)' == 'libmp3lame.64.dll'" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="LeaveOutWindowsLameFromPublish" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Filename)%(Extension)' == 'libmp3lame.32.dll' Or '%(Filename)%(Extension)' == 'libmp3lame.64.dll'" />
+    </ItemGroup>
+  </Target>
+
+</Project>

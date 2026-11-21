@@ -10,6 +10,7 @@ namespace Hindsound.Unix.Window;
 /// on any system; <see cref="SdlVideo"/> is the real one. Every call is made on the loop thread, except <see cref="Push"/>.
 /// </summary>
 [SupportedOSPlatform("linux")]
+[SupportedOSPlatform("macos")]
 internal unsafe interface ISdlVideo
 {
     /// <summary>Starts SDL's video for this window: the hints first if video is not running yet, then a count of SDL's own.</summary>
@@ -89,6 +90,7 @@ internal unsafe interface ISdlVideo
 /// gets a sharp picture, not one scaled up.
 /// </summary>
 [SupportedOSPlatform("linux")]
+[SupportedOSPlatform("macos")]
 internal sealed unsafe class SdlVideo : ISdlVideo
 {
     private nint _window;

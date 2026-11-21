@@ -9,9 +9,10 @@ namespace Hindsound.Unix.Window;
 /// first applies to these too. SDL's bool is one byte (stdbool).
 /// </summary>
 [SupportedOSPlatform("linux")]
+[SupportedOSPlatform("macos")]
 internal static unsafe partial class SdlNative
 {
-    private const string InputLibrary = "libSDL3.so.0";
+    private const string InputLibrary = SdlLibrary.SystemName;
 
     /// <summary>SDL_Rect.</summary>
     [StructLayout(LayoutKind.Sequential)]

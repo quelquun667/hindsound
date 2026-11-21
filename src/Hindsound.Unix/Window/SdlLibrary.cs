@@ -1,12 +1,12 @@
-using System.Reflection;
 using System.Runtime.InteropServices;
 
 namespace Hindsound.Unix.Window;
 
 /// <summary>
-/// Where libSDL3.so.0 comes from: next to the program first (the app ships its own, as most systems have no SDL 3 yet),
+/// Where libSDL3.so.0 comes from on Linux: next to the program first (the app ships its own, as most systems have no SDL 3 yet),
 /// then by name in the system, the order libmp3lame.so.0 is looked for in (Export/LameLibrary.cs). The [LibraryImport]
-/// calls of <see cref="SdlNative"/> reach it through a resolver of this assembly, which answers for that one name only.
+/// calls of <see cref="SdlNative"/> reach it through the resolver of this assembly (<see cref="UnixLibraries"/>). On macOS
+/// the same name stands for the libSDL3.0.dylib of the bundle.
 /// </summary>
 internal static class SdlLibrary
 {
@@ -14,7 +14,6 @@ internal static class SdlLibrary
     public const string SystemName = "libSDL3.so.0";
 
     private static readonly object Gate = new();
-    private static bool _resolverInstalled;
     private static bool _opened;
     private static nint _handle;
 
@@ -27,6 +26,11 @@ internal static class SdlLibrary
     /// (<see cref="AppContext.BaseDirectory"/>), then the system.
     /// </summary>
     public static IReadOnlyList<string> ProgramCandidates => Candidates(AppContext.BaseDirectory);
+
+    /// <summary>Where the app looks on this system: <see cref="ProgramCandidates"/> on Linux, the dylib of the bundle on macOS.</summary>
+    public static IReadOnlyList<string> LoadCandidates => OperatingSystem.IsMacOS()
+        ? UnixLibraries.MacCandidates(AppContext.BaseDirectory, UnixLibraries.MacFiles[SystemName])
+        : ProgramCandidates;
 
     /// <summary>The file or name the library was loaded from, or null while it is not loaded.</summary>
     public static string? LoadedFrom { get; private set; }
@@ -80,38 +84,23 @@ internal static class SdlLibrary
     }
 
     /// <summary>
-    /// Loads the library once, from <see cref="ProgramCandidates"/>, and says whether it is there: what the app asks before
+    /// Loads the library once, from <see cref="LoadCandidates"/>, and says whether it is there: what the app asks before
     /// it offers a window. A library without SDL_Init is not taken.
     /// </summary>
     public static bool TryLoad() => Handle() != 0;
 
-    /// <summary>Points the [LibraryImport] calls of this assembly to <see cref="SystemName"/> at the library found here. Once.</summary>
-    public static void InstallResolver()
-    {
-        lock (Gate)
-        {
-            if (_resolverInstalled)
-            {
-                return;
-            }
+    /// <summary>Points the [LibraryImport] calls of this assembly to <see cref="SystemName"/> at the library found here,
+    /// through the one resolver of the assembly (<see cref="UnixLibraries"/>). Once.</summary>
+    public static void InstallResolver() => UnixLibraries.InstallResolver();
 
-            NativeLibrary.SetDllImportResolver(typeof(SdlLibrary).Assembly, Resolve);
-            _resolverInstalled = true;
-        }
-    }
-
-    // Any other name gets 0, which leaves it to the runtime's own search.
-    private static nint Resolve(string name, Assembly assembly, DllImportSearchPath? searchPath) =>
-        name == SystemName ? Handle() : 0;
-
-    private static nint Handle()
+    internal static nint Handle()
     {
         lock (Gate)
         {
             if (!_opened)
             {
                 _opened = true;
-                _handle = Open(ProgramCandidates, File.Exists, OpenSdl, out var from, out var error);
+                _handle = Open(LoadCandidates, File.Exists, OpenSdl, out var from, out var error);
                 LoadedFrom = from;
                 LastError = error;
             }

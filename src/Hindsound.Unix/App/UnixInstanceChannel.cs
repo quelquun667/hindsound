@@ -56,7 +56,7 @@ internal sealed class UnixInstanceChannel : IInstanceChannel
     public static UnixInstanceChannel Take(AppOptions options, Action<string> log)
     {
         var home = Hindsound.Settings.UserFolders.Find(Environment.SpecialFolder.UserProfile);
-        if (InstancePlace.For(Environment.GetEnvironmentVariable, home, SingleInstance.NameFor(options)) is not { } place)
+        if (InstancePlace.ForThisSystem(Environment.GetEnvironmentVariable, home, SingleInstance.NameFor(options)) is not { } place)
         {
             log("single instance: no folder fits a socket, so every launch counts as the first");
             return new UnixInstanceChannel(log, null, first: true, held: null, listener: null);

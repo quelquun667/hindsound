@@ -1,11 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    The part of the Linux app that calls nothing of Linux itself, for every system other than Windows to share: the SDL 3
-    window and the pieces of its text, the loop of the app, the single instance through a Unix socket, the HTTP transport
-    of the updates, the decoder of the clips and the MP3 encoder through libmp3lame. The Linux app references it; the
-    names of the native libraries are still those of Linux. Like Hindsound.Linux, it builds on any system, so its pure
-    logic is tested on Windows too; what needs a native library is marked [SupportedOSPlatform("linux")].
+    What Linux and macOS share: the SDL 3 window and its text (FreeType and HarfBuzz; the fallback font of the system is
+    behind IFontFallback), the loop of the app, the single instance through a Unix socket, the HTTP transport of the
+    updates, the decoder of the clips and the MP3 encoder through libmp3lame. Hindsound.Linux and Hindsound.Mac reference
+    it. The native libraries are imported by their Linux names; on macOS, UnixLibraries answers those names with the dylib
+    shipped in the app. It builds on any system, so its pure logic is tested on Windows too; what needs a native library is
+    marked [SupportedOSPlatform("linux")] and [SupportedOSPlatform("macos")].
     It has no publish of its own: the exe that references it is published trimmed (TrimMode full trims every assembly,
     this one included) and as a single file that carries it.
   -->
@@ -33,6 +34,7 @@
     <!-- hindsound is the assembly of the Linux app (Hindsound.Linux). -->
     <InternalsVisibleTo Include="hindsound" />
     <InternalsVisibleTo Include="Hindsound.Linux.Tests" />
+    <InternalsVisibleTo Include="Hindsound.Mac.Tests" />
   </ItemGroup>
 
   <ItemGroup>

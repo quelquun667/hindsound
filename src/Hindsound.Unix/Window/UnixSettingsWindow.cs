@@ -19,6 +19,7 @@ namespace Hindsound.Unix.Window;
 /// the loop's actions take turns. Paints are put off to the loop, as WM_PAINT is on Windows: many asks make one paint.
 /// </remarks>
 [SupportedOSPlatform("linux")]
+[SupportedOSPlatform("macos")]
 internal sealed unsafe class UnixSettingsWindow : IWindowHost, ISettingsWindow
 {
     public const int MeterIntervalMs = 100;
