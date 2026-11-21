@@ -54,6 +54,9 @@ usage() {
 
 sha256_of() { sha256sum "$1" | cut -d' ' -f1; }
 
+# The size in bytes, by wc rather than stat: "stat -c" is GNU only, and the mac job of the CI runs this script too.
+size_of() { wc -c < "$1" | tr -d ' '; }
+
 # A TrueType font starts with the version 1.0 of the sfnt table directory, or with "true"; and each one is the pinned file.
 check_fonts() {
   local dir="$1" font head actual
@@ -72,7 +75,7 @@ check_fonts() {
       echo "$dir/$font has the SHA-256 $actual, expected $(pinned_sha256 "$font")." >&2
       exit 1
     fi
-    echo "$font: $(stat -c %s -- "$dir/$font") bytes, SHA-256 $actual"
+    echo "$font: $(size_of "$dir/$font") bytes, SHA-256 $actual"
   done
 }
 
@@ -127,7 +130,7 @@ verify_sha256 "$work/CascadiaCode-2407.24.zip" "$CASCADIA_SHA256"
 
 download "$BARLOW_URL" "$work/BarlowSemiCondensed-SemiBold.ttf"
 blob="$(git hash-object --no-filters -- "$work/BarlowSemiCondensed-SemiBold.ttf")"
-size="$(stat -c %s -- "$work/BarlowSemiCondensed-SemiBold.ttf")"
+size="$(size_of "$work/BarlowSemiCondensed-SemiBold.ttf")"
 if [ "$blob" != "$BARLOW_BLOB" ] || [ "$size" != "$BARLOW_SIZE" ]; then
   echo "The Barlow font has the git blob $blob and $size bytes, expected $BARLOW_BLOB and $BARLOW_SIZE." >&2
   exit 1
