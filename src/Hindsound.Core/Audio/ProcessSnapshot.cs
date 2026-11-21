@@ -1,5 +1,3 @@
-using System.IO;
-
 namespace Hindsound.Audio;
 
 /// <summary>One line of the process list.</summary>
@@ -45,6 +43,18 @@ public static class SourceAppFinder
 /// <summary>Turns audio sessions into the applications to offer.</summary>
 public static class AudioAppList
 {
+    private const string ExeSuffix = ".exe";
+
+    /// <summary>
+    /// The name a person reads for a program: its file name without a final ".exe" (in any case), as Windows names them. A
+    /// name on Linux has no extension and may hold a dot ("org.kde.foo", "python3.12"): it is kept whole.
+    /// </summary>
+    public static string NameOf(string exeName)
+    {
+        ArgumentNullException.ThrowIfNull(exeName);
+        return exeName.EndsWith(ExeSuffix, StringComparison.OrdinalIgnoreCase) ? exeName[..^ExeSuffix.Length] : exeName;
+    }
+
     /// <param name="sessions">The process of each session and the name the session gives, if any.</param>
     /// <param name="processes">The process list, which gives the exe names.</param>
     /// <param name="ownProcessId">This app, left out.</param>
@@ -66,7 +76,7 @@ public static class AudioAppList
 
             // A name from the session may be a resource reference such as "@%SystemRoot%\...", no use to a person.
             var usable = !string.IsNullOrWhiteSpace(displayName) && !displayName.StartsWith('@');
-            var fallback = Path.GetFileNameWithoutExtension(exeName);
+            var fallback = NameOf(exeName);
 
             // Several processes of one application: the first name that is not just the exe name wins.
             if (!apps.TryGetValue(exeName, out var known) || (usable && known.Name == fallback))

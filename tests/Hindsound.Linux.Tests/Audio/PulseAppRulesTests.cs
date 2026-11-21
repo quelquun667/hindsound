@@ -213,6 +213,38 @@ public sealed unsafe class PulseAppRulesTests
     }
 
     [Fact]
+    public void A_recording_that_held_long_enough_counts_its_tries_from_zero_again_when_it_ends()
+    {
+        var steady = TimeSpan.FromSeconds(30);
+
+        Assert.Equal(0, PulseAppRules.TriesAfterEnd(3, TimeSpan.FromSeconds(30), steady));
+        Assert.Equal(0, PulseAppRules.TriesAfterEnd(PulseAppRules.MaxRetries, TimeSpan.FromHours(2), steady));
+    }
+
+    [Fact]
+    public void A_recording_that_ended_quickly_or_never_started_keeps_its_tries()
+    {
+        var steady = TimeSpan.FromSeconds(30);
+
+        Assert.Equal(3, PulseAppRules.TriesAfterEnd(3, TimeSpan.FromSeconds(29.9), steady));
+        Assert.Equal(PulseAppRules.MaxRetries, PulseAppRules.TriesAfterEnd(PulseAppRules.MaxRetries, TimeSpan.Zero, steady));
+        Assert.Equal(2, PulseAppRules.TriesAfterEnd(2, null, steady));
+    }
+
+    [Fact]
+    public void The_hold_that_starts_the_tries_again_is_longer_than_all_the_waits_between_them()
+    {
+        // Else a recording the server ends again and again, each time after its wait, would be tried for ever.
+        var waits = 0;
+        for (var tries = 0; tries < PulseAppRules.MaxRetries; tries++)
+        {
+            waits += PulseAppRules.RetryMilliseconds << tries;
+        }
+
+        Assert.True(PulseAppRules.SteadyMilliseconds > waits, $"{PulseAppRules.SteadyMilliseconds} ms against {waits} ms of waits");
+    }
+
+    [Fact]
     public void A_record_stream_of_one_application_is_never_corked_and_never_moved_by_the_server()
     {
         Assert.Equal(0u, PulseAppRules.RecordFlags & PulseFormats.StartCorked);

@@ -251,6 +251,72 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
     }
 
     [Fact]
+    public void A_recording_ended_by_the_server_more_times_than_it_has_tries_is_still_recorded_when_it_held_in_between()
+    {
+        // A call that plays for hours may be ended by the server a few times in those hours: each time after the recording held,
+        // its tries start again. The hold is a second here, not half a minute, so the test takes seconds.
+        if (OnPipeWire())
+        {
+            // No way to end one recording from outside under PipeWire: see KillOnServer.
+            _output.WriteLine("PipeWire: nothing to try");
+            return;
+        }
+
+        var steady = TimeSpan.FromSeconds(1);
+        var app = StartApp("hsappten", $"{Play(Tone("steady.wav", AppHz, 40))}; true");
+        WaitFor(() => StreamsOn(Sink) >= 1, "the tone playing");
+        var log = new Log();
+        var recorder = new Recorder();
+        using var source = PulseAppCaptureSource.Open(app.Id, "hsappten", new ProcProcessSnapshot(), log.Write, steady);
+        source.PacketAvailable += recorder.OnPacket;
+        source.Start();
+        Thread.Sleep(OpeningGap);
+        WaitFor(() => source.RecordedStreams == 1, "the application recorded");
+        var current = Assert.Single(SourceOutputsNamed(PulseAppCaptureSource.StreamName));
+
+        var ends = PulseAppRules.MaxRetries + 2;
+        var delays = new List<int>();
+        for (var end = 0; end < ends; end++)
+        {
+            // Held past the hold: a second and a half after it is found on the server, which has it ready within moments. Without
+            // its tries starting again, the waits double (1, 2, 4, 8 s) and the fifth end is the last.
+            Thread.Sleep(steady + TimeSpan.FromMilliseconds(500));
+            var clock = Stopwatch.StartNew();
+            KillOnServer(current);
+            string? reopened = null;
+            while (reopened is null && clock.Elapsed < TimeSpan.FromSeconds(5))
+            {
+                Thread.Sleep(50);
+                reopened = SourceOutputsNamed(PulseAppCaptureSource.StreamName).FirstOrDefault(index => index != current);
+            }
+
+            delays.Add((int)clock.Elapsed.TotalMilliseconds);
+            if (reopened is null)
+            {
+                _output.WriteLine($"not opened again after end {end + 1} of {ends}, delays {string.Join(", ", delays)} ms, log: {log}");
+                Assert.Fail($"the recording was not opened again after end {end + 1} of {ends}");
+            }
+
+            current = reopened;
+        }
+
+        Thread.Sleep(500);
+        var from = recorder.Frames;
+        Thread.Sleep(2000);
+        var levels = Blocks(recorder.Samples()[(from * Channels)..], AppHz);
+        var (recorded, onServer) = (source.RecordedStreams, SourceOutputsNamed(PulseAppCaptureSource.StreamName).Count);
+        var playing = !app.HasExited;
+        source.Stop();
+
+        _output.WriteLine($"ended {ends} times: delays {string.Join(", ", delays)} ms, recorded={recorded} onServer={onServer} level={levels.DefaultIfEmpty().Min():0.000} to {levels.DefaultIfEmpty().Max():0.000}, log: {log}");
+        Assert.True(playing, "the application stopped playing too early to mean anything");
+        Assert.Equal(1, recorded);
+        Assert.Equal(1, onServer);
+        Assert.True(levels.Length >= 15, $"only {levels.Length} blocks measured");
+        Assert.All(levels, level => Assert.InRange(level, 0.4, 0.6));
+    }
+
+    [Fact]
     public void The_stream_keeping_an_output_quick_killed_on_the_server_is_opened_again_by_the_next_try()
     {
         var server = Pactl("info").Split('\n').FirstOrDefault(line => line.StartsWith("Server Name", StringComparison.Ordinal));

@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- On Linux, a sound stream of the recorded application that the sound server ends now and then, such as a call that lasts for hours, is recorded again each time it was recorded for half a minute or more before. Before, after the fifth time it was no longer recorded, while the band still said `Capturing`.
+- On Linux, the name of an application that holds a dot, such as `org.kde.foo` or `python3.12`, is shown whole in the `Record` list, the band and the wave. Before, what came after its last dot was cut, as for the `.exe` of a Windows program.
+- On Linux, when `$XDG_DATA_DIRS` lists `~/.local/share`, an AppImage keeps its entry in the list of applications instead of removing it and writing it again at each launch.
+
 ## [0.10.0] - 2026-11-21
 
 Record one application on Linux, as on Windows. On Windows, Hindsound works as in 0.9.0.
