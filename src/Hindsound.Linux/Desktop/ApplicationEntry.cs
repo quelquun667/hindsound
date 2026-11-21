@@ -39,11 +39,15 @@ internal sealed class ApplicationEntry
     private readonly IReadOnlyList<string> _systemData;
 
     /// <param name="dataHome">$XDG_DATA_HOME: for a test, a folder of its own.</param>
-    /// <param name="systemData">The folders of $XDG_DATA_DIRS, where the packages of the system put their entries.</param>
+    /// <param name="systemData">
+    /// The folders of $XDG_DATA_DIRS, where the packages of the system put their entries. The data folder of the user is left
+    /// out when it is one of them: its entry is the user's, and taken for the system's, a lone AppImage would remove its own
+    /// and write it again at every launch.
+    /// </param>
     internal ApplicationEntry(string dataHome, IReadOnlyList<string> systemData)
     {
         _dataHome = dataHome;
-        _systemData = systemData;
+        _systemData = systemData.Where(folder => !EntryRules.SameFolder(folder, dataHome)).ToList();
     }
 
     public string FilePath => Path.Combine(_dataHome, "applications", FileName);
