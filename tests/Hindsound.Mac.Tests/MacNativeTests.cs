@@ -133,7 +133,35 @@ public sealed class MacNativeTests
 
         Assert.True(text.Measure(body, "Hindsound") > 0);
         Assert.True(text.Measure(body, "日本語") > 0);
-        Assert.True(text.FallbackCount >= 1);
+        Assert.True(text.FallbackCount >= 1, text.FallbackCount >= 1 ? string.Empty : WhyNoFallback(text, body));
+    }
+
+    // What each step of the fallback gives for U+65E5 on its own, for the message of the test above when it fails.
+    private static string WhyNoFallback(FreeTypeText text, FontSpec body)
+    {
+        using var probe = new CoreTextFallback();
+        var found = probe.Find(0x65E5, 80);
+        if (found is not var (path, index))
+        {
+            return "CoreText finds no font for U+65E5";
+        }
+
+        var name = System.Text.Encoding.UTF8.GetString(path, 0, path.Length - 1);
+        if (TextNative.FT_Init_FreeType(out var library) != 0)
+        {
+            return name + ": FreeType does not start";
+        }
+
+        try
+        {
+            using var file = FontFile.Open(library, 99, path, index);
+            var step = file is null ? "FontFile.Open gives null" : "covers U+65E5: " + file.Covers(0x65E5);
+            return $"{name}, face {index}: {step}; the text: {text.Describe(body, "\u65E5")}";
+        }
+        finally
+        {
+            TextNative.FT_Done_FreeType(library);
+        }
     }
 
     [Fact]
