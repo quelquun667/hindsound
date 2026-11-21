@@ -186,6 +186,20 @@ public sealed class ApplicationEntryLeftBehindTests : IDisposable
     }
 
     [Fact]
+    public void A_data_folder_of_the_user_listed_among_those_of_the_system_is_not_taken_for_a_package()
+    {
+        // Some sessions put ~/.local/share in $XDG_DATA_DIRS: the entry a lone AppImage wrote there is its own, kept as it is.
+        FirstLaunchOfTheAppImage();
+        File.Delete(SystemEntry);
+        var written = File.ReadAllBytes(Entry().FilePath);
+        var entry = new ApplicationEntry(DataHome, [DataHome + "/", SystemData]);
+
+        Assert.Null(entry.RemoveLeftBehind(AppImage));
+        Assert.Equal(EntryOutcome.AlreadyThere.ToString(), entry.Decide(Share, AppImage).ToString());
+        Assert.Equal(written, File.ReadAllBytes(Entry().FilePath));
+    }
+
+    [Fact]
     public void With_no_entry_of_the_user_or_no_program_nothing_is_said()
     {
         Assert.Null(Entry().RemoveLeftBehind(PackageProgram));
