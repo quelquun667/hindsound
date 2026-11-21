@@ -360,6 +360,72 @@ jobs:
           sed 's/^/  log loop: /' "$folder/settings.log" || true
           [ "$code" -eq 2 ] && [ "$proof_code" -eq 0 ] && grep -q "loop proof: result pass" "$folder/settings.log"
 
+      # A real notification through SDL's Cocoa window, not the offscreen driver. The app says when it is up and where, and
+      # holds it; screencapture takes the main screen, and the pixels of the accent (its bars) are counted where it is. The
+      # app itself checks that the app in front stayed in front and that its window never had the focus, then clicks it with
+      # a mouse event of the system (reported, the runner may drop it) and lets it go.
+      - name: Show a notification with the app
+        if: ${{ !cancelled() && steps.assemble.outcome == 'success' }}
+        run: |
+          program="$RUNNER_TEMP/app/Hindsound.app/Contents/MacOS/hindsound"
+          proof="$RUNNER_TEMP/mac-notification"
+          mkdir -p "$proof"
+          perl -e 'alarm shift; exec @ARGV' 200 "$program" --prove-notification "$proof/out" > "$proof/console.txt" 2>&1 &
+          app=$!
+          for _ in $(seq 1 120); do
+            [ -f "$proof/out/ready" ] && break
+            kill -0 "$app" 2> /dev/null || break
+            sleep 0.5
+          done
+          failed=0
+          if [ -f "$proof/out/ready" ]; then
+            echo "front app seen from bash: $(lsappinfo info -only name "$(lsappinfo front)" 2>&1 | tr '\n' ' ')"
+            screencapture -x -m "$proof/screen.png" || failed=1
+            sips -s format bmp "$proof/screen.png" --out "$proof/screen.bmp" > /dev/null || failed=1
+            python3 - "$proof/out/ready" "$proof/screen.bmp" <<'EOF' || failed=1
+          import struct, sys
+          ready = dict(line.strip().split('=', 1) for line in open(sys.argv[1]) if '=' in line)
+          data = open(sys.argv[2], 'rb').read()
+          offset = struct.unpack_from('<I', data, 10)[0]
+          width, height = struct.unpack_from('<ii', data, 18)
+          bpp, compression = struct.unpack_from('<HI', data, 28)
+          top_down, height, step = height < 0, abs(height), bpp // 8
+          stride = (width * step + 3) & ~3
+          if compression in (3, 6):
+              masks = struct.unpack_from('<III', data, 54)
+          else:
+              masks = (0xFF0000, 0x00FF00, 0x0000FF)
+          shifts = [(m & -m).bit_length() - 1 for m in masks]
+          def pixel(x, y):
+              i = offset + (y if top_down else height - 1 - y) * stride + x * step
+              value = int.from_bytes(data[i:i + step], 'little')
+              return tuple((value & m) >> s for m, s in zip(masks, shifts))
+          accent = int(ready['accent'], 16)
+          target = ((accent >> 16) & 255, (accent >> 8) & 255, accent & 255)
+          near = lambda p: all(abs(p[c] - target[c]) <= 24 for c in range(3))
+          factor = width / int(ready['screen_w'])
+          x, y, w, h = (int(ready[k]) for k in ('x', 'y', 'w', 'h'))
+          x0, y0, x1, y1 = int(x * factor), int(y * factor), int((x + w) * factor), int((y + h) * factor)
+          inside = sum(1 for py in range(max(0, y0), min(height, y1)) for px in range(max(0, x0), min(width, x1)) if near(pixel(px, py)))
+          everywhere = sum(1 for py in range(height) for px in range(width) if near(pixel(px, py)))
+          expected = int(ready['expected']) * (factor / float(ready['scale'])) ** 2
+          print(f"notification pixels: screen {width}x{height} bpp={bpp} factor={factor} rect=({x0},{y0})-({x1},{y1}) "
+                f"accent_inside={inside} accent_elsewhere={everywhere - inside} expected={expected:.0f}")
+          print(f"notification pixels: stripe {pixel(min(width - 1, x1 - 1), (y0 + y1) // 2)} fill {pixel((x0 + x1) // 2, y0 + int(4 * factor))}")
+          sys.exit(0 if inside >= 0.8 * expected and inside > 100 else 1)
+          EOF
+          else
+            echo "the notification never said it was up"
+            failed=1
+          fi
+          touch "$proof/out/captured"
+          code=0
+          wait "$app" || code=$?
+          sed 's/^/  /' "$proof/console.txt"
+          echo "prove-notification: exit code $code"
+          [ "$code" -eq 0 ] || failed=1
+          exit $failed
+
       - name: Keep the pages of the window
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
