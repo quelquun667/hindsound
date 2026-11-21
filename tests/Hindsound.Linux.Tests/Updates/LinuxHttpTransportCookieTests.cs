@@ -8,8 +8,11 @@ namespace Hindsound.Linux.Tests.Updates;
 
 /// <summary>
 /// The update check sends no cookie: one handed out by the first hop of a redirect does not come back on the next hop.
-/// On a local server, so it runs here too.
+/// On a local server, so it runs here too. One at a time with the other transport tests, for the same reason: the connection
+/// of the client and the answers of the server both need threads of the pool, and while the tests beside it held them all on
+/// the Windows runner, a hop waited the 5 s of its delay for nothing.
 /// </summary>
+[Collection(HttpTransportCollection.Name)]
 public class LinuxHttpTransportCookieTests
 {
     private static readonly TransferLimits Roomy = new(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(5), 1024);
