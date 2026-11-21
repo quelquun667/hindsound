@@ -331,61 +331,94 @@ static void permissions(const char *when) {
     probe(key("av_microphone_", when), @"%ld", (long)[AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio]);
 }
 
+static void step(const char *what) { probe("step", @"%s", what); }
+
+static void runAll(int tonePid, int silentPid, double seconds) {
+    permissions("before");
+    AudioObjectID output = getDevice(kAudioHardwarePropertyDefaultOutputDevice);
+    AudioObjectID input = getDevice(kAudioHardwarePropertyDefaultInputDevice);
+    probe("devices", @"output=%u:%@ (%@) input=%u:%@", output, getString(output, kAudioObjectPropertyName),
+          getString(output, kAudioDevicePropertyDeviceUID), input, getString(input, kAudioObjectPropertyName));
+    listProcesses();
+
+    // 1. A global tap that excludes nothing, while afplay plays 1 kHz.
+    step("tap_global_all");
+    tapTest("tap_global_all", [[CATapDescription alloc] initStereoGlobalTapButExcludeProcesses:@[]], output, seconds);
+
+    // 2. One application: the afplay that plays 1 kHz, and the one that plays silence.
+    step("process_targets");
+    AudioObjectID toneObject = processObject(tonePid);
+    AudioObjectID silentObject = processObject(silentPid);
+    probe("process_targets", @"tone_pid=%d object=%u silent_pid=%d object=%u", tonePid, toneObject, silentPid,
+          silentObject);
+    if (toneObject != kAudioObjectUnknown) {
+        tapTest("tap_proc_tone", [[CATapDescription alloc] initStereoMixdownOfProcesses:@[ @(toneObject) ]], output,
+                seconds);
+    } else {
+        probe("tap_proc_tone.result", @"NO_PROCESS_OBJECT pid=%d", tonePid);
+    }
+    if (silentObject != kAudioObjectUnknown) {
+        tapTest("tap_proc_silent", [[CATapDescription alloc] initStereoMixdownOfProcesses:@[ @(silentObject) ]], output,
+                seconds);
+    } else {
+        probe("tap_proc_silent.result", @"NO_PROCESS_OBJECT pid=%d", silentPid);
+    }
+
+    // 3. The microphone: the default input, BlackHole, which gives back what afplay plays on its output.
+    step("mic");
+    if (input != kAudioObjectUnknown) {
+        capture("mic_default_input", input, nominalRate(input), seconds);
+    } else {
+        probe("mic_default_input.result", @"NO_INPUT_DEVICE");
+    }
+    permissions("after");
+
+    // 4. Our own 440 Hz tone on the output, then a global tap that excludes our process: 1 kHz expected, no 440 Hz.
+    step("self_tone");
+    Tone *tone = calloc(1, sizeof(Tone));
+    double outRate = nominalRate(output);
+    tone->step = 2 * M_PI * 440 / (outRate > 0 ? outRate : 48000);
+    AudioDeviceIOProcID toneProc = NULL;
+    OSStatus toneCreated = AudioDeviceCreateIOProcID(output, outputProc, tone, &toneProc);
+    step("self_tone_created");
+    OSStatus toneStarted = toneCreated != noErr ? toneCreated : AudioDeviceStart(output, toneProc);
+    step("self_tone_started");
+    usleep(500000);
+    AudioObjectID selfObject = processObject(getpid());
+    probe("self_tone", @"create=%d start=%d self_object=%u", (int)toneCreated, (int)toneStarted, selfObject);
+    NSArray *exclude = selfObject != kAudioObjectUnknown ? @[ @(selfObject) ] : @[];
+    tapTest("tap_global_excl_self", [[CATapDescription alloc] initStereoGlobalTapButExcludeProcesses:exclude], output,
+            seconds);
+    tapTest("tap_global_with_self", [[CATapDescription alloc] initStereoGlobalTapButExcludeProcesses:@[]], output,
+            seconds);
+    if (toneProc != NULL) {
+        AudioDeviceStop(output, toneProc);
+        AudioDeviceDestroyIOProcID(output, toneProc);
+    }
+    step("end");
+}
+
+// The work runs on a thread of its own while this (main) thread runs its run loop: the first run, with the main thread
+// asleep, hung right after the first property reads. The HAL is also told to use its own thread for notifications.
 __attribute__((visibility("default")))
 int probe_audio_run(const char *tag, int tonePid, int silentPid, double seconds) {
-    @autoreleasepool {
-        snprintf(g_tag, sizeof g_tag, "%s", tag);
-        permissions("before");
-        AudioObjectID output = getDevice(kAudioHardwarePropertyDefaultOutputDevice);
-        AudioObjectID input = getDevice(kAudioHardwarePropertyDefaultInputDevice);
-        probe("devices", @"output=%u:%@ (%@) input=%u:%@", output, getString(output, kAudioObjectPropertyName),
-              getString(output, kAudioDevicePropertyDeviceUID), input, getString(input, kAudioObjectPropertyName));
-        listProcesses();
-
-        // 1. Global taps, while we play 440 Hz ourselves and afplay plays 1 kHz.
-        Tone *tone = calloc(1, sizeof(Tone));
-        double outRate = nominalRate(output);
-        tone->step = 2 * M_PI * 440 / (outRate > 0 ? outRate : 48000);
-        AudioDeviceIOProcID toneProc = NULL;
-        OSStatus toneCreated = AudioDeviceCreateIOProcID(output, outputProc, tone, &toneProc);
-        OSStatus toneStarted = toneCreated != noErr ? toneCreated : AudioDeviceStart(output, toneProc);
-        usleep(500000);
-        AudioObjectID selfObject = processObject(getpid());
-        probe("self_tone", @"create=%d start=%d self_object=%u", (int)toneCreated, (int)toneStarted, selfObject);
-        NSArray *exclude = selfObject != kAudioObjectUnknown ? @[ @(selfObject) ] : @[];
-        tapTest("tap_global_excl_self", [[CATapDescription alloc] initStereoGlobalTapButExcludeProcesses:exclude], output,
-                seconds);
-        tapTest("tap_global_all", [[CATapDescription alloc] initStereoGlobalTapButExcludeProcesses:@[]], output, seconds);
-        if (toneProc != NULL) {
-            AudioDeviceStop(output, toneProc);
-            AudioDeviceDestroyIOProcID(output, toneProc);
+    snprintf(g_tag, sizeof g_tag, "%s", tag);
+    CFRunLoopRef none = NULL;
+    AudioObjectPropertyAddress runLoop = { kAudioHardwarePropertyRunLoop, kAudioObjectPropertyScopeGlobal,
+                                           kAudioObjectPropertyElementMain };
+    OSStatus status = AudioObjectSetPropertyData(kAudioObjectSystemObject, &runLoop, 0, NULL, sizeof none, &none);
+    probe("hal_runloop_null", @"status=%d", (int)status);
+    __block volatile int finished = 0;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        @autoreleasepool {
+            runAll(tonePid, silentPid, seconds);
         }
-
-        // 2. One application: the afplay that plays 1 kHz, and the one that plays silence.
-        AudioObjectID toneObject = processObject(tonePid);
-        AudioObjectID silentObject = processObject(silentPid);
-        probe("process_targets", @"tone_pid=%d object=%u silent_pid=%d object=%u", tonePid, toneObject, silentPid,
-              silentObject);
-        if (toneObject != kAudioObjectUnknown) {
-            tapTest("tap_proc_tone", [[CATapDescription alloc] initStereoMixdownOfProcesses:@[ @(toneObject) ]], output,
-                    seconds);
-        } else {
-            probe("tap_proc_tone.result", @"NO_PROCESS_OBJECT pid=%d", tonePid);
-        }
-        if (silentObject != kAudioObjectUnknown) {
-            tapTest("tap_proc_silent", [[CATapDescription alloc] initStereoMixdownOfProcesses:@[ @(silentObject) ]], output,
-                    seconds);
-        } else {
-            probe("tap_proc_silent.result", @"NO_PROCESS_OBJECT pid=%d", silentPid);
-        }
-
-        // 3. The microphone: the default input, BlackHole, which gives back what afplay plays on its output.
-        if (input != kAudioObjectUnknown) {
-            capture("mic_default_input", input, nominalRate(input), seconds);
-        } else {
-            probe("mic_default_input.result", @"NO_INPUT_DEVICE");
-        }
-        permissions("after");
+        finished = 1;
+    });
+    CFAbsoluteTime deadline = CFAbsoluteTimeGetCurrent() + 90;
+    while (!finished && CFAbsoluteTimeGetCurrent() < deadline) {
+        CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.1, false);
     }
-    return 0;
+    if (!finished) probe("timeout", @"the audio work did not end within 90 s: see the last step line");
+    return finished ? 0 : 1;
 }

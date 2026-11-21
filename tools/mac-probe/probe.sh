@@ -221,7 +221,7 @@ EOF
       probe "sign.${kind}_v$v.spctl" "rc=$? $(echo "$out" | oneline)"
     done
     # What TCC checks at launch: does build 2 satisfy the requirement recorded for build 1?
-    out="$(codesign --verify -R="=$(dr_of "$W/apps/$kind-v1/HindsoundProbe.app")" "$W/apps/$kind-v2/HindsoundProbe.app" 2>&1)"
+    out="$(codesign --verify -R "=$(dr_of "$W/apps/$kind-v1/HindsoundProbe.app")" "$W/apps/$kind-v2/HindsoundProbe.app" 2>&1)"
     probe "sign.$kind.v2_satisfies_v1_dr" "rc=$? $(echo "$out" | oneline)"
   done
 }
@@ -240,7 +240,7 @@ run_app() { # mode app outfile args...
     "$app/Contents/MacOS/HindsoundProbe" "$@" > "$out" 2> "$out.err" &
   fi
   local pid=$!
-  ( sleep 120; kill "$pid" 2> /dev/null ) &
+  ( sleep 150; kill "$pid" 2> /dev/null ) &
   local watchdog=$!
   wait "$pid"
   kill "$watchdog" 2> /dev/null
