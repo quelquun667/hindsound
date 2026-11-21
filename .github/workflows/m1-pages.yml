@@ -61,10 +61,12 @@ jobs:
               exe="$RUNNER_TEMP/${side%2}/hindsound"
               run="$RUNNER_TEMP/run"
               rm -rf "$run" && mkdir -p "$run/png"
-              printf '%s
-' '{"audio":{"micDeviceId":"disabled"}}' > "$run/settings.json"
+              printf '%s\n' '{"audio":{"micDeviceId":"disabled"}}' > "$run/settings.json"
               code=0
-              DONT_FAKE_MONOTONIC=1 HINDSOUND_FONT_DIR="$RUNNER_TEMP/fonts" SDL_VIDEO_DRIVER=offscreen timeout 300                 faketime -f '@2026-11-21 12:00:00' "$exe"                 --settings "$run/settings.json" --no-mic --no-clipboard --no-hotkeys --offscreen                 --dump-settings "$run/png" --scale "$scale" || code=$?
+              DONT_FAKE_MONOTONIC=1 HINDSOUND_FONT_DIR="$RUNNER_TEMP/fonts" SDL_VIDEO_DRIVER=offscreen timeout 300 \
+                faketime -f '@2026-11-21 12:00:00' "$exe" \
+                --settings "$run/settings.json" --no-mic --no-clipboard --no-hotkeys --offscreen \
+                --dump-settings "$run/png" --scale "$scale" || code=$?
               echo "$side at $scale: exit code $code, $(ls "$run/png" | grep -c '\.png$') PNG files"
               [ "$code" -eq 0 ] || failed=1
               mv "$run" "$RUNNER_TEMP/run-$side-$scale"
