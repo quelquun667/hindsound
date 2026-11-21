@@ -16,13 +16,17 @@ public sealed partial class LinuxNoticesTests
     /// <summary>The git blob of COPYING in tmds/Tmds.DBus at commit 5557e043025de2251128ab8048c9d3f0cf50495e.</summary>
     private const string TmdsCopyingBlob = "d1060c2f634ad623ba500dff09ac3044c9747c82";
 
+    // The packages of the Linux app are those of its project and of Hindsound.Unix, which it references.
     public static TheoryData<string> LinuxPackages()
     {
-        var project = XDocument.Load(Path.Combine(Root, "src", "Hindsound.Linux", "Hindsound.Linux.csproj"));
         var data = new TheoryData<string>();
-        foreach (var reference in project.Descendants("PackageReference"))
+        foreach (var name in new[] { "Hindsound.Linux", "Hindsound.Unix" })
         {
-            data.Add((string)reference.Attribute("Include")!);
+            var project = XDocument.Load(Path.Combine(Root, "src", name, name + ".csproj"));
+            foreach (var reference in project.Descendants("PackageReference"))
+            {
+                data.Add((string)reference.Attribute("Include")!);
+            }
         }
 
         return data;

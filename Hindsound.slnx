@@ -4,5 +4,6 @@
   <Project Path="tests/Hindsound.Tests/Hindsound.Tests.csproj" />
   <Project Path="src/Hindsound.Core/Hindsound.Core.csproj" />
   <Project Path="src/Hindsound.Linux/Hindsound.Linux.csproj" />
+  <Project Path="src/Hindsound.Unix/Hindsound.Unix.csproj" />
   <Project Path="src/Hindsound/Hindsound.csproj" />
 </Solution>
