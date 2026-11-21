@@ -2,6 +2,7 @@ using System.Runtime.Versioning;
 using Hindsound.App;
 using Hindsound.Input;
 using Hindsound.Mac.App;
+using Hindsound.Mac.Audio.Devices;
 using Hindsound.Mac.Desktop;
 using Hindsound.Mac.Input;
 using Hindsound.Unix.Export;
@@ -18,9 +19,10 @@ namespace Hindsound.Mac;
 //            instance through a Unix socket and --save from a second launch (Hindsound.Unix, App/MacLaunch.cs), the icon
 //            of the menu bar (Tray/), the Carbon shortcuts (Input/), the pasteboard, open and reveal, the Trash, opening
 //            at login through a launch agent, the screens, the meter and the end of the session (Desktop/), the
-//            notification drawn by the app (Hindsound.Unix, Notification/), the Objective-C helper (Interop/ObjC.cs), the listening
-//            of a clip on an AudioQueue (Audio/Playback/).
-//   off:     the capture, the devices and the process list (step M3); the update channel of macOS (step
+//            notification drawn by the app (Hindsound.Unix, Notification/), the Objective-C helper (Interop/ObjC.cs), the
+//            watch of the devices, the lists of devices and of applications that play, and the process list
+//            (Audio/Devices/), the listening of a clip on an AudioQueue (Audio/Playback/).
+//   off:     the capture (step M3); the update channel of macOS (step
 //            M4). Each is left null here or throws in MacShell, and PlatformFeatures.Mac turns off what the pages would
 //            offer for it.
 
@@ -53,6 +55,8 @@ internal static class MacPlatform
             PlatformDefaults.Shell = () => new MacShell(log);
             PlatformDefaults.RunKey = () => new LaunchAgentEntry();
             PlatformDefaults.Desktop = () => MacDesktop.Parts(log);
+            PlatformDefaults.DeviceWatcher = () => new MacDeviceWatcher(log);
+            PlatformDefaults.ProcessSnapshot = () => new MacProcessSnapshot();
             _installed = true;
         }
     }
