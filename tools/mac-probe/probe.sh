@@ -89,6 +89,15 @@ blackhole() {
     rc=$?
     probe "blackhole.default_$type" "rc=$rc now=$(SwitchAudioSource -t "$type" -c 2>&1)"
   done
+  # Does the IO of BlackHole run at all: afplay of a 1 s tone ends after about 1 s if it does, and hangs if it does not.
+  python3 -c "import wave; f = wave.open('$W/beep.wav', 'wb'); f.setnchannels(1); f.setsampwidth(2); f.setframerate(48000); f.writeframes(bytes(96000)); f.close()"
+  local start=$SECONDS pid
+  afplay "$W/beep.wav" &
+  pid=$!
+  ( sleep 10; kill "$pid" 2> /dev/null ) &
+  wait "$pid"
+  rc=$?
+  probe blackhole.afplay_1s "rc=$rc seconds=$((SECONDS - start)) (rc 143 = killed after 10 s: no IO)"
   echo "--- system_profiler SPAudioDataType (after BlackHole)"
   system_profiler SPAudioDataType 2>&1
 }
