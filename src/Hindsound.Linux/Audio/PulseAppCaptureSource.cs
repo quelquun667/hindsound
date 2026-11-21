@@ -652,7 +652,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
             }
 
             input.Die();
-            input.Tries = PulseAppRules.TriesAfterEnd(input.Tries, input.WasReady ? Stopwatch.GetElapsedTime(input.ReadyAt, input.DeadAt) : null, owner._steady);
+            input.Tries = PulseAppRules.TriesAfterEnd(input.Tries, null, owner._steady);
             owner.Unmix(input);
             owner.Look();
         }
