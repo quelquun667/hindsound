@@ -128,8 +128,9 @@ internal static unsafe class MacCaptureProof
         }
 
         var measure = run.Measure(0.5, CaseSeconds);
-        var ok = expected(measure) && run.Stopped is null;
-        log($"{name} {measure} {run.Facts} stopped={run.Stopped?.Message ?? "no"} result {(ok ? "pass" : "FAIL")}");
+        var received = run.Received(0.5, CaseSeconds);
+        var ok = expected(measure) && run.Stopped is null && received > 0;
+        log($"{name} {measure} received={received} {run.Facts} stopped={run.Stopped?.Message ?? "no"} result {(ok ? "pass" : "FAIL")}");
         return ok;
     }
 
@@ -144,10 +145,12 @@ internal static unsafe class MacCaptureProof
             return false;
         }
 
+        // Placed by their dates, as the Core does: while the application has no process with sound, the tap may send no
+        // packet at all (run 44941099326: 2.2 s without one), and that time is silence in a clip.
         var before = run.Measure(0.2, 1.5);
         var after = run.Measure(4.0, 6.5);
         var ok = before.ExactZero && after.Tone1000 && run.Stopped is null;
-        log($"app_family before_child {before} after_child {after} {run.Facts} result {(ok ? "pass" : "FAIL")}");
+        log($"app_family before_child {before} received={run.Received(0.2, 1.5)} after_child {after} received={run.Received(4.0, 6.5)} {run.Facts} result {(ok ? "pass" : "FAIL")}");
         return ok;
     }
 
@@ -160,8 +163,9 @@ internal static unsafe class MacCaptureProof
         }
 
         var measure = run.Measure(0, 6);
-        var ok = measure.ExactZero && run.Stopped is UnauthorizedAccessException;
-        log($"{name} {measure} {run.Facts} stopped={run.Stopped?.GetType().Name ?? "no"}: {run.Stopped?.Message} result {(ok ? "pass" : "FAIL")}");
+        var received = run.Received(0, 6);
+        var ok = measure.ExactZero && received > 0 && run.Stopped is UnauthorizedAccessException;
+        log($"{name} {measure} received={received} {run.Facts} stopped={run.Stopped?.GetType().Name ?? "no"}: {run.Stopped?.Message} result {(ok ? "pass" : "FAIL")}");
         return ok;
     }
 
@@ -188,6 +192,7 @@ internal static unsafe class MacCaptureProof
         var run = new Recording(source.Format.Channels, source.Format.SampleRate, seconds, openMs);
         source.PacketAvailable += run.OnPacket;
         source.Stopped += exception => run.Stopped ??= exception ?? new OperationCanceledException("stopped without an error");
+        run.StartTicks = PacketStamper.StopwatchTicks();
         source.Start();
         Thread.Sleep(TimeSpan.FromSeconds(seconds));
         source.Stop();
@@ -263,6 +268,7 @@ internal static unsafe class MacCaptureProof
     {
         private readonly float[] _samples = new float[(int)(rate * channels * (seconds + 2))];
         private readonly Lock _gate = new();
+        private readonly List<(long From, long To)> _received = [];
         private int _count;
         private long _packets;
         private long _discontinuities;
@@ -270,6 +276,9 @@ internal static unsafe class MacCaptureProof
         private long _maxAgeMs = long.MinValue;
 
         public Exception? Stopped { get; set; }
+
+        /// <summary>The stopwatch ticks when the capture started: where each packet goes, by its date.</summary>
+        public long StartTicks { get; set; }
 
         public string Facts => string.Create(CultureInfo.InvariantCulture,
             $"rate={rate} channels={channels} opened_ms={openMs} packets={_packets} discontinuities={_discontinuities} stamp_age_ms={(_packets > 0 ? $"{_minAgeMs}..{_maxAgeMs}" : "none")}");
@@ -292,13 +301,35 @@ internal static unsafe class MacCaptureProof
                     _maxAgeMs = Math.Max(_maxAgeMs, age);
                 }
 
-                var take = Math.Min(samples.Length, _samples.Length - _count);
-                samples[..take].CopyTo(_samples.AsSpan(_count));
-                _count += take;
+                // By its date, as the Core lays packets on its timeline; one after the other when it has none.
+                var frames = samples.Length / channels;
+                var at = qpcPosition > 0 && StartTicks > 0
+                    ? (long)Math.Round((qpcPosition - StartTicks) * (double)rate / PacketStamper.TicksPerSecond)
+                    : _count / channels;
+                var skip = (int)Math.Clamp(-at, 0, frames);
+                var first = Math.Max(at, 0) * channels;
+                var take = (int)Math.Min((long)(frames - skip) * channels, _samples.Length - first);
+                if (take > 0)
+                {
+                    samples.Slice(skip * channels, take).CopyTo(_samples.AsSpan((int)first));
+                    _count = Math.Max(_count, (int)first + take);
+                    _received.Add((first / channels, (first + take) / channels));
+                }
             }
         }
 
-        /// <summary>The measure of the stretch from <paramref name="from"/> to <paramref name="to"/> seconds of what came.</summary>
+        /// <summary>How many frames of the stretch from <paramref name="from"/> to <paramref name="to"/> seconds came in packets.</summary>
+        public long Received(double from, double to)
+        {
+            lock (_gate)
+            {
+                var start = (long)(from * rate);
+                var end = (long)(to * rate);
+                return _received.Sum(r => Math.Max(0, Math.Min(r.To, end) - Math.Max(r.From, start)));
+            }
+        }
+
+        /// <summary>The measure of the stretch from <paramref name="from"/> to <paramref name="to"/> seconds after the start, placed by date.</summary>
         public SignalMeasure Measure(double from, double to)
         {
             lock (_gate)

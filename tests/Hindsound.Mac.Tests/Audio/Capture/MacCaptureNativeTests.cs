@@ -102,14 +102,15 @@ public sealed class MacCaptureNativeTests
     }
 
     [Fact]
-    public void AnOutputChosenByNameIsTappedAloneAndMixedToStereo()
+    public void AnOutputChosenByNameIsTappedAloneInTheFormatOfItsStream()
     {
+        // Not a mixdown: a mixdown taps the processes on every output (run 44941099326).
         var description = MacTapParts.Description(global: true, [], "Some_Output_UID");
         try
         {
             Assert.Equal("Some_Output_UID", MacTapParts.DeviceUidOf(description));
             Assert.True(MacTapParts.IsExclusive(description));
-            Assert.True(MacTapParts.IsMixdown(description));
+            Assert.False(MacTapParts.IsMixdown(description));
         }
         finally
         {

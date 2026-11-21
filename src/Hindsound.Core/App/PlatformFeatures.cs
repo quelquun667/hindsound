@@ -47,8 +47,9 @@ internal sealed record PlatformFeatures
     };
 
     /// <summary>
-    /// macOS, as far as the Mac app goes today: its pages, its folders and the MP3. What it does not do yet is off, never
-    /// shown as working: no capture of one application and no confirmation sound. The notification is drawn by the app, as
+    /// macOS, as far as the Mac app goes today: its pages, its folders, the MP3 and the capture, of one application too (a
+    /// Core Audio tap of its processes and their children). What it does not do yet is off, never shown as working: no
+    /// confirmation sound. The notification is drawn by the app, as
     /// on Windows, with its look and its test. The shortcut is a command to bind (<c>hindsound --save</c> inside the bundle),
     /// as on a Linux desktop without a portal, unless <paramref name="shortcuts"/> says the Carbon shortcuts are there. The
     /// words are those of macOS.
@@ -57,7 +58,7 @@ internal sealed record PlatformFeatures
     /// <param name="shortcuts">How the shortcuts are set now; <see cref="ShortcutMode.Command"/> when not given.</param>
     public static PlatformFeatures Mac(Func<string?> saveCommand, Func<ShortcutMode>? shortcuts = null) => new()
     {
-        SingleApp = false,
+        SingleApp = true,
         NotificationLook = true,
         TestNotification = true,
         ConfirmSound = false,

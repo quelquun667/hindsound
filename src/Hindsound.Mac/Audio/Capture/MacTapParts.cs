@@ -59,8 +59,10 @@ internal static unsafe class MacTapParts
             description = ((delegate* unmanaged<nint, nint, nint, nint, nint, nint>)MsgSend)(
                 allocated, ObjC.Selector("initExcludingProcesses:andDeviceUID:withStream:"), array, uid, 0);
             ObjC.Release(uid);
-            SetBool(description, "setMixdown:", true);
-            SetBool(description, "setMono:", false);
+
+            // No setMixdown: here: a mixdown taps the processes on every output (run 44941099326: the tap of the Null
+            // Audio Device heard what played on BlackHole). The tap keeps the format of the device's stream; its channel
+            // count is read from the tap (CoreAudio.TapChannels).
         }
 
         if (description == 0)
@@ -115,6 +117,16 @@ internal static unsafe class MacTapParts
         using var pool = new ObjC.Pool();
         var uuid = ObjC.Send(description, "UUID");
         return uuid == 0 ? null : ObjC.String(ObjC.Send(uuid, "UUIDString"));
+    }
+
+    /// <summary>What the description says it taps, for the log: its output (or "every output"), its stream and its mixdown.</summary>
+    public static string Summary(nint description)
+    {
+        using var pool = new ObjC.Pool();
+        var device = ObjC.String(ObjC.Send(description, "deviceUID")) ?? "every output";
+        var stream = ObjC.Send(description, "stream");
+        var streamText = stream == 0 ? "any" : ObjC.SendUInt(stream, "unsignedIntegerValue").ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return $"output {device}, stream {streamText}, mixdown {(IsMixdown(description) ? "yes" : "no")}";
     }
 
     /// <summary>

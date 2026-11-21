@@ -57,7 +57,7 @@ public sealed class MacPartsTests
     {
         var features = PlatformFeatures.Mac(() => "/Applications/Hindsound.app/Contents/MacOS/hindsound --save");
 
-        Assert.False(features.SingleApp);
+        Assert.True(features.SingleApp);
         Assert.True(features.NotificationLook);
         Assert.True(features.TestNotification);
         Assert.False(features.ConfirmSound);

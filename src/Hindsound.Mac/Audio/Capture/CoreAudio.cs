@@ -36,6 +36,7 @@ internal static unsafe partial class CoreAudio
     public static readonly uint DeviceIsAlive = FourCC("livn");
     public static readonly uint TapUid = FourCC("tuid");
     public static readonly uint TapDescription = FourCC("tdsc");
+    public static readonly uint TapFormat = FourCC("tfmt");
 
     // AudioTimeStamp.mFlags.
     public const uint SampleTimeValid = 1;
@@ -73,6 +74,24 @@ internal static unsafe partial class CoreAudio
     }
 
     /// <summary>A CFString property as text, or null.</summary>
+    /// <summary>
+    /// The channel count of a tap's format (<c>kAudioTapPropertyFormat</c>, an AudioStreamBasicDescription of 40 bytes whose
+    /// mChannelsPerFrame is at byte 28), or <paramref name="otherwise"/> when the tap does not say.
+    /// </summary>
+    public static int TapChannels(uint tap, int otherwise)
+    {
+        var address = new PropertyAddress(TapFormat, ScopeGlobal);
+        var format = stackalloc byte[40];
+        var size = 40u;
+        if (AudioObjectGetPropertyData(tap, &address, 0, null, &size, format) != 0 || size < 32)
+        {
+            return otherwise;
+        }
+
+        var channels = *(uint*)(format + 28);
+        return channels is > 0 and <= 64 ? (int)channels : otherwise;
+    }
+
     public static string? GetString(uint objectId, uint selector)
     {
         var address = new PropertyAddress(selector, ScopeGlobal);

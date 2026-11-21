@@ -22,8 +22,10 @@ namespace Hindsound.Mac;
 //            at login through a launch agent, the screens, the meter and the end of the session (Desktop/), the
 //            notification drawn by the app (Hindsound.Unix, Notification/), the Objective-C helper (Interop/ObjC.cs), the
 //            watch of the devices, the lists of devices and of applications that play, and the process list
-//            (Audio/Devices/), the listening of a clip on an AudioQueue (Audio/Playback/).
-//   off:     the capture (step M3); the update channel of macOS (step
+//            (Audio/Devices/), the listening of a clip on an AudioQueue (Audio/Playback/), the capture through Core
+//            Audio: the sound of the PC by a tap that leaves the app out, one application and its children, the
+//            microphone (Audio/Capture/).
+//   off:     the update channel of macOS (step
 //            M4). Each is left null here or throws in MacShell, and PlatformFeatures.Mac turns off what the pages would
 //            offer for it.
 

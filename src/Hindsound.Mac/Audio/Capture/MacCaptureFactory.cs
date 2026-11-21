@@ -150,6 +150,8 @@ internal sealed class MacCaptureFactory : ICaptureSourceFactory
                 uint tap = 0;
                 CoreAudio.Check(CoreAudio.AudioHardwareCreateProcessTap(description, &tap), "a process tap");
                 mount.Tap = tap;
+                var tapSays = MacTapParts.Summary(description);
+                var channels = CoreAudio.TapChannels(tap, 2);
                 var tapUid = CoreAudio.GetString(tap, CoreAudio.TapUid) ?? MacTapParts.UuidOf(description)
                     ?? throw new IOException("The tap has no UID.");
 
@@ -170,8 +172,8 @@ internal sealed class MacCaptureFactory : ICaptureSourceFactory
                 follower?.Attach(tap);
                 var main = mainUid is null || mainUid == CoreAudioNames.NullDeviceUid ? CoreAudio.Unknown : CoreAudio.DeviceOf(mainUid);
                 uint[] watched = main == CoreAudio.Unknown ? [aggregate] : [aggregate, main];
-                _log($"capture: tap {tap} ({tapUid}) in the aggregate {aggregate}, main device {mainUid ?? "none"}");
-                return MacCaptureSource.Open(aggregate, fromEnd: true, 2, flow, name, _log, mount, watched, _permission);
+                _log($"capture: tap {tap} ({tapUid}; {tapSays}; {channels} channels) in the aggregate {aggregate}, main device {mainUid ?? "none"}");
+                return MacCaptureSource.Open(aggregate, fromEnd: true, channels, flow, name, _log, mount, watched, _permission);
             }
         }
         catch

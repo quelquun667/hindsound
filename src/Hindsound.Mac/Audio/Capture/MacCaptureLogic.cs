@@ -110,7 +110,7 @@ internal static unsafe class HalBuffers
 /// </summary>
 internal sealed class PacketStamper
 {
-    private const long TicksPerSecond = 10_000_000;
+    internal const long TicksPerSecond = 10_000_000;
 
     private readonly Func<long> _nowTicks;
     private readonly Func<ulong> _hostNow;
