@@ -12,8 +12,8 @@
     The Setup manifest must give this version, the address of this Setup on the release of the tag, and the size and
     SHA-256 of the Setup in the folder. The three announce manifests must give this version and exactly the page of the
     release, and nothing else. The portable zip must hold portable.txt next to Hindsound.exe. The Mac zip must hold
-    Hindsound.app and nothing else, with its program, its Info.plist, its four dylibs and its signature, and no AppleDouble
-    file. The .deb must be a Debian
+    Hindsound.app and nothing else, with its program, its Info.plist, its four dylibs, its signature and the licences of
+    LAME and NLayer, and no AppleDouble file. The .deb must be a Debian
     package: an ar archive whose first member is debian-binary, holding 2.0. The LAME source must have the
     SHA-256 given in THIRD-PARTY-NOTICES.md. fuse-3.15.0.tar.xz must have the SHA-256 that fetch-runtime-sources.sh pins,
     read from that script, and the source of the runtime must be a gzip archive: that script checked what it holds. The
@@ -179,7 +179,7 @@ foreach ($entry in $macEntries) {
         throw "$macZipName on the release holds the AppleDouble file $entry."
     }
 }
-foreach ($entry in 'Info.plist', 'MacOS/hindsound', '_CodeSignature/CodeResources', 'Frameworks/libSDL3.0.dylib', 'Frameworks/libfreetype.6.dylib', 'Frameworks/libharfbuzz.0.dylib', 'Frameworks/libmp3lame.0.dylib', 'Resources/licenses/LAME-COPYING.txt') {
+foreach ($entry in 'Info.plist', 'MacOS/hindsound', '_CodeSignature/CodeResources', 'Frameworks/libSDL3.0.dylib', 'Frameworks/libfreetype.6.dylib', 'Frameworks/libharfbuzz.0.dylib', 'Frameworks/libmp3lame.0.dylib', 'Resources/licenses/LAME-COPYING.txt', 'Resources/licenses/linux/NLayer-LICENSE.txt') {
     if ($macEntries -cnotcontains "Hindsound.app/Contents/$entry") {
         throw "$macZipName on the release has no Hindsound.app/Contents/$entry."
     }

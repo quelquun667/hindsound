@@ -289,6 +289,48 @@ jobs:
           version=$(sed -nE 's/^## \[([0-9]+\.[0-9]+\.[0-9]+)\].*/\1/p' CHANGELOG.md | head -n 1)
           bash packaging/mac/build-app.sh "$RUNNER_TEMP/natives" "$RUNNER_TEMP/fonts" "$RUNNER_TEMP/app" "$version"
 
+      # Each check that check-zip.sh makes of the bundle and its Info.plist refuses a bundle without what it checks: a copy
+      # of the bundle with one thing taken out, zipped as the release zips it, must fail on the line that names that thing.
+      # The checks stop at the first missing thing, before the app is started: each case takes a few seconds. The bundle
+      # as built passes them in the job macos of release-files.yml.
+      - name: Show that check-zip.sh refuses a bundle with something missing
+        if: ${{ !cancelled() && steps.assemble.outcome == 'success' }}
+        run: |
+          app="$RUNNER_TEMP/app/Hindsound.app"
+          version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")
+          failed=0
+          no_nlayer() { rm "$1/Contents/Resources/licenses/linux/NLayer-LICENSE.txt"; }
+          no_icon() { rm "$1/Contents/Resources/Hindsound.icns"; }
+          no_icon_key() { /usr/libexec/PlistBuddy -c 'Delete :CFBundleIconFile' "$1/Contents/Info.plist"; }
+          no_mic_text() { /usr/libexec/PlistBuddy -c 'Delete :NSMicrophoneUsageDescription' "$1/Contents/Info.plist"; }
+          no_audio_text() { /usr/libexec/PlistBuddy -c 'Delete :NSAudioCaptureUsageDescription' "$1/Contents/Info.plist"; }
+          other_minimum() { /usr/libexec/PlistBuddy -c 'Set :LSMinimumSystemVersion 13.0' "$1/Contents/Info.plist"; }
+          refused() { # mutation expected-line
+            local dir="$RUNNER_TEMP/zip-mutation/$1"
+            rm -rf "$dir"
+            mkdir -p "$dir/app"
+            ditto "$app" "$dir/app/Hindsound.app"
+            "$1" "$dir/app/Hindsound.app"
+            ditto -c -k --norsrc --noextattr --noqtn --keepParent "$dir/app/Hindsound.app" "$dir/Hindsound-$version-macos-arm64.zip"
+            if bash packaging/mac/check-zip.sh "$dir/Hindsound-$version-macos-arm64.zip" "$version" "$dir/check" > "$dir/out" 2>&1; then
+              echo "check-zip mutation: $1 passed: NOT CAUGHT"
+              failed=1
+            elif grep -qF "$2" "$dir/out"; then
+              echo "check-zip mutation: $1 refused: $(grep -F "$2" "$dir/out" | head -n 1)"
+            else
+              echo "check-zip mutation: $1 refused for another reason:"
+              tail -n 5 "$dir/out"
+              failed=1
+            fi
+          }
+          refused no_nlayer 'the bundle has no Contents/Resources/licenses/linux/NLayer-LICENSE.txt'
+          refused no_icon 'the bundle has no Contents/Resources/Hindsound.icns'
+          refused no_icon_key 'the Info.plist does not name the icon Hindsound'
+          refused no_mic_text 'the Info.plist has no NSMicrophoneUsageDescription'
+          refused no_audio_text 'the Info.plist has no NSAudioCaptureUsageDescription'
+          refused other_minimum 'the Info.plist does not give macOS 14.4 as the minimum'
+          exit $failed
+
       # The app of the bundle, with its own dylibs and fonts (no HINDSOUND_FONT_DIR), settings of its own in which the
       # microphone is disabled, and every option that keeps it from touching the runner's session.
       - name: Draw the pages and prove the MP3 with the app
@@ -740,6 +782,50 @@ jobs:
           pgrep -f 'Hindsound.app/Contents/MacOS/hindsound --settings' > /dev/null && { echo "whole app: still running"; pkill -KILL -f 'Hindsound.app/Contents/MacOS/hindsound --settings'; failed=1; }
           cat "$folder/app.out" "$folder/app.err" 2> /dev/null | sed 's/^/  console: /' || true
           sed 's/^/  log whole: /' "$log" || true
+          grep -q 'leaving with exit code 0' "$log"; check "the app left with exit code 0" $?
+          exit $failed
+
+      # "hindsound --save" with no Hindsound running, from the shell as Terminal or the Shortcuts app would run it: the
+      # program must start its bundle through open (Launch Services) and leave, so that the app is not a child of the shell
+      # (macOS would ask the shell for the permissions, and the app would end with it). The app that starts is a child of
+      # launchd, its parent pid 1; SIGTERM ends it, and its log gives its exit code.
+      - name: Start the app from --save when none is running
+        if: ${{ !cancelled() && steps.assemble.outcome == 'success' }}
+        run: |
+          app="$RUNNER_TEMP/app/Hindsound.app"
+          program="$app/Contents/MacOS/hindsound"
+          folder="$RUNNER_TEMP/mac-save-start"
+          log="$folder/settings.log"
+          mkdir -p "$folder/clips"
+          printf '{"audio":{"micDeviceId":"disabled"},"export":{"outputFolder":"%s","copyToClipboard":false},"general":{"startWithWindows":false}}\n' "$folder/clips" > "$folder/settings.json"
+          set +e
+          failed=0
+          check() { if [ "$2" -eq 0 ]; then echo "save start: $1 pass"; else echo "save start: $1 FAIL"; failed=1; fi; }
+          running() { pgrep -f 'Hindsound.app/Contents/MacOS/hindsound --settings' | head -n 1; }
+          [ -z "$(running)" ]; check "no Hindsound running before" $?
+          code=0
+          perl -e 'alarm shift; exec @ARGV' 30 "$program" --settings "$folder/settings.json" --save || code=$?
+          echo "save start: --save with no running instance ended with code $code"
+          [ "$code" -eq 0 ]; check "--save left with code 0" $?
+          pid=""
+          for _ in $(seq 1 60); do
+            pid=$(running)
+            [ -n "$pid" ] && break
+            sleep 0.5
+          done
+          parent=$([ -n "$pid" ] && ps -o ppid= -p "$pid" | tr -d ' ')
+          echo "save start: pid ${pid:-none}, parent pid ${parent:-none}, command $([ -n "$pid" ] && ps -o command= -p "$pid")"
+          [ -n "$pid" ]; check "the app runs after --save" $?
+          [ "$parent" = 1 ]; check "the app is a child of launchd, not of the shell" $?
+          grep -q 'through Launch Services (open)' "$log"; check "the log says --save went through open" $?
+          sleep 5
+          [ -n "$pid" ] && kill -TERM "$pid"
+          for _ in $(seq 1 40); do
+            [ -z "$(running)" ] && break
+            sleep 0.5
+          done
+          [ -n "$(running)" ] && { echo "save start: still running"; pkill -KILL -f 'Hindsound.app/Contents/MacOS/hindsound --settings'; failed=1; }
+          sed 's/^/  log save start: /' "$log" || true
           grep -q 'leaving with exit code 0' "$log"; check "the app left with exit code 0" $?
           exit $failed
 

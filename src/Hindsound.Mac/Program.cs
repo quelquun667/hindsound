@@ -87,8 +87,15 @@ internal static class Program
 
         if (launch.Save)
         {
-            // Nothing is kept yet: a clip now would be empty. The app starts, and the next --save finds it.
-            journal.Write("--save with no running instance: starting the app instead");
+            // Nothing is kept yet: a clip now would be empty. The app starts, and the next --save finds it: from its bundle
+            // through open, so that it is not a child of Terminal or of Shortcuts (MacLaunch.Relaunch says why).
+            if (MacLaunch.BundleOf(Environment.ProcessPath) is { } bundle)
+            {
+                instance.Dispose();
+                return MacLaunch.Relaunch(bundle, launch.Rest, journal.Write);
+            }
+
+            journal.Write("--save with no running instance, outside a bundle: starting the app instead");
         }
 
         // A clip that cannot be encoded falls back to WAV without a word: a user who gets WAV files finds the reason here.

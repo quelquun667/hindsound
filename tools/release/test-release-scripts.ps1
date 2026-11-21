@@ -443,7 +443,7 @@ try {
         [IO.File]::WriteAllText($Path, "!<arch>`n" + $member + $Format + 'fake control and data', (New-Object Text.UTF8Encoding $false))
     }
     # A zip of the Mac app as ditto writes it, from the names of its entries, each holding its own name.
-    $macEntries = @('Info.plist', 'MacOS/hindsound', '_CodeSignature/CodeResources', 'Frameworks/libSDL3.0.dylib', 'Frameworks/libfreetype.6.dylib', 'Frameworks/libharfbuzz.0.dylib', 'Frameworks/libmp3lame.0.dylib', 'Resources/fonts/Selawik-Regular.ttf', 'Resources/licenses/LAME-COPYING.txt') | ForEach-Object { "Hindsound.app/Contents/$_" }
+    $macEntries = @('Info.plist', 'MacOS/hindsound', '_CodeSignature/CodeResources', 'Frameworks/libSDL3.0.dylib', 'Frameworks/libfreetype.6.dylib', 'Frameworks/libharfbuzz.0.dylib', 'Frameworks/libmp3lame.0.dylib', 'Resources/fonts/Selawik-Regular.ttf', 'Resources/licenses/LAME-COPYING.txt', 'Resources/licenses/linux/NLayer-LICENSE.txt') | ForEach-Object { "Hindsound.app/Contents/$_" }
     function Write-FakeMacZip([string]$Path, [string[]]$Entries = $macEntries) {
         Add-Type -AssemblyName System.IO.Compression
         $stream = [IO.File]::Open($Path, [IO.FileMode]::CreateNew)
@@ -579,6 +579,7 @@ try {
         @{ Name = 'a Mac zip without its program refused'; Entries = @($macEntries | Where-Object { $_ -notmatch 'MacOS/hindsound' }); Reason = 'has no Hindsound.app/Contents/MacOS/hindsound' },
         @{ Name = 'a Mac zip without its encoder refused'; Entries = @($macEntries | Where-Object { $_ -notmatch 'libmp3lame' }); Reason = 'has no Hindsound.app/Contents/Frameworks/libmp3lame.0.dylib' },
         @{ Name = 'a Mac zip without the licence of LAME refused'; Entries = @($macEntries | Where-Object { $_ -notmatch 'LAME-COPYING' }); Reason = 'has no Hindsound.app/Contents/Resources/licenses/LAME-COPYING.txt' },
+        @{ Name = 'a Mac zip without the licence of NLayer, its MP3 decoder, refused'; Entries = @($macEntries | Where-Object { $_ -notmatch 'NLayer-LICENSE' }); Reason = 'has no Hindsound.app/Contents/Resources/licenses/linux/NLayer-LICENSE.txt' },
         @{ Name = 'a Mac zip whose bundle is in a folder refused'; Entries = @($macEntries | ForEach-Object { "out/$_" }); Reason = 'outside Hindsound.app' },
         @{ Name = 'a Mac zip that is not a zip refused'; Text = 'not a zip'; Reason = 'Hindsound-1.2.3-macos-arm64.zip on the release is not a zip' }
     )
