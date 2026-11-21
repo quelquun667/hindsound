@@ -1,0 +1,54 @@
+name: macOS probe
+
+# Throwaway probe of the macOS port (tools/mac-probe): runs only on pushes to its own branch, never on main.
+on:
+  push:
+    branches:
+      - agent/mac-sonde
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: macos-26
+    timeout-minutes: 50
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Terrain
+        run: bash tools/mac-probe/probe.sh terrain
+
+      - name: BlackHole loopback driver
+        run: bash tools/mac-probe/probe.sh blackhole
+
+      - name: Build SDL3, the audio library and the probe
+        run: bash tools/mac-probe/probe.sh build
+
+      - name: Sign
+        run: bash tools/mac-probe/probe.sh sign
+
+      - name: Window, pasteboard, hotkey, login item, fonts
+        run: bash tools/mac-probe/probe.sh ui
+
+      - name: Audio capture and permissions
+        run: bash tools/mac-probe/probe.sh audio
+
+      - name: Summary
+        if: always()
+        run: bash tools/mac-probe/probe.sh summary
+
+      - name: Clean up
+        if: always()
+        run: bash tools/mac-probe/probe.sh cleanup
