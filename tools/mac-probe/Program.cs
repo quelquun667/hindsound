@@ -114,12 +114,12 @@ internal static unsafe class Program
 
     private static void ObjcBasics()
     {
-        const string text = "Hindsound 日本語 é ♪";
+        const string text = "Hindsound \u65E5\u672C\u8A9E \u00E9 \u266A";
         IntPtr ns = ObjC.NSString(text);
         long length = ObjC.SendLong(ns, "length");
         string? back = ObjC.Str(ns);
         P("objc.nsstring", $"roundtrip={(back == text ? "ok" : "MISMATCH")} length={length} expected_utf16={text.Length}");
-        IntPtr url = ObjC.Send(ObjC.Class("NSURL"), "fileURLWithPath:", ObjC.NSString("/tmp/Hindsound clip é.wav"));
+        IntPtr url = ObjC.Send(ObjC.Class("NSURL"), "fileURLWithPath:", ObjC.NSString("/tmp/Hindsound clip \u00E9.wav"));
         P("objc.nsurl", ObjC.Str(ObjC.Send(url, "absoluteString")) ?? "null");
     }
 
@@ -260,7 +260,7 @@ internal static unsafe class Program
     {
         IntPtr baseFont = CoreText.CTFontCreateWithName(ObjC.NSString("Helvetica"), 14, IntPtr.Zero);
         P("coretext.base", ObjC.Str(CoreText.CTFontCopyPostScriptName(baseFont)) ?? "null");
-        const string text = "日本語";
+        const string text = "\u65E5\u672C\u8A9E";
         IntPtr fallback = CoreText.CTFontCreateForString(baseFont, ObjC.NSString(text),
             new CoreText.CFRange { Location = 0, Length = text.Length });
         P("coretext.fallback", fallback == IntPtr.Zero ? "NULL"
