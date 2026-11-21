@@ -78,7 +78,8 @@ internal static unsafe class MacCaptureProof
                 var outputMain = new MacCaptureFactory(Log, processes, outputAsMain: true, deviceTapAlways: false, permission: null);
                 pass &= Case(Log, "system_excl_output_main", outputMain, new CaptureRequest(AudioFlow.System, output, true), m => m.Tone1000 && m.A440Db < -50);
                 var oneOutput = new MacCaptureFactory(Log, processes, outputAsMain: false, deviceTapAlways: true, permission: null);
-                pass &= Case(Log, "system_one_output", oneOutput, new CaptureRequest(AudioFlow.System, output, false), m => m.Tone1000);
+                // Nothing left out: the 1 kHz and the app's 440 Hz come at the same level, so neither is surely dominant (run 44942738699).
+                pass &= Case(Log, "system_one_output", oneOutput, new CaptureRequest(AudioFlow.System, output, false), m => m.A1000Db > -20 && m.A440Db > -20);
                 if (nullPresent)
                 {
                     // Another output, where only this app plays (its 440 Hz): the tap hears it, and not the 1 kHz of BlackHole.
