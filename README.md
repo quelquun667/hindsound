@@ -313,6 +313,10 @@ For MP3 the program uses `libmp3lame.so.0`, which the packages put next to it. T
 window with `tools/linux/fetch-fonts.sh`, then makes the AppImage and the tar.gz with `packaging/linux/build-packages.sh`.
 The program looks for its fonts in the folder `HINDSOUND_FONT_DIR` names, or else in `fonts` next to it.
 
+The Linux layer is in `src/Hindsound.Linux`. What it would share as it is with another system than Windows (the SDL
+window, the loop of the app, the single instance, the HTTP transport, the decoder of the clips and the MP3 encoder) is in
+`src/Hindsound.Unix`, which it references. The tests of both are in `tests/Hindsound.Linux.Tests`.
+
 ## First run
 
 Hindsound starts capturing as soon as it starts, and sits in the notification area of the taskbar. The icon may be hidden
