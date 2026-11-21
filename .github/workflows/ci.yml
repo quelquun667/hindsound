@@ -426,6 +426,71 @@ jobs:
           [ "$code" -eq 0 ] || failed=1
           exit $failed
 
+      # The capture with real sound, as the probe of M0 proved it on this runner: BlackHole 2ch as the default output and
+      # input, the permissions of audio capture and microphone written in both TCC databases for the bundle before the app
+      # opens any device (an undecided one makes coreaudiod wait, for every client, on a prompt nobody answers), then the
+      # app's own proof through its real factory (--prove-capture): the sound of the PC with and without the app's own tone,
+      # one output, one application and the children it starts, the microphone. Then the same permissions written refused:
+      # exact zeros, and the app says so. coreaudiod is restarted between the two, which also frees it after a run that hung.
+      - name: Prove the capture with the app
+        if: ${{ !cancelled() && steps.assemble.outcome == 'success' }}
+        run: |
+          export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 HOMEBREW_NO_ENV_HINTS=1
+          brew install --cask blackhole-2ch > "$RUNNER_TEMP/brew-blackhole.log" 2>&1 || { tail -n 30 "$RUNNER_TEMP/brew-blackhole.log"; exit 1; }
+          brew install switchaudio-osx > "$RUNNER_TEMP/brew-switchaudio.log" 2>&1 || { tail -n 30 "$RUNNER_TEMP/brew-switchaudio.log"; exit 1; }
+          sudo killall coreaudiod
+          sleep 5
+          SwitchAudioSource -a -f cli
+          for type in output input system; do
+            SwitchAudioSource -t "$type" -s 'BlackHole 2ch'
+          done
+          echo "default output: $(SwitchAudioSource -t output -c), input: $(SwitchAudioSource -t input -c)"
+          app="$RUNNER_TEMP/app/Hindsound.app"
+          program="$app/Contents/MacOS/hindsound"
+          folder="$RUNNER_TEMP/mac-capture"
+          mkdir -p "$folder"
+          python3 - "$folder" <<'EOF'
+          import array, math, sys, wave
+          folder, rate, seconds = sys.argv[1], 48000, 90
+          tone = array.array('h')
+          for i in range(rate * seconds):
+              value = int(0.5 * 32767 * math.sin(2 * math.pi * 1000 * i / rate))
+              tone.extend((value, value))
+          for name, data in (('tone.wav', tone.tobytes()), ('silence.wav', bytes(rate * seconds * 4))):
+              with wave.open(f'{folder}/{name}', 'wb') as f:
+                  f.setnchannels(2)
+                  f.setsampwidth(2)
+                  f.setframerate(rate)
+                  f.writeframes(data)
+          EOF
+          requirement=$(codesign -d -r- "$app" 2>&1 | sed -n 's/^#* *designated => //p' | head -n 1)
+          echo "designated requirement: $requirement"
+          csreq -r "=$requirement" -b "$folder/csreq.bin"
+          hex=$(xxd -p "$folder/csreq.bin" | tr -d '\n')
+          grant() {
+            for db in "/Library/Application Support/com.apple.TCC/TCC.db" "$HOME/Library/Application Support/com.apple.TCC/TCC.db"; do
+              for service in kTCCServiceAudioCapture kTCCServiceMicrophone; do
+                sudo sqlite3 "$db" "insert or replace into access (service, client, client_type, auth_value, auth_reason, auth_version, csreq, flags, last_modified) values ('$service', 'io.github.quelquun667.hindsound', 0, $1, 3, 1, X'$hex', 0, CAST(strftime('%s','now') AS INTEGER));" \
+                  && echo "tcc: $service auth_value=$1 written in $db" || echo "tcc: $service not written in $db"
+              done
+            done
+            sudo killall tccd || true
+            killall tccd 2> /dev/null || true
+            sleep 2
+          }
+          grant 2
+          code=0
+          perl -e 'alarm shift; exec @ARGV' 180 "$program" --prove-capture "$folder" || code=$?
+          echo "prove-capture: exit code $code"
+          sudo killall coreaudiod
+          sleep 5
+          echo "after the restart of coreaudiod: output $(SwitchAudioSource -t output -c), input $(SwitchAudioSource -t input -c)"
+          grant 0
+          denied=0
+          perl -e 'alarm shift; exec @ARGV' 120 "$program" --prove-capture "$folder" --denied || denied=$?
+          echo "prove-capture --denied: exit code $denied"
+          [ "$code" -eq 0 ] && [ "$denied" -eq 0 ]
+
       - name: Keep the pages of the window
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
