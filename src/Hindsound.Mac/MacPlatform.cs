@@ -18,10 +18,10 @@ namespace Hindsound.Mac;
 //            instance through a Unix socket and --save from a second launch (Hindsound.Unix, App/MacLaunch.cs), the icon
 //            of the menu bar (Tray/), the Carbon shortcuts (Input/), the pasteboard, open and reveal, the Trash, opening
 //            at login through a launch agent, the screens, the meter and the end of the session (Desktop/), the
-//            Objective-C helper (Interop/ObjC.cs).
-//   off:     the capture, the devices, the process list and the listening (step M3); the notification drawn by the app
-//            (step M2b); the update channel of macOS (step M4). Each is left null here or throws in MacShell, and
-//            PlatformFeatures.Mac turns off what the pages would offer for it.
+//            notification drawn by the app (Hindsound.Unix, Notification/), the Objective-C helper (Interop/ObjC.cs).
+//   off:     the capture, the devices, the process list and the listening (step M3); the update channel of macOS (step
+//            M4). Each is left null here or throws in MacShell, and PlatformFeatures.Mac turns off what the pages would
+//            offer for it.
 
 /// <summary>The macOS layer: the classes handed to the portable code, and nothing that pretends to work.</summary>
 internal static class MacPlatform
