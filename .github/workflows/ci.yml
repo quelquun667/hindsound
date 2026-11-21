@@ -240,6 +240,7 @@ jobs:
         run: bash tools/linux/fetch-fonts.sh --check "$RUNNER_TEMP/fonts"
 
       - name: Build
+        id: build
         run: |
           dotnet build src/Hindsound.Mac/Hindsound.Mac.csproj -c Release
           dotnet build tests/Hindsound.Core.Tests/Hindsound.Core.Tests.csproj -c Release
@@ -263,7 +264,10 @@ jobs:
           done
           exit $failed
 
+      # The bundle and its pages even when a test failed: the job fails all the same, and one run shows every problem.
       - name: Assemble Hindsound.app
+        id: assemble
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
           version=$(sed -nE 's/^## \[([0-9]+\.[0-9]+\.[0-9]+)\].*/\1/p' CHANGELOG.md | head -n 1)
           bash packaging/mac/build-app.sh "$RUNNER_TEMP/natives" "$RUNNER_TEMP/fonts" "$RUNNER_TEMP/app" "$version"
@@ -271,6 +275,7 @@ jobs:
       # The app of the bundle, with its own dylibs and fonts (no HINDSOUND_FONT_DIR), settings of its own in which the
       # microphone is disabled, and every option that keeps it from touching the runner's session.
       - name: Draw the pages and prove the MP3 with the app
+        if: ${{ !cancelled() && steps.assemble.outcome == 'success' }}
         env:
           OUT: ${{ runner.temp }}/mac-dump
         run: |
