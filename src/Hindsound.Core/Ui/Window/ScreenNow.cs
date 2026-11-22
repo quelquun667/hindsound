@@ -143,7 +143,7 @@ internal sealed partial class SettingsScreen
         _contentBottom = 0;
         _waveAccent = Editor.AccentRgb;
         RowLabel("Record", RecordTop);
-        List("now.record", new Box(RecordLeft, RecordTop, FieldWidth, RowHeight), () => SettingsEditor.RecordChoices(_apps, Editor.Settings.Audio.SourceApp, _status is { SourceApp: not null, SourceAppMissing: false }), () => Editor.Settings.Audio.SourceApp ?? string.Empty, Editor.SetSourceApp);
+        List("now.record", new Box(RecordLeft, RecordTop, FieldWidth, RowHeight), () => SettingsEditor.RecordChoices(_apps, Editor.Settings.Audio.SourceApp, _status is { SourceApp: not null, SourceAppMissing: false }, Features.MachineName), () => Editor.Settings.Audio.SourceApp ?? string.Empty, Editor.SetSourceApp);
         Add(new Painted((c, ui) =>
         {
             if (_now is { } panel)

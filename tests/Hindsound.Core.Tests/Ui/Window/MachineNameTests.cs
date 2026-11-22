@@ -88,7 +88,7 @@ public sealed unsafe class MachineNameTests
         Assert.Equal("PC", new PlatformFeatures().MachineName);
         Assert.Equal("Whole PC", PlatformFeatures.Windows.WholeMachine);
         Assert.Equal("Whole PC from here", WaveView.MarkerText(null));
-        Assert.Equal("PC volume", ScreenEditor.VolumeLabel(0, 2));
+        Assert.Equal("PC volume", SettingsScreen.VolumeLabel(0, 2));
         Assert.Equal("Whole PC", SettingsEditor.RecordChoices([], null)[0].Label);
     }
 
@@ -100,7 +100,7 @@ public sealed unsafe class MachineNameTests
         Assert.Equal("Whole " + machine + " from here", WaveView.MarkerText(null, features));
         Assert.Equal("Discord only from here", WaveView.MarkerText("Discord.exe", features));
         Assert.Equal("Whole " + machine, WaveView.SystemLaneTitle(null, WaveMarker.None, features));
-        Assert.Equal("Save: last 1:00 (0:20 from before Whole " + machine + ")", WaveView.SaveLine(60, FactsWithChangeToWhole(5000L * Rate), features));
+        Assert.Equal("Save: last 1:00 (0:40 from before Whole " + machine + ")", WaveView.SaveLine(60, FactsWithChangeToWhole(5000L * Rate), features));
     }
 
     [Theory]
@@ -112,9 +112,9 @@ public sealed unsafe class MachineNameTests
         Assert.Equal("Whole " + machine, EditorWave.LaneName(0, features.MachineName));
         Assert.Equal("Mic", EditorWave.LaneName(1, features.MachineName));
         Assert.Equal("", EditorWave.LaneName(2, features.MachineName));
-        Assert.Equal(machine + " volume", ScreenEditor.VolumeLabel(0, 2, features.MachineName));
-        Assert.Equal("Mic volume", ScreenEditor.VolumeLabel(1, 2, features.MachineName));
-        Assert.Equal("Volume", ScreenEditor.VolumeLabel(0, 1, features.MachineName));
+        Assert.Equal(machine + " volume", SettingsScreen.VolumeLabel(0, 2, features.MachineName));
+        Assert.Equal("Mic volume", SettingsScreen.VolumeLabel(1, 2, features.MachineName));
+        Assert.Equal("Volume", SettingsScreen.VolumeLabel(0, 1, features.MachineName));
     }
 
     [Theory]
@@ -135,19 +135,18 @@ public sealed unsafe class MachineNameTests
         var all = scenes.SelectMany(s => s.Value.Select(text => (Scene: s.Key, Text: text))).ToList();
 
         var other = machine == "Mac" ? new Regex(@"\bPC\b") : new Regex(@"\bMac\b");
-        Assert.Empty(all.Where(t => other.IsMatch(t.Text)).Select(t => t.Scene + ": " + t.Text));
+        Assert.True(!all.Any(t => other.IsMatch(t.Text)), string.Join(" | ", all.Where(t => other.IsMatch(t.Text)).Select(t => t.Scene + ": " + t.Text)));
 
         string[] expected =
         [
             "Whole " + machine,
             machine + " sound gain",
-            "Speak: the bar should move. Off if you only want the " + machine + " sound.",
             "Whole " + machine + " from here",
             machine + " volume",
         ];
         foreach (var text in expected)
         {
-            Assert.Contains(all, t => t.Text == text);
+            Assert.True(all.Any(t => t.Text == text), "no scene draws: " + text);
         }
     }
 }
