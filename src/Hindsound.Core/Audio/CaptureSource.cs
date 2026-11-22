@@ -55,6 +55,12 @@ public interface ICaptureSource : IDisposable
     /// <summary>Raised when the capture ends. The exception says why it ended by itself, for instance a device unplugged.</summary>
     event Action<Exception?> Stopped;
 
+    /// <summary>
+    /// The capture runs, but some of the sound it is there for plays and is not recorded, until that changes by itself: the
+    /// capture of one application under Linux gives up a stream of it that the server keeps ending. Read many times a second.
+    /// </summary>
+    bool SoundLost => false;
+
     void Start();
 
     void Stop();

@@ -449,6 +449,32 @@ public class SourceAppCaptureTests
         factory.OnStart = null;
         Assert.InRange(factory.OpenCalls, 1, 3);
     }
+
+    [Fact]
+    public async Task A_sound_the_capture_of_the_application_gave_up_is_in_the_status_until_it_comes_back()
+    {
+        using var rig = new AudioTestRig(micEnabled: false, sourceApp: App, processes: new FakeProcesses(Running));
+        await rig.Engine.StartAsync();
+        Assert.False(rig.Engine.Status.SourceAppLost);
+
+        rig.SystemSource.SoundLost = true;
+        Assert.True(rig.Engine.Status.SourceAppLost);
+        Assert.True(rig.Engine.Status.SystemCapturing);
+        Assert.False(rig.Engine.Status.SourceAppMissing);
+
+        rig.SystemSource.SoundLost = false;
+        Assert.False(rig.Engine.Status.SourceAppLost);
+    }
+
+    [Fact]
+    public async Task A_sound_given_up_is_no_concern_of_the_whole_PC()
+    {
+        using var rig = new AudioTestRig(micEnabled: false);
+        await rig.Engine.StartAsync();
+
+        rig.SystemSource.SoundLost = true;
+        Assert.False(rig.Engine.Status.SourceAppLost);
+    }
 }
 
 public class RealProcessListTests

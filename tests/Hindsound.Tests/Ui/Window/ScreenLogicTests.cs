@@ -144,6 +144,23 @@ public class StatusTextTests
     }
 
     [Fact]
+    public void A_sound_of_the_app_given_up_is_said_until_it_comes_back()
+    {
+        var lost = StatusText.From(ScreenRig.Capturing() with { SourceApp = "Discord.exe", SourceAppLost = true });
+        Assert.Equal(StatusMark.Warning, lost.Mark);
+        Assert.Equal("Sound lost: Discord", lost.Title);
+        Assert.Equal("mic on", lost.Mic);
+
+        var back = StatusText.From(ScreenRig.Capturing() with { SourceApp = "Discord.exe" });
+        Assert.Equal(StatusMark.Dot, back.Mark);
+        Assert.Equal("Capturing Discord", back.Title);
+
+        // Not running and paused come first: an app that is gone plays nothing to lose, and a pause records nothing at all.
+        Assert.Equal("Not running: Discord", StatusText.From(ScreenRig.Capturing() with { SystemCapturing = false, SourceApp = "Discord.exe", SourceAppMissing = true, SourceAppLost = true }).Title);
+        Assert.Equal("Paused", StatusText.From(ScreenRig.Capturing(true, CaptureActivity.Paused) with { SourceApp = "Discord.exe", SourceAppLost = true }).Title);
+    }
+
+    [Fact]
     public void An_app_that_cannot_be_captured_is_never_called_captured()
     {
         var withMic = StatusText.From(ScreenRig.Capturing() with { SystemCapturing = false, SourceApp = "Discord.exe" });

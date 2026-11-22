@@ -45,6 +45,15 @@ internal static class PulseAppRules
     public const int MaxRetries = 4;
 
     /// <summary>
+    /// How long the capture waits before it looks again at a stream of the application that plays on no output it knows, doubled
+    /// each time, <see cref="MaxRetries"/> times at most until the server says something changed. PipeWire moves a stream whose
+    /// output went away by unlinking it, then linking it to another output, and tells nothing of either: a look between the two
+    /// sees the stream on no output, and no event comes when it is linked again (pipewire-pulse 1.0.5 sends none for a link).
+    /// The 250 ms, 500 ms, 1 s, 2 s and 4 s add up to less than 8 s, and a stream that stays nowhere costs five looks.
+    /// </summary>
+    public const int PlaceMilliseconds = 250;
+
+    /// <summary>
     /// How long the server must have had a recording ready for its tries to count from zero again when it ends. Twice the
     /// 15 seconds all the waits between tries add up to (1 + 2 + 4 + 8): a recording the server ends again and again within
     /// the time of its own tries still runs out of them, while a stream that plays for hours (a call) and is ended a few times
@@ -251,6 +260,23 @@ internal static class PulseAppRules
     /// <param name="steady">How long it must have held for its count to start again.</param>
     public static int TriesAfterEnd(int tries, TimeSpan? held, TimeSpan steady) =>
         held is { } time && time >= steady ? 0 : tries;
+
+    /// <summary>
+    /// Whether a recording is given up while its stream lives: it ended, with all its tries had. Its stream plays and is not
+    /// recorded, which the window says, until the stream ends or moves (<see cref="PulseAppCaptureSource.SoundLost"/>).
+    /// </summary>
+    public static bool GivenUp(bool dead, int tries) => dead && tries >= MaxRetries;
+
+    /// <summary>Whether one of the application's streams plays on no output among <paramref name="monitors"/>: it is being moved.</summary>
+    public static bool AnyUnplaced(IReadOnlyList<PulsePlaybackStream> wanted, IReadOnlyDictionary<uint, string> monitors) =>
+        wanted.Any(stream => !monitors.TryGetValue(stream.Sink, out var monitor) || string.IsNullOrEmpty(monitor));
+
+    /// <summary>
+    /// How long to wait before the next look at a stream on no output, after <paramref name="looks"/> such looks since the
+    /// server last said something; null once they are all had (<see cref="PlaceMilliseconds"/>).
+    /// </summary>
+    public static TimeSpan? PlaceWait(int looks) =>
+        looks < 0 || looks > MaxRetries ? null : TimeSpan.FromMilliseconds(PlaceMilliseconds << looks);
 
     // The highest ancestor of a process, itself included, that bears the program's name; the process itself if none does.
     private static int ProgramOf(int owner, string? name, Dictionary<int, ProcessEntry> byId)

@@ -471,6 +471,9 @@ internal static unsafe class SettingsDump
         var closedApp = NowSamples.Track(voice.AsSpan(0, voice.Length - 60 * slicesPerSecond));
         var lostMic = NowSamples.Track(weakMic.AsSpan(0, weakMic.Length - 40 * slicesPerSecond));
 
+        // A stream of the application the capture of Linux gave up: the application plays on, and nothing of it comes in.
+        var lostSound = NowSamples.Track(voice.AsSpan(0, voice.Length - 20 * slicesPerSecond));
+
         static Audio.WaveFacts Memory(Audio.SourceTrack? system, Audio.SourceTrack? mic, int seconds = memory / rate, params Audio.SourceChange[] changes) =>
             new(system, mic, 0, (long)seconds * rate, memory, changes);
 
@@ -539,6 +542,12 @@ internal static unsafe class SettingsDump
             s.Editor.SetSourceApp("Discord.exe");
             s.UpdateStatus(sampleStatus with { SourceApp = "Discord.exe", SourceAppMissing = true, OwnSoundsExcluded = false });
             Wave(s, Memory(closedApp, micTrack));
+        });
+        Shot("now-app-son-perdu", (s, _) =>
+        {
+            s.Editor.SetSourceApp("Discord.exe");
+            s.UpdateStatus(sampleStatus with { SystemDeviceName = "Discord.exe", SourceApp = "Discord.exe", SourceAppLost = true, OwnSoundsExcluded = false });
+            Wave(s, Memory(lostSound, micTrack));
         });
         Shot("now-sans-peripherique", (s, _) =>
         {

@@ -67,6 +67,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     private int _started;
     private int _ended;
     private int _disposed;
+    private int _lost;
 
     // On the loop's thread, or under its lock.
     private readonly Dictionary<PulseMonitorKey, Input> _inputs = [];
@@ -77,6 +78,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     private bool _lookAgain;
     private bool _serverKnown;
     private bool _paced = true;
+    private int _placeLooks;
 
     internal PulseAppCaptureSource(PulseConnection connection, int target, string? name, IProcessSnapshot processes, Action<string> log, TimeSpan steady)
     {
@@ -109,6 +111,12 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
             return held;
         }
     }
+
+    /// <summary>
+    /// A stream of the application plays and is not recorded: its recording ended again and again and was given up
+    /// (<see cref="PulseAppRules.GivenUp"/>). Back to false once that stream ends or moves, and its next one is recorded.
+    /// </summary>
+    public bool SoundLost => Volatile.Read(ref _lost) != 0;
 
     public event CapturePacketHandler? PacketAvailable;
 
@@ -329,6 +337,8 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     {
         if (PulseAppRules.IsStreamChange(eventType))
         {
+            // The server said something: a stream still on no output is looked at again from the shortest wait.
+            _placeLooks = 0;
             Look();
         }
     }
@@ -407,6 +417,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
         }
 
         var mine = Mine(look.Streams);
+        var unplaced = PulseAppRules.AnyUnplaced(mine, look.Monitors);
         var (open, close) = PulseAppRules.Changes(_inputs.Keys, mine, look.Monitors);
         foreach (var key in close)
         {
@@ -456,10 +467,29 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
             }
         }
 
+        // A stream on no output is being moved, and PipeWire tells nothing once it is linked to its new output: looked at
+        // again a few times, later each time (PulseAppRules.PlaceMilliseconds).
+        if (!unplaced)
+        {
+            _placeLooks = 0;
+        }
+        else if (PulseAppRules.PlaceWait(_placeLooks) is { } place)
+        {
+            if (_placeLooks == 0)
+            {
+                _log($"a stream of the application plays on no output, looked at again in {(int)place.TotalMilliseconds} ms");
+            }
+
+            _placeLooks++;
+            next = next is null || place < next ? place : next;
+        }
+
         if (next is { } due)
         {
             _retry.Change(due + TimeSpan.FromMilliseconds(20), Timeout.InfiniteTimeSpan);
         }
+
+        Volatile.Write(ref _lost, _inputs.Values.Any(input => PulseAppRules.GivenUp(input.Dead, input.Tries)) ? 1 : 0);
     }
 
     // The application's streams among those of a look. /proc is read again only when a stream is new, or now says another

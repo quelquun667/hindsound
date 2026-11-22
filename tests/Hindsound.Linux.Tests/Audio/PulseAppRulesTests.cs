@@ -223,6 +223,36 @@ public sealed unsafe class PulseAppRulesTests
     }
 
     [Fact]
+    public void A_recording_is_given_up_only_once_it_ended_with_all_its_tries_had()
+    {
+        Assert.True(PulseAppRules.GivenUp(dead: true, PulseAppRules.MaxRetries));
+        Assert.False(PulseAppRules.GivenUp(dead: true, PulseAppRules.MaxRetries - 1));
+        Assert.False(PulseAppRules.GivenUp(dead: false, PulseAppRules.MaxRetries));
+    }
+
+    [Fact]
+    public void A_stream_on_no_output_known_to_the_look_is_being_moved()
+    {
+        var monitors = new Dictionary<uint, string> { [0] = "out.monitor", [3] = string.Empty };
+
+        Assert.False(PulseAppRules.AnyUnplaced([new PulsePlaybackStream(2, 0, 1, null, null)], monitors));
+        Assert.False(PulseAppRules.AnyUnplaced([], monitors));
+
+        // Unlinked, as PipeWire lists a stream between two outputs (PA_INVALID_INDEX); on an output gone; on one with no monitor.
+        Assert.True(PulseAppRules.AnyUnplaced([new PulsePlaybackStream(2, 0, 1, null, null), new PulsePlaybackStream(5, uint.MaxValue, 1, null, null)], monitors));
+        Assert.True(PulseAppRules.AnyUnplaced([new PulsePlaybackStream(2, 7, 1, null, null)], monitors));
+        Assert.True(PulseAppRules.AnyUnplaced([new PulsePlaybackStream(2, 3, 1, null, null)], monitors));
+    }
+
+    [Fact]
+    public void A_stream_on_no_output_is_looked_at_again_five_times_later_each_time()
+    {
+        Assert.Equal([250, 500, 1000, 2000, 4000], Enumerable.Range(0, 5).Select(looks => (int)PulseAppRules.PlaceWait(looks)!.Value.TotalMilliseconds));
+        Assert.Null(PulseAppRules.PlaceWait(PulseAppRules.MaxRetries + 1));
+        Assert.Null(PulseAppRules.PlaceWait(-1));
+    }
+
+    [Fact]
     public void A_recording_that_ended_quickly_or_never_started_keeps_its_tries()
     {
         var steady = TimeSpan.FromSeconds(30);
