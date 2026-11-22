@@ -37,6 +37,7 @@ internal sealed class ApplicationEntry
 
     private readonly string _dataHome;
     private readonly IReadOnlyList<string> _systemData;
+    private readonly Func<string, string?> _realPath;
 
     /// <param name="dataHome">$XDG_DATA_HOME: for a test, a folder of its own.</param>
     /// <param name="systemData">
@@ -44,10 +45,12 @@ internal sealed class ApplicationEntry
     /// out when it is one of them: its entry is the user's, and taken for the system's, a lone AppImage would remove its own
     /// and write it again at every launch.
     /// </param>
-    internal ApplicationEntry(string dataHome, IReadOnlyList<string> systemData)
+    /// <param name="realPath">Gives the real path of a folder, links followed, or null when it does not exist; null here is <see cref="EntryRules.RealPath"/>.</param>
+    internal ApplicationEntry(string dataHome, IReadOnlyList<string> systemData, Func<string, string?>? realPath = null)
     {
         _dataHome = dataHome;
-        _systemData = systemData.Where(folder => !EntryRules.SameFolder(folder, dataHome)).ToList();
+        _realPath = realPath ?? EntryRules.RealPath;
+        _systemData = systemData.Where(folder => !EntryRules.SameFolder(folder, dataHome, _realPath)).ToList();
     }
 
     public string FilePath => Path.Combine(_dataHome, "applications", FileName);
@@ -108,7 +111,7 @@ internal sealed class ApplicationEntry
     public EntryOutcome Decide(string? share, string? program)
     {
         // A data folder that is not a full path would land in the current folder, wherever that is.
-        if (share is null || program is null || !Path.IsPathFullyQualified(_dataHome) || EntryRules.SameFolder(share, _dataHome))
+        if (share is null || program is null || !Path.IsPathFullyQualified(_dataHome) || EntryRules.SameFolder(share, _dataHome, _realPath))
         {
             return EntryOutcome.NotPackaged;
         }
@@ -272,14 +275,14 @@ internal static class EntryRules
     /// AppRun starts APPDIR/usr/bin/hindsound, beside APPDIR/usr/share. The archive: share sits next to the program. A copy
     /// installed elsewhere has neither, and is left to whoever installed it.
     /// </summary>
-    public static string? PackageShare(Func<string, string?> environment, string programFolder, Func<string, bool> fileExists)
+    public static string? PackageShare(Func<string, string?> environment, string programFolder, Func<string, bool> fileExists, Func<string, string?>? realPath = null)
     {
         var folder = Path.TrimEndingDirectorySeparator(programFolder);
         string share;
         if (environment("APPIMAGE") is { Length: > 0 } image && image.StartsWith('/')
             && environment("APPDIR") is { Length: > 0 } appDir)
         {
-            if (!SameFolder(folder, Path.Combine(appDir, "usr", "bin")))
+            if (!SameFolder(folder, Path.Combine(appDir, "usr", "bin"), realPath ?? RealPath))
             {
                 return null;
             }
@@ -294,8 +297,88 @@ internal static class EntryRules
         return fileExists(Path.Combine(share, "applications", ApplicationEntry.FileName)) ? share : null;
     }
 
-    public static bool SameFolder(string a, string b) =>
+    private static bool SameName(string a, string b) =>
         string.Equals(Path.TrimEndingDirectorySeparator(a), Path.TrimEndingDirectorySeparator(b), StringComparison.Ordinal);
+
+    /// <summary>
+    /// Whether two paths are one folder: the same name, or, when both exist, the same real path (links followed, as
+    /// <c>realpath</c> does: <c>/home</c> is a link to <c>/var/home</c> on some systems). When one does not exist, the names alone.
+    /// </summary>
+    /// <param name="realPath">Gives the real path of a folder, or null when it does not exist.</param>
+    public static bool SameFolder(string a, string b, Func<string, string?> realPath)
+    {
+        ArgumentNullException.ThrowIfNull(realPath);
+        if (SameName(a, b))
+        {
+            return true;
+        }
+
+        return realPath(a) is { } realA && realPath(b) is { } realB && SameName(realA, realB);
+    }
+
+    /// <summary>The Linux limit of links followed in one path.</summary>
+    private const int MaxLinks = 40;
+
+    /// <summary>
+    /// The real path of an existing folder given as a full path: every link followed at each component, ".." taken after the links
+    /// before it, as <c>realpath</c> does. Null for a relative path, a folder that does not exist, a loop or one that cannot be read.
+    /// </summary>
+    public static string? RealPath(string path)
+    {
+        if (!path.StartsWith('/') || !Directory.Exists(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            var pending = new Stack<string>(path.Split('/', StringSplitOptions.RemoveEmptyEntries).Reverse());
+            var resolved = "/";
+            var links = 0;
+            while (pending.Count > 0)
+            {
+                var name = pending.Pop();
+                if (name == ".")
+                {
+                    continue;
+                }
+
+                if (name == "..")
+                {
+                    resolved = resolved == "/" ? "/" : Path.GetDirectoryName(resolved) ?? "/";
+                    continue;
+                }
+
+                var candidate = resolved == "/" ? "/" + name : resolved + "/" + name;
+                if (new DirectoryInfo(candidate).LinkTarget is not { } target)
+                {
+                    resolved = candidate;
+                    continue;
+                }
+
+                if (++links > MaxLinks)
+                {
+                    return null;
+                }
+
+                if (target.StartsWith('/'))
+                {
+                    resolved = "/";
+                }
+
+                foreach (var part in target.Split('/', StringSplitOptions.RemoveEmptyEntries).Reverse())
+                {
+                    pending.Push(part);
+                }
+            }
+
+            return Directory.Exists(resolved) ? resolved : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>
     /// What an entry the user already has asks for: left when it starts <paramref name="program"/>, or when the user took it
