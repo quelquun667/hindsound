@@ -24,12 +24,14 @@ public class WaveBarsAllocationTests
 
         canvas.Bars(grid, levels, columns, Theme.Line);
 
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var i = 0; i < 200; i++)
+        var bytes = ThreadAllocation.Measure(() =>
         {
-            canvas.Bars(grid, levels, columns, Theme.Line);
-        }
+            for (var i = 0; i < 200; i++)
+            {
+                canvas.Bars(grid, levels, columns, Theme.Line);
+            }
+        });
 
-        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+        Assert.Equal(0, bytes);
     }
 }

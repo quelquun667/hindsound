@@ -563,38 +563,47 @@ public class TextLeakTests
 
     // Even alone, the count of USER objects is not only ours: a thread of an earlier test that used user32 takes its own with
     // it when it ends, on its own schedule. On the Windows runner of the CI it fell by one during the drawings (11 then 10,
-    // 12 then 11). The drawings can only add to it, so a count that fell was moved from elsewhere: only then is the measure
-    // taken again. A leak raises the count, and that is checked at once, never measured again.
-    [Fact]
-    public void Two_hundred_drawings_leave_no_GDI_USER_or_COM_object_behind()
+    // 12 then 11). The work measured can only add to it, so a count that fell was moved from elsewhere: only then is the
+    // measure taken again. A leak raises the count, and that is checked at once, never measured again.
+    private static (uint References, uint Gdi, uint User, uint UserAfter) Measured(TextEngine engine, Action work)
     {
-        using var engine = TextEngine.TryCreate(_ => { }, missingForTests: [])!;
         var process = Native.GetCurrentProcess();
-        Draw(engine);
         for (var measure = 1; ; measure++)
         {
             var references = engine.FactoryReferences();
             var gdi = Native.GetGuiResources(process, Native.GR_GDIOBJECTS);
             var user = Native.GetGuiResources(process, Native.GR_USEROBJECTS);
 
+            work();
+
+            var userAfter = Native.GetGuiResources(process, Native.GR_USEROBJECTS);
+            if (userAfter >= user || measure == MaxMeasures)
+            {
+                return (references, gdi, user, userAfter);
+            }
+        }
+    }
+
+    [Fact]
+    public void Two_hundred_drawings_leave_no_GDI_USER_or_COM_object_behind()
+    {
+        using var engine = TextEngine.TryCreate(_ => { }, missingForTests: [])!;
+        var process = Native.GetCurrentProcess();
+        Draw(engine);
+
+        var (references, gdi, user, userAfter) = Measured(engine, () =>
+        {
             for (var i = 0; i < 200; i++)
             {
                 Draw(engine);
             }
+        });
 
-            var userAfter = Native.GetGuiResources(process, Native.GR_USEROBJECTS);
-            if (userAfter < user && measure < MaxMeasures)
-            {
-                continue;
-            }
-
-            Assert.Equal(references, engine.FactoryReferences());
-            Assert.Equal(gdi, Native.GetGuiResources(process, Native.GR_GDIOBJECTS));
-            Assert.Equal(user, userAfter);
-            // Every target, brush and layout given back, to its last reference: a kept one leaks nothing the counts above see.
-            Assert.Equal(0, engine.HeldForTests);
-            return;
-        }
+        Assert.Equal(references, engine.FactoryReferences());
+        Assert.Equal(gdi, Native.GetGuiResources(process, Native.GR_GDIOBJECTS));
+        Assert.Equal(user, userAfter);
+        // Every target, brush and layout given back, to its last reference: a kept one leaks nothing the counts above see.
+        Assert.Equal(0, engine.HeldForTests);
     }
 
     // The counts of USER objects here are those of the whole process, and a pool thread that called user32 takes its own with it
@@ -617,19 +626,18 @@ public class TextLeakTests
             MeasureOnce(engine, i);
         }
 
-        var references = engine.FactoryReferences();
-        var gdi = Native.GetGuiResources(process, Native.GR_GDIOBJECTS);
-        var user = Native.GetGuiResources(process, Native.GR_USEROBJECTS);
-
-        for (var i = 0; i < 200; i++)
+        var (references, gdi, user, userAfter) = Measured(engine, () =>
         {
-            MeasureOnce(engine, i);
-        }
+            for (var i = 0; i < 200; i++)
+            {
+                MeasureOnce(engine, i);
+            }
+        });
 
         Assert.Equal(0, engine.HeldForTests);
         Assert.Equal(references, engine.FactoryReferences());
         Assert.Equal(gdi, Native.GetGuiResources(process, Native.GR_GDIOBJECTS));
-        Assert.Equal(user, Native.GetGuiResources(process, Native.GR_USEROBJECTS));
+        Assert.Equal(user, userAfter);
     }
 
     private static void MeasureOnce(TextEngine engine, int i)

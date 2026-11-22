@@ -819,9 +819,7 @@ public class NowPageAllocationTests
     private static long AllocatedBy(Action action)
     {
         action();
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        action();
-        return GC.GetAllocatedBytesForCurrentThread() - before;
+        return ThreadAllocation.Measure(action);
     }
 
     [Fact]

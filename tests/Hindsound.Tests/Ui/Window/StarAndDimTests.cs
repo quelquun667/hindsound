@@ -542,15 +542,17 @@ public class StarAndDimAllocationTests
         canvas.FillPolygon(star, 0x2EF2C4);
         canvas.FillPolygon(mixed, 0x2EF2C4);
         canvas.Dim(0.45f);
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var i = 0; i < 50; i++)
+        var bytes = ThreadAllocation.Measure(() =>
         {
-            canvas.FillPolygon(star, 0x2EF2C4);
-            canvas.FillPolygon(mixed, 0x2EF2C4);
-            canvas.Dim(0.45f);
-        }
+            for (var i = 0; i < 50; i++)
+            {
+                canvas.FillPolygon(star, 0x2EF2C4);
+                canvas.FillPolygon(mixed, 0x2EF2C4);
+                canvas.Dim(0.45f);
+            }
+        });
 
-        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+        Assert.Equal(0, bytes);
     }
 
     [Fact]
@@ -558,13 +560,14 @@ public class StarAndDimAllocationTests
     {
         using var canvas = new GdiCanvas(400, 200, 1.5, null);
         canvas.Star(30, 30, 8, filled: true, 0x2EF2C4);
-        var before = GC.GetAllocatedBytesForCurrentThread();
-
-        for (var i = 0; i < 50; i++)
+        var bytes = ThreadAllocation.Measure(() =>
         {
-            canvas.Star(30 + i, 30, 8, filled: true, 0x2EF2C4);
-        }
+            for (var i = 0; i < 50; i++)
+            {
+                canvas.Star(30 + i, 30, 8, filled: true, 0x2EF2C4);
+            }
+        });
 
-        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+        Assert.Equal(0, bytes);
     }
 }

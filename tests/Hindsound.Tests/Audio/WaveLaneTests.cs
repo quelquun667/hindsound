@@ -35,23 +35,6 @@ internal static class WaveRig
         return new WaveFacts(system, mic, Math.Max(stop - bufferFrames, oldest), stop, bufferFrames, changes ?? []);
     }
 
-    /// <summary>
-    /// The fewest bytes a few runs allocate. A real allocation shows in every run. The counter of a thread has been seen
-    /// to jump now and then with nothing allocated, in about 1 measure in 80 on a busy machine, and only in one run.
-    /// </summary>
-    public static long LeastAllocated(Action run)
-    {
-        var least = long.MaxValue;
-        for (var attempt = 0; attempt < 3 && least > 0; attempt++)
-        {
-            var before = GC.GetAllocatedBytesForCurrentThread();
-            run();
-            least = Math.Min(least, GC.GetAllocatedBytesForCurrentThread() - before);
-        }
-
-        return least;
-    }
-
     /// <summary>The level of a slice from a plain copy of the frames still held.</summary>
     public static byte Raw(SourceTrack track, long slice)
     {
@@ -648,7 +631,7 @@ public class WaveLaneBesideTheWriterTests
             }
         };
 
-        Assert.Equal(0, WaveRig.LeastAllocated(ticks));
+        Assert.Equal(0, ThreadAllocation.Measure(ticks));
 
         // Once before measuring: the shared empty list is made the first time anything asks for it.
         void Tick(int i)

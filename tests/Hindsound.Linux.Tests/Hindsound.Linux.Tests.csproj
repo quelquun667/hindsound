@@ -34,4 +34,8 @@
     <ProjectReference Include="..\..\src\Hindsound.Linux\Hindsound.Linux.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\Hindsound.Core.Tests\ThreadAllocation.cs" Link="Shared\ThreadAllocation.cs" />
+  </ItemGroup>
+
 </Project>

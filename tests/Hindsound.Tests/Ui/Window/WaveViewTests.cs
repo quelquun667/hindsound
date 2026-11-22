@@ -331,7 +331,7 @@ public class WaveViewEngineTests
             }
         };
 
-        Assert.Equal(0, WaveRig.LeastAllocated(draws));
+        Assert.Equal(0, ThreadAllocation.Measure(draws));
     }
 }
 

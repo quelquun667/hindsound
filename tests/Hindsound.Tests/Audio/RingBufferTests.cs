@@ -165,14 +165,16 @@ public class RingBufferTests
         var packet = new float[700];
         ring.Write(packet);
 
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var i = 0; i < 1000; i++)
+        var bytes = ThreadAllocation.Measure(() =>
         {
-            ring.Write(packet);
-            ring.WriteSilence(300);
-        }
+            for (var i = 0; i < 1000; i++)
+            {
+                ring.Write(packet);
+                ring.WriteSilence(300);
+            }
+        });
 
-        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+        Assert.Equal(0, bytes);
     }
 
     [Fact]

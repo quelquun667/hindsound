@@ -428,11 +428,17 @@ public sealed class ClipSaverTests : IDisposable
         // The promise is that memory does not grow with the length of the clip: under 2 MB allocated for 5 minutes.
         var snapshot = RepeatedSecond(300);
 
-        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
-        var timer = Stopwatch.StartNew();
-        var result = Saver().Save(snapshot, new ExportOptions { Format = ExportFormat.Mp3, Mp3BitrateKbps = 192, OutputFolder = OutputFolder }, "mp3");
-        timer.Stop();
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        ClipResult? saved = null;
+        var timer = new Stopwatch();
+        var allocated = ThreadAllocation.Measure(
+            () =>
+            {
+                timer.Restart();
+                saved = Saver().Save(snapshot, new ExportOptions { Format = ExportFormat.Mp3, Mp3BitrateKbps = 192, OutputFolder = OutputFolder }, "mp3");
+                timer.Stop();
+            },
+            bytes => bytes < 2_000_000);
+        var result = saved!;
         _output.WriteLine($"5:00 stereo + mic, loudness normalization, MP3 192 kbps: {timer.Elapsed.TotalSeconds:F1} s, {result.SizeBytes / 1e6:F1} MB, {allocated} bytes allocated");
 
         Assert.True(allocated < 2_000_000, $"The save allocated {allocated} bytes; the clip must not be copied whole.");
