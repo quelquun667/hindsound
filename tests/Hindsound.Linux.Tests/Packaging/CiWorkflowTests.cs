@@ -68,6 +68,7 @@ public sealed partial class CiWorkflowTests
         "Play a clip with the app and hear it on BlackHole",
         "Run the whole app, save a clip of a 1 kHz tone and quit",
         "Start the app from --save when none is running",
+        "Change the default output during a capture with the app",
     ];
 
     [Fact]
