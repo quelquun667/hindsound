@@ -248,16 +248,14 @@ public class AudioFormatConverterTests
         var output = new float[converter.MaxOutputFrames * outputChannels];
         var input = new byte[AudioFormatConverter.MaxInputFrames * format.BlockAlign];
 
-        var bytes = ThreadAllocation.Measure(() =>
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < 200; i++)
         {
-            for (var i = 0; i < 200; i++)
-            {
-                converter.Convert(input, false, output);
-                converter.Convert(input.AsSpan(0, 512 * format.BlockAlign), i % 2 == 0, output);
-            }
-        });
+            converter.Convert(input, false, output);
+            converter.Convert(input.AsSpan(0, 512 * format.BlockAlign), i % 2 == 0, output);
+        }
 
-        Assert.Equal(0, bytes);
+        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
     }
 
     private static double ToneLevel(float[] samples, double frequency)

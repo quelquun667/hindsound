@@ -236,15 +236,13 @@ public class CapturePipelineTests
 
         Deliver(0);
 
-        var bytes = ThreadAllocation.Measure(() =>
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 1; i < 2000; i++)
         {
-            for (var i = 1; i < 2000; i++)
-            {
-                Deliver(i);
-            }
-        });
+            Deliver(i);
+        }
 
-        Assert.Equal(0, bytes);
+        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
     }
 }
 

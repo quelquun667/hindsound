@@ -64,7 +64,9 @@ public class RowListStateTests
         state.SetRows(2000, pathAt);
         state.Select(1999);
 
-        var used = ThreadAllocation.Measure(() => state.SetRows(2000, pathAt), bytes => bytes < 8_000);
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        state.SetRows(2000, pathAt);
+        var used = GC.GetAllocatedBytesForCurrentThread() - before;
 
         // One object per row would be at least 48 KB. The margin is for what the runtime may charge to this thread.
         Assert.True(used < 8_000, $"{used} bytes");
