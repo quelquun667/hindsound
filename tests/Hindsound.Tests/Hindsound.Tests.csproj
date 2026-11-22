@@ -34,6 +34,7 @@
   <ItemGroup>
     <!-- Helpers shared with Hindsound.Core.Tests, which holds them: they declare no test, so nothing runs twice. -->
     <Compile Include="..\Hindsound.Core.Tests\CoreScan.cs" Link="Shared\CoreScan.cs" />
+    <Compile Include="..\Hindsound.Core.Tests\ThreadAllocation.cs" Link="Shared\ThreadAllocation.cs" />
     <Compile Include="..\Hindsound.Core.Tests\Export\TestSupport.cs" Link="Shared\TestSupport.cs" />
     <Compile Include="..\Hindsound.Core.Tests\Updates\FakeTransport.cs" Link="Shared\FakeTransport.cs" />
     <Compile Include="..\Hindsound.Core.Tests\Updates\TempFolder.cs" Link="Shared\TempFolder.cs" />

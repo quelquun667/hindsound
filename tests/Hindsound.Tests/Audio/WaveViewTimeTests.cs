@@ -44,7 +44,7 @@ public class WaveViewTimeTests
             }
         };
 
-        Assert.Equal(0, WaveRig.LeastAllocated(reads));
+        Assert.Equal(0, ThreadAllocation.Measure(reads));
     }
 
     [Fact]

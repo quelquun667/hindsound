@@ -157,13 +157,11 @@ public sealed class ClipSaverStreamingTests : IDisposable
         return new AudioSnapshot(system, mic);
     }
 
-    private long Allocated(AudioSnapshot snapshot, ExportOptions options)
+    private long Allocated(AudioSnapshot snapshot, ExportOptions options, long bound)
     {
         var saver = new ClipSaver(RescueFolder, () => Moment);
         saver.Save(snapshot, options with { OutputFolder = _root.Combine("warmup") }, "warm"); // JIT and first-use allocations
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        saver.Save(snapshot, options, "measure");
-        return GC.GetAllocatedBytesForCurrentThread() - before;
+        return ThreadAllocation.Measure(() => saver.Save(snapshot, options, "measure"), bytes => bytes < bound);
     }
 
     // Measured (60 s of PC audio plus microphone, loudness normalization): MP3 429 232 bytes, WAV 161 168 bytes.
@@ -178,7 +176,7 @@ public sealed class ClipSaverStreamingTests : IDisposable
         var snapshot = Snapshot(60);
         var options = new ExportOptions { Format = ExportFormat.Mp3, Mp3BitrateKbps = 192, Normalization = NormalizationMode.Loudness, OutputFolder = OutputFolder };
 
-        var allocated = Allocated(snapshot, options);
+        var allocated = Allocated(snapshot, options, Mp3BoundBytes);
 
         _output.WriteLine($"MP3, 60 s, loudness: {allocated} bytes allocated (snapshot itself: {(snapshot.System.Length + snapshot.Mic.Length) * 4 / 1e6:F1} MB)");
         Assert.True(allocated < Mp3BoundBytes, $"{allocated} bytes");
@@ -190,7 +188,7 @@ public sealed class ClipSaverStreamingTests : IDisposable
         var snapshot = Snapshot(60);
         var options = new ExportOptions { Format = ExportFormat.Wav, Normalization = NormalizationMode.Loudness, OutputFolder = OutputFolder };
 
-        var allocated = Allocated(snapshot, options);
+        var allocated = Allocated(snapshot, options, WavBoundBytes);
 
         _output.WriteLine($"WAV, 60 s, loudness: {allocated} bytes allocated (snapshot itself: {(snapshot.System.Length + snapshot.Mic.Length) * 4 / 1e6:F1} MB)");
         Assert.True(allocated < WavBoundBytes, $"{allocated} bytes");

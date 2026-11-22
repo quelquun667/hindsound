@@ -1,7 +1,7 @@
-using System.Runtime;
 using System.Runtime.CompilerServices;
 using Hindsound.Audio;
 using Hindsound.Linux.Audio;
+using Hindsound.Tests;
 
 namespace Hindsound.Linux.Tests.Audio;
 
@@ -407,16 +407,10 @@ public sealed class PulseAppMixerTests
             mixer.Remove(new PulseMonitorKey(99, 0));
         }
 
-        // The count of the thread can move with nothing allocated by the mixer: once in the Windows CI it rose by 32,664 bytes
-        // early in the run, while the runtime was still compiling and collecting for the tests beside this one. So a measure
-        // that moved is taken again only when a collection or a compilation is seen during it; one that moved with neither
-        // fails at once, and so do measures that kept moving.
-        const int Tries = 5;
-        for (var attempt = 1; ; attempt++)
+        // The count of the thread can move with nothing allocated by the mixer: the measure is taken again only when the
+        // runtime collected or compiled during it.
+        var bytes = ThreadAllocation.Measure(() =>
         {
-            var collections = GC.CollectionCount(0);
-            var compiled = JitInfo.GetCompiledMethodCount();
-            var before = GC.GetAllocatedBytesForCurrentThread();
             for (var i = 0; i < 10_000; i++)
             {
                 mixer.Write(A, packet);
@@ -425,14 +419,8 @@ public sealed class PulseAppMixerTests
                 mixer.Mix(output);
                 mixer.Remove(new PulseMonitorKey(99, 0));
             }
+        });
 
-            var after = GC.GetAllocatedBytesForCurrentThread();
-            var disturbed = GC.CollectionCount(0) != collections || JitInfo.GetCompiledMethodCount() != compiled;
-            if (after == before || !disturbed || attempt == Tries)
-            {
-                Assert.Equal(before, after);
-                return;
-            }
-        }
+        Assert.Equal(0, bytes);
     }
 }
