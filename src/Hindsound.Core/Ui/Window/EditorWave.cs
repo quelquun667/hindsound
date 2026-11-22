@@ -54,6 +54,12 @@ internal static class EditorWave
     /// <summary>The name of a lane of a clip in two files, in the order of its files: the sound of the computer, then the microphone.</summary>
     public static string LaneName(int index, string machine) => index switch { 0 => "Whole " + machine, 1 => "Mic", _ => "" };
 
+    /// <summary>
+    /// How far into the panel the name of a lane starts: 12 px, or further left for a name too wide to end before the wave, which
+    /// begins a gutter in. "Whole PC" keeps its 12; "Whole Mac" is wider and leaves 3 px before the wave.
+    /// </summary>
+    public static float LaneNameOffset(float nameWidth) => Math.Clamp(Gutter - 3 - nameWidth, 4, 12);
+
     public static Box Panel => new(SettingsScreen.Left, Top, SettingsScreen.Width, Height);
 
     /// <summary>What a tick of the play head draws again: the wave, its handles and its axis, with room for their glow.</summary>
@@ -93,7 +99,8 @@ internal static class EditorWave
             var mid = grid.Mid / (float)s;
             if (count > 1)
             {
-                c.TextMid(LaneName(i, view.Machine), Face.Body, 12, panel.X + 12, mid, Theme.Muted);
+                var name = LaneName(i, view.Machine);
+                c.TextMid(name, Face.Body, 12, panel.X + LaneNameOffset(c.Measure(name, Face.Body, 12)), mid, Theme.Muted);
                 if (i > 0)
                 {
                     c.FillRect(new Box(panel.X + 1, panel.Y + i * laneHeight, panel.W - 2, 1), Theme.Line);
