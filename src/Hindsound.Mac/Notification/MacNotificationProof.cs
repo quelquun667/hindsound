@@ -6,6 +6,7 @@ using Hindsound.Export;
 using Hindsound.Mac.App;
 using Hindsound.Mac.Window;
 using Hindsound.Ui;
+using Hindsound.Ui.Window;
 using Hindsound.Unix.App;
 using Hindsound.Unix.Notification;
 
@@ -15,9 +16,12 @@ namespace Hindsound.Mac.Notification;
 /// <c>--prove-notification folder</c>, for the CI: shows a real notification (a saved clip, with its bars) through SDL's Cocoa
 /// window, on the run loop of the main thread, and says in the console what it sees. It writes <c>folder/ready</c> once the
 /// notification is up, with where it is and how many pixels of the accent the picture has, and holds it there until
-/// <c>folder/captured</c> appears (the CI takes its screenshot meanwhile); then it clicks it with a mouse event of the system,
-/// lets it go and leaves. 0 when the window showed, the app in front stayed in front, the window never had the focus, and the
-/// notification left the screen; 3 otherwise. The click is reported, not required: the runner may refuse synthetic events.
+/// <c>folder/captured</c> appears (the CI takes its screenshot meanwhile); then it clicks it with a mouse event of the system
+/// (CGEventPost: the CI writes the PostEvent right of the bundle in TCC), and the click goes where the app sends it: the
+/// Core's route of a click on a notification (<see cref="WindowGoing.Click"/>, what Windows runs too), whose window is only
+/// named here. 0 when the window showed, the app in front stayed in front, the window never had the focus, the click came
+/// once and led to the Library, the click left the app in front where it was and Hindsound not active (as Windows, where the
+/// notification answers MA_NOACTIVATE), and the notification left the screen; 3 otherwise.
 /// </summary>
 [SupportedOSPlatform("macos")]
 internal static unsafe partial class MacNotificationProof
@@ -73,7 +77,16 @@ internal static unsafe partial class MacNotificationProof
         var accent = NotificationPalette.Lime;
         int clicks = 0, finished = 0;
         var ok = true;
-        view.Clicked = () => clicks++;
+
+        // The route of the app, with the window it would open named and not opened: an open window comes forward, on
+        // Windows as here, and what is proved is that the click itself does not.
+        Section? openedOn = null;
+        var going = new WindowGoing(() => true, () => null, () => { }, target => openedOn = target, Log);
+        view.Clicked = () =>
+        {
+            clicks++;
+            going.Click(view.Showing);
+        };
         view.Finished = () =>
         {
             finished++;
@@ -99,8 +112,10 @@ internal static unsafe partial class MacNotificationProof
                 Post(2, x, y);
                 loop.After(1200, () =>
                 {
-                    Log($"click.received {clicks}");
-                    Log($"focus.after_click app_active={(AppActive() ? 1 : 0)} front={Frontmost().Name}");
+                    var front = Frontmost();
+                    Check("click.received", clicks == 1, $"clicks={clicks}");
+                    Check("click.route", openedOn == Section.Library, $"window would open on {openedOn?.ToString() ?? "nothing"}");
+                    Check("focus.click_kept_front", front.Pid == before.Pid && !AppActive(), $"app_active={(AppActive() ? 1 : 0)} pid={front.Pid} name={front.Name}");
                     view.HoldOpen = false;
                 });
             });
@@ -135,6 +150,7 @@ internal static unsafe partial class MacNotificationProof
                 Check("focus.front_kept", after.Pid == before.Pid && after.Pid != Environment.ProcessId, $"pid={after.Pid} name={after.Name}");
                 Check("focus.app_not_active", !AppActive(), string.Empty);
                 Check("focus.window_not_key", surface is { HasFocus: false }, string.Empty);
+                Log($"click.prevents_activation answered={(MacNotificationHook.Messages.InstancesRespondTo("NSWindow", MacNotificationWindow.PreventsActivation) ? 1 : 0)}");
 
                 var bounds = view.Bounds;
                 var screen = surface?.MainScreen() ?? default;
