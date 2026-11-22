@@ -7,13 +7,15 @@
 <p align="center">Hit record after it happens.</p>
 
 <p align="center">
-  <img alt="Platform: Windows" src="https://img.shields.io/badge/platform-Windows-D4F53C?logo=windows&logoColor=white">
+  <img alt="Platform: Windows, Linux, macOS" src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-D4F53C">
   <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-D4F53C?logo=dotnet&logoColor=white">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-D4F53C">
   <a href="https://github.com/quelquun667/hindsound/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/quelquun667/hindsound/actions/workflows/ci.yml/badge.svg"></a>
 </p>
 
 ---
+
+https://github.com/user-attachments/assets/b2339523-396f-4d1c-ae00-4fd431cd5cf7
 
 **Hindsound** runs in the background and keeps the last few minutes of your PC sound and microphone in memory. Something
 funny happens in a game or a call? Press a hotkey. That past becomes a file, and the file is on your clipboard, ready to
