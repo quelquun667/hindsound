@@ -14,9 +14,13 @@ internal sealed unsafe class MacNotificationHook : INotificationWindowHook
 {
     public string NativeWindowProperty => "SDL.window.cocoa.window";
 
+    /// <summary>What the last window made got, for <c>--prove-notification</c>.</summary>
+    internal IReadOnlyList<WindowMessage> Sent { get; private set; } = [];
+
     public void Created(nint nativeWindow)
     {
-        foreach (var message in MacNotificationWindow.ToSend(selector => Messages.RespondsTo(nativeWindow, selector)))
+        Sent = [.. MacNotificationWindow.ToSend(selector => Messages.RespondsTo(nativeWindow, selector))];
+        foreach (var message in Sent)
         {
             switch (message.Kind)
             {

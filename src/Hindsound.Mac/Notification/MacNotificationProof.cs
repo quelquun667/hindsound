@@ -69,7 +69,8 @@ internal static unsafe partial class MacNotificationProof
         using var pump = new MacRunLoopPump();
         using var loop = new UnixLoop(nowMs: null, idle: pump);
         SdlNotificationSurface? surface = null;
-        using var view = new NotificationPresenter(loop, () => surface = new SdlNotificationSurface(new MacNotificationHook()), MacText.Create, Log)
+        var hook = new MacNotificationHook();
+        using var view = new NotificationPresenter(loop, () => surface = new SdlNotificationSurface(hook), MacText.Create, Log)
         {
             HoldOpen = true,
         };
@@ -104,6 +105,11 @@ internal static unsafe partial class MacNotificationProof
             var bounds = view.Bounds;
             var x = bounds.Left + bounds.Width * 0.6;
             var y = bounds.Top + bounds.Height * 0.5;
+
+            // Before the click: whether AppKit has the message, and whether the window of the notification got it.
+            var answered = MacNotificationHook.Messages.InstancesRespondTo("NSWindow", MacNotificationWindow.PreventsActivation);
+            var sent = hook.Sent.Any(m => m.Selector == MacNotificationWindow.PreventsActivation);
+            Log($"click.prevents_activation answered={(answered ? 1 : 0)} sent={(sent ? 1 : 0)}");
             Log($"click.post_access {(CGPreflightPostEventAccess() != 0 ? 1 : 0)} at={x.ToString(CultureInfo.InvariantCulture)},{y.ToString(CultureInfo.InvariantCulture)}");
             Post(5, x, y);
             Post(1, x, y);
@@ -150,7 +156,6 @@ internal static unsafe partial class MacNotificationProof
                 Check("focus.front_kept", after.Pid == before.Pid && after.Pid != Environment.ProcessId, $"pid={after.Pid} name={after.Name}");
                 Check("focus.app_not_active", !AppActive(), string.Empty);
                 Check("focus.window_not_key", surface is { HasFocus: false }, string.Empty);
-                Log($"click.prevents_activation answered={(MacNotificationHook.Messages.InstancesRespondTo("NSWindow", MacNotificationWindow.PreventsActivation) ? 1 : 0)}");
 
                 var bounds = view.Bounds;
                 var screen = surface?.MainScreen() ?? default;
