@@ -405,13 +405,22 @@ jobs:
       # A real notification through SDL's Cocoa window, not the offscreen driver. The app says when it is up and where, and
       # holds it; screencapture takes the main screen, and the pixels of the accent (its bars) are counted where it is. The
       # app itself checks that the app in front stayed in front and that its window never had the focus, then clicks it with
-      # a mouse event of the system (reported, the runner may drop it) and lets it go.
+      # a mouse event of the system (CGEventPost, with the PostEvent right of the bundle written in TCC here): the click must
+      # come once, lead to the Library by the route of the Core, and leave the app in front where it was, as on Windows.
       - name: Show a notification with the app
         if: ${{ !cancelled() && steps.assemble.outcome == 'success' }}
         run: |
-          program="$RUNNER_TEMP/app/Hindsound.app/Contents/MacOS/hindsound"
+          app_bundle="$RUNNER_TEMP/app/Hindsound.app"
+          program="$app_bundle/Contents/MacOS/hindsound"
           proof="$RUNNER_TEMP/mac-notification"
           mkdir -p "$proof"
+          requirement=$(codesign -d -r- "$app_bundle" 2>&1 | sed -n 's/^#* *designated => //p' | head -n 1)
+          csreq -r "=$requirement" -b "$proof/csreq.bin"
+          hex=$(xxd -p "$proof/csreq.bin" | tr -d '\n')
+          for db in "/Library/Application Support/com.apple.TCC/TCC.db" "$HOME/Library/Application Support/com.apple.TCC/TCC.db"; do
+            sudo sqlite3 "$db" "insert or replace into access (service, client, client_type, auth_value, auth_reason, auth_version, csreq, flags, last_modified) values ('kTCCServicePostEvent', 'io.github.quelquun667.hindsound', 0, 2, 3, 1, X'$hex', 0, CAST(strftime('%s','now') AS INTEGER));"               && echo "tcc: kTCCServicePostEvent written in $db" || echo "tcc: kTCCServicePostEvent not written in $db"
+          done
+          sudo killall tccd || true
           perl -e 'alarm shift; exec @ARGV' 200 "$program" --prove-notification "$proof/out" > "$proof/console.txt" 2>&1 &
           app=$!
           for _ in $(seq 1 120); do
@@ -828,6 +837,57 @@ jobs:
           sed 's/^/  log save start: /' "$log" || true
           grep -q 'leaving with exit code 0' "$log"; check "the app left with exit code 0" $?
           exit $failed
+
+      # The default output changed under a running capture of the sound of the Mac (the output setting on the default one):
+      # the app's real engine, factory and watch of the devices. BlackHole 2ch is the default output and the capture hears a
+      # 1 kHz tone afplay plays there; then the app makes the Null Audio Device the default output, the watch sees it, the
+      # engine opens the capture again on it (the factory's line, the name in the status), and the same tone played there is
+      # heard. Launched through open with the right of audio capture written granted, as the capture's own step does.
+      - name: Change the default output during a capture with the app
+        if: ${{ !cancelled() && steps.assemble.outcome == 'success' }}
+        run: |
+          export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 HOMEBREW_NO_ENV_HINTS=1
+          app="$RUNNER_TEMP/app/Hindsound.app"
+          folder="$RUNNER_TEMP/mac-switch"
+          mkdir -p "$folder"
+          brew install --cask blackhole-2ch > "$folder/brew-blackhole.log" 2>&1 || { tail -n 20 "$folder/brew-blackhole.log"; exit 1; }
+          brew install switchaudio-osx > "$folder/brew-switchaudio.log" 2>&1 || { tail -n 20 "$folder/brew-switchaudio.log"; exit 1; }
+          for _ in $(seq 1 60); do
+            SwitchAudioSource -a -t output 2> /dev/null | grep -q 'BlackHole 2ch' && break
+            sleep 0.5
+          done
+          echo "outputs: $(SwitchAudioSource -a -t output | tr '\n' '|')"
+          SwitchAudioSource -t output -s 'BlackHole 2ch' > /dev/null
+          echo "default output before: $(SwitchAudioSource -t output -c)"
+          python3 - "$folder/tone.wav" <<'EOF'
+          import array, math, sys, wave
+          rate, seconds = 48000, 2
+          tone = array.array('h')
+          for i in range(rate * seconds):
+              value = int(0.5 * 32767 * math.sin(2 * math.pi * 1000 * i / rate))
+              tone.extend((value, value))
+          with wave.open(sys.argv[1], 'wb') as f:
+              f.setnchannels(2)
+              f.setsampwidth(2)
+              f.setframerate(rate)
+              f.writeframes(tone.tobytes())
+          EOF
+          requirement=$(codesign -d -r- "$app" 2>&1 | sed -n 's/^#* *designated => //p' | head -n 1)
+          csreq -r "=$requirement" -b "$folder/csreq.bin"
+          hex=$(xxd -p "$folder/csreq.bin" | tr -d '\n')
+          for db in "/Library/Application Support/com.apple.TCC/TCC.db" "$HOME/Library/Application Support/com.apple.TCC/TCC.db"; do
+            sudo sqlite3 "$db" "insert or replace into access (service, client, client_type, auth_value, auth_reason, auth_version, csreq, flags, last_modified) values ('kTCCServiceAudioCapture', 'io.github.quelquun667.hindsound', 0, 2, 3, 1, X'$hex', 0, CAST(strftime('%s','now') AS INTEGER));"
+            echo "tcc: kTCCServiceAudioCapture in $db: $(sudo sqlite3 "$db" "select auth_value from access where service = 'kTCCServiceAudioCapture' and client = 'io.github.quelquun667.hindsound';")"
+          done
+          sudo killall tccd || true
+          killall tccd 2> /dev/null || true
+          sleep 2
+          perl -e 'alarm shift; exec @ARGV' 150 open -n -W --stdout "$folder/switch.out" --stderr "$folder/switch.err" "$app" --args --prove-switch "$folder" \
+            || { echo "prove-switch: open ended by the time limit"; pkill -f 'Hindsound.app/Contents/MacOS/hindsound' || true; }
+          cat "$folder/switch.out" "$folder/switch.err" 2> /dev/null || true
+          echo "default output after: $(SwitchAudioSource -t output -c)"
+          echo "prove-switch: $(cat "$folder/switch.result" 2> /dev/null || echo 'no result')"
+          grep -qx pass "$folder/switch.result"
 
       - name: Keep the pages of the window
         if: always()
