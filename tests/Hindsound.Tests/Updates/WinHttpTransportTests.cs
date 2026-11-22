@@ -90,6 +90,68 @@ public class WinHttpTransportTests
         Assert.InRange(watch.Elapsed, TimeSpan.FromSeconds(1.9), TimeSpan.FromSeconds(3));
     }
 
+    /// <summary>The real path asks for TLS and the policy refuses http: a plain-HTTP server that would answer is never reached.</summary>
+    [Fact]
+    public void APlainHttpAddressIsBlockedBeforeAnyConnectionEvenOnALocalServer()
+    {
+        using var server = new TcpListener(IPAddress.Loopback, 0);
+        server.Start();
+        var accepted = server.AcceptTcpClientAsync();
+        var received = 0;
+
+        var result = new WinHttpTransport().Get(
+            $"http://127.0.0.1:{((IPEndPoint)server.LocalEndpoint).Port}/",
+            Roomy,
+            data => received += data.Length,
+            () => false);
+
+        Assert.Equal(TransportStatus.Blocked, result.Status);
+        Assert.Equal(0, received);
+        Assert.False(accepted.Wait(TimeSpan.FromMilliseconds(300)));
+    }
+
+    /// <summary>
+    /// The server reads the request and then says nothing: WinHttpReceiveResponse waits on the coarse clock of WinHTTP, 3.98 s
+    /// for a patience of 2 s without the watchdog (22/11/2026). In plain HTTP, only for this test: it is not the handshake.
+    /// </summary>
+    [Fact]
+    public void ASilentServerAfterTheRequestEndsAtThePatience()
+    {
+        var received = 0;
+
+        var (result, elapsed) = GetFromLocalServer(
+            async (client, stopped) =>
+            {
+                await ReadTheRequest(client);
+                await Task.Delay(Timeout.Infinite, stopped);
+            },
+            data => received += data.Length);
+
+        Assert.Equal(TransportStatus.TimedOut, result.Status);
+        Assert.Equal(0, received);
+        Assert.InRange(elapsed, TimeSpan.FromSeconds(1.9), TimeSpan.FromSeconds(3));
+    }
+
+    /// <summary>The headers and 3 bytes of 100 arrive, then silence: WinHttpQueryDataAvailable waits on the same clock (4.03 s without the watchdog).</summary>
+    [Fact]
+    public void ASilentBodyEndsAtThePatience()
+    {
+        var received = 0;
+
+        var (result, elapsed) = GetFromLocalServer(
+            async (client, stopped) =>
+            {
+                await ReadTheRequest(client);
+                await client.GetStream().WriteAsync(Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\nabc"));
+                await Task.Delay(Timeout.Infinite, stopped);
+            },
+            data => received += data.Length);
+
+        Assert.Equal(TransportStatus.TimedOut, result.Status);
+        Assert.Equal(3, received);
+        Assert.InRange(elapsed, TimeSpan.FromSeconds(1.9), TimeSpan.FromSeconds(3));
+    }
+
     [Fact]
     public void AnExhaustedDelayMakesNoConnection()
     {
@@ -98,6 +160,59 @@ public class WinHttpTransportTests
         var result = new WinHttpTransport().Get(RealUrl, limits, _ => { }, () => false);
 
         Assert.Equal(TransportStatus.TimedOut, result.Status);
+    }
+
+    /// <summary>One GET of patience 2 s on a plain-HTTP local server whose behaviour is given; the clock stops when the GET ends.</summary>
+    private static (TransportResult Result, TimeSpan Elapsed) GetFromLocalServer(Func<TcpClient, CancellationToken, Task> behaviour, BodySink sink)
+    {
+        using var stop = new CancellationTokenSource();
+        using var server = new TcpListener(IPAddress.Loopback, 0);
+        server.Start();
+        var address = new Uri($"http://127.0.0.1:{((IPEndPoint)server.LocalEndpoint).Port}/");
+        var serving = Task.Run(async () =>
+        {
+            using var client = await server.AcceptTcpClientAsync();
+            try
+            {
+                await behaviour(client, stop.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                // The test is over.
+            }
+        });
+
+        var limits = new TransferLimits(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(2), 1024);
+        var watch = Stopwatch.StartNew();
+        var result = new WinHttpTransport().Run(
+            address.AbsoluteUri,
+            limits,
+            sink,
+            () => false,
+            (_, request, _) => request(address).Result,
+            requestFlags: 0);
+        watch.Stop();
+
+        stop.Cancel();
+        serving.Wait(TimeSpan.FromSeconds(5));
+        return (result, watch.Elapsed);
+    }
+
+    private static async Task ReadTheRequest(TcpClient client)
+    {
+        var stream = client.GetStream();
+        var seen = new StringBuilder();
+        var buffer = new byte[1024];
+        while (!seen.ToString().Contains("\r\n\r\n"))
+        {
+            var read = await stream.ReadAsync(buffer);
+            if (read == 0)
+            {
+                return;
+            }
+
+            seen.Append(Encoding.ASCII.GetString(buffer, 0, read));
+        }
     }
 
     // ---- On the real network

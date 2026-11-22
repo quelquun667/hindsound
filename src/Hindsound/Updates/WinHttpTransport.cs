@@ -36,13 +36,17 @@ internal sealed partial class WinHttpTransport : IUpdateTransport
     public TransportResult Get(string url, TransferLimits limits, BodySink sink, Func<bool> shouldStop) =>
         Run(url, limits, sink, shouldStop, TransferLoops.FollowRedirects);
 
-    /// <summary>For the tests on a silent local server: the delays and handles, around a different redirect loop.</summary>
+    /// <summary>
+    /// For the tests on a silent local server: the delays and handles, around a different redirect loop. Only the tests pass
+    /// requestFlags, 0 for a local server in plain HTTP; <see cref="Get"/> always asks for TLS.
+    /// </summary>
     internal TransportResult Run(
         string url,
         TransferLimits limits,
         BodySink sink,
         Func<bool> shouldStop,
-        Func<string, Func<Uri, HopOutcome>, Func<bool>, TransportResult> follow)
+        Func<string, Func<Uri, HopOutcome>, Func<bool>, TransportResult> follow,
+        uint requestFlags = FlagSecure)
     {
         var watch = Stopwatch.StartNew();
         KeepWinHttpSetUp();
@@ -54,7 +58,7 @@ internal sealed partial class WinHttpTransport : IUpdateTransport
 
         try
         {
-            return follow(url, uri => OneHop(session, uri, limits, sink, shouldStop, watch), shouldStop);
+            return follow(url, uri => OneHop(session, uri, limits, sink, shouldStop, watch, requestFlags), shouldStop);
         }
         finally
         {
@@ -80,7 +84,7 @@ internal sealed partial class WinHttpTransport : IUpdateTransport
         }
     }
 
-    private static HopOutcome OneHop(nint session, Uri uri, TransferLimits limits, BodySink sink, Func<bool> shouldStop, Stopwatch watch)
+    private static HopOutcome OneHop(nint session, Uri uri, TransferLimits limits, BodySink sink, Func<bool> shouldStop, Stopwatch watch, uint requestFlags)
     {
         var patience = Patience(limits, watch.Elapsed);
         if (patience <= 0)
@@ -89,7 +93,7 @@ internal sealed partial class WinHttpTransport : IUpdateTransport
         }
 
         var connection = WinHttpConnect(session, uri.IdnHost, (ushort)uri.Port, 0);
-        var request = connection == 0 ? 0 : WinHttpOpenRequest(connection, "GET", uri.PathAndQuery, null, null, 0, FlagSecure);
+        var request = connection == 0 ? 0 : WinHttpOpenRequest(connection, "GET", uri.PathAndQuery, null, null, 0, requestFlags);
         var watchdog = new Watchdog(() => WinHttpCloseHandle(request));
         try
         {
