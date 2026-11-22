@@ -593,11 +593,15 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
     // ---------------------------------------------------------------- engine
 
+    /// <summary>The line of the journal that says how the capture starts: the whole machine is named as the system names it.</summary>
+    internal static string EngineLine(AudioEngineOptions options, PlatformFeatures features) =>
+        $"engine: buffer {options.BufferDuration}, system {options.SystemDeviceId ?? "(default)"}, app {options.SourceApp ?? "(whole " + features.MachineName + ")"}, mic enabled {options.MicEnabled}, mic {options.MicDeviceId ?? "(default)"}";
+
     private void StartEngine()
     {
         var options = SettingsMapping.ToEngineOptions(_settings, _options);
         _engineOptions = options;
-        _journal.Write($"engine: buffer {options.BufferDuration}, system {options.SystemDeviceId ?? "(default)"}, app {options.SourceApp ?? "(whole " + (PlatformDefaults.Features ?? PlatformFeatures.Windows).MachineName + ")"}, mic enabled {options.MicEnabled}, mic {options.MicDeviceId ?? "(default)"}");
+        _journal.Write(EngineLine(options, PlatformDefaults.Features ?? PlatformFeatures.Windows));
 
         LoadSourceAppName(options.SourceApp);
 
