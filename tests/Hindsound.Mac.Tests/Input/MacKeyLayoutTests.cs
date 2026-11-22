@@ -53,8 +53,8 @@ public sealed class MacKeyLayoutTests
     // The Turkish Q layout of a Mac: the key at the US place of I types the dotless i, and the Latin i is where US has the quote.
     private static readonly Dictionary<ushort, (string Plain, string Shift)> Turkish = With(Us, new()
     {
-        [0x22] = ("ı", "I"), [0x27] = ("i", "İ"), [0x21] = ("ğ", "Ğ"), [0x1E] = ("ü", "Ü"),
-        [0x29] = ("ş", "Ş"), [0x2B] = ("ö", "Ö"), [0x2F] = ("ç", "Ç"), [0x2A] = (",", ";"),
+        [0x22] = ("\u0131", "I"), [0x27] = ("i", "\u0130"), [0x21] = ("\u011F", "\u011E"), [0x1E] = ("\u00FC", "\u00DC"),
+        [0x29] = ("\u015F", "\u015E"), [0x2B] = ("\u00F6", "\u00D6"), [0x2F] = ("\u00E7", "\u00C7"), [0x2A] = (",", ";"),
     });
 
     // A layout without Latin letters (Russian): the letters' keys type Cyrillic, the digits stay.
