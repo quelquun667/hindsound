@@ -13,7 +13,8 @@ namespace Hindsound.Mac.Audio.Capture;
 /// devices: BlackHole 2ch is made the default output, the capture starts on it and hears <c>afplay</c> play
 /// <c>folder/tone.wav</c> (1 kHz, 2 s); then the Null Audio Device is made the default output, the watch sees it, the engine
 /// opens the capture again on it (its line in the log, the name in the status), and <c>afplay</c> plays the same tone there:
-/// the capture must hear it. The default output is set back to BlackHole 2ch at the end. The permission of audio capture is
+/// the capture must hear it. The default output found at the start is read first and set back at the end, both written in
+/// the log (<c>default output before</c>, <c>default output after</c>). The permission of audio capture is
 /// written in TCC before: launched through <c>open</c>, TCC asks about the bundle. Writes <c>folder/switch.result</c>; 0 when
 /// every check passes, 3 otherwise.
 /// </summary>
@@ -63,6 +64,11 @@ internal static unsafe class MacSwitchProof
             File.WriteAllText(Path.Combine(folder, "switch.result"), "FAIL\n");
             return ExitFailed;
         }
+
+        // What the Mac had before the proof touched it: set back at the end, whatever happens.
+        var original = CoreAudio.GetUInt(CoreAudio.SystemObject, CoreAudio.DefaultOutputDevice);
+        var originalName = NameOf(original);
+        Log($"default output before: {originalName}");
 
         var firstName = CoreAudio.GetString(first, CoreAudio.Name);
         var secondName = CoreAudio.GetString(second, CoreAudio.Name);
@@ -118,8 +124,9 @@ internal static unsafe class MacSwitchProof
             }
 
             engine?.Dispose();
-            SetDefaultOutput(first);
-            Log($"default output at the end: {DefaultName()}");
+            var back = original != CoreAudio.Unknown && SetDefaultOutput(original);
+            Log($"default output after: {DefaultName()}");
+            Check("default.restored", back && DefaultName() == originalName, $"default output {DefaultName()}, before {originalName}");
         }
 
         // Launched through Launch Services, the exit code does not reach the CI: the file does.
@@ -165,8 +172,9 @@ internal static unsafe class MacSwitchProof
         return condition() ? watch.ElapsedMilliseconds : -1;
     }
 
-    private static string DefaultName() =>
-        CoreAudio.GetString(CoreAudio.GetUInt(CoreAudio.SystemObject, CoreAudio.DefaultOutputDevice), CoreAudio.Name) ?? "none";
+    private static string DefaultName() => NameOf(CoreAudio.GetUInt(CoreAudio.SystemObject, CoreAudio.DefaultOutputDevice));
+
+    private static string NameOf(uint device) => device == CoreAudio.Unknown ? "none" : CoreAudio.GetString(device, CoreAudio.Name) ?? "none";
 
     // kAudioHardwarePropertyDefaultOutputDevice, as SwitchAudioSource sets it.
     private static bool SetDefaultOutput(uint device)
