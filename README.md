@@ -340,9 +340,7 @@ real keyboard. GitHub removed its macOS 14 machines in November 2026, so macOS 1
 the app declares, but it is not tried. When the default sound output changes while Hindsound records, it opens the capture
 again on the new output and hears a tone played there: the CI proves it by changing the default output from BlackHole 2ch
 to the Null Audio Device under a running capture. A click on the notification of a clip opens the Library, as on Windows,
-without the notification making Hindsound the app in front of the game or the call: the CI proves it with a click of the
-system on the notification, the app that was in front staying in front. The Library, once open, comes in front, with
-Hindsound the active app. Pasting into a real app, a real hotkey pressed on a real keyboard, the prompts of macOS answered
+and it comes in front, with Hindsound the active app: the CI proves it with a click of the system on the notification. Pasting into a real app, a real hotkey pressed on a real keyboard, the prompts of macOS answered
 by a person, macOS 14, and a real game or call have not been tried. If something does not work, the log is in `~/Library/Logs/Hindsound/hindsound.log`; an issue with it helps.
 
 **Download.** `Hindsound-<version>-macos-arm64.zip` from the

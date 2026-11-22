@@ -4,8 +4,9 @@ using Hindsound.Mac.Notification;
 namespace Hindsound.Mac.App;
 
 /// <summary>
-/// Makes Hindsound the active app when a window of it opens: a click on the notification no longer activates the app (the
-/// notification prevents it, as MA_NOACTIVATE does on Windows), so the window it opens has to bring the app forward itself.
+/// Makes Hindsound the active app when a window of it opens: a click on the notification makes it the active app
+/// anyway (no message to the notification's window prevents it), and the window the click opens comes in front, as on Windows.
+/// The window brings the app forward itself, whatever opened it.
 /// SDL's raise sends activateIgnoringOtherApps:, deprecated since macOS 14, where activation is a request the system weighs;
 /// <c>activate</c> is the message of macOS 14 for it. The CI proves the result (<c>focus.library_front</c>).
 /// </summary>

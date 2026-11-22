@@ -26,8 +26,7 @@ namespace Hindsound.Mac.Notification;
 /// bundle was written; <c>click.post_access</c> says what CGPreflightPostEventAccess answers. The click goes where the app sends it: the
 /// Core's route of a click on a notification (<see cref="WindowGoing.Click"/>, what Windows runs too), whose window is only
 /// named here. 0 when the window showed, the app in front stayed in front, the window never had the focus, the click came
-/// once and led to the Library, the click left the app in front where it was and Hindsound not active (as Windows, where the
-/// notification answers MA_NOACTIVATE), the window the click named, then opened as the app opens it (<see cref="MacShell.OpenWindow"/>:
+/// once and led to the Library, the window the click named, then opened as the app opens it (<see cref="MacShell.OpenWindow"/>:
 /// SDL's show and raise, then <see cref="MacActivation"/>), came in front with Hindsound active within 1.5 s, as on Windows,
 /// and the notification left the screen; 3 otherwise. The window is opened 1.2 s after the click, once the click is judged,
 /// where the app opens it in the click's own handler.
@@ -88,8 +87,8 @@ internal static unsafe partial class MacNotificationProof
         int clicks = 0, finished = 0;
         var ok = true;
 
-        // The route of the app, with the window it would open named and not opened: an open window comes forward, on
-        // Windows as here, and what is proved is that the click itself does not.
+        // The route of the app, with the window it would open named and opened afterwards by the app's own way: the window
+        // the click opens comes forward, on Windows as here.
         Section? openedOn = null;
         var going = new WindowGoing(() => true, () => null, () => { }, target => openedOn = target, Log);
         view.Clicked = () =>
@@ -115,10 +114,6 @@ internal static unsafe partial class MacNotificationProof
             var x = bounds.Left + bounds.Width * 0.6;
             var y = bounds.Top + bounds.Height * 0.5;
 
-            // Before the click: whether AppKit has the message, and whether the window of the notification got it.
-            var answered = MacNotificationHook.Messages.InstancesRespondTo("NSWindow", MacNotificationWindow.PreventsActivation);
-            var sent = hook.Sent.Any(m => m.Selector == MacNotificationWindow.PreventsActivation);
-            Log($"click.prevents_activation answered={(answered ? 1 : 0)} sent={(sent ? 1 : 0)}");
             Log($"click.post_access {(CGPreflightPostEventAccess() != 0 ? 1 : 0)} at={x.ToString(CultureInfo.InvariantCulture)},{y.ToString(CultureInfo.InvariantCulture)}");
             Post(5, x, y);
             Post(1, x, y);
@@ -130,7 +125,7 @@ internal static unsafe partial class MacNotificationProof
                     var front = Frontmost();
                     Check("click.received", clicks == 1, $"clicks={clicks}");
                     Check("click.route", openedOn == Section.Library, $"window would open on {openedOn?.ToString() ?? "nothing"}");
-                    Check("focus.click_kept_front", front.Pid == before.Pid && !AppActive(), $"app_active={(AppActive() ? 1 : 0)} pid={front.Pid} name={front.Name}");
+                    Log($"click.app_active {(AppActive() ? 1 : 0)} front={front.Name} pid={front.Pid}");
                     OpenLibrary(openedOn ?? Section.Library);
                 });
             });

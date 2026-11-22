@@ -23,7 +23,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - On Linux with PipeWire, an application whose output disappears while it plays is recorded again. Before, it might not be recorded at all.
 - On Linux, one folder reached by two paths through a symbolic link, such as `/home` and `/var/home` on Fedora Silverblue, is no longer taken for two folders. An AppImage on its own no longer writes its entry in the list of applications again at each launch.
-- On Mac, a click on the notification of a clip no longer makes Hindsound the app in front of the game or the call, and the Library it opens comes in front.
 
 ## [0.11.0] - 2026-11-22
 
