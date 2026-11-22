@@ -597,7 +597,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     {
         var options = SettingsMapping.ToEngineOptions(_settings, _options);
         _engineOptions = options;
-        _journal.Write($"engine: buffer {options.BufferDuration}, system {options.SystemDeviceId ?? "(default)"}, app {options.SourceApp ?? "(whole PC)"}, mic enabled {options.MicEnabled}, mic {options.MicDeviceId ?? "(default)"}");
+        _journal.Write($"engine: buffer {options.BufferDuration}, system {options.SystemDeviceId ?? "(default)"}, app {options.SourceApp ?? "(whole " + (PlatformDefaults.Features ?? PlatformFeatures.Windows).MachineName + ")"}, mic enabled {options.MicEnabled}, mic {options.MicDeviceId ?? "(default)"}");
 
         LoadSourceAppName(options.SourceApp);
 
