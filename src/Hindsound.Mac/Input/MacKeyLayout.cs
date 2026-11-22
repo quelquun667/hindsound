@@ -10,6 +10,13 @@ namespace Hindsound.Mac.Input;
 /// top row of AZERTY, which SDL names by its digit). Only the block of the character keys is read: a digit of the keypad
 /// is not the key of the top row. A letter or a digit that no key types has no key here; the caller then takes its place
 /// on a US keyboard, as SDL does for a layout without Latin letters.
+/// <para>
+/// Turkish Q: the key at the US place of I types the dotless letter (U+0131) and the key that types the Latin i sits where a
+/// US keyboard has the quote. The shortcut I goes to the key that types the Latin letter, the quote key (the rule above: a
+/// key is the letter it types, and the dotless one is another letter), not to the place of I. The window names both keys I
+/// when the shortcut is captured (SDL names the dotless key by its place), so pressing that one while choosing "I" registers
+/// the other: the choice is the Latin letter's key, and a test fixes it.
+/// </para>
 /// </remarks>
 internal sealed class MacKeyLayout
 {

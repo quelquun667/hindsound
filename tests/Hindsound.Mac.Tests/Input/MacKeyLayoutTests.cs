@@ -1,5 +1,6 @@
 using Hindsound.Input;
 using Hindsound.Mac.Input;
+using Hindsound.Unix.Window.Input;
 
 namespace Hindsound.Mac.Tests.Input;
 
@@ -47,6 +48,13 @@ public sealed class MacKeyLayoutTests
         [0x10] = ("z", "Z"), [0x06] = ("y", "Y"), [0x21] = ("\u00FC", "\u00DC"), [0x1E] = ("+", "*"),
         [0x29] = ("\u00F6", "\u00D6"), [0x27] = ("\u00E4", "\u00C4"), [0x2A] = ("#", "'"), [0x32] = ("<", ">"),
         [0x2B] = (",", ";"), [0x2F] = (".", ":"), [0x2C] = ("-", "_"),
+    });
+
+    // The Turkish Q layout of a Mac: the key at the US place of I types the dotless i, and the Latin i is where US has the quote.
+    private static readonly Dictionary<ushort, (string Plain, string Shift)> Turkish = With(Us, new()
+    {
+        [0x22] = ("ı", "I"), [0x27] = ("i", "İ"), [0x21] = ("ğ", "Ğ"), [0x1E] = ("ü", "Ü"),
+        [0x29] = ("ş", "Ş"), [0x2B] = ("ö", "Ö"), [0x2F] = ("ç", "Ç"), [0x2A] = (",", ";"),
     });
 
     // A layout without Latin letters (Russian): the letters' keys type Cyrillic, the digits stay.
@@ -130,30 +138,88 @@ public sealed class MacKeyLayoutTests
     }
 
     [Theory]
-    [InlineData("French")]
-    [InlineData("German")]
-    [InlineData("US")]
-    public void Every_key_the_window_names_by_a_letter_or_a_digit_is_the_key_registered_for_it(string name)
+    [InlineData("French", new ushort[0])]
+    [InlineData("German", new ushort[0])]
+    [InlineData("US", new ushort[0])]
+    [InlineData("Turkish", new ushort[] { 0x22 })]
+    public void Every_key_the_window_names_by_a_letter_or_a_digit_is_the_key_registered_for_it(string name, ushort[] namedByPlaceOnly)
     {
-        // The window (SdlKeys over SDL's default options) names a key by the letter or digit it types without Shift, and a
-        // key of the top row by the digit it types with Shift: registering that name must land on the same key.
-        var table = name switch { "French" => French, "German" => German, _ => Us };
+        // The window names a key with SdlKeys, from the scancode of the key and the keycode SDL gives it: the letter or digit it
+        // types without Shift, or the digit it types with Shift (the top row of AZERTY). Registering that name must land on the
+        // same key. A key whose character is no Latin letter or digit (the dotless i of Turkish) is named by its place: it is
+        // listed, and the name it gets is the one of another key.
+        var table = name switch { "French" => French, "German" => German, "Turkish" => Turkish, _ => Us };
         var layout = Layout(table);
         var checkedKeys = 0;
+        var byPlace = new List<ushort>();
         foreach (var code in MacKeyLayout.CharacterKeys)
         {
             var (plain, shift) = table[code];
-            var named = plain is [var c] && MacKeyLayout.IsCharacter(char.ToUpperInvariant(c)) ? char.ToUpperInvariant(c)
+            var keycode = plain is [>= 'a' and <= 'z' or >= '0' and <= '9'] ? plain[0]
                 : shift is [>= '0' and <= '9'] ? shift[0]
-                : '\0';
-            if (named != '\0')
+                : plain[0];
+            var named = SdlKeys.VirtualKey(Scancode(code), keycode, 0);
+            if (!MacKeyLayout.IsCharacter(named))
+            {
+                continue;
+            }
+
+            if (keycode is >= 'a' and <= 'z' or >= '0' and <= '9')
             {
                 Assert.Equal(((ushort)code, false), MacKeyCodes.Resolve(named, layout));
                 checkedKeys++;
             }
+            else
+            {
+                byPlace.Add(code);
+            }
         }
 
         Assert.Equal(36, checkedKeys);
+        Assert.Equal(namedByPlaceOnly, byPlace);
+    }
+
+    [Fact]
+    public void On_a_Turkish_keyboard_the_letter_I_is_the_key_that_types_the_Latin_i_not_the_dotless_one_at_its_US_place()
+    {
+        var layout = Layout(Turkish);
+
+        Assert.Equal(((ushort)0x27, false), MacKeyCodes.Resolve('I', layout));
+        Assert.NotEqual((ushort)0x22, layout.CodeOf('I'));
+        Assert.Equal(26 + 10, layout.Count);
+        foreach (var letter in Enumerable.Range('A', 26).Select(l => (uint)l))
+        {
+            Assert.NotEqual((ushort)0x22, layout.CodeOf(letter)); // the dotless key is no letter's key
+        }
+
+        Assert.Equal(((ushort)0x1F, false), MacKeyCodes.Resolve('O', layout)); // the letters Turkish keeps are where US has them
+    }
+
+    // The SDL scancode (USB usage page 0x07) of a character key of a Mac keyboard: A to Z, 1 to 9 and 0, then the punctuation.
+    private static uint Scancode(ushort code)
+    {
+        for (var i = 0; i < 26; i++)
+        {
+            if (MacKeyCodes.ToKeyCode((uint)('A' + i)) == code)
+            {
+                return SdlKeys.ScanA + (uint)i;
+            }
+        }
+
+        for (var i = 0; i < 10; i++)
+        {
+            if (MacKeyCodes.ToKeyCode((uint)('0' + i)) == code)
+            {
+                return i == 0 ? SdlKeys.Scan0 : SdlKeys.Scan1 + (uint)(i - 1);
+            }
+        }
+
+        return code switch
+        {
+            0x0A => SdlKeys.ScanNonUsBackslash,
+            0x1B => 45, 0x18 => 46, 0x21 => 47, 0x1E => 48, 0x2A => 49, 0x29 => 51, 0x27 => 52, 0x32 => 53, 0x2B => 54, 0x2F => 55, 0x2C => 56,
+            _ => throw new ArgumentOutOfRangeException(nameof(code)),
+        };
     }
 
     private static MacKeyLayout Layout(Dictionary<ushort, (string Plain, string Shift)> table) =>
