@@ -10,6 +10,13 @@ namespace Hindsound.Mac.Input;
 /// handler of kEventHotKeyPressed on the application target. Everything runs on the main thread, the loop's: the handler is
 /// called while <see cref="MacRunLoopPump"/> hands the events of NSApplication to <c>sendEvent:</c>.
 /// <see cref="KeyByKeyHotkeys"/> turns it into the batch of the Core.
+/// <para>
+/// A letter or a digit is registered on the key that types it in the current keyboard layout (<see cref="MacKeyCodes.Resolve"/>),
+/// as Windows reads a virtual key: Control+Option+A is the key that types A on AZERTY too. When the user picks another
+/// layout, macOS posts kTISNotifySelectedKeyboardInputSourceChanged, and every shortcut whose key moved is registered again
+/// (<see cref="MacHotkeyTable"/>). One that no key can hold any more stays in waiting, tried again at each change, and
+/// <see cref="HeldChanged"/> tells the Core, which then shows it as in use.
+/// </para>
 /// </summary>
 [SupportedOSPlatform("macos")]
 internal sealed unsafe partial class CarbonHotkeys : IHotkeyRegistrar
@@ -25,6 +32,7 @@ internal sealed unsafe partial class CarbonHotkeys : IHotkeyRegistrar
     private const uint DirectObject = 0x2D2D2D2D; // kEventParamDirectObject, '----'
     private const uint HotKeyIdType = 0x686B6964; // typeEventHotKeyID, 'hkid'
     private const int EventNotHandled = -9874; // eventNotHandledErr
+    private const nint DeliverImmediately = 4; // CFNotificationSuspensionBehaviorDeliverImmediately
 
     // kCGEventFlagMask*: Shift, Control, Option (Alternate), Command.
     private const ulong FlagShift = 0x20000;
@@ -36,24 +44,43 @@ internal sealed unsafe partial class CarbonHotkeys : IHotkeyRegistrar
     private static int s_ready;
 
     private readonly Action<string> _log;
-    private readonly Dictionary<int, nint> _registered = [];
+    private readonly MacHotkeyTable _table;
     private nint _handler;
+    private bool _observing;
+    private int _relayouts;
+    private int _changeThread; // 0: no change taken yet, 1: the last came on the main thread, 2: off it
 
     private CarbonHotkeys(Action<string> log, nint handler)
     {
         _log = log;
         _handler = handler;
+        _table = new MacHotkeyTable((code, modifiers, id) => Hold(code, modifiers, id, log), Release, log);
     }
 
     public event Action<int>? HotkeyPressed;
 
+    /// <summary>Raised on the main thread when a change of layout made a shortcut stop working (its key is held by another app) or work again.</summary>
+    public event Action? HeldChanged;
+
     /// <summary>Whether a handler of the shortcuts is installed in this process now: the Hotkeys page then listens to the keys.</summary>
     public static bool Ready => Volatile.Read(ref s_ready) != 0;
 
-    /// <summary>The ids registered now.</summary>
-    internal IReadOnlyCollection<int> Ids => _registered.Keys;
+    /// <summary>The ids registered now, the ones in waiting included.</summary>
+    internal IReadOnlyCollection<int> Ids => _table.Ids;
 
-    /// <summary>The shortcuts of this process, or null where Carbon cannot run them (off the main thread, or refused): the log says which.</summary>
+    /// <summary>The layout the letters and digits are registered in; null when it could not be read (US places).</summary>
+    internal MacKeyLayout? Layout => _table.Layout;
+
+    /// <summary>How many times the layout was read again after a change macOS posted.</summary>
+    internal int Relayouts => Volatile.Read(ref _relayouts);
+
+    /// <summary>Whether the last change of layout came on the main thread (true), off it (false), or none came yet (null).</summary>
+    internal bool? ChangeOnMainThread => Volatile.Read(ref _changeThread) switch { 1 => true, 2 => false, _ => null };
+
+    /// <summary>The key code an id is registered on now (the one it waits for when it is in waiting), or null.</summary>
+    internal ushort? CodeOf(int id) => _table.CodeOf(id);
+
+    /// <summary>The shortcuts of this process, or null where Carbon cannot run them (off the main thread, or refused): the log says which. It does not throw.</summary>
     public static CarbonHotkeys? TryOpen(Action<string> log)
     {
         if (!Cocoa.OnMainThread)
@@ -67,19 +94,36 @@ internal sealed unsafe partial class CarbonHotkeys : IHotkeyRegistrar
             throw new InvalidOperationException("the shortcuts of the app are already open");
         }
 
-        var spec = new EventTypeSpec(KeyboardClass, HotKeyPressedKind);
-        nint handler;
-        var status = InstallEventHandler(GetApplicationEventTarget(), &OnEvent, 1, &spec, 0, &handler);
-        if (status != 0)
+        CarbonHotkeys? keys = null;
+        try
         {
-            log($"hotkeys: InstallEventHandler failed ({status})");
+            var spec = new EventTypeSpec(KeyboardClass, HotKeyPressedKind);
+            nint handler;
+            var status = InstallEventHandler(GetApplicationEventTarget(), &OnEvent, 1, &spec, 0, &handler);
+            if (status != 0)
+            {
+                log($"hotkeys: InstallEventHandler failed ({status})");
+                return null;
+            }
+
+            log("hotkeys: Carbon, handler on the application target");
+            keys = new CarbonHotkeys(log, handler);
+            s_current = keys;
+
+            // The observer first, then the layout: a change between the two is taken once the loop runs, not missed.
+            keys.Watch();
+            keys._table.Use(keys.ReadLayout());
+            log($"hotkeys: keyboard layout {keys.Layout?.Name ?? "none"}");
+            Volatile.Write(ref s_ready, 1);
+            return keys;
+        }
+        catch (Exception ex)
+        {
+            // Never leave the handler installed behind a failure.
+            log("hotkeys: could not be opened: " + ex.Message);
+            keys?.Dispose();
             return null;
         }
-
-        log("hotkeys: Carbon, handler on the application target");
-        s_current = new CarbonHotkeys(log, handler);
-        Volatile.Write(ref s_ready, 1);
-        return s_current;
     }
 
     public bool Register(int id, uint modifiers, uint virtualKey) => TryRegister(id, modifiers, virtualKey) == HotkeyRegistration.Registered;
@@ -92,33 +136,78 @@ internal sealed unsafe partial class CarbonHotkeys : IHotkeyRegistrar
             return HotkeyRegistration.Refused;
         }
 
-        if (MacKeyCodes.ToKeyCode(virtualKey) is not { } code)
+        if (_table.CodeFor(virtualKey) is not { } code)
         {
             _log($"hotkeys: no key of a Mac for the virtual key 0x{virtualKey:X2}");
             return HotkeyRegistration.Refused;
         }
 
         Unregister(id);
+        return _table.Add(id, modifiers, virtualKey, code) ? HotkeyRegistration.Registered : HotkeyRegistration.Refused;
+    }
+
+    public void Unregister(int id) => _table.Remove(id);
+
+    /// <summary>Whether a press of the id reaches the app: false for a shortcut in waiting, which a change of layout lost to another app.</summary>
+    public bool IsHeld(int id) => _table.IsHeld(id);
+
+    // The layout of the system now, or null (the US places) when it cannot be read: the line says why. Never throws.
+    private MacKeyLayout? ReadLayout()
+    {
+        try
+        {
+            return MacKeyboardLayouts.Current(_log);
+        }
+        catch (Exception ex)
+        {
+            _log($"hotkeys: the keyboard layout could not be read ({ex.Message}): letters and digits at their places on a US keyboard");
+            return null;
+        }
+    }
+
+    // Follows the changes of layout; without the observer the shortcuts still work, on the keys of the layout read at the start.
+    private void Watch()
+    {
+        try
+        {
+            CFNotificationCenterAddObserver(CFNotificationCenterGetDistributedCenter(), _handler, &OnLayoutChanged, MacKeyboardLayouts.SelectedChanged, 0, DeliverImmediately);
+            _observing = true;
+            _log("hotkeys: watching the keyboard layout");
+        }
+        catch (Exception ex)
+        {
+            _log($"hotkeys: the changes of keyboard layout cannot be followed ({ex.Message})");
+        }
+    }
+
+    private static nint? Hold(ushort code, uint modifiers, int id, Action<string> log)
+    {
         nint reference;
         var status = RegisterEventHotKey(code, MacKeyCodes.ToModifiers(modifiers), new EventHotKeyId(Signature, (uint)id), GetApplicationEventTarget(), 0, &reference);
         if (status != 0)
         {
             // eventHotKeyExistsErr (-9878): another app holds it; eventHotKeyInvalidErr (-9868): macOS refuses the combination.
-            _log($"hotkeys: RegisterEventHotKey refused key code 0x{code:X2} with modifiers 0x{MacKeyCodes.ToModifiers(modifiers):X4} ({status})");
-            return HotkeyRegistration.Refused;
+            log($"hotkeys: RegisterEventHotKey refused key code 0x{code:X2} with modifiers 0x{MacKeyCodes.ToModifiers(modifiers):X4} ({status})");
+            return null;
         }
 
-        _registered[id] = reference;
-        return HotkeyRegistration.Registered;
+        return reference;
     }
 
-    public void Unregister(int id)
+    private static void Release(nint reference) => UnregisterEventHotKey(reference);
+
+    /// <summary>
+    /// Holds a combination as another app would, for the proof: a registration of this process under another signature, which
+    /// the handler of the shortcuts ignores. Its reference, or null when it is refused. <see cref="ReleaseOutside"/> frees it.
+    /// </summary>
+    internal static nint? HoldOutside(ushort code, uint modifiers)
     {
-        if (_registered.Remove(id, out var reference))
-        {
-            UnregisterEventHotKey(reference);
-        }
+        nint reference;
+        var status = RegisterEventHotKey(code, MacKeyCodes.ToModifiers(modifiers), new EventHotKeyId(0x4F757473, 1), GetApplicationEventTarget(), 0, &reference); // 'Outs'
+        return status == 0 ? reference : null;
     }
+
+    internal static void ReleaseOutside(nint reference) => UnregisterEventHotKey(reference);
 
     public void Dispose()
     {
@@ -127,9 +216,19 @@ internal sealed unsafe partial class CarbonHotkeys : IHotkeyRegistrar
             return;
         }
 
-        foreach (var id in _registered.Keys.ToArray())
+        _table.Clear();
+        if (_observing)
         {
-            Unregister(id);
+            try
+            {
+                CFNotificationCenterRemoveObserver(CFNotificationCenterGetDistributedCenter(), _handler, MacKeyboardLayouts.SelectedChanged, 0);
+            }
+            catch (Exception ex)
+            {
+                _log($"hotkeys: the observer of the keyboard layout could not be removed ({ex.Message})");
+            }
+
+            _observing = false;
         }
 
         RemoveEventHandler(_handler);
@@ -171,7 +270,7 @@ internal sealed unsafe partial class CarbonHotkeys : IHotkeyRegistrar
     /// </summary>
     internal static bool PostKey(uint modifiers, uint virtualKey)
     {
-        if (MacKeyCodes.ToKeyCode(virtualKey) is not { } code)
+        if (MacKeyCodes.Resolve(virtualKey, s_current?.Layout) is not ({ } code, _))
         {
             return false;
         }
@@ -217,6 +316,34 @@ internal sealed unsafe partial class CarbonHotkeys : IHotkeyRegistrar
         }
 
         return 0;
+    }
+
+    // From the run loop of the main thread: the user picked another input source. Nothing may throw into CoreFoundation.
+    [UnmanagedCallersOnly]
+    private static void OnLayoutChanged(nint center, nint observer, nint name, nint obj, nint userInfo)
+    {
+        if (s_current is not { } keys || observer != keys._handler)
+        {
+            return;
+        }
+
+        try
+        {
+            var onMain = Cocoa.OnMainThread;
+            Volatile.Write(ref keys._changeThread, onMain ? 1 : 2);
+            if (keys._table.Retake(onMain, () => keys.ReadLayout(), out var heldChanged))
+            {
+                Interlocked.Increment(ref keys._relayouts);
+                if (heldChanged)
+                {
+                    keys.HeldChanged?.Invoke();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            keys._log("hotkeys: the new keyboard layout could not be taken: " + ex);
+        }
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -277,4 +404,13 @@ internal sealed unsafe partial class CarbonHotkeys : IHotkeyRegistrar
 
     [LibraryImport(CoreFoundation)]
     private static partial void CFRelease(nint value);
+
+    [LibraryImport(CoreFoundation)]
+    private static partial nint CFNotificationCenterGetDistributedCenter();
+
+    [LibraryImport(CoreFoundation)]
+    private static partial void CFNotificationCenterAddObserver(nint center, nint observer, delegate* unmanaged<nint, nint, nint, nint, nint, void> callback, nint name, nint obj, nint suspensionBehavior);
+
+    [LibraryImport(CoreFoundation)]
+    private static partial void CFNotificationCenterRemoveObserver(nint center, nint observer, nint name, nint obj);
 }

@@ -8,8 +8,11 @@ namespace Hindsound.Mac.Input;
 /// RegisterEventHotKey. Pure: tested on every system.
 /// </summary>
 /// <remarks>
-/// A letter is the key at its place on a US keyboard (kVK_ANSI_*), as RegisterEventHotKey takes it: on another layout the
-/// same place may carry another letter. F21 to F24 and Pause have no key on a Mac: they are refused.
+/// RegisterEventHotKey takes a place on the keyboard. A letter or a digit of the Core is the character the key types, as
+/// a virtual key of Windows follows the layout (Ctrl+Shift+A is the key that types A, wherever it is): <see cref="Resolve"/>
+/// gives the key that types it in the current layout (<see cref="MacKeyLayout"/>), and its place on a US keyboard
+/// (kVK_ANSI_*, <see cref="ToKeyCode"/>) only when no key types it. The keys without a character (F1 to F20, the arrows,
+/// Return...) keep their place. F21 to F24 and Pause have no key on a Mac: they are refused.
 /// </remarks>
 internal static class MacKeyCodes
 {
@@ -21,8 +24,28 @@ internal static class MacKeyCodes
 
     private static readonly Dictionary<uint, ushort> Codes = Build();
 
-    /// <summary>The key code of macOS for a virtual key of the Core, or null when a Mac has no such key.</summary>
+    /// <summary>The key code of macOS at the place of a virtual key of the Core on a US keyboard, or null when a Mac has no such key.</summary>
     public static ushort? ToKeyCode(uint virtualKey) => Codes.TryGetValue(virtualKey, out var code) ? code : null;
+
+    /// <summary>
+    /// The key code to register for a virtual key of the Core in <paramref name="layout"/>: for a letter or a digit, the
+    /// key that types it; for any other key, its place. <c>ByPlace</c> is true when a letter or a digit fell back to its US
+    /// place because no key types it (or the layout could not be read): the caller logs it. Null when a Mac has no such key.
+    /// </summary>
+    public static (ushort Code, bool ByPlace)? Resolve(uint virtualKey, MacKeyLayout? layout)
+    {
+        if (ToKeyCode(virtualKey) is not { } place)
+        {
+            return null;
+        }
+
+        if (!MacKeyLayout.IsCharacter(virtualKey))
+        {
+            return (place, false);
+        }
+
+        return layout?.CodeOf(virtualKey) is { } typed ? (typed, false) : (place, true);
+    }
 
     /// <summary>Ctrl is Control, Alt is Option, Win is Command (the key SDL calls GUI), Shift is Shift.</summary>
     public static uint ToModifiers(uint modifiers)
