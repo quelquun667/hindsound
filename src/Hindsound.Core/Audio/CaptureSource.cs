@@ -57,7 +57,8 @@ public interface ICaptureSource : IDisposable
 
     /// <summary>
     /// The capture runs, but some of the sound it is there for plays and is not recorded, until that changes by itself: the
-    /// capture of one application under Linux gives up a stream of it that the server keeps ending. Read many times a second.
+    /// capture of one application under Linux gives up a stream of it whose recording the server keeps ending, or that never
+    /// started in all its tries (the sound plays without being recorded). Read many times a second.
     /// </summary>
     bool SoundLost => false;
 

@@ -9,7 +9,7 @@ namespace Hindsound.Linux.Audio;
 /// <param name="ProcessId">application.process.id, if the stream gives one.</param>
 /// <param name="Binary">application.process.binary: the program's file name, if the stream gives it.</param>
 /// <param name="AppName">application.name: the name the program gives itself, if any.</param>
-internal sealed record PulsePlaybackStream(uint Index, uint Sink, int? ProcessId, string? Binary, string? AppName);
+internal sealed record PulsePlaybackStream(uint Index, uint Sink, int? ProcessId, string? Binary, string? AppName, bool Corked = false);
 
 /// <summary>One playback stream recorded alone, on the output it plays on: a stream moved to another output is another one.</summary>
 internal readonly record struct PulseMonitorKey(uint SinkInput, uint Sink);
@@ -262,10 +262,23 @@ internal static class PulseAppRules
         held is { } time && time >= steady ? 0 : tries;
 
     /// <summary>
-    /// Whether a recording is given up while its stream lives: it ended, with all its tries had. Its stream plays and is not
-    /// recorded, which the window says, until the stream ends or moves (<see cref="PulseAppCaptureSource.SoundLost"/>).
+    /// Whether a recording is abandoned: it ended, with all its tries had, or it never started in all of them. Its stream
+    /// plays and is not recorded, which the window says, until the stream ends or moves (<see cref="PulseAppCaptureSource.SoundLost"/>).
     /// </summary>
-    public static bool GivenUp(bool dead, int tries) => dead && tries >= MaxRetries;
+    public static bool Abandoned(bool dead, int tries) => dead && tries >= MaxRetries;
+
+    /// <summary>
+    /// Whether one of the <paramref name="recordings"/> is abandoned (<see cref="Abandoned"/>) while its stream is one of the
+    /// <paramref name="playing"/> streams of the application, on the same output, and not paused: a stream that ended or
+    /// moved no longer plays unrecorded, and a paused one plays nothing, so neither is a sound lost.
+    /// </summary>
+    public static bool AnyAbandoned(IEnumerable<(PulseMonitorKey Key, bool Dead, int Tries)> recordings, IReadOnlyList<PulsePlaybackStream> playing)
+    {
+        ArgumentNullException.ThrowIfNull(recordings);
+        ArgumentNullException.ThrowIfNull(playing);
+        return recordings.Any(recording => Abandoned(recording.Dead, recording.Tries)
+            && playing.Any(stream => !stream.Corked && stream.Index == recording.Key.SinkInput && stream.Sink == recording.Key.Sink));
+    }
 
     /// <summary>Whether one of the application's streams plays on no output among <paramref name="monitors"/>: it is being moved.</summary>
     public static bool AnyUnplaced(IReadOnlyList<PulsePlaybackStream> wanted, IReadOnlyDictionary<uint, string> monitors) =>

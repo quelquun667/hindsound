@@ -113,8 +113,9 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
     }
 
     /// <summary>
-    /// A stream of the application plays and is not recorded: its recording ended again and again and was given up
-    /// (<see cref="PulseAppRules.GivenUp"/>). Back to false once that stream ends or moves, and its next one is recorded.
+    /// A stream of the application plays and is not recorded: its recording ended again and again, or never started, in all its
+    /// tries, and was given up (<see cref="PulseAppRules.AnyAbandoned"/>). Back to false once that stream ends, moves or is paused,
+    /// and its next one is recorded.
     /// </summary>
     public bool SoundLost => Volatile.Read(ref _lost) != 0;
 
@@ -489,7 +490,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
             _retry.Change(due + TimeSpan.FromMilliseconds(20), Timeout.InfiniteTimeSpan);
         }
 
-        Volatile.Write(ref _lost, _inputs.Values.Any(input => PulseAppRules.GivenUp(input.Dead, input.Tries)) ? 1 : 0);
+        Volatile.Write(ref _lost, PulseAppRules.AnyAbandoned(_inputs.Select(pair => (pair.Key, pair.Value.Dead, pair.Value.Tries)), mine) ? 1 : 0);
     }
 
     // The application's streams among those of a look. /proc is read again only when a stream is new, or now says another
@@ -782,7 +783,7 @@ internal sealed unsafe class PulseAppCaptureSource : ICaptureSource
             var properties = input->Proplist;
             string? Property(string key) => properties == IntPtr.Zero ? null : PulseNative.Text(PulseNative.ProplistGets(properties, key));
             int? processId = int.TryParse(Property("application.process.id"), NumberStyles.None, CultureInfo.InvariantCulture, out var id) ? id : null;
-            look.Streams.Add(new PulsePlaybackStream(input->Index, input->Sink, processId, Property("application.process.binary"), Property("application.name")));
+            look.Streams.Add(new PulsePlaybackStream(input->Index, input->Sink, processId, Property("application.process.binary"), Property("application.name"), input->Corked != 0));
         }
         catch (Exception)
         {
