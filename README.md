@@ -337,10 +337,13 @@ Windows: `Ctrl+Option+A` is the key that types an A, on an AZERTY keyboard as on
 Hindsound runs puts the hotkeys back on the right keys, and a hotkey whose key another app holds waits, with the `Hotkeys`
 page showing it in use. The CI proves it by reading the French, German and Dvorak layouts; no real key has been pressed on a
 real keyboard. GitHub removed its macOS 14 machines in November 2026, so macOS 14 has never run it: 14.4 stays the minimum
-the app declares, but it is not tried. Pasting into a real app, a real hotkey pressed on a real keyboard, the prompts of
-macOS answered by a person, a click on the notification of a clip (it may bring Hindsound to the front), a change of the
-sound output while Hindsound records, macOS 14, and a real game or call have not been tried. If something does not work, the
-log is in `~/Library/Logs/Hindsound/hindsound.log`; an issue with it helps.
+the app declares, but it is not tried. When the default sound output changes while Hindsound records, it opens the capture
+again on the new output and hears a tone played there: the CI proves it by changing the default output from BlackHole 2ch
+to the Null Audio Device under a running capture. A click on the notification of a clip opens the Library, as on Windows,
+without the notification making Hindsound the app in front of the game or the call: the CI proves it with a click of the
+system on the notification, the app that was in front staying in front. The Library, once open, comes in front, with
+Hindsound the active app. Pasting into a real app, a real hotkey pressed on a real keyboard, the prompts of macOS answered
+by a person, macOS 14, and a real game or call have not been tried. If something does not work, the log is in `~/Library/Logs/Hindsound/hindsound.log`; an issue with it helps.
 
 **Download.** `Hindsound-<version>-macos-arm64.zip` from the
 [latest release](https://github.com/quelquun667/hindsound/releases/latest). Between releases, the CI builds the same file
