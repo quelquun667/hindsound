@@ -17,7 +17,9 @@ namespace Hindsound.Mac.Notification;
 /// window, on the run loop of the main thread, and says in the console what it sees. It writes <c>folder/ready</c> once the
 /// notification is up, with where it is and how many pixels of the accent the picture has, and holds it there until
 /// <c>folder/captured</c> appears (the CI takes its screenshot meanwhile); then it clicks it with a mouse event of the system
-/// (CGEventPost: the CI writes the PostEvent right of the bundle in TCC), and the click goes where the app sends it: the
+/// (CGEventPost). The CI starts the program from bash, not through <c>open</c>: TCC judges the event by the process responsible
+/// for it, the runner's shell, not by the bundle, and on run 45029672018 the click reached the window before any right of the
+/// bundle was written; <c>click.post_access</c> says what CGPreflightPostEventAccess answers. The click goes where the app sends it: the
 /// Core's route of a click on a notification (<see cref="WindowGoing.Click"/>, what Windows runs too), whose window is only
 /// named here. 0 when the window showed, the app in front stayed in front, the window never had the focus, the click came
 /// once and led to the Library, the click left the app in front where it was and Hindsound not active (as Windows, where the
