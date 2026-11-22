@@ -318,7 +318,8 @@ internal sealed unsafe partial class CarbonHotkeys : IHotkeyRegistrar
 
         try
         {
-            GC.KeepAlive(keys);
+            keys.Relayout(MacKeyboardLayouts.Current(keys._log));
+            Interlocked.Increment(ref keys._relayouts);
         }
         catch (Exception ex)
         {
