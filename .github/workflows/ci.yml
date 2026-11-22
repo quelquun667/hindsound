@@ -889,21 +889,23 @@ jobs:
 
       - name: Say which macOS this is
         id: system
+        env:
+          IMAGE: ${{ matrix.os }}
         run: |
           sw_vers
           uname -m
           version=$(sw_vers -productVersion)
           IFS=. read -r major minor _ <<< "$version"
           if [ "$(uname -m)" != arm64 ]; then
-            echo "::error::${{ matrix.os }} is not an Apple silicon runner (uname -m gives $(uname -m)): nothing of the app is proven here."
+            echo "::error::$IMAGE is not an Apple silicon runner (uname -m gives $(uname -m)): nothing of the app is proven here."
             exit 1
           fi
           if [ "$major" -lt 14 ] || { [ "$major" -eq 14 ] && [ "${minor:-0}" -lt 4 ]; }; then
-            echo "::error::${{ matrix.os }} is macOS $version, under the 14.4 of the Info.plist: the capture of the app is NOT proven on this runner."
-            echo "macOS $version on ${{ matrix.os }}: under 14.4, the app is not proven here." >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::$IMAGE is macOS $version, under the 14.4 of the Info.plist: the capture of the app is NOT proven on this runner."
+            echo "macOS $version on $IMAGE: under 14.4, the app is not proven here." >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
-          echo "${{ matrix.os }}: macOS $version ($(sw_vers -buildVersion)), $(uname -m)" >> "$GITHUB_STEP_SUMMARY"
+          echo "$IMAGE: macOS $version ($(sw_vers -buildVersion)), $(uname -m)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Fetch the app of the job mac
         if: ${{ steps.system.outcome == 'success' }}
