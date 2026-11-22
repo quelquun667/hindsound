@@ -36,6 +36,11 @@ internal static class Program
             return MacCaptureProof.Run(captureProof.Folder, captureProof.Denied, Console.WriteLine);
         }
 
+        if (MacSwitchProof.Folder(args) is { } switchProof)
+        {
+            return MacSwitchProof.Run(switchProof, Console.WriteLine);
+        }
+
         if (MacDevicesProof.Folder(args) is { } devicesProof)
         {
             return MacDevicesProof.Run(devicesProof, Console.WriteLine);
