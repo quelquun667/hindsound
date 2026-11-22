@@ -47,6 +47,7 @@ internal sealed unsafe class MacCaptureSource : ICaptureSource
     private nint _proc;
     private int _ended;
     private int _disposed;
+    private int _pendingSaid;
 
     private MacCaptureSource(uint device, bool fromEnd, int channels, double rate, AudioFlow flow, string? name, Action<string> log, IDisposable? owner, uint[] watched, Func<AudioFlow, PermissionState> permission)
     {
@@ -245,8 +246,15 @@ internal sealed unsafe class MacCaptureSource : ICaptureSource
             return;
         }
 
-        _log($"capture: only exact zeros for {MacCaptureRules.ZeroSeconds:0} s since the {(_flow == AudioFlow.System ? "sound of the PC" : "microphone")} opened; "
-            + $"the permission reads {state}: nothing plays");
+        var said = Volatile.Read(ref _pendingSaid) != 0;
+        if (MacCaptureRules.PendingText(state, _flow, said) is { } pending)
+        {
+            Volatile.Write(ref _pendingSaid, 1);
+            _log("capture: " + pending);
+            return;
+        }
+
+        _log("capture: " + MacCaptureRules.ZerosText(state, _flow));
     }
 
     private void OnChanged(uint device, uint selector)

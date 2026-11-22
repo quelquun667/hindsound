@@ -141,6 +141,51 @@ public sealed unsafe class MacCaptureLogicTests
     }
 
     [Fact]
+    public void TheMacTextsSayTheMacAndNeverThePc()
+    {
+        var texts = new[]
+        {
+            MacCaptureRules.DenialText(AudioFlow.System),
+            MacCaptureRules.DenialText(AudioFlow.Mic),
+            MacCaptureRules.PendingText(PermissionState.Undecided, AudioFlow.System, false)!,
+            MacCaptureRules.PendingText(PermissionState.Undecided, AudioFlow.Mic, false)!,
+            MacCaptureRules.ZerosText(PermissionState.Granted, AudioFlow.System),
+            MacCaptureRules.ZerosText(PermissionState.Granted, AudioFlow.Mic),
+        };
+
+        Assert.All(texts, text => Assert.DoesNotContain("PC", text, StringComparison.Ordinal));
+        Assert.StartsWith("macOS refuses this app the sound of the Mac: ", MacCaptureRules.DenialText(AudioFlow.System), StringComparison.Ordinal);
+        Assert.Contains("the sound of the Mac opened", MacCaptureRules.ZerosText(PermissionState.Unknown, AudioFlow.System), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnUndecidedPermissionIsNamedOnceWithWhereToGiveIt()
+    {
+        var system = MacCaptureRules.PendingText(PermissionState.Undecided, AudioFlow.System, false);
+        var mic = MacCaptureRules.PendingText(PermissionState.Undecided, AudioFlow.Mic, false);
+
+        Assert.NotNull(system);
+        Assert.Contains("has not given this app the sound of the Mac yet", system, StringComparison.Ordinal);
+        Assert.Contains("System Settings > Privacy & Security > Screen & System Audio Recording", system, StringComparison.Ordinal);
+        Assert.NotNull(mic);
+        Assert.Contains("has not given this app the microphone yet", mic, StringComparison.Ordinal);
+        Assert.Contains("System Settings > Privacy & Security > Microphone", mic, StringComparison.Ordinal);
+        Assert.Null(MacCaptureRules.PendingText(PermissionState.Undecided, AudioFlow.System, true));
+        Assert.Null(MacCaptureRules.PendingText(PermissionState.Undecided, AudioFlow.Mic, true));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(-1)]
+    public void OnlyAnUndecidedPermissionHasThePendingText(int preflight)
+    {
+        var state = MacCaptureRules.StateOf(preflight);
+        Assert.Null(MacCaptureRules.PendingText(state, AudioFlow.System, false));
+        Assert.Null(MacCaptureRules.PendingText(state, AudioFlow.Mic, false));
+    }
+
+    [Fact]
     public void WhatCannotBeOpenedIsRefused()
     {
         Assert.Null(MacCaptureRules.Refuse(new CaptureRequest(AudioFlow.System, "out", true)));

@@ -228,17 +228,40 @@ internal static class MacCaptureRules
     /// <summary>How long a capture may give only exact zeros, from its opening, before the permission is asked.</summary>
     public const double ZeroSeconds = 2.0;
 
-    /// <summary>The TCC service of a side: the sound of the PC (a tap) or the microphone.</summary>
+    /// <summary>The TCC service of a side: the sound of the Mac (a tap) or the microphone.</summary>
     public static string ServiceOf(AudioFlow flow) => flow == AudioFlow.System ? "kTCCServiceAudioCapture" : "kTCCServiceMicrophone";
 
     public static PermissionState StateOf(int preflight) => preflight is >= 0 and <= 2 ? (PermissionState)preflight : PermissionState.Unknown;
 
     /// <summary>What the log and the error of a refused capture say.</summary>
     public static string DenialText(AudioFlow flow) => flow == AudioFlow.System
-        ? "macOS refuses this app the sound of the PC: only exact zeros since the capture opened, and the permission is denied. "
+        ? "macOS refuses this app the sound of the Mac: only exact zeros since the capture opened, and the permission is denied. "
             + "Allow Hindsound in System Settings > Privacy & Security > Screen & System Audio Recording."
         : "macOS refuses this app the microphone: only exact zeros since the capture opened, and the permission is denied. "
             + "Allow Hindsound in System Settings > Privacy & Security > Microphone.";
+
+    /// <summary>
+    /// What the log says, once per capture, when the capture gives only exact zeros and macOS has not decided the permission yet
+    /// (neither granted nor denied): the permission, and where to give it. Null for any other state, which has its own words, and
+    /// when it was <paramref name="alreadySaid"/>. Not an error: the capture goes on, and plays as soon as the permission is given.
+    /// </summary>
+    public static string? PendingText(PermissionState state, AudioFlow flow, bool alreadySaid)
+    {
+        if (state != PermissionState.Undecided || alreadySaid)
+        {
+            return null;
+        }
+
+        return flow == AudioFlow.System
+            ? "macOS has not given this app the sound of the Mac yet: only exact zeros since the capture opened, and the permission is not granted or denied yet. "
+                + "Allow Hindsound in System Settings > Privacy & Security > Screen & System Audio Recording."
+            : "macOS has not given this app the microphone yet: only exact zeros since the capture opened, and the permission is not granted or denied yet. "
+                + "Allow Hindsound in System Settings > Privacy & Security > Microphone.";
+    }
+
+    /// <summary>What the log says of a capture of exact zeros whose permission is neither denied nor undecided.</summary>
+    public static string ZerosText(PermissionState state, AudioFlow flow) =>
+        $"only exact zeros for {ZeroSeconds:0} s since the {(flow == AudioFlow.System ? "sound of the Mac" : "microphone")} opened; the permission reads {state}: nothing plays";
 
     /// <summary>Why a request cannot be opened, or null.</summary>
     public static Exception? Refuse(CaptureRequest request)

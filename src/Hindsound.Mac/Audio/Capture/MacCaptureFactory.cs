@@ -91,7 +91,7 @@ internal sealed class MacCaptureFactory : ICaptureSourceFactory
     private static string Describe(CaptureRequest request) => request.TargetProcessId is { } target
         ? $"the application {request.TargetName ?? "?"} (process {target}) and its children"
         : request.Flow == AudioFlow.Mic ? $"the microphone {request.DeviceId}"
-        : $"the sound of the PC on {request.DeviceId}{(request.ExcludeOwnProcess ? ", this app left out" : string.Empty)}";
+        : $"the sound of the Mac on {request.DeviceId}{(request.ExcludeOwnProcess ? ", this app left out" : string.Empty)}";
 
     private ICaptureSource OpenMic(string uid)
     {
