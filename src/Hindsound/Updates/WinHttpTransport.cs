@@ -90,7 +90,7 @@ internal sealed partial class WinHttpTransport : IUpdateTransport
 
         var connection = WinHttpConnect(session, uri.IdnHost, (ushort)uri.Port, 0);
         var request = connection == 0 ? 0 : WinHttpOpenRequest(connection, "GET", uri.PathAndQuery, null, null, 0, FlagSecure);
-        var watchdog = new Watchdog(request);
+        var watchdog = new Watchdog(() => WinHttpCloseHandle(request));
         try
         {
             if (request == 0 || !Configure(request, patience))
@@ -148,29 +148,28 @@ internal sealed partial class WinHttpTransport : IUpdateTransport
         finally
         {
             // A request the watchdog closed is not closed twice; the connection goes after its request, as always.
-            if (!watchdog.Fired)
-            {
-                WinHttpCloseHandle(request);
-            }
-
+            watchdog.Release();
             WinHttpCloseHandle(connection);
         }
     }
 
     /// <summary>
-    /// Holds each blocking call of a request to its own patience. A server that accepts and never answers holds the TLS handshake
-    /// inside WinHttpSendRequest, and WinHTTP checks that wait against the receive timeout only on a coarse clock of about 3.9 s:
-    /// a receive timeout of 0.5, 1 or 2 s waited 3.8 to 4.0 s, 4 s waited 7.8 s and 8 s 11.8 s, the other timeouts changing
-    /// nothing, on one connection and one ClientHello, with no retry and no fallback (22/11/2026); 6.0 s for 2 s on the CI. No
-    /// option shortens it. Closing the request from another thread ends the call at once (2.005 to 2.017 s for 2 s), and that
-    /// end is the patience running out.
+    /// Holds each blocking call of a request to its own patience. WinHTTP checks the waits of a request against its timeouts only
+    /// on a coarse clock of about 3.9 s, and not only the TLS handshake held inside WinHttpSendRequest: WinHttpReceiveResponse and
+    /// WinHttpQueryDataAvailable wait on the same clock. For the handshake, a receive timeout of 0.5, 1 or 2 s waited 3.8 to 4.0 s,
+    /// 4 s waited 7.8 s and 8 s 11.8 s, the other timeouts changing nothing, on one connection and one ClientHello, with no retry
+    /// and no fallback (22/11/2026); 6.0 s for 2 s on the CI. No option shortens it. Closing the request from another thread ends
+    /// the call at once (2.005 to 2.017 s for 2 s), and that end is the patience running out. The close and the timer are
+    /// injected, so the decision is tested without a network.
     /// </summary>
-    private sealed class Watchdog(nint request)
+    internal sealed class Watchdog(Action close, Func<int, Action, IDisposable>? startTimer = null)
     {
         private readonly Lock _gate = new();
+        private readonly Func<int, Action, IDisposable> _startTimer = startTimer ?? DefaultTimer;
         private int _generation;
         private int _armed;
         private bool _fired;
+        private bool _closed;
 
         /// <summary>The watchdog closed the request: nothing may use or close it again.</summary>
         public bool Fired
@@ -199,14 +198,44 @@ internal sealed partial class WinHttpTransport : IUpdateTransport
             }
 
             // A timer of an earlier call that fires late finds another generation and leaves the request alone.
-            using var timer = new Timer(_ => Fire(generation), null, patience, Timeout.Infinite);
-            var error = call() ? (TransportResult?)null : LastError();
+            using var timer = _startTimer(patience, () => Fire(generation));
+            TransportResult? error;
+            try
+            {
+                error = call() ? null : LastError();
+            }
+            finally
+            {
+                // Whatever the call did, even throw: a disarmed watchdog closes nothing.
+                lock (_gate)
+                {
+                    _armed = 0;
+                }
+            }
+
             lock (_gate)
             {
-                _armed = 0;
                 return _fired ? new TransportResult(TransportStatus.TimedOut) : error;
             }
         }
+
+        /// <summary>Closes the request, once: not after the watchdog closed it, not twice.</summary>
+        public void Release()
+        {
+            lock (_gate)
+            {
+                if (_closed)
+                {
+                    return;
+                }
+
+                _closed = true;
+                close();
+            }
+        }
+
+        private static IDisposable DefaultTimer(int patience, Action fire) =>
+            new Timer(_ => fire(), null, patience, Timeout.Infinite);
 
         private void Fire(int generation)
         {
@@ -218,7 +247,8 @@ internal sealed partial class WinHttpTransport : IUpdateTransport
                 }
 
                 _fired = true;
-                WinHttpCloseHandle(request);
+                _closed = true;
+                close();
             }
         }
     }
