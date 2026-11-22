@@ -47,7 +47,6 @@ internal sealed unsafe class MacCaptureSource : ICaptureSource
     private nint _proc;
     private int _ended;
     private int _disposed;
-    private int _pendingSaid;
 
     private MacCaptureSource(uint device, bool fromEnd, int channels, double rate, AudioFlow flow, string? name, Action<string> log, IDisposable? owner, uint[] watched, Func<AudioFlow, PermissionState> permission)
     {
@@ -237,24 +236,12 @@ internal sealed unsafe class MacCaptureSource : ICaptureSource
 
     private void CheckPermission()
     {
-        var state = _permission(_flow);
-        if (state == PermissionState.Denied)
+        var (line, failure) = MacCaptureRules.VerdictOnZeros(_permission(_flow), _flow);
+        _log(line);
+        if (failure is not null)
         {
-            var text = MacCaptureRules.DenialText(_flow);
-            _log("capture: " + text);
-            Fail(new UnauthorizedAccessException(text));
-            return;
+            Fail(failure);
         }
-
-        var said = Volatile.Read(ref _pendingSaid) != 0;
-        if (MacCaptureRules.PendingText(state, _flow, said) is { } pending)
-        {
-            Volatile.Write(ref _pendingSaid, 1);
-            _log("capture: " + pending);
-            return;
-        }
-
-        _log("capture: " + MacCaptureRules.ZerosText(state, _flow));
     }
 
     private void OnChanged(uint device, uint selector)

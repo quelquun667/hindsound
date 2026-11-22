@@ -241,27 +241,47 @@ internal static class MacCaptureRules
             + "Allow Hindsound in System Settings > Privacy & Security > Microphone.";
 
     /// <summary>
-    /// What the log says, once per capture, when the capture gives only exact zeros and macOS has not decided the permission yet
-    /// (neither granted nor denied): the permission, and where to give it. Null for any other state, which has its own words, and
-    /// when it was <paramref name="alreadySaid"/>. Not an error: the capture goes on, and plays as soon as the permission is given.
+    /// What the log says when the capture gives only exact zeros and macOS has not decided the permission yet (neither granted
+    /// nor denied): the permission, and where to give it. Not an error: the capture goes on, and plays as soon as the permission is given.
     /// </summary>
-    public static string? PendingText(PermissionState state, AudioFlow flow, bool alreadySaid)
-    {
-        if (state != PermissionState.Undecided || alreadySaid)
-        {
-            return null;
-        }
-
-        return flow == AudioFlow.System
-            ? "macOS has not given this app the sound of the Mac yet: only exact zeros since the capture opened, and the permission is not granted or denied yet. "
-                + "Allow Hindsound in System Settings > Privacy & Security > Screen & System Audio Recording."
-            : "macOS has not given this app the microphone yet: only exact zeros since the capture opened, and the permission is not granted or denied yet. "
-                + "Allow Hindsound in System Settings > Privacy & Security > Microphone.";
-    }
+    public static string PendingText(AudioFlow flow) => flow == AudioFlow.System
+        ? "macOS has not given this app the sound of the Mac yet: only exact zeros since the capture opened, and the permission is not granted or denied yet. "
+            + "Allow Hindsound in System Settings > Privacy & Security > Screen & System Audio Recording."
+        : "macOS has not given this app the microphone yet: only exact zeros since the capture opened, and the permission is not granted or denied yet. "
+            + "Allow Hindsound in System Settings > Privacy & Security > Microphone.";
 
     /// <summary>What the log says of a capture of exact zeros whose permission is neither denied nor undecided.</summary>
     public static string ZerosText(PermissionState state, AudioFlow flow) =>
         $"only exact zeros for {ZeroSeconds:0} s since the {(flow == AudioFlow.System ? "sound of the Mac" : "microphone")} opened; the permission reads {state}: nothing plays";
+
+    /// <summary>
+    /// What a capture does once <see cref="ExactZeroWatch"/> has seen only exact zeros, from the state of its permission: the line
+    /// for the log and, when the permission is denied, the error that ends the capture. The watch says it once per capture, so
+    /// this says it once too.
+    /// </summary>
+    public static (string Line, Exception? Failure) VerdictOnZeros(PermissionState state, AudioFlow flow)
+    {
+        switch (state)
+        {
+            case PermissionState.Denied:
+                var denial = DenialText(flow);
+                return ("capture: " + denial, new UnauthorizedAccessException(denial));
+            case PermissionState.Undecided:
+                return ("capture: " + PendingText(flow), null);
+            default:
+                return ("capture: " + ZerosText(state, flow), null);
+        }
+    }
+
+    /// <summary>The words of the log for a capture that is opened.</summary>
+    public static string Describe(CaptureRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return request.TargetProcessId is { } target
+            ? $"the application {request.TargetName ?? "?"} (process {target}) and its children"
+            : request.Flow == AudioFlow.Mic ? $"the microphone {request.DeviceId}"
+            : $"the sound of the Mac on {request.DeviceId}{(request.ExcludeOwnProcess ? ", this app left out" : string.Empty)}";
+    }
 
     /// <summary>Why a request cannot be opened, or null.</summary>
     public static Exception? Refuse(CaptureRequest request)
@@ -271,7 +291,7 @@ internal static class MacCaptureRules
         {
             if (request.Flow != AudioFlow.System)
             {
-                return new PlatformNotSupportedException("An application is captured as the PC's sound, not as a microphone.");
+                return new PlatformNotSupportedException("An application is captured as the Mac's sound, not as a microphone.");
             }
 
             return request.ExcludeOwnProcess

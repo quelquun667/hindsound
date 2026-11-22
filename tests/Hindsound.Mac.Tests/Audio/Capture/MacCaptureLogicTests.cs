@@ -143,46 +143,77 @@ public sealed unsafe class MacCaptureLogicTests
     [Fact]
     public void TheMacTextsSayTheMacAndNeverThePc()
     {
+        var refused = MacCaptureRules.Refuse(new CaptureRequest(AudioFlow.Mic, "in", false, 42));
         var texts = new[]
         {
             MacCaptureRules.DenialText(AudioFlow.System),
             MacCaptureRules.DenialText(AudioFlow.Mic),
-            MacCaptureRules.PendingText(PermissionState.Undecided, AudioFlow.System, false)!,
-            MacCaptureRules.PendingText(PermissionState.Undecided, AudioFlow.Mic, false)!,
+            MacCaptureRules.PendingText(AudioFlow.System),
+            MacCaptureRules.PendingText(AudioFlow.Mic),
             MacCaptureRules.ZerosText(PermissionState.Granted, AudioFlow.System),
             MacCaptureRules.ZerosText(PermissionState.Granted, AudioFlow.Mic),
+            refused!.Message,
+            MacCaptureRules.Describe(new CaptureRequest(AudioFlow.System, "out", false)),
+            MacCaptureRules.Describe(new CaptureRequest(AudioFlow.System, "out", true)),
+            MacCaptureRules.Describe(new CaptureRequest(AudioFlow.Mic, "in", false)),
+            MacCaptureRules.Describe(new CaptureRequest(AudioFlow.System, "out", false, 42, "app")),
         };
 
         Assert.All(texts, text => Assert.DoesNotContain("PC", text, StringComparison.Ordinal));
         Assert.StartsWith("macOS refuses this app the sound of the Mac: ", MacCaptureRules.DenialText(AudioFlow.System), StringComparison.Ordinal);
         Assert.Contains("the sound of the Mac opened", MacCaptureRules.ZerosText(PermissionState.Unknown, AudioFlow.System), StringComparison.Ordinal);
+        Assert.Equal("An application is captured as the Mac's sound, not as a microphone.", refused.Message);
+        Assert.Equal("the sound of the Mac on out", MacCaptureRules.Describe(new CaptureRequest(AudioFlow.System, "out", false)));
     }
 
     [Fact]
-    public void AnUndecidedPermissionIsNamedOnceWithWhereToGiveIt()
+    public void ALogLineSaysWhatIsOpened()
     {
-        var system = MacCaptureRules.PendingText(PermissionState.Undecided, AudioFlow.System, false);
-        var mic = MacCaptureRules.PendingText(PermissionState.Undecided, AudioFlow.Mic, false);
-
-        Assert.NotNull(system);
-        Assert.Contains("has not given this app the sound of the Mac yet", system, StringComparison.Ordinal);
-        Assert.Contains("System Settings > Privacy & Security > Screen & System Audio Recording", system, StringComparison.Ordinal);
-        Assert.NotNull(mic);
-        Assert.Contains("has not given this app the microphone yet", mic, StringComparison.Ordinal);
-        Assert.Contains("System Settings > Privacy & Security > Microphone", mic, StringComparison.Ordinal);
-        Assert.Null(MacCaptureRules.PendingText(PermissionState.Undecided, AudioFlow.System, true));
-        Assert.Null(MacCaptureRules.PendingText(PermissionState.Undecided, AudioFlow.Mic, true));
+        Assert.Equal("the sound of the Mac on out, this app left out", MacCaptureRules.Describe(new CaptureRequest(AudioFlow.System, "out", true)));
+        Assert.Equal("the microphone in", MacCaptureRules.Describe(new CaptureRequest(AudioFlow.Mic, "in", false)));
+        Assert.Equal("the application app (process 42) and its children", MacCaptureRules.Describe(new CaptureRequest(AudioFlow.System, "out", false, 42, "app")));
+        Assert.Equal("the application ? (process 42) and its children", MacCaptureRules.Describe(new CaptureRequest(AudioFlow.System, "out", false, 42)));
     }
 
     [Theory]
-    [InlineData(0)]
-    [InlineData(1)]
-    [InlineData(-1)]
-    public void OnlyAnUndecidedPermissionHasThePendingText(int preflight)
+    [InlineData(AudioFlow.System, "Screen & System Audio Recording")]
+    [InlineData(AudioFlow.Mic, "Privacy & Security > Microphone")]
+    public void AnUndecidedPermissionIsNamedWithWhereToGiveItAndTheCaptureGoesOn(AudioFlow flow, string where)
+    {
+        var (line, failure) = MacCaptureRules.VerdictOnZeros(PermissionState.Undecided, flow);
+
+        Assert.Null(failure);
+        Assert.StartsWith("capture: macOS has not given this app the ", line, StringComparison.Ordinal);
+        Assert.Contains("yet: only exact zeros", line, StringComparison.Ordinal);
+        Assert.Contains(where, line, StringComparison.Ordinal);
+        Assert.Equal("capture: " + MacCaptureRules.PendingText(flow), line);
+    }
+
+    [Theory]
+    [InlineData(AudioFlow.System)]
+    [InlineData(AudioFlow.Mic)]
+    public void ADeniedPermissionIsLoggedAndEndsTheCaptureWithItsText(AudioFlow flow)
+    {
+        var (line, failure) = MacCaptureRules.VerdictOnZeros(PermissionState.Denied, flow);
+
+        var denied = Assert.IsType<UnauthorizedAccessException>(failure);
+        Assert.Equal(MacCaptureRules.DenialText(flow), denied.Message);
+        Assert.Equal("capture: " + MacCaptureRules.DenialText(flow), line);
+    }
+
+    [Theory]
+    [InlineData(0, AudioFlow.System)]
+    [InlineData(0, AudioFlow.Mic)]
+    [InlineData(-1, AudioFlow.System)]
+    [InlineData(-1, AudioFlow.Mic)]
+    public void AGrantedOrUnknownPermissionIsLoggedAsExactZerosWithItsStateAndEndsNothing(int preflight, AudioFlow flow)
     {
         var state = MacCaptureRules.StateOf(preflight);
-        Assert.Null(MacCaptureRules.PendingText(state, AudioFlow.System, false));
-        Assert.Null(MacCaptureRules.PendingText(state, AudioFlow.Mic, false));
+        var (line, failure) = MacCaptureRules.VerdictOnZeros(state, flow);
+
+        Assert.Null(failure);
+        Assert.Equal("capture: " + MacCaptureRules.ZerosText(state, flow), line);
+        Assert.Contains($"the permission reads {state}: nothing plays", line, StringComparison.Ordinal);
     }
 
     [Fact]
