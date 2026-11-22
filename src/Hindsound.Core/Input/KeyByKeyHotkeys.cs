@@ -20,6 +20,7 @@ public sealed class KeyByKeyHotkeys : IHotkeyNative
     {
         _registrar = registrar;
         _registrar.HotkeyPressed += OnRegistrarPressed;
+        _registrar.HeldChanged += OnRegistrarHeldChanged;
     }
 
     public event Action<HotkeyAction>? Pressed;
@@ -32,6 +33,15 @@ public sealed class KeyByKeyHotkeys : IHotkeyNative
     public bool Pending => false;
 
     public HotkeyGesture? BoundKey(HotkeyAction action) => _active.TryGetValue(action, out var entry) ? entry.Gesture : null;
+
+    /// <summary>
+    /// The action as the layer holds it now: bound, or refused when the layer lost its combination to another app after
+    /// registering it (it keeps it in waiting, and the key stays the action's): the page then shows the key as in use.
+    /// </summary>
+    public HotkeyBinding Current(HotkeyAction action) =>
+        !_active.TryGetValue(action, out var entry) ? new HotkeyBinding(action, null, HotkeyBindingState.Unbound)
+        : _registrar.IsHeld(entry.Id) ? Bound(action, entry.Gesture)
+        : new HotkeyBinding(action, entry.Gesture, HotkeyBindingState.Refused);
 
     /// <summary>The action registered under an id of the layer, while it is registered.</summary>
     public bool TryGetAction(int id, out HotkeyAction action)
@@ -61,7 +71,7 @@ public sealed class KeyByKeyHotkeys : IHotkeyNative
                 continue;
             }
 
-            if (_active.TryGetValue(request.Action, out var current) && current.Gesture == gesture)
+            if (_active.TryGetValue(request.Action, out var current) && current.Gesture == gesture && _registrar.IsHeld(current.Id))
             {
                 results[request.Action] = Bound(request.Action, gesture);
             }
@@ -139,10 +149,13 @@ public sealed class KeyByKeyHotkeys : IHotkeyNative
 
         _disposed = true;
         _registrar.HotkeyPressed -= OnRegistrarPressed;
+        _registrar.HeldChanged -= OnRegistrarHeldChanged;
         _registrar.Dispose();
     }
 
     private static HotkeyBinding Bound(HotkeyAction action, HotkeyGesture gesture) => new(action, gesture, HotkeyBindingState.Bound);
+
+    private void OnRegistrarHeldChanged() => BindingsChanged?.Invoke();
 
     // The id is resolved here, on the hotkey thread, while it is still known.
     private void OnRegistrarPressed(int id)

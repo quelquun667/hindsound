@@ -239,7 +239,7 @@ internal sealed class NowWave
         if (titles)
         {
             // Two long names with "then" between them can be wider than the lane: the title is cut there and nowhere sooner.
-            c.TextMid(ShownTitle(c), Face.Medium, 13, SettingsScreen.Left, SystemTitleY, Theme.Muted);
+            c.TextMid(ShownTitle(c), Face.Medium, 13, SettingsScreen.Left, SystemTitleY, WaveView.SystemLaneWarns(_titleStatus) ? Theme.Amber : Theme.Muted);
             var micTitle = WaveView.MicLaneTitle(status, _micLane.HasTrack);
             c.TextMid(micTitle, Face.Medium, 13, SettingsScreen.Left, MicTitleY, micTitle == WaveView.MicLost ? Theme.Amber : Theme.Muted);
         }

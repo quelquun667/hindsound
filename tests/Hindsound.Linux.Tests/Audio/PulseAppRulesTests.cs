@@ -223,6 +223,70 @@ public sealed unsafe class PulseAppRulesTests
     }
 
     [Fact]
+    public void A_recording_is_abandoned_only_once_it_ended_with_all_its_tries_had()
+    {
+        Assert.True(PulseAppRules.Abandoned(dead: true, PulseAppRules.MaxRetries));
+        Assert.False(PulseAppRules.Abandoned(dead: true, PulseAppRules.MaxRetries - 1));
+        Assert.False(PulseAppRules.Abandoned(dead: false, PulseAppRules.MaxRetries));
+    }
+
+    [Fact]
+    public void A_sound_is_lost_while_a_stream_that_plays_has_an_abandoned_recording_and_no_longer_once_it_is_closed()
+    {
+        var key = new PulseMonitorKey(2, 0);
+        var playing = new[] { new PulsePlaybackStream(2, 0, 101, "paplay", "paplay") };
+        var abandoned = new[] { (key, true, PulseAppRules.MaxRetries) };
+
+        Assert.True(PulseAppRules.AnyAbandoned(abandoned, playing));
+
+        // The stream ended, or moved to another output: its recording is closed, or no longer the one of a stream that plays.
+        Assert.False(PulseAppRules.AnyAbandoned(abandoned, []));
+        Assert.False(PulseAppRules.AnyAbandoned(abandoned, [new PulsePlaybackStream(2, 4, 101, "paplay", "paplay")]));
+        Assert.False(PulseAppRules.AnyAbandoned(abandoned, [new PulsePlaybackStream(3, 0, 101, "paplay", "paplay")]));
+
+        // A recording still tried, or one that runs, is no loss.
+        Assert.False(PulseAppRules.AnyAbandoned([(key, true, PulseAppRules.MaxRetries - 1)], playing));
+        Assert.False(PulseAppRules.AnyAbandoned([(key, false, PulseAppRules.MaxRetries)], playing));
+        Assert.False(PulseAppRules.AnyAbandoned([], playing));
+    }
+
+    [Fact]
+    public void A_paused_stream_plays_nothing_so_its_abandoned_recording_is_no_lost_sound()
+    {
+        var key = new PulseMonitorKey(2, 0);
+        var abandoned = new[] { (key, true, PulseAppRules.MaxRetries) };
+
+        Assert.False(PulseAppRules.AnyAbandoned(abandoned, [new PulsePlaybackStream(2, 0, 101, "paplay", "paplay", Corked: true)]));
+        Assert.True(PulseAppRules.AnyAbandoned(abandoned, [new PulsePlaybackStream(2, 0, 101, "paplay", "paplay", Corked: false)]));
+
+        // One paused stream hides nothing of another that plays.
+        Assert.True(PulseAppRules.AnyAbandoned([(key, true, PulseAppRules.MaxRetries), (new PulseMonitorKey(5, 0), true, PulseAppRules.MaxRetries)],
+            [new PulsePlaybackStream(2, 0, 101, "paplay", "paplay", Corked: true), new PulsePlaybackStream(5, 0, 101, "paplay", "paplay")]));
+    }
+
+    [Fact]
+    public void A_stream_on_no_output_known_to_the_look_is_being_moved()
+    {
+        var monitors = new Dictionary<uint, string> { [0] = "out.monitor", [3] = string.Empty };
+
+        Assert.False(PulseAppRules.AnyUnplaced([new PulsePlaybackStream(2, 0, 1, null, null)], monitors));
+        Assert.False(PulseAppRules.AnyUnplaced([], monitors));
+
+        // Unlinked, as PipeWire lists a stream between two outputs (PA_INVALID_INDEX); on an output gone; on one with no monitor.
+        Assert.True(PulseAppRules.AnyUnplaced([new PulsePlaybackStream(2, 0, 1, null, null), new PulsePlaybackStream(5, uint.MaxValue, 1, null, null)], monitors));
+        Assert.True(PulseAppRules.AnyUnplaced([new PulsePlaybackStream(2, 7, 1, null, null)], monitors));
+        Assert.True(PulseAppRules.AnyUnplaced([new PulsePlaybackStream(2, 3, 1, null, null)], monitors));
+    }
+
+    [Fact]
+    public void A_stream_on_no_output_is_looked_at_again_five_times_later_each_time()
+    {
+        Assert.Equal([250, 500, 1000, 2000, 4000], Enumerable.Range(0, 5).Select(looks => (int)PulseAppRules.PlaceWait(looks)!.Value.TotalMilliseconds));
+        Assert.Null(PulseAppRules.PlaceWait(PulseAppRules.MaxRetries + 1));
+        Assert.Null(PulseAppRules.PlaceWait(-1));
+    }
+
+    [Fact]
     public void A_recording_that_ended_quickly_or_never_started_keeps_its_tries()
     {
         var steady = TimeSpan.FromSeconds(30);

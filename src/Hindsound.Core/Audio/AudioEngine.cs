@@ -30,6 +30,8 @@ public enum CaptureActivity
 /// <param name="MemoryBytes">Memory held by the buffers.</param>
 /// <param name="SourceApp">The one application asked for instead of the whole PC, if any.</param>
 /// <param name="SourceAppMissing">That application is not running: nothing is wrong, the PC side is silent until it comes back.</param>
+/// <param name="SourceAppLost">That application plays sound the capture gave up recording (<see cref="ICaptureSource.SoundLost"/>):
+/// the PC side is silent, or misses part of it, until the application plays again.</param>
 public sealed record AudioEngineStatus(
     CaptureActivity Activity,
     bool SystemCapturing,
@@ -41,7 +43,8 @@ public sealed record AudioEngineStatus(
     TimeSpan Buffered,
     long MemoryBytes,
     string? SourceApp = null,
-    bool SourceAppMissing = false);
+    bool SourceAppMissing = false,
+    bool SourceAppLost = false);
 
 /// <summary>A change of what the PC side captures, kept for the live wave.</summary>
 /// <param name="Frame">Timeline frame from which on the new source alone is in the buffer.</param>
@@ -1113,7 +1116,8 @@ public sealed class AudioEngine : IDisposable
             buffered,
             (system?.MemoryBytes ?? 0) + (mic?.MemoryBytes ?? 0),
             WantedApp,
-            appMissing);
+            appMissing,
+            WantedApp is not null && openSystem?.Source.SoundLost == true);
     }
 
     // Asks for the status to be sent. One thread at a time sends, and it reads the status only when its turn comes:

@@ -199,7 +199,8 @@ internal static class WaveView
     /// <summary>
     /// The name of the PC side. While the line of a change shows, the title of the app alone would lie for as long as the memory lasts:
     /// a past from one other app says both, "Discord, then Spotify", and a past from the whole PC, or from more than one source, says
-    /// "Whole PC". The app alone once the line has left the wave. Not running comes first: the present wins.
+    /// "Whole PC". The app alone once the line has left the wave. Not running comes first, then a sound the capture gave up
+    /// (<see cref="SystemLaneWarns"/>): the present wins.
     /// </summary>
     public static string SystemLaneTitle(AudioEngineStatus? status, WaveMarker marker, PlatformFeatures? features = null)
     {
@@ -212,6 +213,11 @@ internal static class WaveView
         if (status.SourceAppMissing)
         {
             return app + " (not running)";
+        }
+
+        if (SystemLaneWarns(status))
+        {
+            return app + " (sound lost)";
         }
 
         if (!marker.Shows)
@@ -229,6 +235,13 @@ internal static class WaveView
         // The same app on both sides has no "then" to tell: the past is that app as much as the present.
         return string.Equals(past, exe, StringComparison.OrdinalIgnoreCase) ? app : AppName(past) + ", then " + app;
     }
+
+    /// <summary>
+    /// Whether the name of the PC side says a loss, in amber as a lost microphone: the application plays sound the capture gave up.
+    /// Not running is no loss, and says so in the usual colour.
+    /// </summary>
+    public static bool SystemLaneWarns(AudioEngineStatus? status) =>
+        status is { SourceApp: not null, SourceAppMissing: false, SourceAppLost: true, SystemCapturing: true };
 
     /// <summary>
     /// The name of the microphone's lane: a lost one is said here, in amber, with its past still under it. Turned off is said in the lane

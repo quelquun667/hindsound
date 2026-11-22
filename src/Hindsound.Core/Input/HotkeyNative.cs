@@ -99,6 +99,19 @@ public interface IHotkeyRegistrar : IDisposable
         Register(id, modifiers, virtualKey) ? HotkeyRegistration.Registered : HotkeyRegistration.Refused;
 
     void Unregister(int id);
+
+    /// <summary>
+    /// Raised when the layer lost a registered shortcut, or got one back, without being asked (macOS moves a letter's key when
+    /// the keyboard layout changes, and the new key may belong to another app). <see cref="KeyByKeyHotkeys"/> then tells its own
+    /// change event. The default never raises it: a layer whose registrations only change by its own calls has nothing to say.
+    /// </summary>
+    event Action? HeldChanged { add { } remove { } }
+
+    /// <summary>
+    /// Whether the combination registered under <paramref name="id"/> is held now, so that a press of it reaches the app. False
+    /// for one the layer keeps in waiting (registered, then lost to another app). The default holds every registered id.
+    /// </summary>
+    bool IsHeld(int id) => true;
 }
 
 /// <summary><c>--no-hotkeys</c>: says yes to every shortcut and registers none. Nothing on the keyboard can reach this run.</summary>

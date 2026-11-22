@@ -189,6 +189,7 @@ internal static class StatusText
             CaptureActivity.Capturing when app is null => (StatusMark.Dot, "Capturing"),
             // The state comes first: a long name gets cut at the end of the title.
             CaptureActivity.Capturing when status.SourceAppMissing => (StatusMark.Caution, "Not running: " + app),
+            CaptureActivity.Capturing when status.SystemCapturing && status.SourceAppLost => (StatusMark.Warning, "Sound lost: " + app),
             CaptureActivity.Capturing when status.SystemCapturing => (StatusMark.Dot, "Capturing " + app),
             CaptureActivity.Capturing => (StatusMark.Warning, "Can't capture " + app),
             _ => (StatusMark.None, "Not capturing"),

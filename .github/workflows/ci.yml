@@ -401,6 +401,19 @@ jobs:
           cat "$folder/proof.out" || true
           sed 's/^/  log loop: /' "$folder/settings.log" || true
           [ "$code" -eq 2 ] && [ "$proof_code" -eq 0 ] && grep -q "loop proof: result pass" "$folder/settings.log"
+      # The shortcuts follow the keyboard layout, with the app on the main thread: the French, German and US layouts read
+      # by their ids (A on the key of US Q, Q on that of US A, Z and W traded, M where US has ';', 1 on the top row with
+      # Shift), two shortcuts that trade keys registered, the French layout selected and both moved by the notification of
+      # macOS, then the layout of the start selected again and both back.
+      - name: Prove the shortcuts follow the keyboard layout with the app
+        if: ${{ !cancelled() && steps.assemble.outcome == 'success' }}
+        run: |
+          program="$RUNNER_TEMP/app/Hindsound.app/Contents/MacOS/hindsound"
+          code=0
+          perl -e 'alarm shift; exec @ARGV' 90 "$program" --prove-keyboard > "$RUNNER_TEMP/keyboard-proof.txt" 2>&1 || code=$?
+          cat "$RUNNER_TEMP/keyboard-proof.txt"
+          echo "--prove-keyboard: exit code $code"
+          [ "$code" -eq 0 ] && grep -q "keyboard proof: result pass" "$RUNNER_TEMP/keyboard-proof.txt"
 
       # A real notification through SDL's Cocoa window, not the offscreen driver. The app says when it is up and where, and
       # holds it; screencapture takes the main screen, and the pixels of the accent (its bars) are counted where it is. The
@@ -898,6 +911,649 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mac-dump
+          path: ${{ runner.temp }}/mac-dump/
+          if-no-files-found: warn
+
+      # What the job mac-older needs from this one: the bundle as the steps above proved it (zipped as the release zips it,
+      # so that its signature and its execute bits come through the artifact), and the dylibs and the fonts the tests load.
+      - name: Pack the app for the older systems
+        id: handoff
+        if: ${{ !cancelled() && steps.assemble.outcome == 'success' }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/handoff"
+          ditto -c -k --norsrc --noextattr --noqtn --keepParent "$RUNNER_TEMP/app/Hindsound.app" "$RUNNER_TEMP/handoff/Hindsound.app.zip"
+          cp -R "$RUNNER_TEMP/natives" "$RUNNER_TEMP/handoff/natives"
+          cp -R "$RUNNER_TEMP/fonts" "$RUNNER_TEMP/handoff/fonts"
+          du -sh "$RUNNER_TEMP/handoff"/*
+
+      - name: Keep the app for the older systems
+        if: ${{ !cancelled() && steps.handoff.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mac-app
+          path: ${{ runner.temp }}/handoff/
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
+  # The app of the job mac, on a system under it that the minimum of the Info.plist (macOS 14.4) covers: macOS 15 on Apple
+  # silicon. macOS 14 is not here: GitHub retired its runner image on 2 November 2026 (the label macos-14 gets "The
+  # configuration 'macos-14-arm64-us-default' is not supported", run 45070396216), so nothing hosted can run the app on
+  # 14.4 to 14.7. The bundle, the dylibs and the fonts are the ones the job mac built and proved (its artifact mac-app);
+  # nothing is built again but the tests, which run here on the system itself. Each runner says its own version first: an
+  # image under 14.4 would not be allowed to capture a process (the Core Audio taps begin at 14.2, the app asks for 14.4),
+  # and the job then fails on that line, not on something it cannot prove. The steps of the proofs are those of the job
+  # mac, word for word (the test CiWorkflowTests keeps them so), with the same preparation: BlackHole 2ch as the virtual
+  # device, the rights of TCC written for the bundle.
+  mac-older:
+    needs: mac
+    if: ${{ !cancelled() }}
+    name: mac-older (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Say which macOS this is
+        id: system
+        env:
+          IMAGE: ${{ matrix.os }}
+        run: |
+          sw_vers
+          uname -m
+          version=$(sw_vers -productVersion)
+          IFS=. read -r major minor _ <<< "$version"
+          if [ "$(uname -m)" != arm64 ]; then
+            echo "::error::$IMAGE is not an Apple silicon runner (uname -m gives $(uname -m)): nothing of the app is proven here."
+            exit 1
+          fi
+          if [ "$major" -lt 14 ] || { [ "$major" -eq 14 ] && [ "${minor:-0}" -lt 4 ]; }; then
+            echo "::error::$IMAGE is macOS $version, under the 14.4 of the Info.plist: the capture of the app is NOT proven on this runner."
+            echo "macOS $version on $IMAGE: under 14.4, the app is not proven here." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "$IMAGE: macOS $version ($(sw_vers -buildVersion)), $(uname -m)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fetch the app of the job mac
+        if: ${{ steps.system.outcome == 'success' }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: mac-app
+          path: ${{ runner.temp }}/handoff
+
+      # The dylibs and the fonts are checked as the job mac checks them (their SHA-256 written when they were built, then
+      # what each one links, with the sha256sum shim of the font script), the bundle is unzipped where the steps below look
+      # for it, and its signature must still hold after the zip and the artifact: the TCC rights name its requirement.
+      - name: Unpack the app and check what came through
+        id: unpack
+        if: ${{ steps.system.outcome == 'success' }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin" "$RUNNER_TEMP/app"
+          printf '#!/bin/sh\nexec shasum -a 256 "$@"\n' > "$RUNNER_TEMP/bin/sha256sum"
+          chmod +x "$RUNNER_TEMP/bin/sha256sum"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          export PATH="$RUNNER_TEMP/bin:$PATH"
+          cp -R "$RUNNER_TEMP/handoff/natives" "$RUNNER_TEMP/natives"
+          cp -R "$RUNNER_TEMP/handoff/fonts" "$RUNNER_TEMP/fonts"
+          (cd "$RUNNER_TEMP/natives" && shasum -a 256 -c SHA256SUMS)
+          bash tools/mac/build-natives.sh --check "$RUNNER_TEMP/natives"
+          bash tools/linux/fetch-fonts.sh --check "$RUNNER_TEMP/fonts"
+          ditto -x -k "$RUNNER_TEMP/handoff/Hindsound.app.zip" "$RUNNER_TEMP/app"
+          app="$RUNNER_TEMP/app/Hindsound.app"
+          codesign --verify --deep --strict "$app"
+          echo "minimum system of the bundle: $(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app/Contents/Info.plist")"
+          ls -l "$app/Contents/MacOS/hindsound"
+
+      - name: Build
+        id: build
+        if: ${{ steps.system.outcome == 'success' }}
+        run: |
+          dotnet build tests/Hindsound.Mac.Tests/Hindsound.Mac.Tests.csproj -c Release
+
+      # The tests of the Mac on this system, the category Mac among them (only the tests that need a device are left out, as
+      # in the job mac). The dylibs next to them and the fonts from HINDSOUND_FONT_DIR, as there.
+      - name: Test
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          HINDSOUND_FONT_DIR: ${{ runner.temp }}/fonts
+        run: |
+          cp "$RUNNER_TEMP"/natives/*.dylib tests/Hindsound.Mac.Tests/bin/Release/net10.0/
+          dotnet test tests/Hindsound.Mac.Tests/Hindsound.Mac.Tests.csproj -c Release --no-build --filter "Category!=Device" --logger "console;verbosity=normal"
+
+      - name: Prove the desktop parts
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          dotnet test tests/Hindsound.Mac.Tests/Hindsound.Mac.Tests.csproj -c Release --no-build             --filter "FullyQualifiedName~Hindsound.Mac.Tests.Desktop.MacDesktopProofs" --logger "console;verbosity=detailed"
+
+      # The app of the bundle, with its own dylibs and fonts (no HINDSOUND_FONT_DIR), settings of its own in which the
+      # microphone is disabled, and every option that keeps it from touching the runner's session.
+      - name: Draw the pages and prove the MP3 with the app
+        if: ${{ !cancelled() && steps.unpack.outcome == 'success' }}
+        env:
+          OUT: ${{ runner.temp }}/mac-dump
+        run: |
+          program="$RUNNER_TEMP/app/Hindsound.app/Contents/MacOS/hindsound"
+          failed=0
+          for scale in 1 1.5; do
+            folder="$RUNNER_TEMP/mac-run-$scale"
+            mkdir -p "$folder" "$OUT/$scale"
+            printf '%s\n' '{"audio":{"micDeviceId":"disabled"}}' > "$folder/settings.json"
+            code=0
+            SDL_VIDEO_DRIVER=offscreen perl -e 'alarm shift; exec @ARGV' 300 "$program" --settings "$folder/settings.json" --no-mic --no-clipboard \
+              --no-hotkeys --offscreen --dump-settings "$OUT/$scale" --scale "$scale" || code=$?
+            sed "s/^/  log $scale: /" "$folder/settings.log" || true
+            count=$(find "$OUT/$scale" -maxdepth 1 -name '*.png' | wc -l | tr -d ' ')
+            echo "scale $scale: exit code $code, $count PNG files"
+            [ "$code" -eq 0 ] && [ "$count" -gt 0 ] || failed=1
+            (cd "$OUT/$scale" && shasum -a 256 *.png | sed "s/^/page $scale /")
+          done
+          mkdir -p "$RUNNER_TEMP/mac-mp3"
+          printf '%s\n' '{"audio":{"micDeviceId":"disabled"}}' > "$RUNNER_TEMP/mac-mp3/settings.json"
+          code=0
+          perl -e 'alarm shift; exec @ARGV' 120 "$program" --settings "$RUNNER_TEMP/mac-mp3/settings.json" --no-mic --no-clipboard --no-hotkeys \
+            --offscreen --prove-mp3 "$RUNNER_TEMP/mac-mp3/out" || code=$?
+          sed 's/^/  log mp3: /' "$RUNNER_TEMP/mac-mp3/settings.log" || true
+          echo "prove-mp3: exit code $code"
+          [ "$code" -eq 0 ] || failed=1
+          exit $failed
+
+      # The loop of the app on the main thread, with the session of the runner: the icon of the menu bar and its menu read
+      # back from AppKit, a Carbon shortcut registered and its press sent, then a real press posted as a keyboard would (with
+      # the PostEvent and Accessibility rights written in TCC for the bundle, as the probe wrote its rights; reported apart),
+      # and "hindsound --save" from a second launch received by the running one.
+      - name: Prove the loop, the icon, the shortcut and --save with the app
+        if: ${{ !cancelled() && steps.unpack.outcome == 'success' }}
+        run: |
+          app="$RUNNER_TEMP/app/Hindsound.app"
+          program="$app/Contents/MacOS/hindsound"
+          folder="$RUNNER_TEMP/mac-loop"
+          mkdir -p "$folder"
+          printf '%s\n' '{"audio":{"micDeviceId":"disabled"}}' > "$folder/settings.json"
+          requirement=$(codesign -d -r- "$app" 2>&1 | sed -n 's/^#* *designated => //p' | head -n 1)
+          echo "designated requirement: $requirement"
+          if csreq -r "=$requirement" -b "$folder/csreq.bin"; then
+            hex=$(xxd -p "$folder/csreq.bin" | tr -d '\n')
+            for db in "/Library/Application Support/com.apple.TCC/TCC.db" "$HOME/Library/Application Support/com.apple.TCC/TCC.db"; do
+              for service in kTCCServicePostEvent kTCCServiceAccessibility; do
+                sudo sqlite3 "$db" "insert or replace into access (service, client, client_type, auth_value, auth_reason, auth_version, csreq, flags, last_modified) values ('$service', 'io.github.quelquun667.hindsound', 0, 2, 3, 1, X'$hex', 0, CAST(strftime('%s','now') AS INTEGER));"                   && echo "tcc: $service written in $db" || echo "tcc: $service not written in $db"
+              done
+            done
+            sudo killall tccd || true
+          fi
+          perl -e 'alarm shift; exec @ARGV' 150 "$program" --settings "$folder/settings.json" --no-mic --no-clipboard --prove-loop > "$folder/proof.out" 2>&1 &
+          proof=$!
+          for attempt in $(seq 1 120); do
+            grep -q "loop proof: ready, waiting for --save" "$folder/settings.log" 2> /dev/null && break
+            sleep 0.5
+          done
+          code=0
+          perl -e 'alarm shift; exec @ARGV' 30 "$program" --settings "$folder/settings.json" --save || code=$?
+          echo "--save from a second launch: exit code $code (2: handed to the running instance)"
+          proof_code=0
+          wait "$proof" || proof_code=$?
+          echo "--prove-loop: exit code $proof_code"
+          cat "$folder/proof.out" || true
+          sed 's/^/  log loop: /' "$folder/settings.log" || true
+          [ "$code" -eq 2 ] && [ "$proof_code" -eq 0 ] && grep -q "loop proof: result pass" "$folder/settings.log"
+
+      # The shortcuts follow the keyboard layout, with the app on the main thread: the French, German and US layouts read
+      # by their ids (A on the key of US Q, Q on that of US A, Z and W traded, M where US has ';', 1 on the top row with
+      # Shift), two shortcuts that trade keys registered, the French layout selected and both moved by the notification of
+      # macOS, then the layout of the start selected again and both back.
+      - name: Prove the shortcuts follow the keyboard layout with the app
+        if: ${{ !cancelled() && steps.unpack.outcome == 'success' }}
+        run: |
+          program="$RUNNER_TEMP/app/Hindsound.app/Contents/MacOS/hindsound"
+          code=0
+          perl -e 'alarm shift; exec @ARGV' 90 "$program" --prove-keyboard > "$RUNNER_TEMP/keyboard-proof.txt" 2>&1 || code=$?
+          cat "$RUNNER_TEMP/keyboard-proof.txt"
+          echo "--prove-keyboard: exit code $code"
+          [ "$code" -eq 0 ] && grep -q "keyboard proof: result pass" "$RUNNER_TEMP/keyboard-proof.txt"
+
+      # A real notification through SDL's Cocoa window, not the offscreen driver. The app says when it is up and where, and
+      # holds it; screencapture takes the main screen, and the pixels of the accent (its bars) are counted where it is. The
+      # app itself checks that the app in front stayed in front and that its window never had the focus, then clicks it with
+      # a mouse event of the system (reported, the runner may drop it) and lets it go.
+      - name: Show a notification with the app
+        if: ${{ !cancelled() && steps.unpack.outcome == 'success' }}
+        run: |
+          program="$RUNNER_TEMP/app/Hindsound.app/Contents/MacOS/hindsound"
+          proof="$RUNNER_TEMP/mac-notification"
+          mkdir -p "$proof"
+          perl -e 'alarm shift; exec @ARGV' 200 "$program" --prove-notification "$proof/out" > "$proof/console.txt" 2>&1 &
+          app=$!
+          for _ in $(seq 1 120); do
+            [ -f "$proof/out/ready" ] && break
+            kill -0 "$app" 2> /dev/null || break
+            sleep 0.5
+          done
+          failed=0
+          if [ -f "$proof/out/ready" ]; then
+            echo "front app seen from bash: $(lsappinfo info -only name "$(lsappinfo front)" 2>&1 | tr '\n' ' ')"
+            screencapture -x -m "$proof/screen.png" || failed=1
+            sips -s format bmp "$proof/screen.png" --out "$proof/screen.bmp" > /dev/null || failed=1
+            python3 - "$proof/out/ready" "$proof/screen.bmp" <<'EOF' || failed=1
+          import struct, sys
+          ready = dict(line.strip().split('=', 1) for line in open(sys.argv[1]) if '=' in line)
+          data = open(sys.argv[2], 'rb').read()
+          offset = struct.unpack_from('<I', data, 10)[0]
+          width, height = struct.unpack_from('<ii', data, 18)
+          bpp, compression = struct.unpack_from('<HI', data, 28)
+          top_down, height, step = height < 0, abs(height), bpp // 8
+          stride = (width * step + 3) & ~3
+          if compression in (3, 6):
+              masks = struct.unpack_from('<III', data, 54)
+          else:
+              masks = (0xFF0000, 0x00FF00, 0x0000FF)
+          shifts = [(m & -m).bit_length() - 1 for m in masks]
+          def pixel(x, y):
+              i = offset + (y if top_down else height - 1 - y) * stride + x * step
+              value = int.from_bytes(data[i:i + step], 'little')
+              return tuple((value & m) >> s for m, s in zip(masks, shifts))
+          accent = int(ready['accent'], 16)
+          target = ((accent >> 16) & 255, (accent >> 8) & 255, accent & 255)
+          near = lambda p: all(abs(p[c] - target[c]) <= 24 for c in range(3))
+          factor = width / int(ready['screen_w'])
+          x, y, w, h = (int(ready[k]) for k in ('x', 'y', 'w', 'h'))
+          x0, y0, x1, y1 = int(x * factor), int(y * factor), int((x + w) * factor), int((y + h) * factor)
+          inside = sum(1 for py in range(max(0, y0), min(height, y1)) for px in range(max(0, x0), min(width, x1)) if near(pixel(px, py)))
+          everywhere = sum(1 for py in range(height) for px in range(width) if near(pixel(px, py)))
+          expected = int(ready['expected']) * (factor / float(ready['scale'])) ** 2
+          print(f"notification pixels: screen {width}x{height} bpp={bpp} factor={factor} rect=({x0},{y0})-({x1},{y1}) "
+                f"accent_inside={inside} accent_elsewhere={everywhere - inside} expected={expected:.0f}")
+          print(f"notification pixels: stripe {pixel(min(width - 1, x1 - 1), (y0 + y1) // 2)} fill {pixel((x0 + x1) // 2, y0 + int(4 * factor))}")
+          sys.exit(0 if inside >= 0.8 * expected and inside > 100 else 1)
+          EOF
+          else
+            echo "the notification never said it was up"
+            failed=1
+          fi
+          touch "$proof/out/captured"
+          code=0
+          wait "$app" || code=$?
+          sed 's/^/  /' "$proof/console.txt"
+          echo "prove-notification: exit code $code"
+          [ "$code" -eq 0 ] || failed=1
+          exit $failed
+
+      # The lists of the settings and the watch of the devices, on the HAL of the runner with BlackHole 2ch installed (the
+      # probe's way: brew, then coreaudiod started again so it loads the driver). The app reads the process list (itself,
+      # named after its bundle, and its parent) and the devices, then waits for the watch to see the default output that
+      # SwitchAudioSource changes, then for afplay (a tone of 1 kHz for 3 s) to be in the list of the applications that play
+      # and to leave it when it ends. The app opens no device: no right of TCC is asked, so none is written.
+      - name: Prove the devices and the applications that play with the app
+        if: ${{ !cancelled() && steps.unpack.outcome == 'success' }}
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+        run: |
+          brew install --cask blackhole-2ch
+          brew install switchaudio-osx
+          sudo killall coreaudiod || true
+          sleep 3
+          echo "outputs: $(SwitchAudioSource -a -t output | tr '\n' '|')"
+          echo "inputs: $(SwitchAudioSource -a -t input | tr '\n' '|')"
+          program="$RUNNER_TEMP/app/Hindsound.app/Contents/MacOS/hindsound"
+          proof="$RUNNER_TEMP/mac-devices"
+          mkdir -p "$proof"
+          python3 - "$proof/tone.wav" <<'EOF'
+          import math, struct, sys, wave
+          with wave.open(sys.argv[1], 'wb') as out:
+              out.setnchannels(2)
+              out.setsampwidth(2)
+              out.setframerate(48000)
+              frames = (int(16384 * math.sin(2 * math.pi * 1000 * i / 48000)) for i in range(3 * 48000))
+              out.writeframes(b''.join(struct.pack('<hh', v, v) for v in frames))
+          EOF
+          perl -e 'alarm shift; exec @ARGV' 150 "$program" --prove-devices "$proof/out" > "$proof/console.txt" 2>&1 &
+          app=$!
+          failed=0
+          for _ in $(seq 1 120); do
+            [ -f "$proof/out/ready-switch" ] && break
+            kill -0 "$app" 2> /dev/null || break
+            sleep 0.5
+          done
+          if [ -f "$proof/out/ready-switch" ]; then
+            current=$(SwitchAudioSource -c -t output)
+            other=$(SwitchAudioSource -a -t output | grep -vxF "$current" | head -n 1)
+            echo "switch: default output '$current' -> '$other'"
+            SwitchAudioSource -t output -s "$other" || failed=1
+          else
+            echo "the app never said it was ready for the switch"
+            failed=1
+          fi
+          for _ in $(seq 1 120); do
+            [ -f "$proof/out/ready-play" ] && break
+            kill -0 "$app" 2> /dev/null || break
+            sleep 0.5
+          done
+          if [ -f "$proof/out/ready-play" ]; then
+            echo "afplay: started by the shell $$"
+            perl -e 'alarm shift; exec @ARGV' 30 afplay "$proof/tone.wav" || failed=1
+            echo "afplay: ended"
+          else
+            echo "the app never said it was ready for afplay"
+            failed=1
+          fi
+          code=0
+          wait "$app" || code=$?
+          sed 's/^/  /' "$proof/console.txt"
+          echo "prove-devices: exit code $code"
+          [ "$code" -eq 0 ] || failed=1
+          if [ "$failed" -ne 0 ]; then
+            sudo killall coreaudiod || true
+          fi
+          exit $failed
+      # The capture with real sound, as the probe of M0 proved it on this runner: BlackHole 2ch as the default output and
+      # input, the permissions of audio capture and microphone written in both TCC databases for the bundle before the app
+      # opens any device (an undecided one makes coreaudiod wait, for every client, on a prompt nobody answers), then the
+      # app's own proof through its real factory (--prove-capture): the sound of the PC with and without the app's own tone,
+      # one output, one application and the children it starts, the microphone. Then the same permissions written refused:
+      # exact zeros, and the app says so. coreaudiod is restarted between the two, which also frees it after a run that hung.
+      - name: Prove the capture with the app
+        if: ${{ !cancelled() && steps.unpack.outcome == 'success' }}
+        run: |
+          export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 HOMEBREW_NO_ENV_HINTS=1
+          brew install --cask blackhole-2ch > "$RUNNER_TEMP/brew-blackhole.log" 2>&1 || { tail -n 30 "$RUNNER_TEMP/brew-blackhole.log"; exit 1; }
+          brew install switchaudio-osx > "$RUNNER_TEMP/brew-switchaudio.log" 2>&1 || { tail -n 30 "$RUNNER_TEMP/brew-switchaudio.log"; exit 1; }
+          sudo killall coreaudiod
+          sleep 5
+          SwitchAudioSource -a -f cli
+          for type in output input system; do
+            SwitchAudioSource -t "$type" -s 'BlackHole 2ch'
+          done
+          echo "default output: $(SwitchAudioSource -t output -c), input: $(SwitchAudioSource -t input -c)"
+          app="$RUNNER_TEMP/app/Hindsound.app"
+          program="$app/Contents/MacOS/hindsound"
+          folder="$RUNNER_TEMP/mac-capture"
+          mkdir -p "$folder"
+          python3 - "$folder" <<'EOF'
+          import array, math, sys, wave
+          folder, rate, seconds = sys.argv[1], 48000, 90
+          tone = array.array('h')
+          for i in range(rate * seconds):
+              value = int(0.5 * 32767 * math.sin(2 * math.pi * 1000 * i / rate))
+              tone.extend((value, value))
+          for name, data in (('tone.wav', tone.tobytes()), ('silence.wav', bytes(rate * seconds * 4))):
+              with wave.open(f'{folder}/{name}', 'wb') as f:
+                  f.setnchannels(2)
+                  f.setsampwidth(2)
+                  f.setframerate(rate)
+                  f.writeframes(data)
+          EOF
+          requirement=$(codesign -d -r- "$app" 2>&1 | sed -n 's/^#* *designated => //p' | head -n 1)
+          echo "designated requirement: $requirement"
+          csreq -r "=$requirement" -b "$folder/csreq.bin"
+          hex=$(xxd -p "$folder/csreq.bin" | tr -d '\n')
+          grant() {
+            for db in "/Library/Application Support/com.apple.TCC/TCC.db" "$HOME/Library/Application Support/com.apple.TCC/TCC.db"; do
+              for service in kTCCServiceAudioCapture kTCCServiceMicrophone; do
+                sudo sqlite3 "$db" "insert or replace into access (service, client, client_type, auth_value, auth_reason, auth_version, csreq, flags, last_modified) values ('$service', 'io.github.quelquun667.hindsound', 0, $1, 3, 1, X'$hex', 0, CAST(strftime('%s','now') AS INTEGER));" \
+                  && echo "tcc: $service auth_value=$1 written in $db" || echo "tcc: $service not written in $db"
+              done
+            done
+            sudo killall tccd || true
+            killall tccd 2> /dev/null || true
+            sleep 2
+          }
+          # Through Launch Services, as the probe did: launched from this shell, the runner would be the process TCC asks
+          # about (run 44940346633: the microphone granted to it, the audio capture undecided, each tap stuck 60 s).
+          prove() {
+            rm -f "$folder/$1.result"
+            perl -e 'alarm shift; exec @ARGV' "$2" open -n -W --stdout "$folder/$1.out" --stderr "$folder/$1.err" "$app" --args "${@:3}"               || { echo "prove-capture $1: open ended by the time limit"; pkill -f 'Hindsound.app/Contents/MacOS/hindsound' || true; }
+            cat "$folder/$1.out" "$folder/$1.err" 2> /dev/null || true
+            echo "prove-capture $1: $(cat "$folder/$1.result" 2> /dev/null || echo 'no result')"
+          }
+          grant 2
+          prove granted 240 --prove-capture "$folder"
+          sudo killall coreaudiod
+          sleep 5
+          echo "after the restart of coreaudiod: output $(SwitchAudioSource -t output -c), input $(SwitchAudioSource -t input -c)"
+          grant 0
+          prove denied 150 --prove-capture "$folder" --denied
+          grep -qx pass "$folder/granted.result" && grep -qx pass "$folder/denied.result"
+
+      # The listening of a clip: the app plays a 1 kHz tone it encoded in MP3 with its own player (an AudioQueue on the
+      # default output) and hears it at the same time on the input of BlackHole 2ch, made the default output and input (a
+      # loopback device: its input gives back what its output plays). The microphone right of the bundle is written in both
+      # TCC databases before any device opens: the input of BlackHole is opened, and a right not decided leaves coreaudiod
+      # stuck for every client. The app says the level, the dominant frequency, the silence after Stop and after the end.
+      - name: Play a clip with the app and hear it on BlackHole
+        if: ${{ !cancelled() && steps.unpack.outcome == 'success' }}
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+          HOMEBREW_NO_ENV_HINTS: 1
+        run: |
+          app="$RUNNER_TEMP/app/Hindsound.app"
+          program="$app/Contents/MacOS/hindsound"
+          folder="$RUNNER_TEMP/mac-preview"
+          mkdir -p "$folder"
+          printf '%s\n' '{"audio":{"micDeviceId":"disabled"}}' > "$folder/settings.json"
+          requirement=$(codesign -d -r- "$app" 2>&1 | sed -n 's/^#* *designated => //p' | head -n 1)
+          csreq -r "=$requirement" -b "$folder/csreq.bin"
+          hex=$(xxd -p "$folder/csreq.bin" | tr -d '\n')
+          for db in "/Library/Application Support/com.apple.TCC/TCC.db" "$HOME/Library/Application Support/com.apple.TCC/TCC.db"; do
+            sudo sqlite3 "$db" "insert or replace into access (service, client, client_type, auth_value, auth_reason, auth_version, csreq, flags, last_modified) values ('kTCCServiceMicrophone', 'io.github.quelquun667.hindsound', 0, 2, 3, 1, X'$hex', 0, CAST(strftime('%s','now') AS INTEGER));"
+            echo "tcc: kTCCServiceMicrophone in $db: $(sudo sqlite3 "$db" "select auth_value from access where service = 'kTCCServiceMicrophone' and client = 'io.github.quelquun667.hindsound';")"
+          done
+          sudo killall tccd || true
+          brew install --cask blackhole-2ch > "$folder/brew-blackhole.log" 2>&1 || { tail -n 20 "$folder/brew-blackhole.log"; exit 1; }
+          brew install switchaudio-osx > "$folder/brew-switchaudio.log" 2>&1 || { tail -n 20 "$folder/brew-switchaudio.log"; exit 1; }
+          sudo killall coreaudiod || true
+          for _ in $(seq 1 60); do
+            SwitchAudioSource -a -t output 2> /dev/null | grep -q 'BlackHole 2ch' && break
+            sleep 0.5
+          done
+          for type in output input system; do
+            SwitchAudioSource -t "$type" -s 'BlackHole 2ch' > /dev/null
+            echo "default $type: $(SwitchAudioSource -t "$type" -c)"
+          done
+          code=0
+          perl -e 'alarm shift; exec @ARGV' 120 "$program" --settings "$folder/settings.json" --no-mic --no-clipboard --no-hotkeys \
+            --offscreen --prove-preview "$folder/out" || code=$?
+          sed 's/^/  log preview: /' "$folder/settings.log" || true
+          echo "prove-preview: exit code $code"
+          [ "$code" -eq 0 ] && grep -q "preview-proof result pass" "$folder/settings.log"
+
+      # The whole app, launched as a user launches it (open, through Launch Services, so that TCC asks about the bundle and
+      # not the runner), with settings of its own: clips of 10 s in a folder of the step, the microphone disabled, the copy to
+      # the clipboard on. The rights of audio capture and microphone are written granted before anything opens a device (the
+      # step of the capture leaves them refused). Then: the capture starts (its line in the log, with the memory), afplay
+      # plays a 1 kHz tone on BlackHole 2ch, "hindsound --save" from a second launch, the clip written in the folder of the
+      # settings (size, duration by afinfo, the 1 kHz measured on its decoding by afconvert), the pasteboard holding the URL
+      # of the clip, the notification shown, the resident memory of the process, and SIGTERM, which ends the app cleanly:
+      # its exit code is in its log, since open does not give it back.
+      - name: Run the whole app, save a clip of a 1 kHz tone and quit
+        if: ${{ !cancelled() && steps.unpack.outcome == 'success' }}
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+          HOMEBREW_NO_ENV_HINTS: 1
+        run: |
+          app="$RUNNER_TEMP/app/Hindsound.app"
+          program="$app/Contents/MacOS/hindsound"
+          folder="$RUNNER_TEMP/mac-whole"
+          clips="$folder/clips"
+          log="$folder/settings.log"
+          mkdir -p "$folder" "$clips"
+          printf '{"clipSeconds":10,"audio":{"micDeviceId":"disabled"},"export":{"outputFolder":"%s","copyToClipboard":true},"general":{"startWithWindows":false}}\n' "$clips" > "$folder/settings.json"
+          cat "$folder/settings.json"
+          brew install --cask blackhole-2ch > "$folder/brew-blackhole.log" 2>&1 || { tail -n 20 "$folder/brew-blackhole.log"; exit 1; }
+          brew install switchaudio-osx > "$folder/brew-switchaudio.log" 2>&1 || { tail -n 20 "$folder/brew-switchaudio.log"; exit 1; }
+          for _ in $(seq 1 60); do
+            SwitchAudioSource -a -t output 2> /dev/null | grep -q 'BlackHole 2ch' && break
+            sleep 0.5
+          done
+          for type in output input system; do
+            SwitchAudioSource -t "$type" -s 'BlackHole 2ch' > /dev/null
+            echo "default $type: $(SwitchAudioSource -t "$type" -c)"
+          done
+          requirement=$(codesign -d -r- "$app" 2>&1 | sed -n 's/^#* *designated => //p' | head -n 1)
+          csreq -r "=$requirement" -b "$folder/csreq.bin"
+          hex=$(xxd -p "$folder/csreq.bin" | tr -d '\n')
+          for db in "/Library/Application Support/com.apple.TCC/TCC.db" "$HOME/Library/Application Support/com.apple.TCC/TCC.db"; do
+            for service in kTCCServiceAudioCapture kTCCServiceMicrophone; do
+              sudo sqlite3 "$db" "insert or replace into access (service, client, client_type, auth_value, auth_reason, auth_version, csreq, flags, last_modified) values ('$service', 'io.github.quelquun667.hindsound', 0, 2, 3, 1, X'$hex', 0, CAST(strftime('%s','now') AS INTEGER));"
+              echo "tcc: $service in $db: $(sudo sqlite3 "$db" "select auth_value from access where service = '$service' and client = 'io.github.quelquun667.hindsound';")"
+            done
+          done
+          sudo killall tccd || true
+          killall tccd 2> /dev/null || true
+          sleep 2
+          python3 - "$folder/tone.wav" <<'PY'
+          import array, math, sys, wave
+          rate, seconds = 48000, 12
+          tone = array.array('h')
+          for i in range(rate * seconds):
+              value = int(0.5 * 32767 * math.sin(2 * math.pi * 1000 * i / rate))
+              tone.extend((value, value))
+          with wave.open(sys.argv[1], 'wb') as f:
+              f.setnchannels(2)
+              f.setsampwidth(2)
+              f.setframerate(rate)
+              f.writeframes(tone.tobytes())
+          PY
+          # Each check says its result and the step goes on to the next: the log then has every number.
+          set +e
+          failed=0
+          check() { if [ "$2" -eq 0 ]; then echo "whole app: $1 pass"; else echo "whole app: $1 FAIL"; failed=1; fi; }
+          wait_for() {
+            for _ in $(seq 1 "$2"); do
+              grep -qE "$1" "$log" 2> /dev/null && return 0
+              sleep 0.5
+            done
+            return 1
+          }
+          perl -e 'alarm shift; exec @ARGV' 240 open -n -W --stdout "$folder/app.out" --stderr "$folder/app.err" "$app" --args --settings "$folder/settings.json" &
+          opener=$!
+          wait_for 'capture started:' 120; check "capture started" $?
+          pid=$(pgrep -f 'Hindsound.app/Contents/MacOS/hindsound --settings' | head -n 1)
+          echo "whole app: pid ${pid:-none}"
+          perl -e 'alarm shift; exec @ARGV' 30 afplay "$folder/tone.wav" &
+          player=$!
+          sleep 11
+          [ -n "$pid" ] && echo "whole app: resident memory while capturing $(ps -o rss= -p "$pid" | tr -d ' ') KB (ps)"
+          code=0
+          perl -e 'alarm shift; exec @ARGV' 30 "$program" --settings "$folder/settings.json" --save || code=$?
+          echo "--save from a second launch: exit code $code (2: handed to the running instance)"
+          [ "$code" -eq 2 ]; check "--save handed over" $?
+          wait_for 'clip saved:|clip not saved:' 60; check "clip saved line" $?
+          wait_for 'notification (Saved|Partial|WavFallback):' 20; check "notification shown" $?
+          clip=$(find "$clips" -maxdepth 1 -name '*.mp3' | head -n 1)
+          echo "whole app: clip '${clip:-none}', $(stat -f %z "$clip" 2> /dev/null || echo 0) bytes"
+          [ -n "$clip" ] && [ -s "$clip" ]; check "clip written in the folder of the settings" $?
+          if [ -n "$clip" ]; then
+            afinfo "$clip" | sed 's/^/  afinfo: /'
+            afconvert -f WAVE -d LEI16 "$clip" "$folder/clip.wav"; check "clip decoded" $?
+            python3 - "$folder/clip.wav" <<'PY'; check "1 kHz in the clip" $?
+          import array, math, sys, wave
+          with wave.open(sys.argv[1], 'rb') as f:
+              rate, channels = f.getframerate(), f.getnchannels()
+              data = array.array('h', f.readframes(f.getnframes()))
+          left = [data[i] / 32768.0 for i in range(0, len(data), channels)]
+          print(f"clip: {len(left) / rate:.2f} s at {rate} Hz, {channels} channels")
+          def level(samples, hz):
+              w = 2 * math.pi * hz / rate
+              k = 2 * math.cos(w)
+              s1 = s2 = 0.0
+              for x in samples:
+                  s1, s2 = x + k * s1 - s2, s1
+              power = s1 * s1 + s2 * s2 - k * s1 * s2
+              return 20 * math.log10(max(1e-12, 2 * math.sqrt(max(0.0, power)) / len(samples)))
+          # The loudest second: the tone plays in the last part of the clip, after the silence before afplay.
+          seconds = [left[i:i + rate] for i in range(0, len(left) - rate + 1, rate)]
+          best = max(seconds, key=lambda s: sum(x * x for x in s))
+          rms = 20 * math.log10(max(1e-12, math.sqrt(sum(x * x for x in best) / len(best))))
+          peak = 20 * math.log10(max(1e-12, max(abs(x) for x in best)))
+          a1000, a440, a2000 = level(best, 1000), level(best, 440), level(best, 2000)
+          # A pure sine of amplitude A has a RMS of A/sqrt(2): its Goertzel amplitude in dBFS is the RMS plus 3 dB.
+          print(f"clip: loudest second rms={rms:.1f}dBFS peak={peak:.1f}dBFS a1000={a1000:.1f}dBFS a440={a440:.1f}dBFS a2000={a2000:.1f}dBFS")
+          sys.exit(0 if rms > -40 and a1000 > rms and a1000 - a440 > 30 and a1000 - a2000 > 30 else 1)
+          PY
+            pasted=$(osascript -l JavaScript -e 'ObjC.import("AppKit"); ObjC.unwrap($.NSPasteboard.generalPasteboard.stringForType("public.file-url"))' 2>&1)
+            echo "whole app: pasteboard file URL '$pasted'"
+            python3 - "$pasted" "$clip" <<'PY'; check "pasteboard holds the URL of the clip" $?
+          import os, sys, urllib.parse
+          url = urllib.parse.urlparse(sys.argv[1])
+          sys.exit(0 if url.scheme == 'file' and os.path.realpath(urllib.parse.unquote(url.path)) == os.path.realpath(sys.argv[2]) else 1)
+          PY
+          fi
+          [ -n "$pid" ] && echo "whole app: resident memory after the clip $(ps -o rss= -p "$pid" | tr -d ' ') KB (ps)"
+          wait "$player" || true
+          if [ -n "$pid" ]; then
+            kill -TERM "$pid"; check "SIGTERM sent" $?
+          fi
+          opener_code=0
+          wait "$opener" || opener_code=$?
+          echo "whole app: open ended with code $opener_code"
+          pgrep -f 'Hindsound.app/Contents/MacOS/hindsound --settings' > /dev/null && { echo "whole app: still running"; pkill -KILL -f 'Hindsound.app/Contents/MacOS/hindsound --settings'; failed=1; }
+          cat "$folder/app.out" "$folder/app.err" 2> /dev/null | sed 's/^/  console: /' || true
+          sed 's/^/  log whole: /' "$log" || true
+          grep -q 'leaving with exit code 0' "$log"; check "the app left with exit code 0" $?
+          exit $failed
+
+      # "hindsound --save" with no Hindsound running, from the shell as Terminal or the Shortcuts app would run it: the
+      # program must start its bundle through open (Launch Services) and leave, so that the app is not a child of the shell
+      # (macOS would ask the shell for the permissions, and the app would end with it). The app that starts is a child of
+      # launchd, its parent pid 1; SIGTERM ends it, and its log gives its exit code.
+      - name: Start the app from --save when none is running
+        if: ${{ !cancelled() && steps.unpack.outcome == 'success' }}
+        run: |
+          app="$RUNNER_TEMP/app/Hindsound.app"
+          program="$app/Contents/MacOS/hindsound"
+          folder="$RUNNER_TEMP/mac-save-start"
+          log="$folder/settings.log"
+          mkdir -p "$folder/clips"
+          printf '{"audio":{"micDeviceId":"disabled"},"export":{"outputFolder":"%s","copyToClipboard":false},"general":{"startWithWindows":false}}\n' "$folder/clips" > "$folder/settings.json"
+          set +e
+          failed=0
+          check() { if [ "$2" -eq 0 ]; then echo "save start: $1 pass"; else echo "save start: $1 FAIL"; failed=1; fi; }
+          running() { pgrep -f 'Hindsound.app/Contents/MacOS/hindsound --settings' | head -n 1; }
+          [ -z "$(running)" ]; check "no Hindsound running before" $?
+          code=0
+          perl -e 'alarm shift; exec @ARGV' 30 "$program" --settings "$folder/settings.json" --save || code=$?
+          echo "save start: --save with no running instance ended with code $code"
+          [ "$code" -eq 0 ]; check "--save left with code 0" $?
+          pid=""
+          for _ in $(seq 1 60); do
+            pid=$(running)
+            [ -n "$pid" ] && break
+            sleep 0.5
+          done
+          parent=$([ -n "$pid" ] && ps -o ppid= -p "$pid" | tr -d ' ')
+          echo "save start: pid ${pid:-none}, parent pid ${parent:-none}, command $([ -n "$pid" ] && ps -o command= -p "$pid")"
+          [ -n "$pid" ]; check "the app runs after --save" $?
+          [ "$parent" = 1 ]; check "the app is a child of launchd, not of the shell" $?
+          grep -q 'through Launch Services (open)' "$log"; check "the log says --save went through open" $?
+          sleep 5
+          [ -n "$pid" ] && kill -TERM "$pid"
+          for _ in $(seq 1 40); do
+            [ -z "$(running)" ] && break
+            sleep 0.5
+          done
+          [ -n "$(running)" ] && { echo "save start: still running"; pkill -KILL -f 'Hindsound.app/Contents/MacOS/hindsound --settings'; failed=1; }
+          sed 's/^/  log save start: /' "$log" || true
+          grep -q 'leaving with exit code 0' "$log"; check "the app left with exit code 0" $?
+          exit $failed
+
+      - name: Keep the pages of the window
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mac-dump-${{ matrix.os }}
           path: ${{ runner.temp }}/mac-dump/
           if-no-files-found: warn
 

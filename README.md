@@ -84,7 +84,7 @@ release holds:
 | `hindsound-X.Y.Z-linux-x64.AppImage` | Linux: one file to run. See [Linux](#linux). |
 | `hindsound-X.Y.Z-linux-x64.tar.gz` | Linux, where the AppImage does not run: a folder to unpack. See [Linux](#linux). |
 | `hindsound_X.Y.Z_amd64.deb` | Ubuntu 22.04 and later, Debian 12 and later: a package to install with `apt`. See [Linux](#linux). |
-| `Hindsound-X.Y.Z-macos-arm64.zip` | macOS 14.4 and later (tried on macOS 26 only), on a Mac with Apple silicon: the app, in a zip. See [macOS](#macos). |
+| `Hindsound-X.Y.Z-macos-arm64.zip` | macOS 14.4 and later (tried on macOS 15 and 26 only, in the CI), on a Mac with Apple silicon: the app, in a zip. See [macOS](#macos). |
 | `SHA256SUMS` | The SHA-256 of every file of the release. |
 
 The portable zip, the AppImage and the tar.gz come with the releases after 0.5.0, and the `.deb` with the releases after
@@ -329,14 +329,18 @@ whole Mac (Hindsound itself left out), or one application and its child processe
 name one. It saves a clip on its hotkey, on `hindsound --save` or from the menu of its icon in the menu bar, says so with
 its own notification, as on Windows, and puts the clip on the clipboard as a file.
 
-**No one has tried it on a real Mac yet.** Everything in this section has only run on the macOS machines of GitHub's CI
-(macOS 26 on Apple silicon): the app is built, signed, unzipped and started there, its window drawn off screen, its MP3
-encoder and its capture checked with a test tone played through a virtual sound device, the permissions written by the CI
-itself. Pasting into a real app, a real hotkey pressed on a real keyboard (and on a keyboard other than the US one), the
-prompts of macOS answered by a person, a click on the notification of a clip (it may bring Hindsound to the front), a
-change of the sound output while Hindsound records, macOS 14 and 15 (only macOS 26 has run it), and a real game or call
-have not been tried. If something does not work, the log is in
-`~/Library/Logs/Hindsound/hindsound.log`; an issue with it helps.
+**No one has tried it on a real Mac yet.** Everything in this section has only run on the macOS machines of GitHub's CI,
+on Apple silicon: the app is built, signed, unzipped and started there, and the CI runs the app and all its proofs on
+macOS 26 and on macOS 15 (15.8.2): its window drawn off screen, its MP3 encoder and its capture checked with a test tone
+played through a virtual sound device, the permissions written by the CI itself. A hotkey follows the keyboard layout, as on
+Windows: `Ctrl+Option+A` is the key that types an A, on an AZERTY keyboard as on a QWERTY one, a change of layout while
+Hindsound runs puts the hotkeys back on the right keys, and a hotkey whose key another app holds waits, with the `Hotkeys`
+page showing it in use. The CI proves it by reading the French, German and Dvorak layouts; no real key has been pressed on a
+real keyboard. GitHub removed its macOS 14 machines in November 2026, so macOS 14 has never run it: 14.4 stays the minimum
+the app declares, but it is not tried. Pasting into a real app, a real hotkey pressed on a real keyboard, the prompts of
+macOS answered by a person, a click on the notification of a clip (it may bring Hindsound to the front), a change of the
+sound output while Hindsound records, macOS 14, and a real game or call have not been tried. If something does not work, the
+log is in `~/Library/Logs/Hindsound/hindsound.log`; an issue with it helps.
 
 **Download.** `Hindsound-<version>-macos-arm64.zip` from the
 [latest release](https://github.com/quelquun667/hindsound/releases/latest). Between releases, the CI builds the same file
@@ -558,6 +562,8 @@ applications that have an audio session, so an application that has played nothi
 - On Linux, an application that stops playing sound leaves the list. If it is the one you chose, the `Record` menu then shows
   its process name, `firefox` instead of `Firefox`, as on Windows for an application with no audio session: the choice is
   the same, only the name shown changes, and it comes back when the application plays again.
+- On Linux, when the sound of the recorded application is lost, the screen says `Sound lost: <application>` and the log says it
+  too, once, until the sound is back. With PipeWire, an application whose output disappears while it plays is recorded again.
 - On Linux with PulseAudio (Ubuntu 22.04), the first 2 seconds after you choose the application, or after Hindsound starts, may
   be missing from the memory. PipeWire does not have this gap.
 - On Linux with PulseAudio, while one application is recorded, Hindsound also holds one record stream on each output, shown

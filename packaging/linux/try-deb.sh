@@ -3,7 +3,7 @@
 # file, with only what its Depends bring (no Recommends). Then, started as /usr/bin/hindsound:
 #   --prove-mp3     writes one second of a sine as an MP3 and reads it back (see check-packages.sh), with the
 #                   libmp3lame.so.0 of /usr/lib/hindsound, the folder of the real program, not of the link;
-#   --dump-settings draws the 80 pages of the window off screen, with the libSDL3.so.0 and the fonts of /usr/lib/hindsound,
+#   --dump-settings draws the 81 pages of the window off screen, with the libSDL3.so.0 and the fonts of /usr/lib/hindsound,
 #                   and the FreeType, HarfBuzz and fontconfig that Depends brought.
 # Before that, each library the code loads by name must be found on the system, and come from a package of Depends.
 # Then apt-get remove, and nothing of the package may stay in /usr.
@@ -11,7 +11,7 @@
 # Usage: try-deb.sh <folder holding the .deb> <version>
 set -euo pipefail
 
-readonly PAGES=80
+readonly PAGES=81
 # The libraries that the program loads by name from the system, which Depends must bring: each must be found by the loader
 # (ldconfig -p) and belong to a package of Depends or to one of its alternatives. Written here from the code, to be kept in
 # step with it:

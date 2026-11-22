@@ -120,6 +120,27 @@ internal sealed class CaptureOnReminder
 /// <summary>From two successive engine statuses to what the user sees. Pure: tested without any window.</summary>
 internal static class StatusTransitions
 {
+    /// <summary>
+    /// The journal line for a change of what the application recorded plays unrecorded: "sound lost: X" when the capture gives
+    /// up a stream of it, "sound back: X" when that ends while the application still runs; null otherwise. A change of
+    /// application starts from nothing lost, and an application that closed says so in its own line.
+    /// </summary>
+    public static string? SoundLine(AudioEngineStatus? previous, AudioEngineStatus current)
+    {
+        if (current.SourceApp is not { } app)
+        {
+            return null;
+        }
+
+        var wasLost = previous is { SourceApp: { } before, SourceAppLost: true } && before == app;
+        if (current.SourceAppLost && !wasLost)
+        {
+            return $"sound lost: {app}";
+        }
+
+        return !current.SourceAppLost && wasLost && !current.SourceAppMissing ? $"sound back: {app}" : null;
+    }
+
     public const string ClosingTip = "Hindsound - finishing a clip, then closing";
     public const string OnDefaultsProblem = "Settings file not read: defaults, mic off";
 

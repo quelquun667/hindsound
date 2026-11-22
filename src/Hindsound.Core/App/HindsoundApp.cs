@@ -643,12 +643,23 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         }
     }
 
-    private void OnStatus(AudioEngineStatus status)
+    // What the journal says of the recorded application when the status changes from <previous> to <status>.
+    internal void JournalStatus(AudioEngineStatus? previous, AudioEngineStatus status)
     {
-        if (status.SourceApp is { } app && (_lastStatus?.SourceApp != app || _lastStatus.SourceAppMissing != status.SourceAppMissing))
+        if (status.SourceApp is { } app && (previous?.SourceApp != app || previous.SourceAppMissing != status.SourceAppMissing))
         {
             _journal.Write($"recorded app {app}: {(status.SourceAppMissing ? "not running" : "running")}, captured as {status.SystemDeviceName ?? "(nothing)"}");
         }
+
+        if (StatusTransitions.SoundLine(previous, status) is { } soundLine)
+        {
+            _journal.Write(soundLine);
+        }
+    }
+
+    private void OnStatus(AudioEngineStatus status)
+    {
+        JournalStatus(_lastStatus, status);
 
         var notice = _captureOnReminder.Adjust(StatusTransitions.Decide(_lastStatus, status), status);
         var micNotice = _micWatch.Note(status, NowMs);
