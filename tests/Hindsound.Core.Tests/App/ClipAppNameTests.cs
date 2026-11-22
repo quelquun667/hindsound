@@ -35,15 +35,17 @@ public sealed class ClipAppNameTests : IDisposable
     }
 
     [Theory]
-    [InlineData("Discord.exe")]
-    [InlineData("Discord.EXE")]
-    [InlineData("two words.Exe")]
-    [InlineData("python3.12")]
-    [InlineData("org.kde.foo")]
-    [InlineData("a.exe.exe")]
-    public void The_executable_loses_its_suffix_by_the_one_rule_of_the_list_of_programs(string exe)
+    [InlineData("Discord.exe", "Discord")]
+    [InlineData("Discord.EXE", "Discord")]
+    [InlineData("two words.Exe", "two words")]
+    [InlineData("two words .exe", "two words ")]
+    [InlineData("python3.12", "python3.12")]
+    [InlineData("org.kde.foo", "org.kde.foo")]
+    [InlineData("a.exe.exe", "a.exe")]
+    public void The_executable_loses_its_final_exe_and_nothing_else_as_the_list_of_programs_does(string exe, string expected)
     {
-        Assert.Equal(AudioAppList.NameOf(exe), ClipAppName.For(exe, null, "Notepad"));
+        Assert.Equal(expected, ClipAppName.For(exe, null, "Notepad"));
+        Assert.Equal(expected, AudioAppList.NameOf(exe));
     }
 
     [Fact]
