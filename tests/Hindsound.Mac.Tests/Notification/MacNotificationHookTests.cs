@@ -16,6 +16,32 @@ public sealed class MacNotificationHookTests
     }
 
     [Fact]
+    public void A_window_that_answers_the_message_not_public_gets_it_last()
+    {
+        var asked = new List<string>();
+
+        var sent = MacNotificationWindow.ToSend(selector =>
+        {
+            asked.Add(selector);
+            return true;
+        }).ToList();
+
+        Assert.Equal(MacNotificationWindow.OnCreate, sent);
+        Assert.Equal(MacNotificationWindow.PreventsActivation, sent[^1].Selector);
+        Assert.Equal([MacNotificationWindow.PreventsActivation], asked);
+    }
+
+    [Fact]
+    public void A_window_that_does_not_answer_the_message_not_public_gets_only_the_public_ones()
+    {
+        var sent = MacNotificationWindow.ToSend(_ => false).ToList();
+
+        Assert.DoesNotContain(sent, m => m.Selector == MacNotificationWindow.PreventsActivation);
+        Assert.Equal(MacNotificationWindow.OnCreate.Where(m => !m.OnlyIfAnswered), sent);
+        Assert.Equal(3, sent.Count);
+    }
+
+    [Fact]
     public void The_window_stays_on_every_space_above_the_floating_windows_and_there_when_the_app_is_not_active()
     {
         Assert.Equal(

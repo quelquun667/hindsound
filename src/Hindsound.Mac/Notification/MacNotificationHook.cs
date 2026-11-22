@@ -16,13 +16,8 @@ internal sealed unsafe class MacNotificationHook : INotificationWindowHook
 
     public void Created(nint nativeWindow)
     {
-        foreach (var message in MacNotificationWindow.OnCreate)
+        foreach (var message in MacNotificationWindow.ToSend(selector => Messages.RespondsTo(nativeWindow, selector)))
         {
-            if (message.OnlyIfAnswered && !Messages.RespondsTo(nativeWindow, message.Selector))
-            {
-                continue;
-            }
-
             switch (message.Kind)
             {
                 case WindowArgument.UInt:
@@ -138,6 +133,14 @@ internal static class MacNotificationWindow
         new("setHidesOnDeactivate:", 0, WindowArgument.Bool),
         new(PreventsActivation, 1, WindowArgument.Bool, OnlyIfAnswered: true),
     ];
+
+    /// <summary>
+    /// The messages of <see cref="OnCreate"/> the window gets, in order: a message that is not public only when
+    /// <paramref name="answers"/> (respondsToSelector: of the window) says the window has it, so an AppKit without it gets
+    /// nothing it would refuse.
+    /// </summary>
+    internal static IEnumerable<WindowMessage> ToSend(Func<string, bool> answers) =>
+        OnCreate.Where(message => !message.OnlyIfAnswered || answers(message.Selector));
 }
 
 /// <summary>The type of the one argument of a message to the NSWindow.</summary>
