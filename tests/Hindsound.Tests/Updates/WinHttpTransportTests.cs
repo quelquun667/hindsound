@@ -2,10 +2,18 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using Hindsound.Tests.Audio;
 using Hindsound.Updates;
 
 namespace Hindsound.Tests.Updates;
 
+/// <summary>
+/// The silent server costs about 4 s here against a bound of 6 s, and the wait ends through threads of WinHTTP that must get a
+/// core in time. Beside the tests that run in parallel they may not: with the process held on 2 cores and 8 threads spinning
+/// beside it, one wait took 6.8 s, where the .NET pool starved by 30 blocked tasks changed nothing (3.8 to 4.0 s). The tests of
+/// the transport run one at a time, apart from the others.
+/// </summary>
+[Collection(nameof(TimingSensitive))]
 public class WinHttpTransportTests
 {
     private const string RealUrl = "https://github.com/microsoft/winget-cli/releases/latest/download/DesktopAppInstaller_Dependencies.json";
