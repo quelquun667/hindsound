@@ -1,3 +1,5 @@
+using Hindsound.Audio;
+
 namespace Hindsound.App;
 
 /// <summary>
@@ -6,8 +8,6 @@ namespace Hindsound.App;
 /// </summary>
 internal static class ClipAppName
 {
-    private const string ExeSuffix = ".exe";
-
     /// <summary>Whether two executable names are one program. A name of a program, not a path: compared in capitals, as the system does not tell them apart.</summary>
     public static bool SameProgram(string? a, string? b) =>
         string.Equals(a?.Trim().ToUpperInvariant(), b?.Trim().ToUpperInvariant(), StringComparison.Ordinal);
@@ -30,7 +30,7 @@ internal static class ClipAppName
             return shown;
         }
 
-        var bare = exe.ToUpperInvariant().EndsWith(ExeSuffix.ToUpperInvariant(), StringComparison.Ordinal) ? exe[..^ExeSuffix.Length].TrimEnd() : exe;
+        var bare = AudioAppList.NameOf(exe);
         return bare.Length > 0 ? bare : foregroundName;
     }
 }

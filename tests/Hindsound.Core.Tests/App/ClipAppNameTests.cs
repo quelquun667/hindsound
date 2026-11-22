@@ -1,4 +1,5 @@
 using Hindsound.App;
+using Hindsound.Audio;
 using Hindsound.Ui;
 
 namespace Hindsound.Tests.App;
@@ -31,6 +32,18 @@ public sealed class ClipAppNameTests : IDisposable
         Assert.Equal("Notepad", ClipAppName.For("", "Google Chrome", "Notepad"));
         Assert.Equal("Notepad", ClipAppName.For("   ", null, "Notepad"));
         Assert.Null(ClipAppName.For(null, null, null));
+    }
+
+    [Theory]
+    [InlineData("Discord.exe")]
+    [InlineData("Discord.EXE")]
+    [InlineData("two words.Exe")]
+    [InlineData("python3.12")]
+    [InlineData("org.kde.foo")]
+    [InlineData("a.exe.exe")]
+    public void The_executable_loses_its_suffix_by_the_one_rule_of_the_list_of_programs(string exe)
+    {
+        Assert.Equal(AudioAppList.NameOf(exe), ClipAppName.For(exe, null, "Notepad"));
     }
 
     [Fact]
