@@ -59,23 +59,7 @@ internal sealed partial class LinuxTrashFileSystem : ITrashFileSystem
         return new TrashStat(0, kind, device, *(uint*)(buffer + OwnerAt), (uint)(mode & 0xFFF));
     }
 
-    public string? RealPath(string path)
-    {
-        var resolved = RealPathC(path, 0);
-        if (resolved == 0)
-        {
-            return null;
-        }
-
-        try
-        {
-            return Marshal.PtrToStringUTF8(resolved);
-        }
-        finally
-        {
-            Free(resolved);
-        }
-    }
+    public string? RealPath(string path) => LinuxRealPath.Of(path);
 
     public int MakeDirectory(string path) => MkDir(path, Private) == 0 ? 0 : Marshal.GetLastPInvokeError();
 
@@ -172,12 +156,6 @@ internal sealed partial class LinuxTrashFileSystem : ITrashFileSystem
 
     [LibraryImport(LibC, EntryPoint = "statx", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
     private static unsafe partial int StatX(int folder, string path, int flags, uint mask, byte* buffer);
-
-    [LibraryImport(LibC, EntryPoint = "realpath", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
-    private static partial nint RealPathC(string path, nint resolved);
-
-    [LibraryImport(LibC, EntryPoint = "free")]
-    private static partial void Free(nint memory);
 
     [LibraryImport(LibC, EntryPoint = "mkdir", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
     private static partial int MkDir(string path, uint mode);

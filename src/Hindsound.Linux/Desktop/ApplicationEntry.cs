@@ -45,13 +45,16 @@ internal sealed class ApplicationEntry
     /// out when it is one of them: its entry is the user's, and taken for the system's, a lone AppImage would remove its own
     /// and write it again at every launch.
     /// </param>
-    /// <param name="realPath">Gives the real path of a folder, links followed, or null when it does not exist; null here is <see cref="EntryRules.RealPath"/>.</param>
+    /// <param name="realPath">Gives the real path of a folder, links followed, or null when it does not exist; null here is <see cref="EntryRules.RealPath"/>: the real path of the C library on Linux, none elsewhere.</param>
     internal ApplicationEntry(string dataHome, IReadOnlyList<string> systemData, Func<string, string?>? realPath = null)
     {
         _dataHome = dataHome;
         _realPath = realPath ?? EntryRules.RealPath;
         _systemData = systemData.Where(folder => !EntryRules.SameFolder(folder, dataHome, _realPath)).ToList();
     }
+
+    /// <summary>The folders of the system left, the data folder of the user, under whatever name, taken out.</summary>
+    internal IReadOnlyList<string> SystemData => _systemData;
 
     public string FilePath => Path.Combine(_dataHome, "applications", FileName);
 
@@ -316,68 +319,18 @@ internal static class EntryRules
         return realPath(a) is { } realA && realPath(b) is { } realB && SameName(realA, realB);
     }
 
-    /// <summary>The Linux limit of links followed in one path.</summary>
-    private const int MaxLinks = 40;
-
     /// <summary>
-    /// The real path of an existing folder given as a full path: every link followed at each component, ".." taken after the links
-    /// before it, as <c>realpath</c> does. Null for a relative path, a folder that does not exist, a loop or one that cannot be read.
+    /// The real path of an existing folder given as a full path, by <see cref="LinuxRealPath"/>. Null for a relative path, a
+    /// path that is no folder, a loop, and on every system but Linux, where the names alone are compared.
     /// </summary>
     public static string? RealPath(string path)
     {
-        if (!path.StartsWith('/') || !Directory.Exists(path))
+        if (!OperatingSystem.IsLinux() || !path.StartsWith('/'))
         {
             return null;
         }
 
-        try
-        {
-            var pending = new Stack<string>(path.Split('/', StringSplitOptions.RemoveEmptyEntries).Reverse());
-            var resolved = "/";
-            var links = 0;
-            while (pending.Count > 0)
-            {
-                var name = pending.Pop();
-                if (name == ".")
-                {
-                    continue;
-                }
-
-                if (name == "..")
-                {
-                    resolved = resolved == "/" ? "/" : Path.GetDirectoryName(resolved) ?? "/";
-                    continue;
-                }
-
-                var candidate = resolved == "/" ? "/" + name : resolved + "/" + name;
-                if (new DirectoryInfo(candidate).LinkTarget is not { } target)
-                {
-                    resolved = candidate;
-                    continue;
-                }
-
-                if (++links > MaxLinks)
-                {
-                    return null;
-                }
-
-                if (target.StartsWith('/'))
-                {
-                    resolved = "/";
-                }
-
-                foreach (var part in target.Split('/', StringSplitOptions.RemoveEmptyEntries).Reverse())
-                {
-                    pending.Push(part);
-                }
-            }
-
-            return Directory.Exists(resolved) ? resolved : null;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
+        return LinuxRealPath.Of(path) is { } real && Directory.Exists(real) ? real : null;
     }
 
     /// <summary>
