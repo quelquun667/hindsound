@@ -90,6 +90,7 @@ internal sealed partial class WinHttpTransport : IUpdateTransport
 
         var connection = WinHttpConnect(session, uri.IdnHost, (ushort)uri.Port, 0);
         var request = connection == 0 ? 0 : WinHttpOpenRequest(connection, "GET", uri.PathAndQuery, null, null, 0, FlagSecure);
+        var watchdog = new Watchdog(request);
         try
         {
             if (request == 0 || !Configure(request, patience))
@@ -97,18 +98,22 @@ internal sealed partial class WinHttpTransport : IUpdateTransport
                 return new HopOutcome(LastError());
             }
 
-            if (!WinHttpSendRequest(request, 0, 0, 0, 0, 0, 0))
+            if (watchdog.Run(patience, () => WinHttpSendRequest(request, 0, 0, 0, 0, 0, 0)) is { } notSent)
             {
-                return new HopOutcome(LastError());
+                return new HopOutcome(notSent);
             }
 
             // Connecting took part of the time: what is left, and no more, goes to the answer.
             var answerPatience = (uint)Math.Max(Patience(limits, watch.Elapsed), 1);
             if (!WinHttpSetOption(request, OptionReceiveTimeout, ref answerPatience, sizeof(uint))
-                || !WinHttpSetOption(request, OptionReceiveResponseTimeout, ref answerPatience, sizeof(uint))
-                || !WinHttpReceiveResponse(request, 0))
+                || !WinHttpSetOption(request, OptionReceiveResponseTimeout, ref answerPatience, sizeof(uint)))
             {
                 return new HopOutcome(LastError());
+            }
+
+            if (watchdog.Run((int)answerPatience, () => WinHttpReceiveResponse(request, 0)) is { } noAnswer)
+            {
+                return new HopOutcome(noAnswer);
             }
 
             uint size = sizeof(int);
@@ -134,7 +139,7 @@ internal sealed partial class WinHttpTransport : IUpdateTransport
             }
 
             return new HopOutcome(TransferLoops.PumpBody(
-                (buffer, wait) => ReadSome(request, buffer, wait),
+                (buffer, wait) => ReadSome(request, watchdog, buffer, wait),
                 limits,
                 sink,
                 shouldStop,
@@ -142,8 +147,79 @@ internal sealed partial class WinHttpTransport : IUpdateTransport
         }
         finally
         {
-            WinHttpCloseHandle(request);
+            // A request the watchdog closed is not closed twice; the connection goes after its request, as always.
+            if (!watchdog.Fired)
+            {
+                WinHttpCloseHandle(request);
+            }
+
             WinHttpCloseHandle(connection);
+        }
+    }
+
+    /// <summary>
+    /// Holds each blocking call of a request to its own patience. A server that accepts and never answers holds the TLS handshake
+    /// inside WinHttpSendRequest, and WinHTTP checks that wait against the receive timeout only on a coarse clock of about 3.9 s:
+    /// a receive timeout of 0.5, 1 or 2 s waited 3.8 to 4.0 s, 4 s waited 7.8 s and 8 s 11.8 s, the other timeouts changing
+    /// nothing, on one connection and one ClientHello, with no retry and no fallback (22/11/2026); 6.0 s for 2 s on the CI. No
+    /// option shortens it. Closing the request from another thread ends the call at once (2.005 to 2.017 s for 2 s), and that
+    /// end is the patience running out.
+    /// </summary>
+    private sealed class Watchdog(nint request)
+    {
+        private readonly Lock _gate = new();
+        private int _generation;
+        private int _armed;
+        private bool _fired;
+
+        /// <summary>The watchdog closed the request: nothing may use or close it again.</summary>
+        public bool Fired
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _fired;
+                }
+            }
+        }
+
+        /// <summary>Null when the call succeeded in time; TimedOut when its patience ran out, whatever it returned; else its error.</summary>
+        public TransportResult? Run(int patience, Func<bool> call)
+        {
+            int generation;
+            lock (_gate)
+            {
+                if (_fired)
+                {
+                    return new TransportResult(TransportStatus.TimedOut);
+                }
+
+                generation = _armed = ++_generation;
+            }
+
+            // A timer of an earlier call that fires late finds another generation and leaves the request alone.
+            using var timer = new Timer(_ => Fire(generation), null, patience, Timeout.Infinite);
+            var error = call() ? (TransportResult?)null : LastError();
+            lock (_gate)
+            {
+                _armed = 0;
+                return _fired ? new TransportResult(TransportStatus.TimedOut) : error;
+            }
+        }
+
+        private void Fire(int generation)
+        {
+            lock (_gate)
+            {
+                if (_armed != generation || _fired)
+                {
+                    return;
+                }
+
+                _fired = true;
+                WinHttpCloseHandle(request);
+            }
         }
     }
 
@@ -166,13 +242,18 @@ internal sealed partial class WinHttpTransport : IUpdateTransport
 
     // Asking how much is there, then reading exactly that, means no read waits to fill the buffer: a server dripping one
     // byte at a time cannot hold a single call past the deadline.
-    private static BodyRead ReadSome(nint request, byte[] buffer, TimeSpan patience)
+    private static BodyRead ReadSome(nint request, Watchdog watchdog, byte[] buffer, TimeSpan patience)
     {
         var wait = (uint)Math.Ceiling(patience.TotalMilliseconds);
-        if (!WinHttpSetOption(request, OptionReceiveTimeout, ref wait, sizeof(uint))
-            || !WinHttpQueryDataAvailable(request, out var available))
+        if (!WinHttpSetOption(request, OptionReceiveTimeout, ref wait, sizeof(uint)))
         {
             return new BodyRead(0, LastError());
+        }
+
+        uint available = 0;
+        if (watchdog.Run((int)wait, () => WinHttpQueryDataAvailable(request, out available)) is { } notRead)
+        {
+            return new BodyRead(0, notRead);
         }
 
         if (available == 0)

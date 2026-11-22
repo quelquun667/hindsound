@@ -8,10 +8,9 @@ using Hindsound.Updates;
 namespace Hindsound.Tests.Updates;
 
 /// <summary>
-/// The silent server costs about 4 s here against a bound of 6 s, and the wait ends through threads of WinHTTP that must get a
-/// core in time. Beside the tests that run in parallel they may not: with the process held on 2 cores and 8 threads spinning
-/// beside it, one wait took 6.8 s, where the .NET pool starved by 30 blocked tasks changed nothing (3.8 to 4.0 s). The tests of
-/// the transport run one at a time, apart from the others.
+/// The wait on a silent server ends through a timer thread that must get a core in time. Beside the tests that run in parallel it
+/// may not: before the watchdog of the transport, with the process held on 2 cores and 8 threads spinning beside it, one wait took
+/// 6.8 s instead of 4. The tests of the transport run one at a time, apart from the others.
 /// </summary>
 [Collection(nameof(TimingSensitive))]
 public class WinHttpTransportTests
@@ -62,6 +61,33 @@ public class WinHttpTransportTests
 
         Assert.Equal(TransportStatus.TimedOut, result.Status);
         Assert.InRange(watch.Elapsed, TimeSpan.FromSeconds(1.5), TimeSpan.FromSeconds(6));
+    }
+
+    /// <summary>
+    /// The patience is held to the hop, not left to WinHTTP: alone, its TLS handshake waited 3.8 to 4.0 s for a patience of 2 s,
+    /// and 6.0 s on the CI. With the watchdog it ends at 2.005 to 2.017 s; the bound leaves 1 s to a loaded machine.
+    /// </summary>
+    [Fact]
+    public void ASilentServerEndsAtThePatienceOfTheHop()
+    {
+        using var server = new TcpListener(IPAddress.Loopback, 0);
+        server.Start();
+        var address = new Uri($"https://127.0.0.1:{((IPEndPoint)server.LocalEndpoint).Port}/");
+        var accepted = server.AcceptTcpClientAsync();
+
+        var limits = new TransferLimits(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(2), 1024);
+        var watch = Stopwatch.StartNew();
+        var result = new WinHttpTransport().Run(
+            address.AbsoluteUri,
+            limits,
+            _ => { },
+            () => false,
+            (_, request, _) => request(address).Result);
+        watch.Stop();
+
+        Assert.Equal(TransportStatus.TimedOut, result.Status);
+        Assert.True(accepted.IsCompletedSuccessfully);
+        Assert.InRange(watch.Elapsed, TimeSpan.FromSeconds(1.9), TimeSpan.FromSeconds(3));
     }
 
     [Fact]
