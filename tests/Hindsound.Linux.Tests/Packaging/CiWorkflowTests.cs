@@ -70,12 +70,12 @@ public sealed partial class CiWorkflowTests
     ];
 
     [Fact]
-    public void The_older_systems_run_on_macOS_14_and_15_with_the_app_the_job_mac_built()
+    public void The_older_system_runs_on_macOS_15_with_the_app_the_job_mac_built()
     {
         var older = JobOf("mac-older");
 
         Assert.Contains("\n    needs: mac\n", older, StringComparison.Ordinal);
-        Assert.Contains("os: [macos-14, macos-15]", older, StringComparison.Ordinal);
+        Assert.Contains("os: [macos-15]", older, StringComparison.Ordinal);
         Assert.Contains("\n    runs-on: ${{ matrix.os }}\n", older, StringComparison.Ordinal);
         Assert.Contains("fail-fast: false", older, StringComparison.Ordinal);
         Assert.Contains("timeout-minutes:", older, StringComparison.Ordinal);

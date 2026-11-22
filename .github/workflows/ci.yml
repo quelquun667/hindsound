@@ -859,13 +859,15 @@ jobs:
           compression-level: 0
           if-no-files-found: error
 
-  # The app of the job mac, on the systems under it that the minimum of the Info.plist (macOS 14.4) covers: macOS 14 and
-  # macOS 15, both on Apple silicon. The bundle, the dylibs and the fonts are the ones the job mac built and proved (its
-  # artifact mac-app); nothing is built again but the tests, which run here on the system itself. Each runner says its own
-  # version first: an image of macos-14 older than 14.4 would not be allowed to capture a process (the Core Audio taps
-  # begin at 14.2, the app asks for 14.4), and the job then fails on that line, not on something it cannot prove. The
-  # steps of the proofs are those of the job mac, word for word (the test CiWorkflowTests keeps them so), with the same
-  # preparation: BlackHole 2ch as the virtual device, the rights of TCC written for the bundle.
+  # The app of the job mac, on a system under it that the minimum of the Info.plist (macOS 14.4) covers: macOS 15 on Apple
+  # silicon. macOS 14 is not here: GitHub retired its runner image on 2 November 2026 (the label macos-14 gets "The
+  # configuration 'macos-14-arm64-us-default' is not supported", run 45070396216), so nothing hosted can run the app on
+  # 14.4 to 14.7. The bundle, the dylibs and the fonts are the ones the job mac built and proved (its artifact mac-app);
+  # nothing is built again but the tests, which run here on the system itself. Each runner says its own version first: an
+  # image under 14.4 would not be allowed to capture a process (the Core Audio taps begin at 14.2, the app asks for 14.4),
+  # and the job then fails on that line, not on something it cannot prove. The steps of the proofs are those of the job
+  # mac, word for word (the test CiWorkflowTests keeps them so), with the same preparation: BlackHole 2ch as the virtual
+  # device, the rights of TCC written for the bundle.
   mac-older:
     needs: mac
     if: ${{ !cancelled() }}
@@ -873,7 +875,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, macos-15]
+        os: [macos-15]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
