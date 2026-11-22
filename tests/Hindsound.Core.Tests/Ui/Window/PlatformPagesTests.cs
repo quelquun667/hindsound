@@ -685,4 +685,23 @@ public sealed unsafe class PlatformPagesTests
         Assert.Contains("Recycle Bin", string.Join(' ', scenes["library-supprimer-clip@100"]));
         Assert.Contains("Record", scenes["audio@100"]);
     }
+
+    // ---------------------------------------------------------------- what the pages call the computer
+
+    [Theory]
+    [InlineData("Windows", "PC")]
+    [InlineData("Linux", "PC")]
+    [InlineData("Mac", "Mac")]
+    public void The_mic_step_of_the_first_launch_card_names_the_machine_of_its_system(string system, string machine)
+    {
+        var features = system switch
+        {
+            "Windows" => Windows,
+            "Linux" => X11,
+            _ => PlatformFeatures.Mac(static () => null),
+        };
+        using var rig = new Rig(features, firstRun: true);
+        rig.Click("run.next");
+        Assert.Contains("Speak: the bar should move. Off if you only want the " + machine + " sound.", rig.Texts());
+    }
 }

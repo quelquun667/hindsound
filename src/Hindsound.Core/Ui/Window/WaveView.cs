@@ -1,3 +1,4 @@
+using Hindsound.App;
 using Hindsound.Audio;
 using Hindsound.Export;
 
@@ -54,7 +55,6 @@ internal static class WaveView
     public const string MicLost = "Mic lost";
 
     // The word of the Record list, so that the page says one thing.
-    private const string WholePc = "Whole PC";
 
     private const int Rate = InternalFormat.SampleRate;
 
@@ -201,11 +201,11 @@ internal static class WaveView
     /// a past from one other app says both, "Discord, then Spotify", and a past from the whole PC, or from more than one source, says
     /// "Whole PC". The app alone once the line has left the wave. Not running comes first: the present wins.
     /// </summary>
-    public static string SystemLaneTitle(AudioEngineStatus? status, WaveMarker marker)
+    public static string SystemLaneTitle(AudioEngineStatus? status, WaveMarker marker, PlatformFeatures? features = null)
     {
         if (status?.SourceApp is not { } exe)
         {
-            return WholePc;
+            return (features ?? PlatformFeatures.Windows).WholeMachine;
         }
 
         var app = AppName(exe);
@@ -223,7 +223,7 @@ internal static class WaveView
         // on it: its past would name a sequence that never took place, and the title would contradict the line under it.
         if (marker.Past is not { } past || !string.Equals(marker.App, exe, StringComparison.OrdinalIgnoreCase))
         {
-            return WholePc;
+            return (features ?? PlatformFeatures.Windows).WholeMachine;
         }
 
         // The same app on both sides has no "then" to tell: the past is that app as much as the present.
@@ -271,7 +271,7 @@ internal static class WaveView
     /// <see cref="SaveSeconds"/> at each tick, two integers and no allocation, and builds the text only when they differ.
     /// </para>
     /// </summary>
-    public static string SaveLine(int clipSeconds, in WaveFacts facts)
+    public static string SaveLine(int clipSeconds, in WaveFacts facts, PlatformFeatures? features = null)
     {
         var (kept, before) = SaveSeconds(clipSeconds, facts);
         var line = "Save: last " + NotificationStates.FormatDuration(kept);
@@ -282,7 +282,7 @@ internal static class WaveView
 
         if (before > 0)
         {
-            line += $" ({NotificationStates.FormatDuration(before)} from before {SourceName(LastChange(facts)!.Value.App)})";
+            line += $" ({NotificationStates.FormatDuration(before)} from before {SourceName(LastChange(facts)!.Value.App, features)})";
         }
 
         return line;
@@ -314,7 +314,7 @@ internal static class WaveView
     }
 
     /// <summary>The words on the line of a change of source.</summary>
-    public static string MarkerText(string? app) => app is null ? WholePc + " from here" : AppName(app) + " only from here";
+    public static string MarkerText(string? app, PlatformFeatures? features = null) => app is null ? (features ?? PlatformFeatures.Windows).WholeMachine + " from here" : AppName(app) + " only from here";
 
     /// <summary>
     /// What to say when nothing can be captured, or null. The same two cases as the status band: with an application
@@ -330,7 +330,7 @@ internal static class WaveView
         return status.SourceApp is { } exe ? "Can't capture " + AppName(exe) : "No audio device";
     }
 
-    private static string SourceName(string? app) => app is null ? WholePc : AppName(app);
+    private static string SourceName(string? app, PlatformFeatures? features) => app is null ? (features ?? PlatformFeatures.Windows).WholeMachine : AppName(app);
 
     private static string AppName(string exe) => AudioAppList.NameOf(exe);
 

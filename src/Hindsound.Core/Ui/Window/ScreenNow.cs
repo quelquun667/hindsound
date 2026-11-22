@@ -101,7 +101,7 @@ internal sealed partial class SettingsScreen
             return;
         }
 
-        var wave = _wave ??= new NowWave();
+        var wave = _wave ??= new NowWave(Features);
         var facts = panel.WaveFacts;
         wave.Follow(facts);
         var change = wave.Look(_canvas.Scale, facts, Editor.Settings.ClipSeconds, _status);
@@ -143,12 +143,12 @@ internal sealed partial class SettingsScreen
         _contentBottom = 0;
         _waveAccent = Editor.AccentRgb;
         RowLabel("Record", RecordTop);
-        List("now.record", new Box(RecordLeft, RecordTop, FieldWidth, RowHeight), () => SettingsEditor.RecordChoices(_apps, Editor.Settings.Audio.SourceApp, _status is { SourceApp: not null, SourceAppMissing: false }), () => Editor.Settings.Audio.SourceApp ?? string.Empty, Editor.SetSourceApp);
+        List("now.record", new Box(RecordLeft, RecordTop, FieldWidth, RowHeight), () => SettingsEditor.RecordChoices(_apps, Editor.Settings.Audio.SourceApp, _status is { SourceApp: not null, SourceAppMissing: false }, Features.MachineName), () => Editor.Settings.Audio.SourceApp ?? string.Empty, Editor.SetSourceApp);
         Add(new Painted((c, ui) =>
         {
             if (_now is { } panel)
             {
-                (_wave ??= new NowWave()).PaintAll(c, ui.Accent, panel.WaveFacts, Editor.Settings.ClipSeconds, Editor.Settings.BufferSeconds, _status);
+                (_wave ??= new NowWave(Features)).PaintAll(c, ui.Accent, panel.WaveFacts, Editor.Settings.ClipSeconds, Editor.Settings.BufferSeconds, _status);
             }
         }));
         BuildVoiceSwitch();

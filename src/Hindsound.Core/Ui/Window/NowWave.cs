@@ -1,3 +1,4 @@
+using Hindsound.App;
 using Hindsound.Audio;
 
 namespace Hindsound.Ui.Window;
@@ -41,7 +42,11 @@ internal sealed class NowWave
     private static readonly Box SystemLane = new(SettingsScreen.Left, SystemTop, SettingsScreen.Width, SystemHeight);
     private static readonly Box MicLane = new(SettingsScreen.Left, MicTop, SettingsScreen.Width, MicHeight);
 
+    /// <summary>A wave that says what the system calls its own sound in the words of <paramref name="features"/>: the Windows ones when none is given.</summary>
+    public NowWave(PlatformFeatures? features = null) => _features = features ?? PlatformFeatures.Windows;
+
     private readonly WaveLane _systemLane = new(), _micLane = new();
+    private readonly PlatformFeatures _features;
     private double _scale;
     private WaveGrid _systemGrid, _micGrid;
     private byte[] _systemBars = [], _micBars = [], _nextSystem = [], _nextMic = [];
@@ -150,7 +155,7 @@ internal sealed class NowWave
             _titleStatus = status;
             _titleMixed = marker.Shows;
             _titlePast = marker.Past;
-            _systemTitle = WaveView.SystemLaneTitle(status, marker);
+            _systemTitle = WaveView.SystemLaneTitle(status, marker, _features);
             _noCapture = WaveView.NoCaptureText(status);
             change |= WaveChange.Lanes | WaveChange.Titles;
         }
@@ -158,7 +163,7 @@ internal sealed class NowWave
         if (marker.Shows && (_markerText is null || !ReferenceEquals(marker.App, _markerApp)))
         {
             _markerApp = marker.App;
-            _markerText = WaveView.MarkerText(marker.App);
+            _markerText = WaveView.MarkerText(marker.App, _features);
         }
 
         var seconds = WaveView.SaveSeconds(clipSeconds, facts);
@@ -170,7 +175,7 @@ internal sealed class NowWave
             _saveClipSeconds = clipSeconds;
             _saveShown = shown;
             _saveChanges = facts.Changes;
-            _saveText = shown ? WaveView.SaveLine(clipSeconds, facts) : string.Empty;
+            _saveText = shown ? WaveView.SaveLine(clipSeconds, facts, _features) : string.Empty;
             if (_saveText != before)
             {
                 change |= WaveChange.SaveLine;

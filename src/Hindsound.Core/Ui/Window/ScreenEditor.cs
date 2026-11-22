@@ -499,7 +499,7 @@ internal sealed partial class SettingsScreen
         ? string.Create(CultureInfo.InvariantCulture, $"about {Math.Max(1, Math.Round(bytes / 1000.0)):0} KB")
         : string.Create(CultureInfo.InvariantCulture, $"about {bytes / 1_000_000.0:0.0} MB");
 
-    internal static string VolumeLabel(int index, int count) => count > 1 ? (index == 0 ? "PC volume" : "Mic volume") : "Volume";
+    internal static string VolumeLabel(int index, int count, string machine = "PC") => count > 1 ? (index == 0 ? machine + " volume" : "Mic volume") : "Volume";
 
     internal static string HeldText(double ceilingDb) =>
         string.Create(CultureInfo.InvariantCulture, $"Peaks held under {ceilingDb:0.#} dB");
@@ -516,7 +516,7 @@ internal sealed partial class SettingsScreen
         {
             if (Math.Abs(_editGains[i]) >= 0.5)
             {
-                var name = _editGains.Length > 1 ? (i == 0 ? "PC" : "mic") : "volume";
+                var name = _editGains.Length > 1 ? (i == 0 ? Features.MachineName : "mic") : "volume";
                 summary += ", " + name + " " + StatusText.GainLabel(_editGains[i]);
             }
         }
@@ -535,7 +535,8 @@ internal sealed partial class SettingsScreen
             selection.DurationMs,
             EditorPlayheadMs,
             selection.Mode == EditorMode.Normal && selection.TooLongForSoundboard,
-            Editor.Settings.Export.PeakCeilingDb);
+            Editor.Settings.Export.PeakCeilingDb,
+            Features.MachineName);
     }
 
     private EditorTimeline EditorTimelineNow() =>
@@ -650,7 +651,7 @@ internal sealed partial class SettingsScreen
 
     private void EditorVolumeRow(int index, float y)
     {
-        var label = VolumeLabel(index, _editGains.Length);
+        var label = VolumeLabel(index, _editGains.Length, Features.MachineName);
         var db = _editGains[index];
         Add(new Painted((c, _) => c.TextMid(label, Face.Body, 14, Left, y + RowHeight / 2, Theme.Text)), scrolls: false);
         var bounds = new Box(Right - 300, y + 5, 300, 20);

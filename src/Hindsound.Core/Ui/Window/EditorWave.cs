@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using Hindsound.App;
 using Hindsound.Audio;
 
 namespace Hindsound.Ui.Window;
@@ -33,6 +34,7 @@ internal readonly record struct EditorTimeline(float X0, float X1, long Duration
 /// <param name="PlayheadMs">Where the playback is, or null when nothing plays.</param>
 /// <param name="SoundboardLimit">Mark where 5.2 s after the start ends: the part kept is longer than the soundboard takes.</param>
 /// <param name="CeilingDb">Where a boosted peak is held.</param>
+/// <param name="Machine">What the system calls the computer, for the name of the lane of its sound.</param>
 internal sealed record EditorWaveView(
     IReadOnlyList<IReadOnlyList<float>> Peaks,
     IReadOnlyList<double> GainsDb,
@@ -41,15 +43,22 @@ internal sealed record EditorWaveView(
     long DurationMs,
     long? PlayheadMs,
     bool SoundboardLimit,
-    double CeilingDb);
+    double CeilingDb,
+    string Machine = "PC");
 
 /// <summary>The wave of the editor: one lane per file, the part kept lit, the play head, the axis under it.</summary>
 internal static class EditorWave
 {
     public const float Top = 112, Height = 128, Gutter = 68, GripWidth = 18, GripHeight = 48, AxisGap = 11;
 
-    /// <summary>The names of the lanes of a clip in two files, in the order of its files.</summary>
-    public static readonly string[] LaneNames = ["Whole PC", "Mic"];
+    /// <summary>The name of a lane of a clip in two files, in the order of its files: the sound of the computer, then the microphone.</summary>
+    public static string LaneName(int index, string machine) => index switch { 0 => "Whole " + machine, 1 => "Mic", _ => "" };
+
+    /// <summary>
+    /// How far into the panel the name of a lane starts: 12 px, or further left for a name too wide to end before the wave, which
+    /// begins a gutter in. "Whole PC" keeps its 12; "Whole Mac" is wider and leaves 3 px before the wave.
+    /// </summary>
+    public static float LaneNameOffset(float nameWidth) => Math.Clamp(Gutter - 3 - nameWidth, 4, 12);
 
     public static Box Panel => new(SettingsScreen.Left, Top, SettingsScreen.Width, Height);
 
@@ -90,7 +99,8 @@ internal static class EditorWave
             var mid = grid.Mid / (float)s;
             if (count > 1)
             {
-                c.TextMid(i < LaneNames.Length ? LaneNames[i] : "", Face.Body, 12, panel.X + 12, mid, Theme.Muted);
+                var name = LaneName(i, view.Machine);
+                c.TextMid(name, Face.Body, 12, panel.X + LaneNameOffset(c.Measure(name, Face.Body, 12)), mid, Theme.Muted);
                 if (i > 0)
                 {
                     c.FillRect(new Box(panel.X + 1, panel.Y + i * laneHeight, panel.W - 2, 1), Theme.Line);

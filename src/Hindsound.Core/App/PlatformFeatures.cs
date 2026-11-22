@@ -69,6 +69,7 @@ internal sealed record PlatformFeatures
         TestNotification = true,
         ConfirmSound = false,
         StartupLabel = "Open at login",
+        MachineName = "Mac",
         TrashName = "Trash",
         ReservedNameText = "This name is reserved",
         Shortcuts = shortcuts ?? (static () => ShortcutMode.Command),
@@ -95,6 +96,12 @@ internal sealed record PlatformFeatures
 
     /// <summary>The words of the toggle that starts the app with the user's session.</summary>
     public string StartupLabel { get; init; } = "Start with Windows";
+
+    /// <summary>What the pages call the computer itself, where they tell its sound from a microphone's or an application's: "Whole PC".</summary>
+    public string MachineName { get; init; } = "PC";
+
+    /// <summary>The name of the source that records everything the computer plays: "Whole PC", "Whole Mac".</summary>
+    public string WholeMachine => "Whole " + MachineName;
 
     /// <summary>What the system calls the place deleted files go to, in the sentences that say a clip goes there.</summary>
     public string TrashName { get; init; } = "Recycle Bin";

@@ -571,7 +571,7 @@ internal sealed partial class SettingsScreen
         y += 36;
         if (Features.SingleApp)
         {
-            Row("Record", "audio.record", y, () => SettingsEditor.RecordChoices(_apps, Editor.Settings.Audio.SourceApp, _status is { SourceApp: not null, SourceAppMissing: false }), () => Editor.Settings.Audio.SourceApp ?? string.Empty, Editor.SetSourceApp);
+            Row("Record", "audio.record", y, () => SettingsEditor.RecordChoices(_apps, Editor.Settings.Audio.SourceApp, _status is { SourceApp: not null, SourceAppMissing: false }, Features.MachineName), () => Editor.Settings.Audio.SourceApp ?? string.Empty, Editor.SetSourceApp);
             y += pitch;
         }
 
@@ -586,7 +586,7 @@ internal sealed partial class SettingsScreen
         y += pitch;
         SegmentRow("Tracks", "audio.mode", y, ["Mix", "Separate"], () => Editor.Settings.Audio.Mode == "mix" ? 0 : 1, i => Editor.SetMode(i == 0 ? "mix" : "multitrack"));
         y += pitch;
-        GainRow("PC sound gain", "audio.systemGain", y, audio.SystemGainDb, Editor.SetSystemGain, true);
+        GainRow(Features.MachineName + " sound gain", "audio.systemGain", y, audio.SystemGainDb, Editor.SetSystemGain, true);
         y += pitch;
         GainRow("Mic gain", "audio.micGain", y, audio.MicGainDb, Editor.SetMicGain, audio.MicCaptured);
         _contentBottom = y + RowHeight;
@@ -1078,7 +1078,7 @@ internal sealed partial class SettingsScreen
 
                 break;
             case 1:
-                FirstRunNote("Speak: the bar should move. Off if you only want the PC sound.", inner, top);
+                FirstRunNote("Speak: the bar should move. Off if you only want the " + Features.MachineName + " sound.", inner, top);
                 Add(
                     new Dropdown(() => SettingsEditor.MicChoices(_mics, Editor.Settings.Audio.MicDeviceId), () => Editor.Settings.Audio.MicDeviceId, Editor.SetMic, OpenPopup)
                     {
