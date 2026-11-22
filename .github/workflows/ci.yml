@@ -1044,6 +1044,20 @@ jobs:
           sed 's/^/  log loop: /' "$folder/settings.log" || true
           [ "$code" -eq 2 ] && [ "$proof_code" -eq 0 ] && grep -q "loop proof: result pass" "$folder/settings.log"
 
+      # The shortcuts follow the keyboard layout, with the app on the main thread: the French, German and US layouts read
+      # by their ids (A on the key of US Q, Q on that of US A, Z and W traded, M where US has ';', 1 on the top row with
+      # Shift), two shortcuts that trade keys registered, the French layout selected and both moved by the notification of
+      # macOS, then the layout of the start selected again and both back.
+      - name: Prove the shortcuts follow the keyboard layout with the app
+        if: ${{ !cancelled() && steps.unpack.outcome == 'success' }}
+        run: |
+          program="$RUNNER_TEMP/app/Hindsound.app/Contents/MacOS/hindsound"
+          code=0
+          perl -e 'alarm shift; exec @ARGV' 90 "$program" --prove-keyboard > "$RUNNER_TEMP/keyboard-proof.txt" 2>&1 || code=$?
+          cat "$RUNNER_TEMP/keyboard-proof.txt"
+          echo "--prove-keyboard: exit code $code"
+          [ "$code" -eq 0 ] && grep -q "keyboard proof: result pass" "$RUNNER_TEMP/keyboard-proof.txt"
+
       # A real notification through SDL's Cocoa window, not the offscreen driver. The app says when it is up and where, and
       # holds it; screencapture takes the main screen, and the pixels of the accent (its bars) are counted where it is. The
       # app itself checks that the app in front stayed in front and that its window never had the focus, then clicks it with

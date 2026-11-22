@@ -4,6 +4,26 @@ All notable changes to Hindsound are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- On Linux, when the sound of the recorded application is lost, the screen says `Sound lost` with the name of the application, and the log says it too.
+- On Mac, a hotkey follows the keyboard layout, as on Windows: `Ctrl+Option+A` is the key that types an A, on an AZERTY keyboard as on a QWERTY one. When the layout changes while Hindsound runs, the hotkeys move to the right keys. A hotkey whose key another app holds waits, and the `Hotkeys` page shows it as in use.
+- On Mac, the log says once which permission macOS has not decided yet, and where to give it.
+- The README shows a short film of Hindsound at the top.
+
+### Changed
+
+- On Mac, Hindsound says `Mac` where it said `PC`. Windows and Linux keep `PC`.
+- On Windows, the check for a new version gives up on a server that does not answer after 2 seconds, instead of 4 to 6.
+- The name of an application in the name of a clip is cut by the same rule as in the list of programs.
+
+### Fixed
+
+- On Linux with PipeWire, an application whose output disappears while it plays is recorded again. Before, it might not be recorded at all.
+- On Linux, one folder reached by two paths through a symbolic link, such as `/home` and `/var/home` on Fedora Silverblue, is no longer taken for two folders. An AppImage on its own no longer writes its entry in the list of applications again at each launch.
+
 ## [0.11.0] - 2026-11-22
 
 A first Mac version. On Windows and Linux, Hindsound works as in 0.10.1.

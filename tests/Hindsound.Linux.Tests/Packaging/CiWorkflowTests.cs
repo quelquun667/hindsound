@@ -61,6 +61,7 @@ public sealed partial class CiWorkflowTests
     [
         "Draw the pages and prove the MP3 with the app",
         "Prove the loop, the icon, the shortcut and --save with the app",
+        "Prove the shortcuts follow the keyboard layout with the app",
         "Show a notification with the app",
         "Prove the devices and the applications that play with the app",
         "Prove the capture with the app",
