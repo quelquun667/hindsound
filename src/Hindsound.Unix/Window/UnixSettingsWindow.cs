@@ -41,6 +41,7 @@ internal sealed unsafe class UnixSettingsWindow : IWindowHost, ISettingsWindow
     private readonly bool _offscreen;
     private readonly UnixTextField _field;
     private readonly ILoopPump _pump;
+    private readonly Action? _activateApp;
 
     private PixelCanvas _canvas;
     private uint* _bits;
@@ -70,11 +71,14 @@ internal sealed unsafe class UnixSettingsWindow : IWindowHost, ISettingsWindow
 
     /// <summary>Opens SDL's video and makes the window, hidden until <see cref="Show"/>.</summary>
     /// <param name="newText">Makes the text of a bitmap: each bitmap gets its own, and frees it with itself.</param>
-    public UnixSettingsWindow(SettingsWindowRequest request, UnixLoop loop, Func<ICanvasText> newText, ISdlVideo video)
+    /// <param name="activateApp">Run each time the window is shown or brought back on screen, after SDL raised it: the Mac
+    /// makes the app the active one there. Null on Linux, where SDL's raise is all.</param>
+    public UnixSettingsWindow(SettingsWindowRequest request, UnixLoop loop, Func<ICanvasText> newText, ISdlVideo video, Action? activateApp = null)
     {
         Closed = request.Closed;
         _loop = loop;
         _video = video;
+        _activateApp = activateApp;
         _newText = newText;
         _readMicPeak = request.ReadMicPeak;
         _offscreen = request.Offscreen;
@@ -132,8 +136,8 @@ internal sealed unsafe class UnixSettingsWindow : IWindowHost, ISettingsWindow
     }
 
     /// <summary>Opens a window on SDL itself.</summary>
-    public static UnixSettingsWindow Open(SettingsWindowRequest request, UnixLoop loop, Func<ICanvasText> newText) =>
-        new(request, loop, newText, new SdlVideo());
+    public static UnixSettingsWindow Open(SettingsWindowRequest request, UnixLoop loop, Func<ICanvasText> newText, Action? activateApp = null) =>
+        new(request, loop, newText, new SdlVideo(), activateApp);
 
     /// <summary>The windows open in this process, for <c>--settings-probe</c>.</summary>
     public static int OpenWindows => Volatile.Read(ref s_windows);
@@ -173,6 +177,7 @@ internal sealed unsafe class UnixSettingsWindow : IWindowHost, ISettingsWindow
         if (!_offscreen)
         {
             _video.Show();
+            _activateApp?.Invoke();
         }
 
         Invalidate();
@@ -183,6 +188,7 @@ internal sealed unsafe class UnixSettingsWindow : IWindowHost, ISettingsWindow
         if (!_offscreen && !_closed)
         {
             _video.BringBack();
+            _activateApp?.Invoke();
         }
     }
 

@@ -406,7 +406,8 @@ jobs:
       # holds it; screencapture takes the main screen, and the pixels of the accent (its bars) are counted where it is. The
       # app itself checks that the app in front stayed in front and that its window never had the focus, then clicks it with
       # a mouse event of the system (CGEventPost): the click must come once, lead to the Library by the route of the Core, and
-      # leave the app in front where it was, as on Windows. The program is started from bash, not through open: TCC judges its
+      # leave the app in front where it was, as on Windows; then the Library, opened as the app opens it on the Mac, must come
+      # in front with Hindsound active within 1.5 s (focus.library_front), as on Windows. The program is started from bash, not through open: TCC judges its
       # CGEventPost by the process responsible for it, the runner's shell, and on run 45029672018 the click reached the window
       # with no right of the bundle written: the PostEvent right of the bundle written below is not what lets the click
       # through here. The line click.post_access of the app says what CGPreflightPostEventAccess answers.

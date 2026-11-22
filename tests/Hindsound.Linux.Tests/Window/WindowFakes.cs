@@ -189,13 +189,13 @@ internal sealed unsafe class FakeVideo : ISdlVideo
         Bounds = (x, y, width, height);
     }
 
-    public void Show()
-    {
-    }
+    public int Shows { get; private set; }
 
-    public void BringBack()
-    {
-    }
+    public int BringBacks { get; private set; }
+
+    public void Show() => Shows++;
+
+    public void BringBack() => BringBacks++;
 
     public void SetIcon(uint[] argb, int side)
     {
@@ -243,7 +243,7 @@ internal sealed unsafe class WindowRig : IDisposable
 {
     private readonly List<nint> _strings = [];
 
-    public WindowRig(bool offscreen = true, int zoom = 100, Action<FakeVideo>? setUp = null)
+    public WindowRig(bool offscreen = true, int zoom = 100, Action<FakeVideo>? setUp = null, Action? activateApp = null)
     {
         Video = new FakeVideo();
         setUp?.Invoke(Video);
@@ -251,7 +251,7 @@ internal sealed unsafe class WindowRig : IDisposable
         Settings = new AppSettings().Normalize();
         Settings.General.WindowZoom = zoom;
         var request = new SettingsWindowRequest(Settings, Backend, () => { MicReads++; return 0.5f; }, false, offscreen, default, () => ClosedCount++);
-        Window = new UnixSettingsWindow(request, Loop, () => new BlockText(), Video);
+        Window = new UnixSettingsWindow(request, Loop, () => new BlockText(), Video, activateApp);
     }
 
     public FakeVideo Video { get; }

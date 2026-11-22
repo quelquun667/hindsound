@@ -1,14 +1,18 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Hindsound.App;
 using Hindsound.Export;
+using Hindsound.Input;
 using Hindsound.Mac.App;
 using Hindsound.Mac.Window;
+using Hindsound.Settings;
 using Hindsound.Ui;
 using Hindsound.Ui.Window;
 using Hindsound.Unix.App;
 using Hindsound.Unix.Notification;
+using Hindsound.Unix.Window;
 
 namespace Hindsound.Mac.Notification;
 
@@ -23,7 +27,10 @@ namespace Hindsound.Mac.Notification;
 /// Core's route of a click on a notification (<see cref="WindowGoing.Click"/>, what Windows runs too), whose window is only
 /// named here. 0 when the window showed, the app in front stayed in front, the window never had the focus, the click came
 /// once and led to the Library, the click left the app in front where it was and Hindsound not active (as Windows, where the
-/// notification answers MA_NOACTIVATE), and the notification left the screen; 3 otherwise.
+/// notification answers MA_NOACTIVATE), the window the click named, then opened as the app opens it (<see cref="MacShell.OpenWindow"/>:
+/// SDL's show and raise, then <see cref="MacActivation"/>), came in front with Hindsound active within 1.5 s, as on Windows,
+/// and the notification left the screen; 3 otherwise. The window is opened 1.2 s after the click, once the click is judged,
+/// where the app opens it in the click's own handler.
 /// </summary>
 [SupportedOSPlatform("macos")]
 internal static unsafe partial class MacNotificationProof
@@ -124,9 +131,49 @@ internal static unsafe partial class MacNotificationProof
                     Check("click.received", clicks == 1, $"clicks={clicks}");
                     Check("click.route", openedOn == Section.Library, $"window would open on {openedOn?.ToString() ?? "nothing"}");
                     Check("focus.click_kept_front", front.Pid == before.Pid && !AppActive(), $"app_active={(AppActive() ? 1 : 0)} pid={front.Pid} name={front.Name}");
-                    view.HoldOpen = false;
+                    OpenLibrary(openedOn ?? Section.Library);
                 });
             });
+        }
+
+        // The window the click named, opened by the app's own way on the Mac: it must come in front, and Hindsound be the
+        // active app, within 1.5 s; then it is closed and the notification let go.
+        void OpenLibrary(Section target)
+        {
+            var request = new SettingsWindowRequest(new AppSettings().Normalize(), new QuietBackend(), static () => 0f, false, false, default, static () => { });
+            var watch = Stopwatch.StartNew();
+            UnixSettingsWindow? library = null;
+            try
+            {
+                library = MacShell.OpenWindow(request, loop, Log);
+                library.Screen.ShowSection(target);
+                library.Show();
+            }
+            catch (Exception exception)
+            {
+                Check("focus.library_front", false, "the window did not open: " + exception.Message);
+                view.HoldOpen = false;
+                return;
+            }
+
+            Log($"library.opened on {target} after {watch.ElapsedMilliseconds} ms");
+            WaitForFront(library, watch, 0);
+        }
+
+        void WaitForFront(UnixSettingsWindow library, Stopwatch watch, int turn)
+        {
+            var front = Frontmost();
+            var active = AppActive();
+            var good = front.Pid == Environment.ProcessId && active && library.IsForeground;
+            if (!good && turn < 15)
+            {
+                loop.After(100, () => WaitForFront(library, watch, turn + 1));
+                return;
+            }
+
+            Check("focus.library_front", good, $"app_active={(active ? 1 : 0)} front={front.Name} pid={front.Pid} self={Environment.ProcessId} window_focus={(library.IsForeground ? 1 : 0)} after={watch.ElapsedMilliseconds} ms");
+            library.Close();
+            view.HoldOpen = false;
         }
 
         void WaitForCapture(int turn)
@@ -185,6 +232,42 @@ internal static unsafe partial class MacNotificationProof
         loop.Run();
         Check("finished", finished == 1, $"clicks={clicks}");
         return ok ? 0 : ExitFailed;
+    }
+
+    /// <summary>The window's backend: the proof changes no setting.</summary>
+    private sealed class QuietBackend : ISettingsBackend
+    {
+        public void Applied(SettingsChange change)
+        {
+        }
+
+        public void SaveNow()
+        {
+        }
+
+        public void TogglePause()
+        {
+        }
+
+        public void CopyLast()
+        {
+        }
+
+        public void OpenFolder()
+        {
+        }
+
+        public void ShowTestNotification()
+        {
+        }
+
+        public void SuspendHotkeys()
+        {
+        }
+
+        public IReadOnlyList<HotkeyResult> ApplyHotkeys(HotkeySettings hotkeys) => [];
+
+        public IReadOnlyList<HotkeyResult> ResumeHotkeys() => [];
     }
 
     /// <summary>The app in front, as the Dock sees it: its process and its name; 0 and "none" when there is none.</summary>

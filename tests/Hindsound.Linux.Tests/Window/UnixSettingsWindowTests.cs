@@ -99,6 +99,33 @@ public sealed unsafe class UnixSettingsWindowTests
     }
 
     [Fact]
+    public void A_window_shown_or_brought_back_on_screen_asks_the_app_to_be_active_after_SDL_raised_it()
+    {
+        var asked = new List<(int Shows, int BringBacks)>();
+        FakeVideo? video = null;
+        using var rig = new WindowRig(offscreen: false, setUp: v => video = v, activateApp: () => asked.Add((video!.Shows, video.BringBacks)));
+
+        rig.Window.Show();
+        Assert.Equal([(1, 0)], asked);
+
+        rig.Window.BringBack();
+        Assert.Equal([(1, 0), (1, 1)], asked);
+    }
+
+    [Fact]
+    public void An_offscreen_window_never_asks_the_app_to_be_active()
+    {
+        var asked = 0;
+        using var rig = new WindowRig(activateApp: () => asked++);
+
+        rig.Window.Show();
+        rig.Window.BringBack();
+
+        Assert.Equal(0, asked);
+        Assert.Equal(0, rig.Video.Shows);
+    }
+
+    [Fact]
     public void Text_typed_in_a_field_reaches_the_page_and_text_input_follows_the_field()
     {
         using var rig = new WindowRig(offscreen: false, setUp: v => v.Focused = true);

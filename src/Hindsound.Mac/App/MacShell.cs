@@ -52,7 +52,11 @@ internal sealed class MacShell(Action<string> log) : IAppShell
     public IClipboardFiles Clipboard(IAppLoop loop) => new MacPasteboard(log);
 
     public ISettingsWindow? NewSettingsWindow(SettingsWindowRequest request) =>
-        HasWindow && _loop is { } loop ? UnixSettingsWindow.Open(request, loop, MacText.Create) : null;
+        HasWindow && _loop is { } loop ? OpenWindow(request, loop, log) : null;
+
+    /// <summary>The settings window of the Mac, which brings the app forward each time it is shown: what the app opens, and what <c>--prove-notification</c> opens.</summary>
+    internal static UnixSettingsWindow OpenWindow(SettingsWindowRequest request, UnixLoop loop, Action<string> log) =>
+        UnixSettingsWindow.Open(request, loop, MacText.Create, () => log("settings window: the app asked to be active with " + MacActivation.Activate()));
 
     public IFolderShell NewFolderShell() => new MacOpen(log);
 
