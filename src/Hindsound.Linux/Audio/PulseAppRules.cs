@@ -9,7 +9,7 @@ namespace Hindsound.Linux.Audio;
 /// <param name="ProcessId">application.process.id, if the stream gives one.</param>
 /// <param name="Binary">application.process.binary: the program's file name, if the stream gives it.</param>
 /// <param name="AppName">application.name: the name the program gives itself, if any.</param>
-internal sealed record PulsePlaybackStream(uint Index, uint Sink, int? ProcessId, string? Binary, string? AppName);
+internal sealed record PulsePlaybackStream(uint Index, uint Sink, int? ProcessId, string? Binary, string? AppName, bool Corked = false);
 
 /// <summary>One playback stream recorded alone, on the output it plays on: a stream moved to another output is another one.</summary>
 internal readonly record struct PulseMonitorKey(uint SinkInput, uint Sink);
@@ -43,6 +43,15 @@ internal static class PulseAppRules
     public const int RetryMilliseconds = 1000;
 
     public const int MaxRetries = 4;
+
+    /// <summary>
+    /// How long the capture waits before it looks again at a stream of the application that plays on no output it knows, doubled
+    /// each time, <see cref="MaxRetries"/> times at most until the server says something changed. PipeWire moves a stream whose
+    /// output went away by unlinking it, then linking it to another output, and tells nothing of either: a look between the two
+    /// sees the stream on no output, and no event comes when it is linked again (pipewire-pulse 1.0.5 sends none for a link).
+    /// The 250 ms, 500 ms, 1 s, 2 s and 4 s add up to less than 8 s, and a stream that stays nowhere costs five looks.
+    /// </summary>
+    public const int PlaceMilliseconds = 250;
 
     /// <summary>
     /// How long the server must have had a recording ready for its tries to count from zero again when it ends. Twice the
@@ -251,6 +260,36 @@ internal static class PulseAppRules
     /// <param name="steady">How long it must have held for its count to start again.</param>
     public static int TriesAfterEnd(int tries, TimeSpan? held, TimeSpan steady) =>
         held is { } time && time >= steady ? 0 : tries;
+
+    /// <summary>
+    /// Whether a recording is abandoned: it ended, with all its tries had, or it never started in all of them. Its stream
+    /// plays and is not recorded, which the window says, until the stream ends or moves (<see cref="PulseAppCaptureSource.SoundLost"/>).
+    /// </summary>
+    public static bool Abandoned(bool dead, int tries) => dead && tries >= MaxRetries;
+
+    /// <summary>
+    /// Whether one of the <paramref name="recordings"/> is abandoned (<see cref="Abandoned"/>) while its stream is one of the
+    /// <paramref name="playing"/> streams of the application, on the same output, and not paused: a stream that ended or
+    /// moved no longer plays unrecorded, and a paused one plays nothing, so neither is a sound lost.
+    /// </summary>
+    public static bool AnyAbandoned(IEnumerable<(PulseMonitorKey Key, bool Dead, int Tries)> recordings, IReadOnlyList<PulsePlaybackStream> playing)
+    {
+        ArgumentNullException.ThrowIfNull(recordings);
+        ArgumentNullException.ThrowIfNull(playing);
+        return recordings.Any(recording => Abandoned(recording.Dead, recording.Tries)
+            && playing.Any(stream => !stream.Corked && stream.Index == recording.Key.SinkInput && stream.Sink == recording.Key.Sink));
+    }
+
+    /// <summary>Whether one of the application's streams plays on no output among <paramref name="monitors"/>: it is being moved.</summary>
+    public static bool AnyUnplaced(IReadOnlyList<PulsePlaybackStream> wanted, IReadOnlyDictionary<uint, string> monitors) =>
+        wanted.Any(stream => !monitors.TryGetValue(stream.Sink, out var monitor) || string.IsNullOrEmpty(monitor));
+
+    /// <summary>
+    /// How long to wait before the next look at a stream on no output, after <paramref name="looks"/> such looks since the
+    /// server last said something; null once they are all had (<see cref="PlaceMilliseconds"/>).
+    /// </summary>
+    public static TimeSpan? PlaceWait(int looks) =>
+        looks < 0 || looks > MaxRetries ? null : TimeSpan.FromMilliseconds(PlaceMilliseconds << looks);
 
     // The highest ancestor of a process, itself included, that bears the program's name; the process itself if none does.
     private static int ProgramOf(int owner, string? name, Dictionary<int, ProcessEntry> byId)

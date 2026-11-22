@@ -317,6 +317,70 @@ public sealed class PulseAppCaptureOnLinuxTests : IDisposable
     }
 
     [Fact]
+    public void A_stream_whose_recording_is_given_up_is_told_until_the_next_stream_of_the_application_is_recorded()
+    {
+        // Ended five times, each soon after it was opened again: no more tries, and the capture says sound is lost while the
+        // stream plays. The application's next stream is recorded, and the loss is no longer told.
+        if (OnPipeWire())
+        {
+            // No way to end one recording from outside under PipeWire: see KillOnServer.
+            _output.WriteLine("PipeWire: nothing to try");
+            return;
+        }
+
+        var app = StartApp("hsappeleven", $"{Play(Tone("lost.wav", AppHz, 26))}; sleep 1; {Play(Tone("back.wav", AppHz, 12))}; true");
+        WaitFor(() => StreamsOn(Sink) >= 1, "the tone playing");
+        var log = new Log();
+        using var source = PulseAppCaptureSource.Open(app.Id, "hsappeleven", new ProcProcessSnapshot(), log.Write);
+        source.Start();
+        Thread.Sleep(OpeningGap);
+        WaitFor(() => source.RecordedStreams == 1, "the application recorded");
+        Assert.False(source.SoundLost);
+        var current = Assert.Single(SourceOutputsNamed(PulseAppCaptureSource.StreamName));
+
+        for (var end = 0; end <= PulseAppRules.MaxRetries; end++)
+        {
+            KillOnServer(current);
+            if (end == PulseAppRules.MaxRetries)
+            {
+                break;
+            }
+
+            // The waits double: 1, 2, 4, then 8 s before the fifth recording.
+            var clock = Stopwatch.StartNew();
+            string? reopened = null;
+            while (reopened is null && clock.Elapsed < TimeSpan.FromSeconds(12))
+            {
+                Thread.Sleep(50);
+                reopened = SourceOutputsNamed(PulseAppCaptureSource.StreamName).FirstOrDefault(index => index != current);
+            }
+
+            Assert.True(reopened is not null, $"the recording was not opened again after end {end + 1}, log: {log}");
+            Assert.False(source.SoundLost);
+            current = reopened;
+        }
+
+        WaitFor(() => source.SoundLost, "the loss told");
+        var (recorded, playing) = (source.RecordedStreams, !app.HasExited);
+
+        var back = Stopwatch.StartNew();
+        while (source.SoundLost && back.Elapsed < TimeSpan.FromSeconds(20))
+        {
+            Thread.Sleep(50);
+        }
+
+        var told = source.SoundLost;
+        WaitFor(() => source.RecordedStreams == 1, "the next stream recorded");
+        source.Stop();
+
+        _output.WriteLine($"given up: recorded={recorded} playing={playing}, back after {back.Elapsed.TotalSeconds:0.0} s, log: {log}");
+        Assert.True(playing, "the application stopped playing too early to mean anything");
+        Assert.Equal(0, recorded);
+        Assert.False(told, "the loss was still told once the next stream played");
+        Assert.Contains("not recorded again", log.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void The_stream_keeping_an_output_quick_killed_on_the_server_is_opened_again_by_the_next_try()
     {
         var server = Pactl("info").Split('\n').FirstOrDefault(line => line.StartsWith("Server Name", StringComparison.Ordinal));

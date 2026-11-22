@@ -72,7 +72,7 @@ internal struct PaSinkInfo
     public IntPtr MonitorSourceName;
 }
 
-/// <summary>The start of pa_sink_input_info, up to proplist.</summary>
+/// <summary>The start of pa_sink_input_info, up to corked (which follows proplist).</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct PaSinkInputInfo
 {
@@ -90,6 +90,7 @@ internal struct PaSinkInputInfo
     public IntPtr Driver;
     public int Mute;
     public IntPtr Proplist;
+    public int Corked;
 }
 
 /// <summary>The start of pa_timing_info (pulse/def.h), up to read_index.</summary>

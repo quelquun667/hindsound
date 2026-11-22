@@ -27,6 +27,8 @@ internal sealed class FakeSource(AudioFlow flow, CaptureRequest request, string 
 
     public bool Disposed { get; private set; }
 
+    public bool SoundLost { get; set; }
+
     public event CapturePacketHandler? PacketAvailable;
 
     public event Action<Exception?>? Stopped;

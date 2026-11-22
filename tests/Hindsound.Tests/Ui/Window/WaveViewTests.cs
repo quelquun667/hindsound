@@ -446,6 +446,28 @@ public class WaveViewZoneTests
     }
 
     [Fact]
+    public void The_title_of_the_PC_side_says_a_sound_given_up_in_amber_until_it_comes_back()
+    {
+        var lost = Status(app: "Discord.exe") with { SourceAppLost = true };
+        Assert.Equal("Discord (sound lost)", WaveView.SystemLaneTitle(lost, WaveMarker.None));
+        Assert.True(WaveView.SystemLaneWarns(lost));
+
+        // The present wins over the line of a change still in the memory.
+        var line = new WaveMarker(10, "Discord.exe", Mixed: false, "Spotify.exe");
+        Assert.Equal("Discord (sound lost)", WaveView.SystemLaneTitle(lost, line));
+
+        var back = Status(app: "Discord.exe");
+        Assert.Equal("Discord", WaveView.SystemLaneTitle(back, WaveMarker.None));
+        Assert.False(WaveView.SystemLaneWarns(back));
+
+        // Not running is no loss; nor is anything of the whole PC.
+        Assert.Equal("Discord (not running)", WaveView.SystemLaneTitle(lost with { SourceAppMissing = true }, WaveMarker.None));
+        Assert.False(WaveView.SystemLaneWarns(lost with { SourceAppMissing = true }));
+        Assert.False(WaveView.SystemLaneWarns(Status() with { SourceAppLost = true }));
+        Assert.False(WaveView.SystemLaneWarns(null));
+    }
+
+    [Fact]
     public void The_title_of_the_mic_says_its_state()
     {
         Assert.Equal("Mic", WaveView.MicLaneTitle(null));
