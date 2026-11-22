@@ -5,6 +5,7 @@ using Hindsound.Mac.Audio.Capture;
 using Hindsound.Mac.Audio.Devices;
 using Hindsound.Mac.Audio.Playback;
 using Hindsound.Mac.Desktop;
+using Hindsound.Mac.Input;
 using Hindsound.Mac.Notification;
 using Hindsound.Mac.Window;
 using Hindsound.Unix.App;
@@ -34,6 +35,11 @@ internal static class Program
         if (MacCaptureProofOptions.Read(args) is { } captureProof)
         {
             return MacCaptureProof.Run(captureProof.Folder, captureProof.Denied, Console.WriteLine);
+        }
+
+        if (args.Contains(MacKeyboardProof.Option))
+        {
+            return MacKeyboardProof.Run(Console.WriteLine);
         }
 
         if (MacDevicesProof.Folder(args) is { } devicesProof)
