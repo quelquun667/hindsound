@@ -92,6 +92,16 @@ internal static unsafe partial class MacKeyboardLayouts
         return TISSelectInputSource(source);
     }, -1);
 
+    /// <summary>Whether the layout of id <paramref name="id"/> is enabled in the input sources of the user (kTISPropertyInputSourceIsEnabled); false when there is none.</summary>
+    public static bool IsEnabled(string id) => WithSource(id, source =>
+    {
+        var value = TISGetInputSourceProperty(source, Constant(CarbonHandle, "kTISPropertyInputSourceIsEnabled"));
+        return value != 0 && CFBooleanGetValue(value) != 0;
+    }, false);
+
+    /// <summary>Disables the layout of id <paramref name="id"/>, which <see cref="Select"/> had enabled: the status of TISDisableInputSource, or -1 when there is none. A selected layout cannot be disabled.</summary>
+    public static int Disable(string id) => WithSource(id, source => TISDisableInputSource(source), -1);
+
     private static T WithSource<T>(string id, Func<nint, T> use, T none = default!)
     {
         var key = Constant(CarbonHandle, "kTISPropertyInputSourceID");
@@ -180,10 +190,16 @@ internal static unsafe partial class MacKeyboardLayouts
     private static partial int TISSelectInputSource(nint source);
 
     [LibraryImport(Carbon)]
+    private static partial int TISDisableInputSource(nint source);
+
+    [LibraryImport(Carbon)]
     private static partial byte LMGetKbdType();
 
     [LibraryImport(Carbon)]
     private static partial int UCKeyTranslate(nint layout, ushort keyCode, ushort keyAction, uint modifierKeyState, uint keyboardType, uint options, uint* deadKeyState, nuint maxLength, nuint* actualLength, char* chars);
+
+    [LibraryImport(CoreFoundation)]
+    private static partial byte CFBooleanGetValue(nint value);
 
     [LibraryImport(CoreFoundation)]
     private static partial nint CFDataGetBytePtr(nint data);
