@@ -49,14 +49,14 @@ internal static class HotkeyChoice
     /// <summary>The notice when the program path cannot be written as a command, in the language of the moment.</summary>
     public static string NoticeGenericText => Tr.Of(
         NoShortcutGenericText,
-        "Pas de raccourci global sur cet environnement de bureau. Dans les réglages du clavier, associe à une touche le chemin complet du programme Hindsound suivi de --save.");
+        "Pas de raccourci global sur ce bureau. Dans les réglages du clavier, associe à une touche le chemin complet du programme Hindsound suivi de --save.");
 
     /// <summary>The notice for <paramref name="program"/>, in the language of the moment: what <see cref="NoShortcutTextFor"/> says, in French when it is.</summary>
     public static string NoticeTextFor(string? program) =>
         SaveCommandFor(program) is { } command
             ? Tr.Of(
                 "No global shortcut on this desktop. In your keyboard settings, bind this command to a key: " + command,
-                "Pas de raccourci global sur cet environnement de bureau. Dans les réglages du clavier, associe cette commande à une touche : " + command)
+                "Pas de raccourci global sur ce bureau. Dans les réglages du clavier, associe cette commande à une touche : " + command)
             : NoticeGenericText;
 
     /// <summary>

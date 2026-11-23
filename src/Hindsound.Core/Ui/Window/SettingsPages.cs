@@ -23,16 +23,18 @@ internal sealed partial class SettingsScreen
         "Hindsound checks GitHub for updates once a day. GitHub sees your IP address. Change it in Settings > General.",
         "Hindsound vérifie les mises à jour sur GitHub une fois par jour. GitHub voit ton adresse IP. Change ça dans Réglages > Général.");
     public const string ClipBusyNote = "A clip is still being saved";
+
+    public static string ClipBusyNoteText => Tr.Of(ClipBusyNote, "Un clip s'enregistre encore");
     public static string DesktopKeysNote => Tr.Of(
         "Your desktop sets these keys. To change one, use the shortcut settings of your desktop.",
-        "Ton environnement de bureau définit ces raccourcis. Pour en modifier un, utilise ses réglages de raccourcis clavier.");
+        "Ton bureau définit ces raccourcis. Pour en modifier un, utilise ses réglages de raccourcis clavier.");
     public static string CommandIntro => Tr.Of(
         "This desktop has no global shortcut for apps. In its keyboard settings, bind this command to a key:",
-        "Cet environnement de bureau n'a pas de raccourci global pour les applications. Dans ses réglages du clavier, associe cette commande à une touche\u00A0:");
+        "Ce bureau n'a pas de raccourci global pour les applications. Dans ses réglages du clavier, associe cette commande à une touche\u00A0:");
     public static string CommandNote => Tr.Of("The key then saves a clip, as the Save button does.", "La touche enregistre alors un clip, comme le bouton Enregistrer.");
     public static string CommandGenericIntro => Tr.Of(
         "This desktop has no global shortcut for apps. In its keyboard settings, bind the full path of the Hindsound program followed by --save to a key.",
-        "Cet environnement de bureau n'a pas de raccourci global pour les applications. Dans ses réglages du clavier, associe à une touche le chemin complet du programme Hindsound suivi de --save.");
+        "Ce bureau n'a pas de raccourci global pour les applications. Dans ses réglages du clavier, associe à une touche le chemin complet du programme Hindsound suivi de --save.");
     private static string CopyLabel => Tr.Of("Copy", "Copier");
     private static string CopiedLabel => Tr.Of("Copied", "Copié");
     public const string FirstRunUpdatesId = "run.updates";
@@ -970,6 +972,12 @@ internal sealed partial class SettingsScreen
 
     // ---------------------------------------------------------------- the update card
 
+    private static string UpdateLabel => Tr.Of("Update", "Mettre à jour");
+
+    private static string SaveThenUpdateLabel => Tr.Of("Save it, then update", "Enregistrer, puis mettre à jour");
+
+    private static string UpdateCancelLabel => Tr.Of("Cancel", "Annuler");
+
     private void BuildUpdateCard()
     {
         const float cardLeft = 130, cardRight = WindowWidth - 130, cardTop = BandHeight + 60, inner = cardLeft + 28, textWidth = cardRight - cardLeft - 56;
@@ -977,11 +985,11 @@ internal sealed partial class SettingsScreen
         var view = panel?.View;
         var busy = view?.CardBusy == true;
         var clipBusy = panel?.ClipBusy == true;
-        var title = view?.Offered is { } offered ? $"Update to {offered}" : "Update";
+        var title = view?.Offered is { } offered ? Tr.Format($"Update to {offered}", $"Mettre à jour vers {offered}") : UpdateLabel;
         var body = StatusText.UpdateCardBody(_status, panel?.BufferSeconds ?? 0);
 
         // A download under way speaks first; then a clip still being written, which greys the two buttons.
-        var line = busy ? view!.CardLine : clipBusy ? ClipBusyNote : view?.CardLine;
+        var line = busy ? view!.CardLine : clipBusy ? ClipBusyNoteText : view?.CardLine;
         var bodyTop = cardTop + 66;
         var bodyHeight = WrapLines(_canvas, body, Face.Body, 14, textWidth).Count * _canvas.LineHeight(Face.Body, 14);
         var lineMid = bodyTop + bodyHeight + 18;
@@ -999,17 +1007,17 @@ internal sealed partial class SettingsScreen
         }) { Id = "card.text" }, scrolls: false);
 
         var canUpdate = view is { UpdateEnabled: true } && !busy && !clipBusy;
-        var cancelWidth = Button.WidthFor(_canvas, "Cancel", padding: 22);
-        var updateWidth = Button.WidthFor(_canvas, "Update", padding: 22);
-        var saveWidth = Button.WidthFor(_canvas, "Save it, then update", padding: 22);
+        var cancelWidth = Button.WidthFor(_canvas, UpdateCancelLabel, padding: 22);
+        var updateWidth = Button.WidthFor(_canvas, UpdateLabel, padding: 22);
+        var saveWidth = Button.WidthFor(_canvas, SaveThenUpdateLabel, padding: 22);
         var cancelBox = new Box(cardRight - 28 - cancelWidth, buttonY, cancelWidth, 34);
         var updateBox = new Box(cancelBox.X - 12 - updateWidth, buttonY, updateWidth, 34);
         var saveBox = new Box(updateBox.X - 12 - saveWidth, buttonY, saveWidth, 34);
-        Add(new Button("Save it, then update", () => Confirm(saveFirst: true)) { Id = "card.save", Enabled = canUpdate, Bounds = saveBox }, scrolls: false);
+        Add(new Button(SaveThenUpdateLabel, () => Confirm(saveFirst: true)) { Id = "card.save", Enabled = canUpdate, Bounds = saveBox }, scrolls: false);
 
         // Greyed, the accent would still say "press me": it only goes on a button that can be pressed.
-        Add(new Button("Update", () => Confirm(saveFirst: false)) { Id = "card.update", Accented = canUpdate, Enabled = canUpdate, Bounds = updateBox }, scrolls: false);
-        Add(new Button("Cancel", CloseUpdateCard) { Id = "card.cancel", Bounds = cancelBox }, scrolls: false);
+        Add(new Button(UpdateLabel, () => Confirm(saveFirst: false)) { Id = "card.update", Accented = canUpdate, Enabled = canUpdate, Bounds = updateBox }, scrolls: false);
+        Add(new Button(UpdateCancelLabel, CloseUpdateCard) { Id = "card.cancel", Bounds = cancelBox }, scrolls: false);
         _contentBottom = WindowHeight;
     }
 
