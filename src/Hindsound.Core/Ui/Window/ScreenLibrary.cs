@@ -108,22 +108,34 @@ internal sealed partial class SettingsScreen
     public const string ClipMoreId = "foot.more", MoreLabel = "...";
     private const float MoreButtonWidth = 44;
     public const string ClipListId = "lib.list", ClipCopyId = "foot.copy", ClipShowId = "foot.show", ClipPlayId = "foot.play";
-    public const string PlayLabel = "Play", StopLabel = "Stop";
-    public const string NoClipsTitle = "No clips yet", NoClipsBody = "Save a clip with your shortcut, and it shows up here.";
-    public const string ClipsCappedNote = "Showing the 2,000 most recent clips.";
-    public const string ClipsCappedSearchNote = "Searching the 2,000 most recent clips, and any with a star or collection.";
+    public static string PlayLabel => Tr.Of("Play", "Lire");
+    public static string StopLabel => Tr.Of("Stop", "Arrêter");
+    public static string NoClipsTitle => Tr.Of("No clips yet", "Aucun clip pour l'instant");
+    public static string NoClipsBody => Tr.Of("Save a clip with your shortcut, and it shows up here.", "Enregistre un clip avec ton raccourci\u00A0: il apparaîtra ici.");
+    public static string ClipsCappedNote => Tr.Of("Showing the 2,000 most recent clips.", "Affichage des 2\u00A0000 clips les plus récents.");
+    public static string ClipsCappedSearchNote => Tr.Of(
+        "Searching the 2,000 most recent clips, and any with a star or collection.",
+        "Recherche dans les 2\u00A0000 clips les plus récents, et dans ceux qui ont une étoile ou une collection.");
 
     /// <summary>The same while the collections file cannot be read: no star or collection is known, so none is searched on top of the cap.</summary>
-    public const string ClipsCappedSearchPlainNote = "Searching the 2,000 most recent clips.";
-    public const string ClipSearchId = "lib.search", SearchPlaceholder = "Search";
-    public const string SelectedClipCaption = "Selected clip", NothingSelected = "Nothing selected", ShowInFolderLabel = "Show in folder";
-    public const string ClipGoneMessage = "This clip was moved or deleted", ClipFailedMessage = "That didn't work. Your clip is untouched.";
+    public static string ClipsCappedSearchPlainNote => Tr.Of("Searching the 2,000 most recent clips.", "Recherche dans les 2\u00A0000 clips les plus récents.");
+    public const string ClipSearchId = "lib.search";
+    public static string SearchPlaceholder => Tr.Of("Search", "Rechercher");
+    public static string SelectedClipCaption => Tr.Of("Selected clip", "Clip choisi");
+    public static string NothingSelected => Tr.Of("Nothing selected", "Aucun clip choisi");
+    public static string ShowInFolderLabel => Tr.Of("Show in folder", "Afficher dans le dossier");
+    public static string ClipGoneMessage => Tr.Of("This clip was moved or deleted", "Ce clip a été déplacé ou supprimé");
+    public const string ClipFailedMessage = "That didn't work. Your clip is untouched.";
+    public static string ClipFailedShown => Tr.Of(ClipFailedMessage, "Ça n'a pas marché. Ton clip n'a pas été touché.");
     public const string ClipFilterId = NameBox.AfterDeleteId;
-    public const string StartOverId = "lib.startover", StartOverLabel = "Start over";
+    public const string StartOverId = "lib.startover";
+    public static string StartOverLabel => Tr.Of("Start over", "Recommencer");
     public const int ClipRowsShown = 6;
 
     // The menu sits on the line of the side bar's first entry, and the list starts under it.
     private const float ClipFilterTop = BandHeight + 10, ClipListTop = BandHeight + 46;
+
+    private static string CopyLabel => Tr.Of("Copy", "Copier");
 
     private static readonly LibraryData NoIndex = new();
     private const float FootMargin = 24, FootButtonGap = 12, FootButtonHeight = 34;
@@ -987,7 +999,7 @@ internal sealed partial class SettingsScreen
     {
         var chosen = ChosenClip;
         var showWidth = Button.WidthFor(_canvas, ShowInFolderLabel);
-        var copyWidth = Button.WidthFor(_canvas, "Copy");
+        var copyWidth = Button.WidthFor(_canvas, CopyLabel);
         var moreWidth = MathF.Max(MoreButtonWidth, Button.WidthFor(_canvas, MoreLabel));
 
         // Stop takes the place and the width of Play, so that nothing moves under the mouse.
@@ -1009,7 +1021,7 @@ internal sealed partial class SettingsScreen
             Enabled = enabled,
             Bounds = more,
         });
-        Chrome(new Button("Copy", () => ClipGesture(p => p.Copy))
+        Chrome(new Button(CopyLabel, () => ClipGesture(p => p.Copy))
         {
             Id = ClipCopyId,
             Enabled = enabled,
@@ -1073,7 +1085,7 @@ internal sealed partial class SettingsScreen
         {
             // Something plays with nothing chosen: the sentence still needs its line.
             c.TextMid(NothingSelected, Face.Body, 13, x, first, Theme.Muted);
-            c.TextMid(c.Fit(ClipPreview.CanEndUpInClipText, Face.Body, 12, nameWidth), Face.Body, 12, FootMargin, second, Theme.Muted);
+            c.TextMid(c.Fit(ClipPreview.CanEndUpInClipShown, Face.Body, 12, nameWidth), Face.Body, 12, FootMargin, second, Theme.Muted);
             return;
         }
 
@@ -1091,7 +1103,7 @@ internal sealed partial class SettingsScreen
         }
         else if (string.Equals(_failedClip, chosen.Main.Path, Library.PathRules.Comparison))
         {
-            Message.Error(c, ClipFailedMessage, FootMargin, second);
+            Message.Error(c, ClipFailedShown, FootMargin, second);
         }
         else if (ClipPreview.ErrorTextFor(_preview, chosen) is { } cantPlay)
         {
@@ -1100,7 +1112,7 @@ internal sealed partial class SettingsScreen
         else if (says)
         {
             // Said in the place of the name while it is true, and after what went wrong, which matters more.
-            c.TextMid(c.Fit(ClipPreview.CanEndUpInClipText, Face.Body, 12, nameWidth), Face.Body, 12, FootMargin, second, Theme.Muted);
+            c.TextMid(c.Fit(ClipPreview.CanEndUpInClipShown, Face.Body, 12, nameWidth), Face.Body, 12, FootMargin, second, Theme.Muted);
         }
         else
         {

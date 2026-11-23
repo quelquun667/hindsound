@@ -26,7 +26,10 @@ internal static class ClipKeys
 internal sealed class ClipMenu : ActionMenu
 {
     public const float Width = 236;
-    public const string RenameLabel = "Rename", EditLabel = "Edit...", SoundboardLabel = "Send to soundboard...", DeleteLabel = "Delete";
+    public static string RenameLabel => Tr.Of("Rename", "Renommer");
+    public static string EditLabel => Tr.Of("Edit...", "Modifier...");
+    public static string SoundboardLabel => Tr.Of("Send to soundboard...", "Envoyer vers la soundboard...");
+    public static string DeleteLabel => Tr.Of("Delete", "Supprimer");
 
     private static readonly ClipMenuItem[] WithEditor =
         [ClipMenuItem.Rename, ClipMenuItem.Edit, ClipMenuItem.Soundboard, ClipMenuItem.Copy, ClipMenuItem.ShowInFolder, ClipMenuItem.Delete];
@@ -67,7 +70,7 @@ internal sealed class ClipMenu : ActionMenu
         ClipMenuItem.Rename => RenameLabel,
         ClipMenuItem.Edit => EditLabel,
         ClipMenuItem.Soundboard => SoundboardLabel,
-        ClipMenuItem.Copy => "Copy",
+        ClipMenuItem.Copy => Tr.Of("Copy", "Copier"),
         ClipMenuItem.ShowInFolder => SettingsScreen.ShowInFolderLabel,
         _ => DeleteLabel,
     };

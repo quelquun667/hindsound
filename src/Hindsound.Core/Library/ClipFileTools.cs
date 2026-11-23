@@ -96,7 +96,7 @@ internal static class ClipNames
     public static readonly string[] TrackSuffixes = ["_system", "_mic"];
 
     /// <summary>The sentence of <see cref="ClipRenameOutcome.TrackSuffix"/>.</summary>
-    public const string TrackSuffixText = "A name can't end with _system or _mic";
+    public static string TrackSuffixText => Tr.Of("A name can't end with _system or _mic", "Un nom ne peut pas finir par _system ou _mic");
 
     /// <summary>The name the user edits: the file name without its extension, and without the suffix of its track for a clip in two files.</summary>
     public static string EditableName(ClipGroup line)

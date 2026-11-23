@@ -94,7 +94,7 @@ internal sealed partial class SettingsScreen
                 SayGone(line);
                 break;
             default:
-                SayOnLine(line.Main.Path, NameBoxState.ClipRefusalText(outcome, Features) ?? ClipFailedMessage);
+                SayOnLine(line.Main.Path, NameBoxState.ClipRefusalText(outcome, Features) ?? ClipFailedShown);
                 break;
         }
 
@@ -118,10 +118,10 @@ internal sealed partial class SettingsScreen
                 SayGone(line);
                 break;
             case ClipDeleteOutcome.CannotRecycle:
-                SayOnLine(line.Main.Path, Features.Words(NameBoxState.CannotRecycleText));
+                SayOnLine(line.Main.Path, Features.Words(NameBoxState.CannotRecycleShown));
                 break;
             default:
-                SayOnLine(line.Main.Path, ClipFailedMessage);
+                SayOnLine(line.Main.Path, ClipFailedShown);
                 break;
         }
 

@@ -61,7 +61,11 @@ internal sealed class RowList : Widget
 
     private const float NameInset = 10, DurationRight = 44, NoteRight = 100, NoteGap = 12, ThumbFromRight = 12, ThumbWidth = 6, ThumbGrace = 4, TrackInset = 4;
 
-    private const string Prefix = "Hindsound_", RescuedNote = "Rescued", TwoFilesNote = "2 files";
+    private const string Prefix = "Hindsound_";
+
+    private static string RescuedNote => Tr.Of("Rescued", "Récupéré");
+
+    private static string TwoFilesNote => Tr.Of("2 files", "2 fichiers");
 
     /// <summary>The star sits in the last pixels of the row, after the duration; a press there is about the star alone.</summary>
     private const float StarFromRight = 18, StarRadius = 8, StarZone = 36;

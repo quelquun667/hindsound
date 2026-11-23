@@ -42,14 +42,28 @@ internal enum NameBoxKey
 /// </summary>
 internal sealed class NameBoxState
 {
+    // The English of the sentences below stays a constant, which tests of the English read; the *Shown ones are what the screen
+    // draws, in the language of the moment.
     public const string TakenText = "That name is already used", TooLongText = "40 characters at most";
-    public const string StartOverQuestion = "Start over with no collections? Your clips stay.";
+    public static string TakenShown => Tr.Of(TakenText, "Ce nom est déjà utilisé");
+    public static string TooLongShown => Tr.Of(TooLongText, "40 caractères au maximum");
+    public static string StartOverQuestion => Tr.Of("Start over with no collections? Your clips stay.", "Recommencer sans collection\u00A0? Tes clips restent.");
 
     public const string ClipEmptyText = "The name can't be empty", ClipReservedText = "Windows keeps this name for itself";
     public const string ClipTrailingText = "A name can't end with a dot or a space", ClipTooLongText = "This name is too long";
     public const string ClipTakenText = "Another clip has this name";
+    public static string ClipEmptyShown => Tr.Of(ClipEmptyText, "Le nom ne peut pas être vide");
+    public static string ClipTrailingShown => Tr.Of(ClipTrailingText, "Un nom ne peut pas finir par un point ou un espace");
+    public static string ClipTooLongShown => Tr.Of(ClipTooLongText, "Ce nom est trop long");
+    public static string ClipTakenShown => Tr.Of(ClipTakenText, "Un autre clip porte ce nom");
+
+    // The Windows wording, as the others of the box: Features.Words puts the word of the system in. The French word is the same on
+    // every system.
     public const string CannotRecycleText = "The Recycle Bin can't take this clip. It stays where it is.";
-    public const string TwoFilesText = "This clip is 2 files, the system sound and the microphone. Both files go to the Recycle Bin.";
+    public static string CannotRecycleShown => Tr.Of(CannotRecycleText, "La Corbeille ne peut pas prendre ce clip. Il reste où il est.");
+    public static string TwoFilesText => Tr.Of(
+        "This clip is 2 files, the system sound and the microphone. Both files go to the Recycle Bin.",
+        "Ce clip fait 2 fichiers\u00A0: le son du PC et le micro. Les deux fichiers vont dans la Corbeille.");
 
     /// <summary>The words of the system the box is shown on: the sentences above are the Windows ones.</summary>
     public PlatformFeatures Features { get; set; } = PlatformFeatures.Windows;
@@ -94,21 +108,21 @@ internal sealed class NameBoxState
 
     public string Title => Kind switch
     {
-        NameBoxKind.Rename => "Rename collection",
-        NameBoxKind.RenameClip => "Rename clip",
-        _ => "New collection",
+        NameBoxKind.Rename => Tr.Of("Rename collection", "Renommer la collection"),
+        NameBoxKind.RenameClip => Tr.Of("Rename clip", "Renommer le clip"),
+        _ => Tr.Of("New collection", "Nouvelle collection"),
     };
 
     /// <summary>The words over the field.</summary>
-    public string FieldLabel => Kind == NameBoxKind.RenameClip ? "Clip name" : "Collection name";
+    public string FieldLabel => Kind == NameBoxKind.RenameClip ? Tr.Of("Clip name", "Nom du clip") : Tr.Of("Collection name", "Nom de la collection");
 
     public string ConfirmLabel => Kind switch
     {
-        NameBoxKind.Create => "Create",
-        NameBoxKind.Rename => "Rename",
+        NameBoxKind.Create => Tr.Of("Create", "Créer"),
+        NameBoxKind.Rename => Tr.Of("Rename", "Renommer"),
         NameBoxKind.StartOver => SettingsScreen.StartOverLabel,
-        NameBoxKind.RenameClip => "Rename",
-        _ => "Delete",
+        NameBoxKind.RenameClip => Tr.Of("Rename", "Renommer"),
+        _ => Tr.Of("Delete", "Supprimer"),
     };
 
     /// <summary>The first control of the box: the name, or Cancel for a deletion, so that Enter on arrival deletes nothing.</summary>
@@ -165,12 +179,12 @@ internal sealed class NameBoxState
     /// <summary>The sentence of a name a clip can't take, in the words of <paramref name="features"/>.</summary>
     public static string? ClipRefusalText(ClipRenameOutcome outcome, PlatformFeatures features) => outcome switch
     {
-        ClipRenameOutcome.Empty => ClipEmptyText,
+        ClipRenameOutcome.Empty => ClipEmptyShown,
         ClipRenameOutcome.BadCharacters => SettingsEditor.TemplateCharsError,
         ClipRenameOutcome.Reserved => features.ReservedNameText,
-        ClipRenameOutcome.TrailingDotOrSpace => ClipTrailingText,
-        ClipRenameOutcome.TooLong => ClipTooLongText,
-        ClipRenameOutcome.Taken => ClipTakenText,
+        ClipRenameOutcome.TrailingDotOrSpace => ClipTrailingShown,
+        ClipRenameOutcome.TooLong => ClipTooLongShown,
+        ClipRenameOutcome.Taken => ClipTakenShown,
         ClipRenameOutcome.TrackSuffix => ClipNames.TrackSuffixText,
         _ => null,
     };
@@ -179,14 +193,14 @@ internal sealed class NameBoxState
     public FieldCheck Check(string text) => Kind == NameBoxKind.RenameClip ? CheckClip(text) : LibraryStore.NameRefusal(_collections(), text, CollectionId) switch
     {
         null => FieldCheck.Fine,
-        LibraryOutcome.NameTooLong => FieldCheck.Bad(TooLongText),
-        LibraryOutcome.NameTaken => FieldCheck.Bad(TakenText),
+        LibraryOutcome.NameTooLong => FieldCheck.Bad(TooLongShown),
+        LibraryOutcome.NameTaken => FieldCheck.Bad(TakenShown),
         _ => new FieldCheck(false, null),
     };
 
     /// <summary>The name of a clip, at each key. Unlike a collection, an empty name says why: the field was full when the box opened.</summary>
     private FieldCheck CheckClip(string text) =>
-        _clipRefusal(text) is { } refusal ? FieldCheck.Bad(ClipRefusalText(refusal, Features) ?? ClipEmptyText) : FieldCheck.Fine;
+        _clipRefusal(text) is { } refusal ? FieldCheck.Bad(ClipRefusalText(refusal, Features) ?? ClipEmptyShown) : FieldCheck.Fine;
 
     /// <summary>What a key means here, before any widget has it. Tab stays in the box by way of <see cref="NameBox.NextStop"/>.</summary>
     /// <param name="vk">The virtual key.</param>
@@ -235,10 +249,10 @@ internal sealed class NameBoxState
         switch (outcome)
         {
             case LibraryOutcome.NameTaken:
-                Field.Message = TakenText;
+                Field.Message = TakenShown;
                 return false;
             case LibraryOutcome.NameTooLong:
-                Field.Message = TooLongText;
+                Field.Message = TooLongShown;
                 return false;
             case LibraryOutcome.NameEmpty:
                 return false;
@@ -372,11 +386,11 @@ internal static class NameBox
         var ready = state.CanConfirm;
         var idle = !state.Waiting;
         var confirmWidth = Button.WidthFor(c, state.ConfirmLabel);
-        var cancelWidth = Button.WidthFor(c, "Cancel");
+        var cancelWidth = Button.WidthFor(c, Tr.Of("Cancel", "Annuler"));
         var top = box.Bottom - ButtonFromBottom - ButtonHeight;
 
         // In the order of the eye: Tab from the field goes to Cancel, then to the button that acts.
-        widgets.Add(new Button("Cancel", () => { if (!state.Waiting) { cancel(); } })
+        widgets.Add(new Button(Tr.Of("Cancel", "Annuler"), () => { if (!state.Waiting) { cancel(); } })
         {
             Id = CancelId,
             Enabled = idle,
@@ -417,11 +431,15 @@ internal static class NameBox
     }
 
     public static string DeleteQuestion(ICanvas c, string name) =>
-        "Delete collection \"" + c.Fit(name, Face.Body, TextSize, DeleteNameWidth) + "\"? Your clips stay.";
+        FitQuestion(c.Fit(name, Face.Body, TextSize, DeleteNameWidth));
+
+    private static string FitQuestion(string name) => Tr.Format(
+        $"Delete collection \"{name}\"? Your clips stay.",
+        $"Supprimer la collection «\u00A0{name}\u00A0»\u00A0? Tes clips restent.");
 
     /// <summary>The question before a clip goes to the Recycle Bin, its name with its extension.</summary>
     public static string ClipDeleteQuestion(ICanvas c, string name) =>
-        "Move \"" + c.Fit(name, Face.Body, TextSize, ClipNameWidth) + "\" to the Recycle Bin?";
+        Tr.Format($"Move \"{c.Fit(name, Face.Body, TextSize, ClipNameWidth)}\" to the Recycle Bin?", $"Déplacer «\u00A0{c.Fit(name, Face.Body, TextSize, ClipNameWidth)}\u00A0» dans la Corbeille\u00A0?");
 }
 
 /// <summary>
