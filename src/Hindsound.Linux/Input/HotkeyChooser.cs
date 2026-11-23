@@ -191,7 +191,12 @@ internal class HotkeyChooser : IHotkeyNative
             }
         }
 
-        _log("hotkeys: " + HotkeyChoice.NoShortcutText);
+        // The journal is English, whatever the language of the screen.
+        using (Tr.Use(UiLanguage.English))
+        {
+            _log("hotkeys: " + HotkeyChoice.NoShortcutText);
+        }
+
         try
         {
             _announceNone();

@@ -68,16 +68,20 @@ internal sealed class PortalBindings
         return false;
     }
 
-    /// <summary>What the desktop shows the user for an action, in its shortcut dialog and settings.</summary>
+    /// <summary>
+    /// What the desktop shows the user for an action, in its shortcut dialog and settings. The desktop keeps what it is given
+    /// when the shortcuts are bound: the words are those of the language of that moment, and a later change of language reaches
+    /// the desktop only when the shortcuts are bound again.
+    /// </summary>
     public static string DescriptionOf(HotkeyAction action) => action switch
     {
-        HotkeyAction.SaveDefault => "Save a clip",
-        HotkeyAction.Save15s => "Save the last 15 seconds",
-        HotkeyAction.Save1m => "Save the last minute",
-        HotkeyAction.Save5m => "Save the last 5 minutes",
-        HotkeyAction.TogglePause => "Pause or resume",
-        HotkeyAction.CopyLast => "Copy the last clip",
-        HotkeyAction.SaveAndEdit => "Save a clip and edit it",
+        HotkeyAction.SaveDefault => Tr.Of("Save a clip", "Enregistrer un clip"),
+        HotkeyAction.Save15s => Tr.Of("Save the last 15 seconds", "Enregistrer les 15 dernières secondes"),
+        HotkeyAction.Save1m => Tr.Of("Save the last minute", "Enregistrer la dernière minute"),
+        HotkeyAction.Save5m => Tr.Of("Save the last 5 minutes", "Enregistrer les 5 dernières minutes"),
+        HotkeyAction.TogglePause => Tr.Of("Pause or resume", "Pause ou reprise"),
+        HotkeyAction.CopyLast => Tr.Of("Copy the last clip", "Copier le dernier clip"),
+        HotkeyAction.SaveAndEdit => Tr.Of("Save a clip and edit it", "Enregistrer un clip et le modifier"),
         _ => throw new ArgumentOutOfRangeException(nameof(action)),
     };
 
