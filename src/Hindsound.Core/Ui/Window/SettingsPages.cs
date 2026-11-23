@@ -49,7 +49,7 @@ internal sealed partial class SettingsScreen
     private bool _customClipOpen;
     private bool _customAccentOpen;
     private bool _commandCopied;
-    private string? _folderMessage;
+    private bool _folderRefused;
     private int _firstRunStep;
     private bool _firstRunClipDone;
     private IUpdatesPanel? _updates;
@@ -694,7 +694,7 @@ internal sealed partial class SettingsScreen
         Add(new Button(browseLabel, PickFolder) { Id = "export.browse", FontSize = 13, Bounds = new Box(Right - browse, y, browse, RowHeight) });
         var folder = Editor.FolderShown;
         var folderBox = new Box(Left + 60, y, Width - 60 - browse - 8, RowHeight);
-        var folderError = _folderMessage;
+        var folderError = _folderRefused ? SettingsEditor.FolderError : null;
         Add(new Painted((c, _) =>
         {
             c.Frame(folderBox, 4, Theme.Panel, Theme.Line);

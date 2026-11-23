@@ -284,8 +284,22 @@ internal sealed partial class SettingsScreen : Hindsound.App.IEditorWindowScreen
     /// </summary>
     public void LanguageChanged()
     {
+        _wave?.RemakeWords();
+
+        // A refusal under a field was made when the text was checked; it is a verdict on the draft, so the draft is checked again.
+        RemakeRefusal(_clipField, SettingsEditor.CheckCustomClip);
+        RemakeRefusal(_hexField, SettingsEditor.CheckAccent);
+        RemakeRefusal(_templateField, SettingsEditor.CheckTemplate);
         _forceEditText = true;
         Refresh();
+    }
+
+    private static void RemakeRefusal(FieldState field, Func<string, FieldCheck> check)
+    {
+        if (field.Message is not null)
+        {
+            field.Message = check(field.Draft).Message;
+        }
     }
 
     public void MeterTick(float peak)
@@ -970,7 +984,7 @@ internal sealed partial class SettingsScreen : Hindsound.App.IEditorWindowScreen
     {
         if (_host.PickFolder(Editor.FolderShown) is { } folder)
         {
-            _folderMessage = Editor.SetFolder(folder).Message;
+            _folderRefused = !Editor.SetFolder(folder).Ok;
             Refresh();
         }
     }

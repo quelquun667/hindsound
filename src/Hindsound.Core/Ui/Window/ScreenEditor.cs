@@ -280,7 +280,7 @@ internal sealed partial class SettingsScreen
             }
             else
             {
-                SayOnLine(edited, ProblemSentence(problem));
+                SayOnLine(edited, () => ProblemSentence(problem));
             }
 
             Refresh();
@@ -306,7 +306,7 @@ internal sealed partial class SettingsScreen
         {
             if (result.Outcome == EditSaveOutcome.SavedAside)
             {
-                SayOnLine(edited, Features.Words(EditorAsideLost));
+                SayOnLine(edited, () => Features.Words(EditorAsideLost));
             }
 
             Refresh();
@@ -315,7 +315,7 @@ internal sealed partial class SettingsScreen
 
         // The panel sends a new reading after this answer: the copy is chosen as soon as it brings it.
         SelectClip(path);
-        var notice = result.Outcome == EditSaveOutcome.SavedAside ? (result.OriginalInBin ? Features.Words(EditorSavedAside) : EditorNotReplaced) : forDiscord ? Soundboard.UploadHint : null;
+        Func<string>? notice = result.Outcome == EditSaveOutcome.SavedAside ? (result.OriginalInBin ? () => Features.Words(EditorSavedAside) : () => EditorNotReplaced) : forDiscord ? () => Soundboard.UploadHint : null;
         if (notice is not null)
         {
             SayOnLine(path, notice);

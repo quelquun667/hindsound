@@ -94,7 +94,7 @@ internal sealed partial class SettingsScreen
                 SayGone(line);
                 break;
             default:
-                SayOnLine(line.Main.Path, NameBoxState.ClipRefusalText(outcome, Features) ?? ClipFailedShown);
+                SayOnLine(line.Main.Path, () => NameBoxState.ClipRefusalText(outcome, Features) ?? ClipFailedShown);
                 break;
         }
 
@@ -118,10 +118,10 @@ internal sealed partial class SettingsScreen
                 SayGone(line);
                 break;
             case ClipDeleteOutcome.CannotRecycle:
-                SayOnLine(line.Main.Path, Features.Words(NameBoxState.CannotRecycleShown));
+                SayOnLine(line.Main.Path, () => Features.Words(NameBoxState.CannotRecycleShown));
                 break;
             default:
-                SayOnLine(line.Main.Path, ClipFailedShown);
+                SayOnLine(line.Main.Path, () => ClipFailedShown);
                 break;
         }
 
@@ -380,12 +380,12 @@ internal sealed partial class SettingsScreen
         if (ChosenClip is { } chosen && string.Equals(chosen.Main.Path, line.Main.Path, Library.PathRules.Comparison))
         {
             _clips.Deselect();
-            SayOnLine(null, ClipGoneMessage);
+            SayOnLine(null, () => ClipGoneMessage);
         }
     }
 
     /// <summary>The sentence of an answer on the amber line, for this clip: the reading that the answer brings leaves it be.</summary>
-    private void SayOnLine(string? clip, string text)
+    private void SayOnLine(string? clip, Func<string> text)
     {
         _lineNotice = (clip, text);
         _noticeUnseen = Section != Section.Library;
