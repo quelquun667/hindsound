@@ -80,6 +80,16 @@ public sealed class UiLanguagesTests
         Assert.Equal(UiLanguage.English, UiLanguages.Resolve("system", Linux(("LANGUAGE", "fr_FR"))));
     }
 
+    [Theory]
+    [InlineData("fr", UiLanguage.French)]
+    [InlineData("FR", UiLanguage.French)]
+    [InlineData("Fr", UiLanguage.French)]
+    [InlineData("en", UiLanguage.English)]
+    [InlineData("EN", UiLanguage.English)]
+    [InlineData("de", UiLanguage.English)]
+    public void The_language_of_the_dump_is_read_without_regard_to_case(string value, UiLanguage expected) =>
+        Assert.Equal(expected, Hindsound.App.AppOptions.Parse(["--lang", value]).DumpLanguage);
+
     [Fact]
     public void The_Windows_list_is_read_up_to_its_double_null()
     {
