@@ -177,7 +177,7 @@ public sealed unsafe class LanguagePagesTests
         Assert.Equal("Reprendre", StatusText.From(capturing with { Activity = CaptureActivity.Paused }, 300).PauseLabel);
         Assert.Equal("Démarrage", StatusText.From(null).Title);
         Assert.Equal("Enregistrer 30 s", StatusText.SaveLabel(30));
-        Assert.Equal("Enregistrer 2 min", StatusText.SaveLabel(120));
+        Assert.Equal("Enregistrer 2 min", StatusText.SaveLabel(120));
         Assert.Equal("Enregistrer 1:30", StatusText.SaveLabel(90));
     }
 
