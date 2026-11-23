@@ -468,16 +468,17 @@ listed), and of the rescue folder. A folder you filled with music shows that mus
 - **Will it end up in a clip?** When it records the whole PC on your default output, Hindsound asks Windows to leave its own
   sound out of what it records. On the PC it was tried on, a tone played here was missing from the next clip, and the same tone
   played by another program was in it. When it records a chosen output, or on a Windows too old to leave its sound out, `Playback can end up in your
-  next clip on this setup.` shows next to the menu while a clip plays, in place of `Rename` and `Delete`, which come back when it
-  stops. A microphone that hears your speakers can't be seen from here, so nothing says it.
+  next clip on this setup.` shows at the bottom, in place of the name of the chosen clip, while a clip plays.
+  A microphone that hears your speakers can't be seen from here, so nothing says it.
 - **Your files:** `Library` renames or deletes a file only when you ask, from the menu of its clip (right-click, or the `...` button): `Delete` moves it to the Recycle Bin and never deletes it for good. Files you move or rename in the Explorer are followed by the list too.
 - **Long lists:** it shows the 2,000 most recent clips, and says so at the end of the list. A clip with a star or in a collection
   is listed too, however old, as long as the collections file can be read.
+- **Search:** the field at the right of the menu keeps the clips whose name holds every word you type, in any order, as you type. It ignores capitals and accents, so `cafe` finds a name with an accent, and it reads the name as the list shows it, without `.mp3`. It searches inside `Favorites` or a collection too. `Ctrl+F` (`Control+F` on a Mac) goes to the field and selects its text; `Esc` empties it; `Down` or `Enter` goes to the list. When the list shows the 2,000 most recent clips, only those, and the clips with a star or in a collection, are searched, and the end of the list says so. The text stays until you close the window.
 - **Favorites:** each line has a star. Click the star of a line to star that clip, without choosing it, or press `F` with the list focused to star the chosen clip. Do it again to take the star off.
 - **Collections:** under the list, `Selected clip in:` shows the collections, with a box to tick for each. A clip can be in
   several. The ticked ones come first; those that don't fit are behind `+N`. `New collection...` makes one, up to 40 characters.
-- **The menu above the list:** `All clips`, `Favorites`, or one of your collections. When it shows a collection, `Rename` and
-  `Delete` are next to it. Deleting a collection deletes no clip, and the clips keep their star and their other collections.
+- **The menu above the list:** `All clips`, `Favorites`, or one of your collections. When it shows a collection, a `...` button
+  next to it opens `Rename...` and `Delete...`. Deleting a collection deletes no clip, and the clips keep their star and their other collections.
 - **Where they are kept:** in `library.json`, next to `settings.json`. Hindsound writes it only when you change something, and
   never touches your clips to do it. A clip renamed or moved in a folder Hindsound reads keeps its star and collections. A clip
   gone for 30 days loses them. The names of your collections are never written to the log.

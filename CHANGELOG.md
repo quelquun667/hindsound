@@ -4,6 +4,17 @@ All notable changes to Hindsound are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- The Library has a search field, at the right of the menu. It keeps the clips whose name holds every word typed, in any order, ignoring capitals and accents (`cafe` finds a clip named with an accent), inside `All clips`, `Favorites` or a collection. `Ctrl+F` goes to it, `Esc` empties it, and `Down` or `Enter` goes to the list. When it finds nothing, the list says so, and when the list holds only the 2,000 most recent clips, the end of the list says that only those, and the clips with a star or a collection, are searched.
+
+### Changed
+
+- In the Library, `Rename` and `Delete` of a collection are now `Rename...` and `Delete...` in the menu of a `...` button next to the menu of collections, to leave room for the search field.
+- In the Library, `Playback can end up in your next clip on this setup.` is now said at the bottom, in place of the name of the chosen clip, and no longer takes the place of the buttons of the collection.
+
 ## [0.12.0] - 2026-11-23
 
 Hotkeys that follow the keyboard layout on Mac, and a lost sound shown on Linux. On Windows, Hindsound works as in 0.11.0, but gives up sooner on a server that does not answer a check for a new version.
