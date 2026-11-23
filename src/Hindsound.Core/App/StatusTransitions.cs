@@ -250,7 +250,7 @@ internal static class StatusTransitions
     {
         var activity = engineFailed ? CaptureActivity.NoDevice : status?.Activity ?? CaptureActivity.Stopped;
         var refused = RefusedSave(hotkeys);
-        var problem = activity == CaptureActivity.NoDevice ? "No audio device"
+        var problem = activity == CaptureActivity.NoDevice ? Tr.Of("No audio device", "Aucun périphérique audio")
             : refused is not null ? Describe(refused)
             : importantClipWaiting ? "A clip has a problem"
             : onDefaults ? OnDefaultsProblem

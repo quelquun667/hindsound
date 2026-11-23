@@ -106,7 +106,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     private ClipResult? _lastClip;
     private DateTime _lastClipTime;
     private TimeSpan _lastRequested;
-    private NotificationContent? _lastClipNotice;
+    // The facts of the last clip, not its words: the first-launch card says them in the language of the moment it is drawn.
+    private Func<NotificationContent>? _lastClipNotice;
 
     private double _cpuBeforeNotification;
     private int _exitCode;
@@ -882,7 +883,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         _lastRequested = outcome.Request.Requested;
 
         // What is true until the copy has been tried: the clip is in its folder.
-        _lastClipNotice = NotificationStates.ForClip(result, _lastRequested, copyWanted: false, copied: false, Accent);
+        var requested = _lastRequested;
+        _lastClipNotice = () => NotificationStates.ForClip(result, requested, copyWanted: false, copied: false, Accent);
         _window?.Screen.SetLastClip(LastClipShown());
         _journal.Write($"clip saved: {string.Join(", ", result.Paths)}, {result.Duration.TotalSeconds:F2} s of {outcome.Request.Requested.TotalSeconds:F0} s, {result.SizeBytes} bytes, silent {result.IsSilent}, rescued {result.Rescued}, fell back to WAV {result.FellBackToWav}, {_desktop.Meter.Memory()}");
         if (outcome.Request.CopyWanted)
@@ -909,7 +911,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         {
             var content = NotificationStates.ForClip(result, outcome.Request.Requested, outcome.Request.CopyWanted, copied, Accent);
             _journal.Write($"clipboard: wanted {outcome.Request.CopyWanted}, copied {copied}; notification {content.Kind}");
-            NoteLastClipNotice(result, content);
+            NoteLastClipNotice(result, () => NotificationStates.ForClip(result, outcome.Request.Requested, outcome.Request.CopyWanted, copied, Accent));
             var copyFailed = outcome.Request.CopyWanted && !copied;
             ShowClip(content, saved: true, important: result.Rescued || copyFailed, copyFailed, outcome.Request.Screen);
             FinishSelfTest(outcome, copied);
@@ -922,11 +924,11 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     }
 
     // The first-launch card says what the notification says. Only about the last clip: a copy can end after a newer one is written.
-    private void NoteLastClipNotice(ClipResult clip, NotificationContent content)
+    private void NoteLastClipNotice(ClipResult clip, Func<NotificationContent> notice)
     {
         if (ReferenceEquals(_lastClip, clip))
         {
-            _lastClipNotice = content;
+            _lastClipNotice = notice;
             _window?.Screen.SetLastClip(LastClipShown());
         }
     }
@@ -949,10 +951,11 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         }
 
         // The answer to a press: the sound is only for a new clip, and a copy that failed is said whatever the settings.
+        var requested = _lastRequested;
         CopyClip(clip, copied =>
         {
-            var content = NotificationStates.ForClip(clip, _lastRequested, true, copied, Accent);
-            NoteLastClipNotice(clip, content);
+            var content = NotificationStates.ForClip(clip, requested, true, copied, Accent);
+            NoteLastClipNotice(clip, () => NotificationStates.ForClip(clip, requested, true, copied, Accent));
             ShowClip(content, saved: false, important: !copied, copyFailed: !copied, screen);
         });
     }
@@ -997,7 +1000,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
         if (decision.CatchUpLater)
         {
-            _journal.Write($"notification {content.Kind} waits for the desktop: {content.Title} / {content.Body}");
+            _journal.Write($"notification {content.Kind} waits for the desktop");
             _pending.AddStatus(content, NowMs);
             ArmPendingPoll();
             RefreshTray();
@@ -1090,7 +1093,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         var area = NotificationSpot.AreaOn(screen, covers);
         var dpi = screen.Dpi;
         _journal.Write($"notification area: {area.Left},{area.Top},{area.Right},{area.Bottom} at {dpi} dpi, foreground covers the screen {covers}{(_options.Offscreen ? ", drawn off screen instead" : string.Empty)}");
-        _journal.Write($"notification {content.Kind}: {content.Title} / {content.Body}");
+        _journal.Write($"notification {content.Kind}");
         _cpuBeforeNotification = _desktop.Meter.CpuMilliseconds();
         var leftEdge = string.Equals(_settings.General.NotificationPosition, "left", StringComparison.OrdinalIgnoreCase);
         _notification.Present(content, new NotificationSpot(area, dpi, clickThrough, leftEdge), Accent);
@@ -1169,15 +1172,25 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     /// <summary>Called whenever one of the things the icon says has changed.</summary>
     private void RefreshTray()
     {
-        var (state, tip) = StatusTransitions.TrayOf(_lastStatus, _hotkeyResults, _pending.ImportantClipWaiting, _engineFailed, _leave.Waiting, _settingsFile.StillOnDefaults);
+        var (state, tip) = TrayNow();
         if (state != _trayState || tip != _trayTip)
         {
-            _journal.Write($"tray: {state}, {tip}");
+            // The journal is in English whatever the language, so the tip it names is made again in English.
+            string englishTip;
+            using (Tr.Use(UiLanguage.English))
+            {
+                englishTip = TrayNow().Tip;
+            }
+
+            _journal.Write($"tray: {state}, {englishTip}");
             _trayState = state;
             _trayTip = tip;
             UpdateTray();
         }
     }
+
+    private (TrayState State, string Tip) TrayNow() =>
+        StatusTransitions.TrayOf(_lastStatus, _hotkeyResults, _pending.ImportantClipWaiting, _engineFailed, _leave.Waiting, _settingsFile.StillOnDefaults);
 
     private void OnScaleMayHaveChanged()
     {
@@ -1611,7 +1624,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     });
 
     private LastClipInfo? LastClipShown() =>
-        _lastClip is { } clip ? new LastClipInfo(clip.Duration, _lastClipTime, clip.SizeBytes) { Notice = _lastClipNotice } : null;
+        _lastClip is { } clip ? new LastClipInfo(clip.Duration, _lastClipTime, clip.SizeBytes) { NoticeMaker = _lastClipNotice } : null;
 
     internal void OnSettingsClosed()
     {

@@ -457,7 +457,7 @@ internal static unsafe class SettingsDump
             s.Key(Vk.Enter, 0);
             s.Key(Vk.Enter, 0);
             var clip = new Hindsound.Export.ClipResult(["clip.mp3"], TimeSpan.FromSeconds(30), 720_000, false, [], false);
-            s.SetLastClip(new LastClipInfo(clip.Duration, DateTime.Now, clip.SizeBytes) { Notice = NotificationStates.ForClip(clip, clip.Duration, true, false, Theme.Amber) });
+            s.SetLastClip(new LastClipInfo(clip.Duration, DateTime.Now, clip.SizeBytes) { NoticeMaker = () => NotificationStates.ForClip(clip, clip.Duration, true, false, Theme.Amber) });
         }, firstRun: true);
 
         // The Now page. The same names as its mock-ups, and made-up samples through real tracks and real lanes.
