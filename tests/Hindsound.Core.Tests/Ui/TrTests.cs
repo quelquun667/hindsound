@@ -70,13 +70,13 @@ public sealed class TrTests
     }
 
     [Theory]
-    [InlineData(UiLanguage.English, 1.44, "0.0", SizeUnit.MB, "1.4 MB")]
-    [InlineData(UiLanguage.French, 1.44, "0.0", SizeUnit.MB, "1,4 Mo")]
-    [InlineData(UiLanguage.English, 720, "0", SizeUnit.KB, "720 KB")]
-    [InlineData(UiLanguage.French, 720, "0", SizeUnit.KB, "720 Ko")]
-    [InlineData(UiLanguage.English, 2.25, "0.00", SizeUnit.GB, "2.25 GB")]
-    [InlineData(UiLanguage.French, 2.25, "0.00", SizeUnit.GB, "2,25 Go")]
-    [InlineData(UiLanguage.French, 1500.5, "#,0.0", SizeUnit.MB, "1 500,5 Mo")]
+    [InlineData(UiLanguage.English, 1.44, "0.0", SizeUnit.MB, "1.4\u00A0MB")]
+    [InlineData(UiLanguage.French, 1.44, "0.0", SizeUnit.MB, "1,4\u00A0Mo")]
+    [InlineData(UiLanguage.English, 720, "0", SizeUnit.KB, "720\u00A0KB")]
+    [InlineData(UiLanguage.French, 720, "0", SizeUnit.KB, "720\u00A0Ko")]
+    [InlineData(UiLanguage.English, 2.25, "0.00", SizeUnit.GB, "2.25\u00A0GB")]
+    [InlineData(UiLanguage.French, 2.25, "0.00", SizeUnit.GB, "2,25\u00A0Go")]
+    [InlineData(UiLanguage.French, 1500.5, "#,0.0", SizeUnit.MB, "1 500,5\u00A0Mo")]
     public void A_size_has_the_decimal_mark_and_the_unit_of_its_language(UiLanguage language, double value, string format, SizeUnit unit, string expected)
     {
         using var scope = Tr.Use(language);
@@ -86,11 +86,11 @@ public sealed class TrTests
     [Fact]
     public void The_sizes_of_the_window_follow_the_language()
     {
-        Assert.Equal("1.4 MB", StatusText.FileSize(1_400_000));
-        Assert.Equal("~87 MB", StatusText.Megabytes(86_688_000));
+        Assert.Equal("1.4\u00A0MB", StatusText.FileSize(1_400_000));
+        Assert.Equal("~87\u00A0MB", StatusText.Megabytes(86_688_000));
         using var scope = Tr.Use(UiLanguage.French);
-        Assert.Equal("1,4 Mo", StatusText.FileSize(1_400_000));
-        Assert.Equal("720 Ko", StatusText.FileSize(720_000));
-        Assert.Equal("~87 Mo", StatusText.Megabytes(86_688_000));
+        Assert.Equal("1,4\u00A0Mo", StatusText.FileSize(1_400_000));
+        Assert.Equal("720\u00A0Ko", StatusText.FileSize(720_000));
+        Assert.Equal("~87\u00A0Mo", StatusText.Megabytes(86_688_000));
     }
 }

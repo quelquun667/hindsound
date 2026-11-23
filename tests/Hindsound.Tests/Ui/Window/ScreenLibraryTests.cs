@@ -669,7 +669,7 @@ public sealed class ScreenLibraryTests : IDisposable
         var drawn = Painted();
         Assert.DoesNotContain(SettingsScreen.NothingSelected, drawn);
         Assert.Contains(SettingsScreen.SelectedClipCaption, drawn);
-        Assert.Contains("720 KB", drawn);
+        Assert.Contains("720\u00A0KB", drawn);
         Assert.Contains("clip0002.mp3", drawn);
 
         // Five rows, and the foot.
@@ -685,7 +685,7 @@ public sealed class ScreenLibraryTests : IDisposable
         Screen.SelectClip(FakeLibrary.Folder + "clip.mp3");
 
         var drawn = Painted();
-        Assert.Contains("720 KB", drawn);
+        Assert.Contains("720\u00A0KB", drawn);
         Assert.DoesNotContain("0:00", drawn);
     }
 
@@ -701,7 +701,7 @@ public sealed class ScreenLibraryTests : IDisposable
         var drawn = Painted();
         Assert.Contains("demo.mp3", drawn);
         Assert.DoesNotContain("demo_system.mp3", drawn);
-        Assert.Contains("700 KB", drawn);
+        Assert.Contains("700\u00A0KB", drawn);
         Assert.Contains("2 files", drawn);
     }
 

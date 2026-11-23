@@ -137,14 +137,14 @@ public sealed unsafe class LanguagePagesTests
     private static readonly string[] FrenchPilot =
     [
         "Maintenant", "Bibliothèque", "Réglages", "Raccourcis", "Durées", "Audio", "Export", "Général",
-        "micro actif", "Pause", "Enregistrer 30 s", "~87 Mo",
+        "micro actif", "Pause", "Enregistrer 30 s", "~87\u00A0Mo",
         "Couleur d'accent", "Lancer avec Windows", "Langue", "Système (Français)", "Taille de la fenêtre", "Notifications d'enregistrement",
-        "Dernier clip", "720 Ko", "Copier", "Ouvrir le dossier",
+        "Dernier clip", "720\u00A0Ko", "Copier", "Ouvrir le dossier",
     ];
 
     private static readonly string[] EnglishPilot =
     [
-        "Now", "Library", "Settings", "Hotkeys", "Durations", "General", "Capturing", "mic on", "Save up to 30s", "~87 MB",
+        "Now", "Library", "Settings", "Hotkeys", "Durations", "General", "Capturing", "mic on", "Save up to 30s", "~87\u00A0MB",
         "Accent color", "Start with Windows", "Language", "System (English)", "Window size", "Save notifications", "Last clip", "Copy", "Open folder",
     ];
 
@@ -172,7 +172,7 @@ public sealed unsafe class LanguagePagesTests
         Assert.Equal("Capture", band.Title);
         Assert.Equal("micro actif", band.Mic);
         Assert.Equal("Pause", band.PauseLabel);
-        Assert.Equal("~87 Mo", band.Ram);
+        Assert.Equal("~87\u00A0Mo", band.Ram);
         Assert.Equal("En pause", StatusText.From(capturing with { Activity = CaptureActivity.Paused }, 300).Title);
         Assert.Equal("Reprendre", StatusText.From(capturing with { Activity = CaptureActivity.Paused }, 300).PauseLabel);
         Assert.Equal("Démarrage", StatusText.From(null).Title);

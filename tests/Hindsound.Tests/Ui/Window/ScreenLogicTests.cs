@@ -102,7 +102,7 @@ public class StatusTextTests
         Assert.Equal("Capturing", band.Title);
         Assert.Equal("mic on", band.Mic);
         Assert.Equal("1:02", band.Duration);
-        Assert.Equal("~87 MB", band.Ram);
+        Assert.Equal("~87\u00A0MB", band.Ram);
         Assert.Equal("Pause", band.PauseLabel);
     }
 
@@ -193,9 +193,9 @@ public class StatusTextTests
     }
 
     [Theory]
-    [InlineData(720_000, "720 KB")]
-    [InlineData(400, "1 KB")]
-    [InlineData(1_400_000, "1.4 MB")]
+    [InlineData(720_000, "720\u00A0KB")]
+    [InlineData(400, "1\u00A0KB")]
+    [InlineData(1_400_000, "1.4\u00A0MB")]
     public void A_size_reads_in_the_right_unit(long bytes, string text)
     {
         Assert.Equal(text, StatusText.FileSize(bytes));
@@ -217,7 +217,7 @@ public class StatusTextTests
 
         Assert.Equal("0:30", clip.DurationText);
         Assert.Equal("14:32", clip.TimeText);
-        Assert.Equal("720 KB", clip.SizeText);
+        Assert.Equal("720\u00A0KB", clip.SizeText);
     }
 }
 

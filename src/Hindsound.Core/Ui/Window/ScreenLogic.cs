@@ -199,7 +199,7 @@ internal static class StatusText
             // The state comes first: a long name gets cut at the end of the title.
             CaptureActivity.Capturing when status.SourceAppMissing => (StatusMark.Caution, Tr.Of("Not running", "Pas lancé") + Colon + app),
             CaptureActivity.Capturing when status.SystemCapturing && status.SourceAppLost => (StatusMark.Warning, Tr.Of("Sound lost", "Son perdu") + Colon + app),
-            CaptureActivity.Capturing when status.SystemCapturing => (StatusMark.Dot, Tr.Of("Capturing ", "Capture de ") + app),
+            CaptureActivity.Capturing when status.SystemCapturing => (StatusMark.Dot, Tr.French ? "Capture " + Tr.FrenchOf(app!) : "Capturing " + app),
             CaptureActivity.Capturing => (StatusMark.Warning, CannotCapture(app)),
             _ => (StatusMark.None, Tr.Of("Not capturing", "Pas de capture")),
         };
@@ -266,7 +266,12 @@ internal static class StatusText
 internal sealed record LastClipInfo(TimeSpan Duration, DateTime Time, long SizeBytes)
 {
     /// <summary>What the notification says about this clip now: the first-launch card says the same. Null when it was copied without a word.</summary>
-    public NotificationContent? Notice { get; init; }
+    public NotificationContent? Notice { get => NoticeMaker is { } make ? make() : _notice; init => _notice = value; }
+
+    /// <summary>Makes what the notification says about this clip, each time it is asked: its words follow the language of the moment.</summary>
+    public Func<NotificationContent?>? NoticeMaker { get; init; }
+
+    private readonly NotificationContent? _notice;
 
     public string DurationText => NotificationStates.FormatDuration(NotificationStates.WholeSeconds(Duration));
 
