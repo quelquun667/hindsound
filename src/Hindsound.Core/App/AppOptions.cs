@@ -164,7 +164,7 @@ internal sealed record AppOptions(
                     i++;
                     break;
                 case "--lang" when next is not null:
-                    options = options with { DumpLanguage = next == "fr" ? UiLanguage.French : UiLanguage.English };
+                    options = options with { DumpLanguage = string.Equals(next, "fr", StringComparison.OrdinalIgnoreCase) ? UiLanguage.French : UiLanguage.English };
                     i++;
                     break;
                 case "--first-run":

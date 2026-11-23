@@ -12,6 +12,7 @@ public class PathSitesTests
     /// <summary>Per file of the core, how many times OrdinalIgnoreCase is written, and what those compare: never a path of the library.</summary>
     private static readonly Dictionary<string, (int Count, string Compares)> Allowed = new()
     {
+        ["App/AppOptions.cs"] = (1, "the value of --lang"),
         ["App/FullscreenPolicy.cs"] = (1, "a setting value"),
         ["App/HindsoundApp.cs"] = (3, "executable names, a setting value, and the canary of the probe in the lines of the log"),
         ["App/SettingsMapping.cs"] = (3, "setting values, and the default folder on Windows only"),

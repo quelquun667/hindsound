@@ -86,14 +86,15 @@ internal static class UiLanguages
     /// <summary>
     /// The preferred languages of a Linux session, as gettext reads them: the locale of the messages is the first set of
     /// <c>LC_ALL</c>, <c>LC_MESSAGES</c> and <c>LANG</c>; <c>LANGUAGE</c>, a list split by colons, comes before it. A locale of
-    /// <c>C</c> or <c>POSIX</c> asks for no language at all, and gettext then ignores <c>LANGUAGE</c> too: nothing.
+    /// <c>C</c> or <c>POSIX</c> asks for no language at all, and gettext then ignores <c>LANGUAGE</c> too: nothing. So does a session
+    /// where none of the three is set, which is the <c>C</c> locale as well.
     /// </summary>
     /// <param name="variable">Reads one variable of the environment; null when it is not set.</param>
     public static IReadOnlyList<string> FromLinuxEnvironment(Func<string, string?> variable)
     {
         var locale = new[] { "LC_ALL", "LC_MESSAGES", "LANG" }.Select(variable).FirstOrDefault(value => !string.IsNullOrEmpty(value));
         var messages = FromPosixLocale(locale);
-        if (locale is not null && messages is null)
+        if (locale is null || messages is null)
         {
             return [];
         }

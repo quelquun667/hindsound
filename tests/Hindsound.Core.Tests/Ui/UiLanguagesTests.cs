@@ -73,6 +73,14 @@ public sealed class UiLanguagesTests
     }
 
     [Fact]
+    public void On_Linux_LANGUAGE_alone_is_ignored_as_gettext_does_when_no_locale_variable_is_set()
+    {
+        Assert.Empty(Linux(("LANGUAGE", "fr_FR")));
+        Assert.Empty(Linux(("LANGUAGE", "fr_FR:en"), ("LANG", "")));
+        Assert.Equal(UiLanguage.English, UiLanguages.Resolve("system", Linux(("LANGUAGE", "fr_FR"))));
+    }
+
+    [Fact]
     public void The_Windows_list_is_read_up_to_its_double_null()
     {
         Assert.Equal(["fr-FR", "en-US"], UiLanguages.FromMultiString("fr-FR\0en-US\0\0"));
