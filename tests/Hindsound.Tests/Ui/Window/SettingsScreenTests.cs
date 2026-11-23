@@ -78,7 +78,7 @@ public sealed class SettingsScreenTests : IDisposable
         Assert.Equal(["export.format", "export.bitrate", "export.normalization", "export.browse", "export.template", "export.copy"], PageStops());
 
         Screen.ShowSection(Section.General);
-        Assert.Equal(["general.accent", "general.startup", "general.size", "general.notifications", "general.position", "general.fullscreen", "general.sound", "general.test"], PageStops());
+        Assert.Equal(["general.accent", "general.startup", "general.language", "general.size", "general.notifications", "general.position", "general.fullscreen", "general.sound", "general.test"], PageStops());
 
         Screen.ShowSection(Section.Hotkeys);
         Assert.Equal(

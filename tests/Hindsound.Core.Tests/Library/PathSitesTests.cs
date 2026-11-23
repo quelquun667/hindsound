@@ -27,6 +27,7 @@ public class PathSitesTests
         ["Library/LibraryStore.cs"] = (1, "the name of a collection"),
         ["Library/PathRules.cs"] = (2, "the definition of the comparer of paths"),
         ["Settings/AppSettings.cs"] = (2, "option values and the microphone id"),
+        ["Ui/UiLanguages.cs"] = (3, "language tags, which the systems write in either case"),
         ["Ui/Window/SettingsEditor.cs"] = (6, "gestures, device ids and tags of a template"),
         ["Ui/Window/WaveView.cs"] = (2, "executable names"),
         ["Ui/Window/Widgets.cs"] = (1, "option values"),
