@@ -111,6 +111,17 @@ internal sealed class NowWave
     /// <summary>The page is coming back after an absence, during which nothing was read: its next full paint reads first.</summary>
     public void ReadAgain() => _followed = false;
 
+    /// <summary>
+    /// The language changed: the titles and the line under the wave were made once, in the old one, and are made again at the next
+    /// look. With the memory full the engine sends no new status, so nothing else would ever remake them.
+    /// </summary>
+    public void RemakeWords()
+    {
+        _titleKnown = false;
+        _markerText = null;
+        _seconds = (-1, -1);
+    }
+
     /// <summary>Works out the picture and says what changed. Draws nothing, and allocates nothing unless the words change.</summary>
     public WaveChange Look(double scale, in WaveFacts facts, int clipSeconds, AudioEngineStatus? status)
     {

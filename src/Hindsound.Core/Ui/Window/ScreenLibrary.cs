@@ -166,7 +166,7 @@ internal sealed partial class SettingsScreen
     private NameBoxState? _box;
 
     /// <summary>What the last answer said on the line, in amber, and for which chosen clip. Gone at the next reading, action or clip.</summary>
-    private (string? Clip, string Text)? _lineNotice;
+    private (string? Clip, Func<string> Text)? _lineNotice;
 
     /// <summary>The sentence above came while another page was on screen: the readings up to the first one back on Library keep it.</summary>
     private bool _noticeUnseen;
@@ -771,7 +771,7 @@ internal sealed partial class SettingsScreen
         var limit = ChipLine.ChipsLimit(_canvas, Right);
         if (_lineNotice is { } said)
         {
-            Add(ChipLine.Notice(said.Text, Left, limit - Left), scrolls: false);
+            Add(ChipLine.Notice(said.Text(), Left, limit - Left), scrolls: false);
         }
         else if (chosen is not null)
         {
@@ -794,7 +794,7 @@ internal sealed partial class SettingsScreen
     /// <summary>The sentence of an answer, kept for the clip chosen now. Nothing for an answer with nothing to say.</summary>
     private void Say(LibraryOutcome outcome)
     {
-        _lineNotice = ChipLine.OutcomeMessage(outcome) is { } text ? (ChosenClip?.Main.Path, text) : null;
+        _lineNotice = ChipLine.OutcomeMessage(outcome) is not null ? (ChosenClip?.Main.Path, () => ChipLine.OutcomeMessage(outcome) ?? string.Empty) : null;
         _noticeUnseen = _lineNotice is not null && Section != Section.Library;
     }
 

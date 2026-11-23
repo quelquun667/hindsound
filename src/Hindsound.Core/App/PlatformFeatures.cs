@@ -44,6 +44,7 @@ internal sealed record PlatformFeatures
     /// </param>
     public static PlatformFeatures Linux(Func<ShortcutMode> shortcuts, Func<string?>? saveCommand = null) => new()
     {
+        InstalledWindows = false,
         NotificationLook = false,
         ConfirmSound = false,
         StartupWords = ("Start with the session", "Lancer avec la session"),
@@ -65,6 +66,7 @@ internal sealed record PlatformFeatures
     /// <param name="shortcuts">How the shortcuts are set now; <see cref="ShortcutMode.Command"/> when not given.</param>
     public static PlatformFeatures Mac(Func<string?> saveCommand, Func<ShortcutMode>? shortcuts = null) => new()
     {
+        InstalledWindows = false,
         SingleApp = true,
         NotificationLook = true,
         TestNotification = true,
@@ -79,6 +81,9 @@ internal sealed record PlatformFeatures
         PasteGesture = "Win+V",
         PasteKeys = ["Cmd", "V"],
     };
+
+    /// <summary>The installed Windows app, which is the only system that starts a Setup to update itself. False for the others, whatever words they use.</summary>
+    public bool InstalledWindows { get; init; } = true;
 
     /// <summary>The choice of one application to capture, in place of the whole PC sound.</summary>
     public bool SingleApp { get; init; } = true;

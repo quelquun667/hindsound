@@ -19,6 +19,9 @@ internal sealed class PendingNotices(Action<string> journal)
     public const int FastPollMs = 500;
     public const int SlowPollMs = 2000;
 
+    // A notification waits with the words it was made with, and is not made again if the language changes. That is accepted: the
+    // language is changed in the window, and opening the window means leaving the game, which shows this queue first.
+    // Only a hand edit of the settings file during a game could leave one in the old language.
     private NotificationContent? _status;
     private NotificationContent? _importantClip;
     private NotificationContent? _ordinaryClip;
