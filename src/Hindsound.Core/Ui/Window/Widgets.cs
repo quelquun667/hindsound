@@ -718,7 +718,7 @@ internal sealed class HotkeyField(HotkeyAction action, Func<HotkeyFieldView> vie
         var line = box.Bottom + MessageHeight / 2;
         if (state.Listening && state.Message is null)
         {
-            c.TextMid(Tr.Of("Esc cancels, Backspace clears", "Esc annule, Backspace efface"), Face.Body, 13, box.X, line, Theme.Muted);
+            c.TextMid(Tr.Of("Esc cancels, Backspace clears", "Échap annule, Retour arrière efface"), Face.Body, 13, box.X, line, Theme.Muted);
         }
         else if (state.Message is not null)
         {

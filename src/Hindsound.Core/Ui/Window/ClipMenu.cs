@@ -79,7 +79,8 @@ internal sealed class ClipMenu : ActionMenu
     public static string? KeyOf(ClipMenuItem item) => item switch
     {
         ClipMenuItem.Rename => "F2",
-        ClipMenuItem.Delete => "Del",
+        // French keyboards print "Suppr" on that key.
+        ClipMenuItem.Delete => Tr.Of("Del", "Suppr"),
         _ => null,
     };
 
