@@ -757,7 +757,7 @@ jobs:
           echo "--save from a second launch: exit code $code (2: handed to the running instance)"
           [ "$code" -eq 2 ]; check "--save handed over" $?
           wait_for 'clip saved:|clip not saved:' 60; check "clip saved line" $?
-          wait_for 'notification (Saved|Partial|WavFallback):' 20; check "notification shown" $?
+          wait_for '  notification (Saved|Partial|WavFallback)$' 20; check "notification shown" $?
           clip=$(find "$clips" -maxdepth 1 -name '*.mp3' | head -n 1)
           echo "whole app: clip '${clip:-none}', $(stat -f %z "$clip" 2> /dev/null || echo 0) bytes"
           [ -n "$clip" ] && [ -s "$clip" ]; check "clip written in the folder of the settings" $?
@@ -1464,7 +1464,7 @@ jobs:
           echo "--save from a second launch: exit code $code (2: handed to the running instance)"
           [ "$code" -eq 2 ]; check "--save handed over" $?
           wait_for 'clip saved:|clip not saved:' 60; check "clip saved line" $?
-          wait_for 'notification (Saved|Partial|WavFallback):' 20; check "notification shown" $?
+          wait_for '  notification (Saved|Partial|WavFallback)$' 20; check "notification shown" $?
           clip=$(find "$clips" -maxdepth 1 -name '*.mp3' | head -n 1)
           echo "whole app: clip '${clip:-none}', $(stat -f %z "$clip" 2> /dev/null || echo 0) bytes"
           [ -n "$clip" ] && [ -s "$clip" ]; check "clip written in the folder of the settings" $?
