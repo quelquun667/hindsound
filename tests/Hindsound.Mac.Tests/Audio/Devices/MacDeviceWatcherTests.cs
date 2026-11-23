@@ -2,6 +2,18 @@ using Hindsound.Mac.Audio.Devices;
 
 namespace Hindsound.Mac.Tests.Audio.Devices;
 
+/// <summary>
+/// Apart from the parallel tests: the watch folds the notifications with a timer, whose callback runs in the thread pool, and
+/// on the busy Windows runner of the CI the tests beside these held every thread of the pool for more than 5 s (run
+/// 45136081495: the event of a change never came).
+/// </summary>
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class DeviceWatcherTimerCollection
+{
+    public const string Name = "Timer of the device watcher";
+}
+
+[Collection(DeviceWatcherTimerCollection.Name)]
 public sealed class MacDeviceWatcherTests
 {
     [Fact]

@@ -19,7 +19,12 @@ internal sealed class LatestLoad<T>(Action<Action> toLoop, Action<T> delivered, 
     private int _running;
     private Func<T>? _waiting;
 
-    /// <summary>Starts a load in the thread pool, or keeps it for when one ends. Call it on the loop's thread.</summary>
+    /// <summary>
+    /// Starts a load on a thread of its own, or keeps it for when one ends. Call it on the loop's thread. Not in the thread pool:
+    /// a load may sit for seconds in a driver, and a pool whose threads are all held starts it only once it grows, seconds
+    /// later on a busy machine (the Windows runner of the CI, where the lists had not started 10 s later). At most
+    /// <see cref="MostAtOnce"/> such threads live at once.
+    /// </summary>
     public void Start(Func<T> load)
     {
         lock (_gate)
@@ -34,7 +39,7 @@ internal sealed class LatestLoad<T>(Action<Action> toLoop, Action<T> delivered, 
         }
 
         var ticket = ++_latest;
-        _ = Task.Run(() =>
+        _ = Task.Factory.StartNew(() =>
         {
             try
             {
@@ -62,7 +67,7 @@ internal sealed class LatestLoad<T>(Action<Action> toLoop, Action<T> delivered, 
                     toLoop(() => Start(waiting));
                 }
             }
-        });
+        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
 
     /// <summary>Nothing started so far is wanted any more. Call it on the loop's thread.</summary>
