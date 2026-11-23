@@ -183,7 +183,7 @@ public sealed unsafe class LanguageLiveChangeTests
         var french = rig.Texts();
 
         Assert.Contains("Tout le PC", french);
-        Assert.Contains("Enregistrement", french);
+        Assert.Contains("Prochain clip", french);
         Assert.DoesNotContain("Whole PC", french);
         Assert.DoesNotContain("Save", french);
     }
@@ -202,7 +202,7 @@ public sealed unsafe class LanguageLiveChangeTests
         wave.RemakeWords();
         wave.Look(1, facts, 30, Status());
 
-        Assert.StartsWith("Enregistrement", wave.SaveText, StringComparison.Ordinal);
+        Assert.StartsWith("Prochain clip", wave.SaveText, StringComparison.Ordinal);
     }
 
     [Fact]

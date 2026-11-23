@@ -209,6 +209,27 @@ public sealed class EditorFrenchTests : IDisposable
     }
 
     [Fact]
+    public void A_dialog_made_wider_by_French_takes_its_own_clicks_and_the_side_bar_around_it_takes_none()
+    {
+        using var scope = Tr.Use(UiLanguage.French);
+        Open();
+        Click(SettingsScreen.EditorSaveId);
+        var cancel = Screen.WidgetById(EditorSaveDialogState.CancelId)!.Bounds;
+        Assert.True(cancel.X < SettingsScreen.NavWidth, "the French buttons must widen the dialog into the side bar for this test to mean anything");
+
+        // Above the dialog, on the side bar: nothing happens.
+        Screen.MouseDown(SettingsScreen.NavWidth - 2, SettingsScreen.BandHeight + 4);
+        Screen.MouseUp(SettingsScreen.NavWidth - 2, SettingsScreen.BandHeight + 4);
+        Assert.NotNull(Screen.EditorDialog);
+        Assert.Equal(Section.Library, Screen.Section);
+
+        // The left edge of Cancel, over the side bar: it is the dialog's.
+        Screen.MouseDown(cancel.X + 2, cancel.MidY);
+        Screen.MouseUp(cancel.X + 2, cancel.MidY);
+        Assert.Null(Screen.EditorDialog);
+    }
+
+    [Fact]
     public void The_name_of_the_copy_is_refused_in_French()
     {
         using var scope = Tr.Use(UiLanguage.French);

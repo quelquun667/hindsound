@@ -1205,6 +1205,19 @@ internal sealed partial class SettingsScreen : Hindsound.App.IEditorWindowScreen
             return null;
         }
 
+        // The dialog of Save comes first: a box made wider by its labels reaches over the side bar, whose rows come earlier in the
+        // list, and they would take the clicks of its field and of Cancel.
+        if (_saveDialog is not null)
+        {
+            foreach (var widget in _chrome)
+            {
+                if (widget.Id.StartsWith(EditorSaveDialogState.Prefix, StringComparison.Ordinal) && widget.Bounds.Contains(x, y) && widget.Enabled && widget is not Painted)
+                {
+                    return widget;
+                }
+            }
+        }
+
         foreach (var widget in _chrome)
         {
             if (widget.Bounds.Contains(x, y) && widget.Enabled && widget is not Painted)

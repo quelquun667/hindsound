@@ -839,8 +839,15 @@ internal sealed partial class SettingsScreen
             Chrome(widget);
         }
 
+        // The side bar is shielded around the box, never over it: a box made wider by its labels reaches into the side bar, and
+        // a shield over its left edge would take the clicks of its field and of Cancel.
         var box = EditorSaveDialog.BoxOf(_canvas);
         _chrome.Insert(0, new EditorShield { Id = "edit.shield.band", Bounds = new Box(0, 0, WindowWidth, BandHeight) });
-        _chrome.Insert(1, new EditorShield { Id = "edit.shield.side", Bounds = new Box(0, BandHeight, MathF.Max(box.X, NavWidth), WindowHeight - BandHeight) });
+        _chrome.Insert(1, new EditorShield { Id = "edit.shield.side", Bounds = new Box(0, BandHeight, box.X, WindowHeight - BandHeight) });
+        if (box.X < NavWidth)
+        {
+            _chrome.Insert(2, new EditorShield { Id = "edit.shield.above", Bounds = new Box(box.X, BandHeight, NavWidth - box.X, box.Y - BandHeight) });
+            _chrome.Insert(3, new EditorShield { Id = "edit.shield.below", Bounds = new Box(box.X, box.Bottom, NavWidth - box.X, WindowHeight - box.Bottom) });
+        }
     }
 }
