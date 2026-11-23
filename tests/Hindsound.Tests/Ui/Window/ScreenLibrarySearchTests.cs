@@ -339,8 +339,7 @@ public sealed class ScreenLibrarySearchTests : IDisposable
         Screen.SelectClip(saved);
         Assert.Equal(string.Empty, Screen.SearchText);
 
-        // The words come back before the reading does, and hide the clip once it is listed.
-        Type("goal");
+        // Nothing is typed before the reading comes: it lists the clip, and it is chosen. Words typed meanwhile would be the person's own.
         library.Lines = new ClipLines([.. library.Lines!.Lines, new ClipGroup([new ClipFile(saved, 1000, default)])], 0);
         Screen.LibraryReadingArrived();
 
