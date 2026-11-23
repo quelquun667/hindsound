@@ -58,6 +58,9 @@ public static class LibraryFilter
     private const string NoClipsYet = "No clips yet", SaveAClip = "Save a clip with your shortcut, and it shows up here.",
         NoFavorites = "No favorite clips", NoClipsInCollection = "No clips in this collection";
 
+    /// <summary>What a search with no result says, around the words as typed: see <see cref="NoMatch"/>.</summary>
+    public const string NoMatchStart = "No clips match \"", NoMatchEnd = "\"", TryOtherWords = "Try other words, or clear the search.";
+
     /// <summary>The two names the menu holds already: a collection called so could not be told from them.</summary>
     public static bool IsReservedName(string name) =>
         string.Equals(name, AllClips, StringComparison.OrdinalIgnoreCase) || string.Equals(name, Favorites, StringComparison.OrdinalIgnoreCase);
@@ -112,6 +115,36 @@ public static class LibraryFilter
 
         return kept;
     }
+
+    /// <summary>
+    /// The lines whose visible name, without the extension, holds every word of the search, in the order they came. A search with no
+    /// word keeps every line, with no copy.
+    /// </summary>
+    /// <param name="lines">The lines of a choice of the menu.</param>
+    /// <param name="query">What was typed.</param>
+    /// <param name="nameOf">The name of a line as the list shows it, with its extension.</param>
+    public static IReadOnlyList<ClipGroup> Search(IReadOnlyList<ClipGroup> lines, string? query, Func<ClipGroup, string> nameOf)
+    {
+        var words = LibrarySearch.Words(query);
+        if (words.Count == 0)
+        {
+            return lines;
+        }
+
+        var kept = new List<ClipGroup>();
+        foreach (var line in lines)
+        {
+            if (LibrarySearch.Matches(LibrarySearch.VisibleName(nameOf(line)), words))
+            {
+                kept.Add(line);
+            }
+        }
+
+        return kept;
+    }
+
+    /// <summary>What a search that finds nothing says. <paramref name="shown"/> is the text typed, cut to fit by the caller.</summary>
+    public static LibraryEmptyText NoMatch(string shown) => new(NoMatchStart + shown + NoMatchEnd, TryOtherWords);
 
     public static LibraryEmptyText EmptyText(LibraryChoice choice) => choice.Kind switch
     {
