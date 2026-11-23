@@ -52,7 +52,7 @@ internal enum WaveTone
 internal static class WaveView
 {
     /// <summary>The line of a microphone that was on and is no longer captured.</summary>
-    public const string MicLost = "Mic lost";
+    public static string MicLost => Tr.Of("Mic lost", "Micro perdu");
 
     // The word of the Record list, so that the page says one thing.
 
@@ -193,7 +193,7 @@ internal static class WaveView
         return new WaveAxis(
             "-" + NotificationStates.FormatDuration(bufferSeconds),
             middle,
-            activity == CaptureActivity.Paused ? "paused" : "now");
+            activity == CaptureActivity.Paused ? Tr.Of("paused", "en pause") : Tr.Of("now", "maintenant"));
     }
 
     /// <summary>
@@ -206,18 +206,18 @@ internal static class WaveView
     {
         if (status?.SourceApp is not { } exe)
         {
-            return (features ?? PlatformFeatures.Windows).WholeMachine;
+            return WholeMachine(features);
         }
 
         var app = AppName(exe);
         if (status.SourceAppMissing)
         {
-            return app + " (not running)";
+            return app + Tr.Of(" (not running)", " (pas lancé)");
         }
 
         if (SystemLaneWarns(status))
         {
-            return app + " (sound lost)";
+            return app + Tr.Of(" (sound lost)", " (son perdu)");
         }
 
         if (!marker.Shows)
@@ -229,11 +229,11 @@ internal static class WaveView
         // on it: its past would name a sequence that never took place, and the title would contradict the line under it.
         if (marker.Past is not { } past || !string.Equals(marker.App, exe, StringComparison.OrdinalIgnoreCase))
         {
-            return (features ?? PlatformFeatures.Windows).WholeMachine;
+            return WholeMachine(features);
         }
 
         // The same app on both sides has no "then" to tell: the past is that app as much as the present.
-        return string.Equals(past, exe, StringComparison.OrdinalIgnoreCase) ? app : AppName(past) + ", then " + app;
+        return string.Equals(past, exe, StringComparison.OrdinalIgnoreCase) ? app : AppName(past) + Tr.Of(", then ", ", puis ") + app;
     }
 
     /// <summary>
@@ -253,10 +253,10 @@ internal static class WaveView
     {
         if (status is null || !status.MicEnabled || !hasTrack)
         {
-            return "Mic";
+            return Tr.Of("Mic", "Micro");
         }
 
-        return status.MicCapturing || status.Activity is CaptureActivity.Paused or CaptureActivity.Stopped or CaptureActivity.NoDevice ? "Mic" : MicLost;
+        return status.MicCapturing || status.Activity is CaptureActivity.Paused or CaptureActivity.Stopped or CaptureActivity.NoDevice ? Tr.Of("Mic", "Micro") : MicLost;
     }
 
     /// <summary>What the lane of the microphone says in its middle, with no base line, or null when it shows its bars.</summary>
@@ -269,10 +269,10 @@ internal static class WaveView
 
         if (!status.MicEnabled)
         {
-            return "Mic off";
+            return Tr.Of("Mic off", "Micro coupé");
         }
 
-        return !hasTrack && !status.MicCapturing && status.Activity == CaptureActivity.Capturing ? "Mic not captured" : null;
+        return !hasTrack && !status.MicCapturing && status.Activity == CaptureActivity.Capturing ? Tr.Of("Mic not captured", "Micro non capté") : null;
     }
 
     /// <summary>
@@ -287,15 +287,17 @@ internal static class WaveView
     public static string SaveLine(int clipSeconds, in WaveFacts facts, PlatformFeatures? features = null)
     {
         var (kept, before) = SaveSeconds(clipSeconds, facts);
-        var line = "Save: last " + NotificationStates.FormatDuration(kept);
+        var line = Tr.Of("Save: last ", "Enregistrement : dernières ") + NotificationStates.FormatDuration(kept);
         if (kept < clipSeconds)
         {
-            line += " of " + NotificationStates.FormatDuration(clipSeconds);
+            line += Tr.Of(" of ", " sur ") + NotificationStates.FormatDuration(clipSeconds);
         }
 
         if (before > 0)
         {
-            line += $" ({NotificationStates.FormatDuration(before)} from before {SourceName(LastChange(facts)!.Value.App, features)})";
+            var past = NotificationStates.FormatDuration(before);
+            var source = SourceName(LastChange(facts)!.Value.App, features);
+            line += Tr.Format($" ({past} from before {source})", $" ({past} d'avant {source})");
         }
 
         return line;
@@ -327,7 +329,8 @@ internal static class WaveView
     }
 
     /// <summary>The words on the line of a change of source.</summary>
-    public static string MarkerText(string? app, PlatformFeatures? features = null) => app is null ? (features ?? PlatformFeatures.Windows).WholeMachine + " from here" : AppName(app) + " only from here";
+    public static string MarkerText(string? app, PlatformFeatures? features = null) =>
+        app is null ? WholeMachine(features) + Tr.Of(" from here", " à partir d'ici") : AppName(app) + Tr.Of(" only from here", " seul à partir d'ici");
 
     /// <summary>
     /// What to say when nothing can be captured, or null. The same two cases as the status band: with an application
@@ -340,10 +343,17 @@ internal static class WaveView
             return null;
         }
 
-        return status.SourceApp is { } exe ? "Can't capture " + AppName(exe) : "No audio device";
+        return status.SourceApp is { } exe ? StatusText.CannotCapture(AppName(exe)) : Tr.Of("No audio device", "Aucun périphérique audio");
     }
 
-    private static string SourceName(string? app, PlatformFeatures? features) => app is null ? (features ?? PlatformFeatures.Windows).WholeMachine : AppName(app);
+    private static string SourceName(string? app, PlatformFeatures? features) => app is null ? WholeMachine(features) : AppName(app);
+
+    // The name of the source that records everything the computer plays: "Whole PC", "Tout le PC".
+    private static string WholeMachine(PlatformFeatures? features)
+    {
+        var platform = features ?? PlatformFeatures.Windows;
+        return Tr.Of(platform.WholeMachine, "Tout le " + platform.MachineName);
+    }
 
     private static string AppName(string exe) => AudioAppList.NameOf(exe);
 

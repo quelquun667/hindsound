@@ -205,7 +205,7 @@ internal static class StatusText
         };
     }
 
-    private static string CannotCapture(string? app) => Tr.French ? "Capture impossible" + Colon + app : "Can't capture " + app;
+    internal static string CannotCapture(string? app) => Tr.French ? "Capture impossible" + Colon + app : "Can't capture " + app;
 
     public static string Megabytes(long bytes) =>
         "~" + Tr.Size(Math.Round(bytes / 1_000_000.0, MidpointRounding.AwayFromZero), "0", SizeUnit.MB);
@@ -216,35 +216,42 @@ internal static class StatusText
     /// </summary>
     public static string SaveLabel(int clipSeconds) =>
         Tr.Of("Save up to ", "Enregistrer ") + (clipSeconds < 60 ? clipSeconds + Tr.Of("s", "\u00A0s")
-            : clipSeconds % 60 == 0 ? clipSeconds / 60 + " min"
+            : clipSeconds % 60 == 0 ? clipSeconds / 60 + Tr.Of(" min", " min")
             : NotificationStates.FormatDuration(clipSeconds));
 
     /// <summary>The same length in a sentence: "30 seconds", "1 minute", "1:30".</summary>
     public static string ClipWords(int clipSeconds) =>
-        clipSeconds < 60 ? clipSeconds + (clipSeconds == 1 ? " second" : " seconds")
-        : clipSeconds == 60 ? "1 minute"
-        : clipSeconds % 60 == 0 ? clipSeconds / 60 + " minutes"
+        clipSeconds < 60 ? Tr.Plural(clipSeconds, "{0} second", "{0} seconds", "{0} seconde", "{0} secondes")
+        : clipSeconds % 60 == 0 ? Tr.Plural(clipSeconds / 60, "{0} minute", "{0} minutes", "{0} minute", "{0} minutes")
         : NotificationStates.FormatDuration(clipSeconds);
 
     /// <summary>The first step of the first-launch card.</summary>
     public static string FirstRunHotkeyNote(int clipSeconds) =>
-        $"Saves up to the last {ClipWords(clipSeconds)}, from anywhere, even in a game.";
+        Tr.Format(
+            $"Saves up to the last {ClipWords(clipSeconds)}, from anywhere, even in a game.",
+            $"Enregistre jusqu'à {ClipWords(clipSeconds)}, de partout, même en jeu.");
 
     /// <summary>What the update card says is lost. No figure under a few seconds: there is nothing to warn about.</summary>
     /// <param name="status">The last status of the engine; before any, only the setting can be named.</param>
     /// <param name="capSeconds">What the setting lets the memory hold.</param>
     public static string UpdateCardBody(AudioEngineStatus? status, int capSeconds)
     {
-        const string restart = "Updating restarts Hindsound.";
+        var restart = Tr.Of("Updating restarts Hindsound.", "La mise à jour redémarre Hindsound.");
         if (status is null)
         {
-            return $"{restart} The last {NotificationStates.FormatDuration(capSeconds)} in memory will be lost.";
+            return Lost(restart, capSeconds);
         }
 
         var kept = KeptDuration.SecondsOf(status.Buffered);
         return kept < KeptDuration.StartingBelowSeconds
             ? restart
-            : $"{restart} The last {NotificationStates.FormatDuration(KeptDuration.Shown(kept, capSeconds))} in memory will be lost.";
+            : Lost(restart, KeptDuration.Shown(kept, capSeconds));
+    }
+
+    private static string Lost(string restart, int seconds)
+    {
+        var duration = NotificationStates.FormatDuration(seconds);
+        return Tr.Format($"{restart} The last {duration} in memory will be lost.", $"{restart} Ce qui est gardé en mémoire ({duration}) sera perdu.");
     }
 
     /// <summary>"720 KB", "1.4 MB"; "720 Ko", "1,4 Mo" in French.</summary>
@@ -259,7 +266,7 @@ internal static class StatusText
     }
 
     public static string GainLabel(double db) =>
-        string.Create(CultureInfo.InvariantCulture, $"{(db > 0 ? "+" : string.Empty)}{Math.Round(db):0} dB");
+        string.Create(CultureInfo.InvariantCulture, $"{(db > 0 ? "+" : string.Empty)}{Math.Round(db):0}") + Tr.Of(" dB", " dB");
 }
 
 /// <summary>What the foot of the window shows about the last clip.</summary>
