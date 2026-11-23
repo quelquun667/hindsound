@@ -142,7 +142,7 @@ internal sealed partial class SettingsScreen
         // Without this, it would keep the scrolling room of the page before it.
         _contentBottom = 0;
         _waveAccent = Editor.AccentRgb;
-        RowLabel("Record", RecordTop);
+        RowLabel(Tr.Of("Record", "Capturer"), RecordTop);
         List("now.record", new Box(RecordLeft, RecordTop, FieldWidth, RowHeight), () => SettingsEditor.RecordChoices(_apps, Editor.Settings.Audio.SourceApp, _status is { SourceApp: not null, SourceAppMissing: false }, Features.MachineName), () => Editor.Settings.Audio.SourceApp ?? string.Empty, Editor.SetSourceApp);
         Add(new Painted((c, ui) =>
         {
@@ -162,7 +162,7 @@ internal sealed partial class SettingsScreen
         var usable = audio.MicEnabled;
         var box = NowWave.VoiceSwitch;
         Add(new Painted((c, _) =>
-            c.TextRight("Record my voice", Face.Body, 13, box.X - 8, box.MidY, usable ? Theme.Muted : Theme.Faded)));
+            c.TextRight(Tr.Of("Record my voice", "Capturer ma voix"), Face.Body, 13, box.X - 8, box.MidY, usable ? Theme.Muted : Theme.Faded)));
         Add(new Toggle(() => audio.MicCaptured, Editor.SetRecordMic) { Id = "now.voice", Bounds = box, Enabled = usable });
     }
 }

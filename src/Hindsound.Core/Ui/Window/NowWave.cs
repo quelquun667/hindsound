@@ -37,7 +37,7 @@ internal sealed class NowWave
         GrayDarkShare = 0.24f, GrayHaloShare = 0.20f, FrozenBrightShare = 0.72f, ZoneLineSoftShare = 0.30f;
 
     private const float TitleGap = 12, MinCutTitle = 80;
-    private const string Filling = "Filling...";
+    private static string Filling => Tr.Of("Filling...", "Remplissage...");
 
     private static readonly Box SystemLane = new(SettingsScreen.Left, SystemTop, SettingsScreen.Width, SystemHeight);
     private static readonly Box MicLane = new(SettingsScreen.Left, MicTop, SettingsScreen.Width, MicHeight);
