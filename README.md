@@ -45,6 +45,7 @@ window, comes with the releases after 0.5.0, and the releases after 0.7.0 add it
 - **Cut and turn up:** open a clip, keep the part you want between two handles, turn its volume up or down, and save a copy or
   replace it. A part of 5.2 seconds or less can go to the Discord soundboard.
 - **Your color:** six accent colors, or any bright color you type.
+- **English or French:** the whole window and the notifications, following the language of the system unless you choose one.
 - **No account:** the only network use is the daily check for a new version, which you can turn off. See [Updates](#updates).
 
 ## Screenshots
@@ -494,7 +495,7 @@ listed), and of the rescue folder. A folder you filled with music shows that mus
   second, and `Shift` with an arrow by a second. `Start`, `End` and `Kept` say where you are, and `Play` plays the kept part.
 - **Volume:** turn it from -12 to +20 dB, each track on its own for a clip saved as two files. The peaks are held under the
   ceiling of your export settings, so a voice that was too quiet can come up without clipping.
-- **Save:** `Save as a copy` writes a new clip next to the original, named after it with ` (cut)`, in the same collections.
+- **Save:** `Save as a copy` writes a new clip next to the original, named after it with ` (cut)` (` (modifié)` when Hindsound is in French), in the same collections.
   `Replace the original` puts the edit in its place, with its star and collections, and moves the original to the Recycle
   Bin. A save you started always goes to its end, even if you leave the page, and the `Library` line tells you how it went.
 - **Discord soundboard:** `Send to soundboard...` opens the same page for at most 5.2 seconds, the longest a soundboard sound
@@ -544,7 +545,7 @@ there too, next to the `Mic` lane: turned off, the microphone is not opened at a
 | General | Accent color | **Lime**, Mint, Cyan, Violet, Pink, White, Custom |
 | General | When a version is out | **Install automatically**, Ask me, Off. See [Updates](#updates). |
 | General | Start with Windows | **Off** |
-| General | Language | **System**, English, Français. The whole window, the menu of the icon and the notifications follow it at once. The log, the names of the clips and this README stay in English. |
+| General | Language | **System**, English, Français. The whole window, the menu of the icon and the notifications follow it at once. The log and this README stay in English, and so do the names of the clips, except the end of an edited copy: ` (modifié)` in French. |
 | General | Window size | 100%, **120%**, 140%. If the screen can't hold it, the window takes the largest size that fits, and a line says so. |
 | General | Save notifications | **On** |
 | General | Notification position | **Right edge**, Left edge |
@@ -717,7 +718,7 @@ the same two ways, and removes it. Not tried for real:
 
 ## Roadmap
 
-- A Mac version, with no date yet
+Nothing is planned yet.
 
 ## License
 
