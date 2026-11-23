@@ -64,8 +64,11 @@ internal interface IPreviewPlayer
 /// <param name="nowMs">The clock, for a test. A monotonic count by default.</param>
 internal sealed class ClipPreview(IPreviewPlayer player, Action<PreviewChange> changed, Action<string>? journal = null, Func<long>? nowMs = null) : IDisposable
 {
-    public const string CantPlayText = "Can't play this file";
+    public static string CantPlayText => Tr.Of("Can't play this file", "Impossible de lire ce fichier");
+
     public const string CanEndUpInClipText = "Playback can end up in your next clip on this setup.";
+
+    public static string CanEndUpInClipShown => Tr.Of(CanEndUpInClipText, "Avec ce réglage, la lecture peut se retrouver dans ton prochain clip.");
 
     /// <summary>How often the end is looked for. It only decides how late the state says it, not when the sound ends.</summary>
     internal const int PollMs = 250;

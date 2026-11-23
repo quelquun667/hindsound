@@ -14,7 +14,8 @@ internal enum CollectionMenuItem
 internal sealed class CollectionMenu : ActionMenu
 {
     public const float Width = 160;
-    public const string RenameLabel = "Rename...", DeleteLabel = "Delete...";
+    public static string RenameLabel => Tr.Of("Rename...", "Renommer...");
+    public static string DeleteLabel => Tr.Of("Delete...", "Supprimer...");
 
     private static readonly CollectionMenuItem[] All = [CollectionMenuItem.Rename, CollectionMenuItem.Delete];
 

@@ -60,7 +60,9 @@ internal static class ChipLine
 {
     public const float Top = 370, Height = 28, Gap = 8, MaxName = 96, MidY = Top + Height / 2;
 
-    public const string Label = "Selected clip in:", NewLabel = "New collection...";
+    public static string Label => Tr.Of("Selected clip in:", "Clip choisi dans\u00A0:");
+
+    public static string NewLabel => Tr.Of("New collection...", "Nouvelle collection...");
 
     public const string ChipsId = "lib.chips", NewId = "lib.new";
 
@@ -73,9 +75,9 @@ internal static class ChipLine
     /// </summary>
     public static string? ReadOnlyMessage(LibraryStatus status) => status switch
     {
-        LibraryStatus.TooNew => "A newer version wrote your collections. Update to change them.",
-        LibraryStatus.Corrupt => "Your collections file has an error. A copy is kept before anything changes.",
-        LibraryStatus.Unreadable => "Collections can't be read right now. Your clips are safe.",
+        LibraryStatus.TooNew => Tr.Of("A newer version wrote your collections. Update to change them.", "Une version plus récente a écrit tes collections. Mets à jour pour les modifier."),
+        LibraryStatus.Corrupt => Tr.Of("Your collections file has an error. A copy is kept before anything changes.", "Ton fichier de collections contient une erreur. Une copie est gardée avant tout changement."),
+        LibraryStatus.Unreadable => Tr.Of("Collections can't be read right now. Your clips are safe.", "Impossible de lire les collections pour l'instant. Tes clips sont en sécurité."),
         _ => null,
     };
 
@@ -86,15 +88,15 @@ internal static class ChipLine
     /// </summary>
     public static string? OutcomeMessage(LibraryOutcome outcome) => outcome switch
     {
-        LibraryOutcome.NotWritten => "Couldn't save that. Nothing changed.",
-        LibraryOutcome.ReadOnly => "Collections can't be changed right now. Your clips are safe.",
-        LibraryOutcome.UnknownCollection => "That collection no longer exists.",
-        LibraryOutcome.NameTaken => NameBoxState.TakenText,
-        LibraryOutcome.NameTooLong => NameBoxState.TooLongText,
+        LibraryOutcome.NotWritten => Tr.Of("Couldn't save that. Nothing changed.", "Impossible d'enregistrer. Rien n'a changé."),
+        LibraryOutcome.ReadOnly => Tr.Of("Collections can't be changed right now. Your clips are safe.", "Impossible de modifier les collections pour l'instant. Tes clips sont en sécurité."),
+        LibraryOutcome.UnknownCollection => Tr.Of("That collection no longer exists.", "Cette collection n'existe plus."),
+        LibraryOutcome.NameTaken => NameBoxState.TakenShown,
+        LibraryOutcome.NameTooLong => NameBoxState.TooLongShown,
         LibraryOutcome.NoFile or LibraryOutcome.ClipGone => SettingsScreen.ClipGoneMessage,
 
         // The folder was not read, so the clip may well be there: not called gone.
-        LibraryOutcome.FolderNotRead => "Can't check this clip's folder right now. Try again.",
+        LibraryOutcome.FolderNotRead => Tr.Of("Can't check this clip's folder right now. Try again.", "Impossible de vérifier le dossier de ce clip pour l'instant. Réessaie."),
         _ => null,
     };
 

@@ -53,17 +53,34 @@ public readonly record struct LibraryEmptyText(string Title, string? Body = null
 /// </summary>
 public static class LibraryFilter
 {
-    public const string AllClips = "All clips", Favorites = "Favorites";
+    public static string AllClips => Tr.Of("All clips", "Tous les clips");
 
-    private const string NoClipsYet = "No clips yet", SaveAClip = "Save a clip with your shortcut, and it shows up here.",
-        NoFavorites = "No favorite clips", NoClipsInCollection = "No clips in this collection";
+    public static string Favorites => Tr.Of("Favorites", "Favoris");
+
+    private static string NoClipsYet => Tr.Of("No clips yet", "Aucun clip pour l'instant");
+
+    private static string SaveAClip => Tr.Of("Save a clip with your shortcut, and it shows up here.", "Enregistre un clip avec ton raccourci\u00A0: il apparaîtra ici.");
+
+    private static string NoFavorites => Tr.Of("No favorite clips", "Aucun clip favori");
+
+    private static string NoClipsInCollection => Tr.Of("No clips in this collection", "Aucun clip dans cette collection");
 
     /// <summary>What a search with no result says, around the words as typed: see <see cref="NoMatch"/>.</summary>
-    public const string NoMatchStart = "No clips match \"", NoMatchEnd = "\"", TryOtherWords = "Try other words, or clear the search.";
+    public static string NoMatchStart => Tr.Of("No clips match \"", "Aucun clip ne correspond à «\u00A0");
 
-    /// <summary>The two names the menu holds already: a collection called so could not be told from them.</summary>
+    public static string NoMatchEnd => Tr.Of("\"", "\u00A0»");
+
+    public static string TryOtherWords => Tr.Of("Try other words, or clear the search.", "Essaie d'autres mots, ou efface la recherche.");
+
+    /// <summary>
+    /// The two names the menu holds already: a collection called so could not be told from them. The names of both languages are
+    /// kept, whatever the language of the moment: a file made in one is read in the other, and the menu then holds two names alike.
+    /// </summary>
     public static bool IsReservedName(string name) =>
-        string.Equals(name, AllClips, StringComparison.OrdinalIgnoreCase) || string.Equals(name, Favorites, StringComparison.OrdinalIgnoreCase);
+        IsOneOf(name, "All clips", "Tous les clips") || IsOneOf(name, "Favorites", "Favoris");
+
+    private static bool IsOneOf(string name, string english, string french) =>
+        string.Equals(name, english, StringComparison.OrdinalIgnoreCase) || string.Equals(name, french, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The menu: every clip, the favorites, then the collections in the order of the file.</summary>
     public static IReadOnlyList<LibraryMenuItem> Menu(LibraryData data)
