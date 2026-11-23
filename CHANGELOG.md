@@ -4,7 +4,9 @@ All notable changes to Hindsound are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.12.0] - 2026-11-23
+
+Hotkeys that follow the keyboard layout on Mac, and a lost sound shown on Linux. On Windows, Hindsound works as in 0.11.0, but gives up sooner on a server that does not answer a check for a new version.
 
 ### Added
 
@@ -18,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - On Mac, Hindsound says `Mac` where it said `PC`. Windows and Linux keep `PC`.
 - On Windows, the check for a new version gives up on a server that does not answer after 2 seconds, instead of 4 to 6.
 - The name of an application in the name of a clip is cut by the same rule as in the list of programs.
+- On macOS, the CI now runs Hindsound and all its proofs on macOS 15 as well as on macOS 26, and also proves that the capture follows a change of the sound output while it records, and that a click on the notification of a clip opens the Library in front. It has still never run on a real Mac, nor on macOS 14.
 
 ### Fixed
 
