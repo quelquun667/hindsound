@@ -9,6 +9,9 @@ public enum HotkeyAction
     Save5m,
     TogglePause,
     CopyLast,
+
+    /// <summary>Saves like <see cref="SaveDefault"/>, then opens the editor on the clip. Last, so that the numbers of the others never move.</summary>
+    SaveAndEdit,
 }
 
 public enum HotkeyStatus

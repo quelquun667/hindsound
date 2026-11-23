@@ -85,6 +85,16 @@ public sealed class HotkeySettings
 
     public string? CopyLast { get; set; }
 
+    public string? SaveAndEdit { get; set; }
+
+    /// <summary>A copy that leaves out the shortcut that opens the editor: for a system with no editor to open.</summary>
+    internal HotkeySettings WithoutSaveAndEdit()
+    {
+        var copy = (HotkeySettings)MemberwiseClone();
+        copy.SaveAndEdit = null;
+        return copy;
+    }
+
     internal void Normalize()
     {
         SaveDefault = Clean(SaveDefault) ?? DefaultSaveShortcut;
@@ -93,6 +103,7 @@ public sealed class HotkeySettings
         Save5m = Clean(Save5m);
         TogglePause = Clean(TogglePause);
         CopyLast = Clean(CopyLast);
+        SaveAndEdit = Clean(SaveAndEdit);
     }
 
     // Canonical text if valid, otherwise null (an unreadable shortcut is dropped rather than kept as garbage).

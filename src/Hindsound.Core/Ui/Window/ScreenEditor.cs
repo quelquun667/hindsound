@@ -44,6 +44,16 @@ internal sealed partial class SettingsScreen
     /// <summary>Whether the editor is on the Library page instead of the list.</summary>
     public bool EditorOpen => _editing is not null;
 
+    /// <summary>Whether this window has an editor to open: the menu of a clip offers Edit only then.</summary>
+    public bool HasEditor => _editorPanel is not null;
+
+    /// <summary>
+    /// The editor is open and replacing it would lose something: a part moved, a volume changed, the Save dialog open, or a save
+    /// still being written. An editor just opened, or only reading its clip, holds nothing.
+    /// </summary>
+    public bool EditorHoldsWork => _editing is not null
+        && (_editSaving || _saveDialog is not null || _selection is { Moved: true } || _editGains.Any(gain => gain != 0));
+
     /// <summary>The clip being edited and what for. Null when the editor is closed.</summary>
     public (ClipGroup Clip, EditorMode Mode)? Editing => _editing;
 
@@ -85,6 +95,12 @@ internal sealed partial class SettingsScreen
         }
 
         _editorPanel = panel;
+
+        // The Hotkeys page is the one the window starts on, built before the app gives it its editor: its row for the editor is drawn now.
+        if (Section == Section.Hotkeys)
+        {
+            Refresh();
+        }
     }
 
     /// <summary>Opens the editor on this clip, on the Library page. Without an editor panel, nothing happens.</summary>
@@ -99,6 +115,12 @@ internal sealed partial class SettingsScreen
         }
 
         _library?.StopPlaying();
+        if (_editing is not null)
+        {
+            // An editor that is replaced plays for the clip it leaves: its sound stops, and its answers no longer reach this screen.
+            panel.Close();
+        }
+
         ResetEditor();
         _editing = (clip, mode);
         _editorReturnId = returnId;
@@ -106,6 +128,9 @@ internal sealed partial class SettingsScreen
         panel.Load(clip);
         if (Section == Section.Library)
         {
+            // A menu or a list left open on the page would stay over the editor, and a list open takes the keys it needs.
+            DropLibraryOverlays();
+            ClosePopup();
             Refresh();
         }
         else
@@ -113,6 +138,9 @@ internal sealed partial class SettingsScreen
             ShowSection(Section.Library);
         }
     }
+
+    /// <summary>Opens the editor on a clip that has no line of the list to return the focus to.</summary>
+    public void OpenEditorOn(ClipGroup clip) => OpenEditor(clip, EditorMode.Normal);
 
     /// <summary>Leaves the editor for the list, with nothing saved.</summary>
     public void CloseEditor()

@@ -523,9 +523,15 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         catch (Exception ex)
         {
             _journal.Write("hotkeys: " + ex);
-            NoteHotkeys(HotkeyManager.WithoutManager(_settings.Hotkeys));
+            NoteHotkeys(HotkeyManager.WithoutManager(ToRegister(_settings.Hotkeys)));
         }
     }
+
+    /// <summary>Whether this run has a window, and so an editor to open on a clip. Where it has none, "Save and edit" is neither shown nor registered.</summary>
+    internal bool EditorAvailable => _shell.HasWindow;
+
+    /// <summary>The shortcuts to hand to the system: those of the settings, less the one that opens the editor where there is none. The settings themselves keep it.</summary>
+    internal HotkeySettings ToRegister(HotkeySettings wanted) => EditorAvailable ? wanted : wanted.WithoutSaveAndEdit();
 
     private void ApplyHotkeys()
     {
@@ -535,7 +541,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
             return;
         }
 
-        NoteHotkeys(_hotkeys?.Apply(_settings.Hotkeys) ?? HotkeyManager.WithoutManager(_settings.Hotkeys));
+        NoteHotkeys(_hotkeys?.Apply(ToRegister(_settings.Hotkeys)) ?? HotkeyManager.WithoutManager(ToRegister(_settings.Hotkeys)));
     }
 
     // Not once the manager is gone: it is released on the way out, and a late change must not read it.
@@ -565,7 +571,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         RefreshTray();
     }
 
-    private void OnHotkey(HotkeyAction action)
+    /// <summary>What a pressed shortcut does. Internal for a test that presses one without a hotkey layer.</summary>
+    internal void OnHotkey(HotkeyAction action)
     {
         ReloadSettingsIfChanged();
         switch (action)
@@ -587,6 +594,14 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
                 break;
             case HotkeyAction.CopyLast:
                 CopyLastClip();
+                break;
+            case HotkeyAction.SaveAndEdit:
+                // Never registered without an editor, but a layer may still answer for a key it kept: no clip is saved for a window that cannot open.
+                if (EditorAvailable)
+                {
+                    SaveClip(TimeSpan.FromSeconds(_settings.ClipSeconds), edit: true);
+                }
+
                 break;
         }
     }
@@ -736,15 +751,47 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
     private TrayClick? ClickStandingIn => TrayClick.StandingIn(_loop.InFront(), _lastMenuClick);
 
-    private void SaveClip(TimeSpan requested)
+    private void SaveClip(TimeSpan requested, bool edit = false)
     {
         var click = ClickStandingIn;
-        SaveClip(requested, click is { } standing ? standing.AppName : _desktop.Screens.Foreground().AppName, click?.Screen);
+        SaveClip(requested, click is { } standing ? standing.AppName : _desktop.Screens.Foreground().AppName, click?.Screen, edit);
     }
 
     // The one door of every clip, the shortcut and the menu alike: with one program recorded alone, {app} is that program.
-    private void SaveClip(TimeSpan requested, string? foregroundName, ScreenInfo? screen) =>
-        _pipeline.Press(new ClipRequest(requested, SettingsMapping.ToExportOptions(_settings), RecordedAppName(foregroundName), SettingsMapping.CopyWanted(_settings, _options)) { Screen = screen });
+    private void SaveClip(TimeSpan requested, string? foregroundName, ScreenInfo? screen, bool edit = false) =>
+        _pipeline.Press(new ClipRequest(requested, SettingsMapping.ToExportOptions(_settings), RecordedAppName(foregroundName), SettingsMapping.CopyWanted(_settings, _options)) { Screen = screen, EditAfter = edit });
+
+    /// <summary>
+    /// "Save and edit": the clip is written, so the window opens on its editor, unless what the window shows holds something to
+    /// keep. Nothing opens for a clip whose files are gone; the clip itself is saved all the same.
+    /// </summary>
+    internal EditorOpening OpenEditorOn(ClipResult result)
+    {
+        ClipGroup group;
+        try
+        {
+            group = new ClipGroup([.. result.Paths.Select(path =>
+            {
+                var info = new FileInfo(path);
+                return new ClipFile(path, info.Length, info.LastWriteTimeUtc);
+            })]);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _journal.Write($"editor not opened: the clip could not be read back ({ClipFolders.Describe(ex)})");
+            return EditorOpening.NotOpened;
+        }
+
+        if (group.Files.Count == 0)
+        {
+            _journal.Write("editor not opened: the clip has no file");
+            return EditorOpening.NotOpened;
+        }
+
+        var opening = _going.OpenEditor(group);
+        _journal.Write($"save and edit: {opening}");
+        return opening;
+    }
 
     internal string? RecordedAppName(string? foregroundName)
     {
@@ -817,10 +864,17 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
             Started = OnClipStarted,
         };
 
-    private void OnClipFinished(ClipOutcome outcome)
+    /// <summary>Internal for a test that gives it the end of a clip it wrote.</summary>
+    internal void OnClipFinished(ClipOutcome outcome)
     {
         OnClipEnded();
         (ShowOutcomeInstead ?? ShowOutcome)(outcome);
+
+        // After what the clip says to the user, so that the window comes up on a clip the notification already told about.
+        if (outcome.Request.EditAfter && outcome.Result is { } written)
+        {
+            OpenEditorOn(written);
+        }
     }
 
     /// <summary>What a clip that ended says to the user, so that a test sees the Library page look again without the notification.</summary>
@@ -1680,14 +1734,14 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
     IReadOnlyList<HotkeyResult> ISettingsBackend.ApplyHotkeys(HotkeySettings hotkeys)
     {
-        var results = _hotkeys?.Apply(hotkeys) ?? HotkeyManager.WithoutManager(hotkeys);
+        var results = _hotkeys?.Apply(ToRegister(hotkeys)) ?? HotkeyManager.WithoutManager(ToRegister(hotkeys));
         NoteHotkeys(results);
         return results;
     }
 
     IReadOnlyList<HotkeyResult> ISettingsBackend.ResumeHotkeys()
     {
-        var results = _hotkeys?.Resume() ?? HotkeyManager.WithoutManager(_settings.Hotkeys);
+        var results = _hotkeys?.Resume() ?? HotkeyManager.WithoutManager(ToRegister(_settings.Hotkeys));
         NoteHotkeys(results);
         return results;
     }

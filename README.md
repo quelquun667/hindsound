@@ -501,10 +501,13 @@ listed), and of the rescue folder. A folder you filled with music shows that mus
   can be. Its save writes a short copy named after the clip with ` (soundboard)`, opens Discord if it is installed and shows
   the file in its folder. In Discord, add it from the settings of your server: `Soundboard`, then `Upload Sound`.
 
+The `Save and edit` hotkey saves a clip as `Save clip` does, then opens the editor on it: the window comes to the front, and in a fullscreen game that takes you out of the game. If the editor is already open with a change or a save under way, or a box of the `Library` is open for a name, it is left as it is and the window only comes to the front, with the new clip saved as usual.
+
 ### Hotkeys
 | Action | Default |
 | --- | --- |
 | `Save clip` (the length set in Durations) | `Ctrl+Shift+F10` |
+| `Save and edit` (saves like `Save clip`, then opens the editor) | Not set |
 | `Save up to 15s` | Not set |
 | `Save up to 1 min` | Not set |
 | `Save up to 5 min` | Not set |
@@ -512,6 +515,7 @@ listed), and of the rescue folder. A folder you filled with music shows that mus
 | `Copy last clip` | Not set |
 
 You can change them all in Settings > Hotkeys. If another app already holds a combination, Hindsound says so.
+On Linux and on the Mac, when the window cannot be drawn (SDL 3 or the text libraries and fonts it needs are missing, and the log says which), `Save and edit` is not offered.
 
 ## Settings
 

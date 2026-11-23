@@ -276,6 +276,12 @@ internal static unsafe class SettingsDump
                 Clock = () => new DateTime(2026, 11, 6, 14, 32, 5),
             };
 
+            // The window of the app always has its editor, and the Hotkeys page has a row for it only then.
+            if (name.StartsWith("hotkeys", StringComparison.Ordinal))
+            {
+                screen.SetEditor(new DumpScenesEditor.SampleEditor());
+            }
+
             // Where the desktop binds the keys, it has answered: each action holds the key the settings proposed.
             if (screen.Features.Shortcuts() == ShortcutMode.Portal)
             {

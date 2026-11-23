@@ -165,4 +165,17 @@ public sealed class PortalBindingsTests
         Assert.False(PortalBindings.TryActionOf("SaveDefault", out _));
         Assert.False(PortalBindings.TryActionOf(null, out _));
     }
+
+    [Fact]
+    public void Save_and_edit_is_offered_to_the_portal_with_its_own_id_and_words_when_a_key_is_proposed()
+    {
+        var state = new PortalBindings();
+        var (answers, batch) = state.Take([Ask(HotkeyAction.SaveAndEdit, CtrlShiftP)]);
+
+        Assert.Equal([HotkeyBindingState.Pending], answers.Select(a => a.State));
+        Assert.NotNull(batch);
+        Assert.Equal([new PortalOffer("save-edit", "Save a clip and edit it", "CTRL+SHIFT+p")], batch.Offers);
+        Assert.True(PortalBindings.TryActionOf("save-edit", out var action));
+        Assert.Equal(HotkeyAction.SaveAndEdit, action);
+    }
 }

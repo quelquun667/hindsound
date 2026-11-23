@@ -130,6 +130,36 @@ public sealed unsafe class PlatformPagesTests
     }
 
     /// <summary>A screen on a canvas of its own, as a window of the system would have.</summary>
+    /// <summary>An editor that reads and writes nothing: the window has one, so its pages are those of the app.</summary>
+    private sealed class StillEditor : IEditorPanel
+    {
+        public void Load(Hindsound.Library.ClipGroup clip)
+        {
+        }
+
+        public long EstimateBytes(EditRequest request) => 0;
+
+        public void Play(EditRequest request)
+        {
+        }
+
+        public void StopPlaying()
+        {
+        }
+
+        public void Save(EditRequest request, EditSave save)
+        {
+        }
+
+        public void HandToDiscord(string path)
+        {
+        }
+
+        public void Close()
+        {
+        }
+    }
+
     private sealed class Rig : IDisposable
     {
         private readonly uint* _bits;
@@ -143,6 +173,9 @@ public sealed unsafe class PlatformPagesTests
             {
                 NoNativeEdit = true,
             };
+
+            // The window of the app always has an editor, which the Hotkeys page has a row for.
+            Screen.SetEditor(new StillEditor());
         }
 
         public CountingCanvas Canvas { get; }
