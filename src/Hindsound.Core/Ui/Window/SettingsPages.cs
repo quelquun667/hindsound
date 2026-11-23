@@ -974,7 +974,7 @@ internal sealed partial class SettingsScreen
 
     private static string UpdateLabel => Tr.Of("Update", "Mettre à jour");
 
-    private static string SaveThenUpdateLabel => Tr.Of("Save it, then update", "Enregistrer, puis mettre à jour");
+    private static string SaveThenUpdateLabel => Tr.Of("Save it, then update", "Enregistrer d'abord");
 
     private static string UpdateCancelLabel => Tr.Of("Cancel", "Annuler");
 

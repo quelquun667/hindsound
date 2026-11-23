@@ -374,7 +374,7 @@ public sealed unsafe class FrenchSettingsPagesTests
     [Fact]
     public void The_update_card_is_in_French()
     {
-        Reads("update-card@100", ["Mettre à jour vers", "Enregistrer, puis mettre à jour", "Mettre à jour", "Annuler"], ["Update to", "Save it, then update", "Cancel"]);
+        Reads("update-card@100", ["Mettre à jour vers", "Enregistrer d'abord", "Mettre à jour", "Annuler"], ["Update to", "Save it, then update", "Cancel"]);
         Reads("update-card-clip@100", ["Un clip s'enregistre encore"], ["A clip is still being saved"]);
     }
 }
