@@ -13,6 +13,8 @@ internal sealed class LabeledLibrary : ILibraryPanel
 
     public LibraryData? Index { get; set; }
 
+    public LibraryStatus IndexStatus { get; set; } = LibraryStatus.Missing;
+
     public Dictionary<string, ClipLabels> Labels { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public List<(string Path, bool On)> StarsAsked { get; } = [];
@@ -395,6 +397,36 @@ public sealed class ScreenLibraryFilterTests : IDisposable
 
         Assert.Equal((NameBoxKind.Rename, "p", "pets"), (rename.Kind, rename.CollectionId, rename.Name));
         Assert.Equal((NameBoxKind.Delete, "p", "pets"), (delete.Kind, delete.CollectionId, delete.Name));
+    }
+
+    [Fact]
+    public void A_deletion_cancelled_gives_the_focus_back_to_the_button_of_the_collection()
+    {
+        var library = Open(LabeledLibrary.Sample());
+        Filter.PickValue(LibraryChoice.Of("p").Value);
+
+        CollectionMenuClicks.Pick(Screen, CollectionMenuItem.Delete);
+        Assert.Equal(NameBox.CancelId, Screen.FocusId);
+        Screen.Key(Vk.Enter, 0);
+
+        Assert.False(Screen.BoxOpen);
+        Assert.Equal(CollectionActions.MoreId, Screen.FocusId);
+        Assert.NotNull(library.Index!.Collections.Find(c => c.Id == "p"));
+    }
+
+    [Fact]
+    public void The_focus_goes_to_the_menu_when_the_button_it_was_on_goes_with_its_collection()
+    {
+        var library = Open(LabeledLibrary.Sample());
+        Filter.PickValue(LibraryChoice.Of("p").Value);
+        Assert.True(Screen.TabTo(CollectionActions.MoreId));
+        Assert.Equal(CollectionActions.MoreId, Screen.FocusId);
+
+        library.Index!.Collections.RemoveAll(c => c.Id == "p");
+        Screen.LibraryReadingArrived();
+
+        Assert.Null(Screen.WidgetById(CollectionActions.MoreId));
+        Assert.Equal(SettingsScreen.ClipFilterId, Screen.FocusId);
     }
 
     [Fact]

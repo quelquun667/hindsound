@@ -123,6 +123,23 @@ public sealed class LibrarySearchTests
         Assert.Equal(["a.mp3", "b.mp3"], Found(query, "a.mp3", "b.mp3"));
     }
 
+    [Theory]
+    [InlineData("́")]
+    [InlineData(" ́̈ ")]
+    public void Marks_typed_alone_fold_to_no_word_and_are_no_search(string query)
+    {
+        Assert.Empty(LibrarySearch.Words(query));
+        Assert.False(LibrarySearch.IsActive(query));
+        Assert.True(LibrarySearch.Matches("anything", query));
+    }
+
+    [Fact]
+    public void A_mark_after_a_letter_keeps_the_search_active()
+    {
+        Assert.True(LibrarySearch.IsActive("é"));
+        Assert.Equal(["e"], LibrarySearch.Words("é"));
+    }
+
     [Fact]
     public void White_space_around_and_between_words_is_ignored()
     {

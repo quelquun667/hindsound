@@ -103,8 +103,11 @@ public static class LibrarySearch
         return Fold(query).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
     }
 
-    /// <summary>The text holds a word to find. White space only has none: it keeps every line, as an empty field does.</summary>
-    public static bool IsActive(string? query) => !string.IsNullOrWhiteSpace(query);
+    /// <summary>
+    /// The text holds a word to find. White space only has none: it keeps every line, as an empty field does, and so do marks typed
+    /// alone, which fold to nothing.
+    /// </summary>
+    public static bool IsActive(string? query) => Words(query).Count > 0;
 
     /// <summary>Every word is in the name, in any order and anywhere in it.</summary>
     public static bool Matches(string name, string? query) => Matches(name, Words(query));

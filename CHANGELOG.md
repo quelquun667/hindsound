@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- The Library has a search field, at the right of the menu. It keeps the clips whose name holds every word typed, in any order, ignoring capitals and accents (`cafe` finds a clip named with an accent), inside `All clips`, `Favorites` or a collection. `Ctrl+F` goes to it, `Esc` empties it, and `Down` or `Enter` goes to the list. When it finds nothing, the list says so, and when the list holds only the 2,000 most recent clips, the end of the list says that only those, and the clips with a star or a collection, are searched.
+- The Library has a search field, at the right of the menu. It keeps the clips whose name holds every word typed, in any order, ignoring capitals and accents (`cafe` finds a clip named with an accent), inside `All clips`, `Favorites` or a collection. `Ctrl+F` (`Control+F` on a Mac) goes to it, `Esc` empties it, and `Down` or `Enter` goes to the list. When it finds nothing, the list says so, and when the list holds only the 2,000 most recent clips, the end of the list says that only those, and the clips with a star or a collection, are searched.
 
 ### Changed
 

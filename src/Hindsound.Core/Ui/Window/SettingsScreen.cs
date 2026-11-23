@@ -790,7 +790,9 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
             });
             if (field.Id == ClipSearchId)
             {
-                // Each key changes the rows, and the list starts again from its top.
+                // Each key changes the rows, and the list starts again from its top. A clip still waiting to be chosen is given up:
+                // the person moved on, and no reading may empty what they type.
+                _wantedClip = null;
                 ApplyChoice(toTop: true);
             }
 

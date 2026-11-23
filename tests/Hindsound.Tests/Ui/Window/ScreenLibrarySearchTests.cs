@@ -348,6 +348,60 @@ public sealed class ScreenLibrarySearchTests : IDisposable
         Assert.Equal(saved, Screen.EditorChosenPath);
     }
 
+    private static ClipLines WithSaved(LabeledLibrary library, string saved) =>
+        new([.. library.Lines!.Lines, new ClipGroup([new ClipFile(saved, 1000, default)])], 0);
+
+    [Fact]
+    public void A_clip_waiting_to_be_chosen_is_given_up_when_another_choice_of_the_menu_is_picked_and_no_reading_empties_the_search()
+    {
+        var library = Open(Named());
+        var saved = Clip(Goal + " saved");
+        Screen.SelectClip(saved);
+
+        // The person moves on before the reading comes: Favorites, then words that the saved clip's name holds.
+        Filter.PickValue(LibraryChoice.Favorites.Value);
+        Type("goal");
+        library.Lines = WithSaved(library, saved);
+        library.Labels[saved] = new ClipLabels(true, []);
+        Screen.LibraryReadingArrived();
+
+        Assert.Equal("goal", Screen.SearchText);
+        Type("goal");
+        Screen.LibraryReadingArrived();
+        Assert.Equal("goal", Screen.SearchText);
+    }
+
+    [Fact]
+    public void Typing_gives_up_a_clip_waiting_to_be_chosen_even_on_all_clips()
+    {
+        var library = Open(Named());
+        var saved = Clip("Fresh save");
+        Screen.SelectClip(saved);
+
+        Type("fresh");
+        library.Lines = WithSaved(library, saved);
+        Screen.LibraryReadingArrived();
+        Type("fresh x");
+        Screen.LibraryReadingArrived();
+
+        Assert.Equal("fresh x", Screen.SearchText);
+        Assert.NotEqual(saved, Screen.EditorChosenPath);
+    }
+
+    [Fact]
+    public void A_clip_waiting_to_be_chosen_is_chosen_when_the_reading_brings_it_and_nothing_was_typed()
+    {
+        var library = Open(Named());
+        var saved = Clip("Fresh save");
+        Screen.SelectClip(saved);
+
+        library.Lines = WithSaved(library, saved);
+        Screen.LibraryReadingArrived();
+
+        Assert.Equal(saved, Screen.EditorChosenPath);
+        Assert.Equal(string.Empty, Screen.SearchText);
+    }
+
     // ---------------------------------------------------------------- nothing found
 
     [Fact]
@@ -407,6 +461,33 @@ public sealed class ScreenLibrarySearchTests : IDisposable
         Screen.TabTo(SettingsScreen.ClipSearchId);
         Screen.EditChanged(string.Empty);
         Filter.PickValue(LibraryChoice.All.Value);
+        Assert.Contains(SettingsScreen.ClipsCappedNote, Painted());
+    }
+
+    [Fact]
+    public void The_end_note_of_a_search_names_no_star_or_collection_when_the_collections_file_cannot_be_read()
+    {
+        var library = Named(leftOut: 7);
+        library.IndexStatus = LibraryStatus.Unreadable;
+        Open(library);
+
+        Type("o");
+        var drawn = Painted();
+
+        Assert.Contains(SettingsScreen.ClipsCappedSearchPlainNote, drawn);
+        Assert.DoesNotContain(SettingsScreen.ClipsCappedSearchNote, drawn);
+        Assert.DoesNotContain("star", SettingsScreen.ClipsCappedSearchPlainNote, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Marks_typed_alone_are_no_search_in_the_window()
+    {
+        Open(Named(leftOut: 7));
+
+        Type("́");
+
+        Assert.False(Screen.SearchActive);
+        Assert.Equal(Stems, Rows());
         Assert.Contains(SettingsScreen.ClipsCappedNote, Painted());
     }
 

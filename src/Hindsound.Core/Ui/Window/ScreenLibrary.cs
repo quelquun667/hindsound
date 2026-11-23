@@ -112,6 +112,9 @@ internal sealed partial class SettingsScreen
     public const string NoClipsTitle = "No clips yet", NoClipsBody = "Save a clip with your shortcut, and it shows up here.";
     public const string ClipsCappedNote = "Showing the 2,000 most recent clips.";
     public const string ClipsCappedSearchNote = "Searching the 2,000 most recent clips, and any with a star or collection.";
+
+    /// <summary>The same while the collections file cannot be read: no star or collection is known, so none is searched on top of the cap.</summary>
+    public const string ClipsCappedSearchPlainNote = "Searching the 2,000 most recent clips.";
     public const string ClipSearchId = "lib.search", SearchPlaceholder = "Search";
     public const string SelectedClipCaption = "Selected clip", NothingSelected = "Nothing selected", ShowInFolderLabel = "Show in folder";
     public const string ClipGoneMessage = "This clip was moved or deleted", ClipFailedMessage = "That didn't work. Your clip is untouched.";
@@ -453,8 +456,9 @@ internal sealed partial class SettingsScreen
         if (_wantedClip is { } path)
         {
             // The clip just saved is in the reading, and the words typed since hide it: it is the search that gives way, as in SelectClip.
+            // Only when the menu's choice lists it: in another choice, the person has moved on, and a search is theirs to keep.
             var found = _clips.SelectPath(path);
-            if (!found && SearchActive && _clipLines is { } read && read.Lines.Any(line => string.Equals(line.Main.Path, path, Library.PathRules.Comparison)))
+            if (!found && SearchActive && RowsOfChoice().Any(line => string.Equals(line.Main.Path, path, Library.PathRules.Comparison)))
             {
                 ClearSearchText();
                 ApplyChoice(toTop: true);
@@ -478,11 +482,8 @@ internal sealed partial class SettingsScreen
     /// <summary>The rows of the menu's choice, out of the latest reading. The chosen clip stays chosen while it is still a row.</summary>
     private void ApplyChoice(bool toTop)
     {
-        var lines = _clipLines?.Lines ?? [];
-        var ofChoice = _clipChoice.Kind == LibraryFilterKind.All || _library is not { } panel ? lines : Kept(lines, panel, _clipChoice);
-
         // The search works on the rows of the choice: inside Favorites or a collection as much as in All clips.
-        var rows = LibraryFilter.Search(ofChoice, SearchText, ListRow.NameOf);
+        var rows = LibraryFilter.Search(RowsOfChoice(), SearchText, ListRow.NameOf);
         _clipRows = rows;
 
         // A local, not the field: the state holds on to this until the next reading.
@@ -491,6 +492,13 @@ internal sealed partial class SettingsScreen
         {
             _clips.ScrollTo(0);
         }
+    }
+
+    /// <summary>The lines the menu's choice keeps out of the latest reading, before any search.</summary>
+    private IReadOnlyList<ClipGroup> RowsOfChoice()
+    {
+        var lines = _clipLines?.Lines ?? [];
+        return _clipChoice.Kind == LibraryFilterKind.All || _library is not { } panel ? lines : Kept(lines, panel, _clipChoice);
     }
 
     private static List<ClipGroup> Kept(IReadOnlyList<ClipGroup> lines, ILibraryPanel panel, LibraryChoice choice)
@@ -515,8 +523,9 @@ internal sealed partial class SettingsScreen
             return;
         }
 
-        // Another view starts at its head, as a new list would.
+        // Another view starts at its head, as a new list would. A clip still waiting to be chosen is given up: the person moved on.
         _clipChoice = choice;
+        _wantedClip = null;
         ApplyChoice(toTop: true);
         Refresh();
     }
@@ -705,7 +714,7 @@ internal sealed partial class SettingsScreen
                 Id = ClipListId,
                 RowPressed = () => _wantedClip = null,
                 StarPressed = StarPressed,
-                EndNote = _clipChoice.Kind != LibraryFilterKind.All ? null : SearchActive ? _canvas.Fit(ClipsCappedSearchNote, Face.Body, 13, Width - 56) : ClipsCappedNote,
+                EndNote = _clipChoice.Kind != LibraryFilterKind.All ? null : SearchActive ? _canvas.Fit(IndexUnread ? ClipsCappedSearchPlainNote : ClipsCappedSearchNote, Face.Body, 13, Width - 56) : ClipsCappedNote,
                 EmptyTitle = _clipsRead ? empty.Title : string.Empty,
                 EmptyBody = _clipsRead ? empty.Body : null,
                 EmptyArea = new Box(Left, BandHeight, Width, ViewBottom - BandHeight),
