@@ -25,6 +25,7 @@ internal sealed record PlatformFeatures
     // Before Windows below: the static fields are set in the order of the file, and the defaults of an instance read these.
     private static readonly string[] WindowsModifierNames = ["Ctrl", "Alt", "Shift", "Win"];
     private static readonly string[] WindowsPasteKeys = ["Ctrl", "V"];
+    private static readonly (string English, string French) WindowsTrash = ("Recycle Bin", "Corbeille");
 
     /// <summary>The command a desktop's keyboard settings are told to run when nothing grabs a key.</summary>
     public const string DefaultSaveCommand = "hindsound --save";
@@ -46,8 +47,8 @@ internal sealed record PlatformFeatures
         NotificationLook = false,
         ConfirmSound = false,
         StartupWords = ("Start with the session", "Lancer avec la session"),
-        TrashName = "Trash",
-        ReservedNameText = "This name is reserved",
+        TrashWords = ("Trash", "Corbeille"),
+        ReservedWords = ("This name is reserved", "Ce nom est réservé"),
         Shortcuts = shortcuts,
         SaveCommand = saveCommand ?? (() => DefaultSaveCommand),
     };
@@ -70,8 +71,8 @@ internal sealed record PlatformFeatures
         ConfirmSound = false,
         StartupWords = ("Open at login", "Ouvrir à la connexion"),
         MachineName = "Mac",
-        TrashName = "Trash",
-        ReservedNameText = "This name is reserved",
+        TrashWords = ("Trash", "Corbeille"),
+        ReservedWords = ("This name is reserved", "Ce nom est réservé"),
         Shortcuts = shortcuts ?? (static () => ShortcutMode.Command),
         SaveCommand = saveCommand,
         ModifierNames = ["Control", "Option", "Shift", "Cmd"],
@@ -103,14 +104,20 @@ internal sealed record PlatformFeatures
     /// <summary>What the pages call the computer itself, where they tell its sound from a microphone's or an application's: "Whole PC".</summary>
     public string MachineName { get; init; } = "PC";
 
-    /// <summary>The name of the source that records everything the computer plays: "Whole PC", "Whole Mac".</summary>
-    public string WholeMachine => "Whole " + MachineName;
+    /// <summary>The name of the source that records everything the computer plays: "Whole PC", "Whole Mac"; "Tout le PC" in French.</summary>
+    public string WholeMachine => Tr.Of("Whole " + MachineName, "Tout le " + MachineName);
 
-    /// <summary>What the system calls the place deleted files go to, in the sentences that say a clip goes there.</summary>
-    public string TrashName { get; init; } = "Recycle Bin";
+    /// <summary>What the system calls the place deleted files go to, in English and in French.</summary>
+    public (string English, string French) TrashWords { get; init; } = WindowsTrash;
 
-    /// <summary>Why a name is refused when it is one the app keeps for itself, with no full stop.</summary>
-    public string ReservedNameText { get; init; } = "Windows keeps this name for itself";
+    /// <summary>What the system calls the place deleted files go to, in the sentences that say a clip goes there, in the language of the moment.</summary>
+    public string TrashName => Tr.Of(TrashWords.English, TrashWords.French);
+
+    /// <summary>Why a name is refused when it is one the app keeps for itself, in English and in French, with no full stop.</summary>
+    public (string English, string French) ReservedWords { get; init; } = ("Windows keeps this name for itself", "Windows garde ce nom pour lui");
+
+    /// <summary>Why a name is refused when it is one the app keeps for itself, in the language of the moment, with no full stop.</summary>
+    public string ReservedNameText => Tr.Of(ReservedWords.English, ReservedWords.French);
 
     /// <summary>How the shortcuts are set. A function: a system may only know after the window is open.</summary>
     public Func<ShortcutMode> Shortcuts { get; init; } = static () => ShortcutMode.Capture;
@@ -159,5 +166,5 @@ internal sealed record PlatformFeatures
 
     /// <summary>A sentence written with the Windows words, in the words of this system: the Recycle Bin is its own name for the place.</summary>
     public string Words(string windowsText) =>
-        TrashName == "Recycle Bin" ? windowsText : windowsText.Replace("Recycle Bin", TrashName, StringComparison.Ordinal);
+        TrashWords == WindowsTrash ? windowsText : windowsText.Replace("Recycle Bin", TrashName, StringComparison.Ordinal);
 }

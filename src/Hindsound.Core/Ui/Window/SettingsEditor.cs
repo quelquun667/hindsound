@@ -53,16 +53,24 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
     public const int BufferSliderUsualMax = 600;
     public const int CustomClip = 5;
 
-    public const string CustomClipHelp = "m:ss or seconds, up to 30:00";
-    public const string CustomClipError = "Use m:ss or seconds, from 0:01 to 30:00";
+    public static string CustomClipHelp => Tr.Of("m:ss or seconds, up to 30:00", "m:ss ou secondes, jusqu'à 30:00");
+    public static string CustomClipError => Tr.Of("Use m:ss or seconds, from 0:01 to 30:00", "Utilise m:ss ou des secondes, de 0:01 à 30:00");
+
+    // The English texts of four refusals are constants, as tests name them in attributes; the screen shows the same words in the
+    // language of the moment through the properties beside them.
     public const string AccentFormatError = "Use a color code like #D4F53C";
     public const string AccentDarkError = "Too dark: it wouldn't show in a game. Pick a lighter color.";
     public const string TemplateEmptyError = "The name can't be empty";
     public const string TemplateCharsError = "A file name can't contain \\ / : * ? \" < > |";
-    public const string FolderError = "Pick a full folder path";
+
+    public static string AccentFormatText => Tr.Of(AccentFormatError, "Utilise un code couleur comme #D4F53C");
+    public static string AccentDarkText => Tr.Of(AccentDarkError, "Trop sombre\u00A0: on ne la verrait pas dans un jeu. Choisis une couleur plus claire.");
+    public static string TemplateEmptyText => Tr.Of(TemplateEmptyError, "Le nom ne peut pas être vide");
+    public static string TemplateCharsText => Tr.Of(TemplateCharsError, "Un nom de fichier ne peut pas contenir \\ / : * ? \" < > |");
+    public static string FolderError => Tr.Of("Pick a full folder path", "Choisis un chemin de dossier complet");
 
     public static readonly int[] ClipPresets = [15, 30, 60, 120, 300];
-    public static readonly string[] ClipLabels = ["15s", "30s", "1 min", "2 min", "5 min", "Custom"];
+    public static string[] ClipLabels => [Tr.Of("15s", "15\u00A0s"), Tr.Of("30s", "30\u00A0s"), Tr.Of("1 min", "1\u00A0min"), Tr.Of("2 min", "2\u00A0min"), Tr.Of("5 min", "5\u00A0min"), Tr.Of("Custom", "Autre")];
     public static readonly int[] Bitrates = [128, 192, 320];
 
     /// <summary>The object itself: the app reads the same one. It is replaced when the file was edited by hand.</summary>
@@ -175,7 +183,7 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
     }
 
     /// <summary>The live text under the slider, for the value being dragged as much as for the stored one.</summary>
-    public string RamText(int bufferSeconds) => RamEstimate.Format(bufferSeconds, Settings.Audio.MicCaptured) + " of RAM";
+    public string RamText(int bufferSeconds) => RamEstimate.Format(bufferSeconds, Settings.Audio.MicCaptured) + Tr.Of(" of RAM", " de RAM");
 
     private static int RoundUpToMinute(int seconds) => (seconds + 59) / 60 * 60;
 
@@ -192,15 +200,15 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
 
     // ---------------------------------------------------------------- hotkeys
 
-    public static readonly (HotkeyAction Action, string Label)[] HotkeyRows =
+    public static (HotkeyAction Action, string Label)[] HotkeyRows =>
     [
-        (HotkeyAction.SaveDefault, "Save clip"),
-        (HotkeyAction.SaveAndEdit, "Save and edit"),
-        (HotkeyAction.Save15s, "Save up to 15s"),
-        (HotkeyAction.Save1m, "Save up to 1 min"),
-        (HotkeyAction.Save5m, "Save up to 5 min"),
-        (HotkeyAction.TogglePause, "Pause or resume"),
-        (HotkeyAction.CopyLast, "Copy last clip"),
+        (HotkeyAction.SaveDefault, Tr.Of("Save clip", "Enregistrer un clip")),
+        (HotkeyAction.SaveAndEdit, Tr.Of("Save and edit", "Enregistrer et modifier")),
+        (HotkeyAction.Save15s, Tr.Of("Save up to 15s", "Enregistrer 15\u00A0s")),
+        (HotkeyAction.Save1m, Tr.Of("Save up to 1 min", "Enregistrer 1\u00A0min")),
+        (HotkeyAction.Save5m, Tr.Of("Save up to 5 min", "Enregistrer 5\u00A0min")),
+        (HotkeyAction.TogglePause, Tr.Of("Pause or resume", "Pause ou reprise")),
+        (HotkeyAction.CopyLast, Tr.Of("Copy last clip", "Copier le dernier clip")),
     ];
 
     public string? GestureOf(HotkeyAction action) => GestureOf(Settings.Hotkeys, action);
@@ -337,12 +345,12 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
     /// <summary>The list of the "Record" row. An app chosen earlier and not running now stays listed.</summary>
     public static IReadOnlyList<DropItem> RecordChoices(IReadOnlyList<AudioAppChoice> apps, string? selected, bool selectedRunning = false, string machine = "PC")
     {
-        var items = new List<DropItem> { new(string.Empty, "Whole " + machine) };
+        var items = new List<DropItem> { new(string.Empty, Tr.Of("Whole " + machine, "Tout le " + machine)) };
         items.AddRange(apps.Select(a => new DropItem(a.ExeName, a.Name)));
         if (!string.IsNullOrEmpty(selected) && !items.Any(i => string.Equals(i.Value, selected, StringComparison.OrdinalIgnoreCase)))
         {
             // An app that has not played anything yet has no session, so it can be running and still not be listed.
-            items.Add(new DropItem(selected, selectedRunning ? AudioAppList.NameOf(selected) : selected + " (not running)"));
+            items.Add(new DropItem(selected, selectedRunning ? AudioAppList.NameOf(selected) : Tr.Of(selected + " (not running)", selected + " (fermée)")));
         }
 
         return items;
@@ -351,7 +359,7 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
     /// <summary>The list of the "Output" row. A device that went away stays listed, rather than changing by itself.</summary>
     public static IReadOnlyList<DropItem> OutputChoices(IReadOnlyList<AudioDeviceChoice> devices, string selected)
     {
-        var items = new List<DropItem> { new(AudioSettings.DefaultDevice, "Default output") };
+        var items = new List<DropItem> { new(AudioSettings.DefaultDevice, Tr.Of("Default output", "Sortie par défaut")) };
         AddDevices(items, devices, selected);
         return items;
     }
@@ -359,8 +367,8 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
     /// <summary>The list of the "Microphone" row: Default, the devices, Off.</summary>
     public static IReadOnlyList<DropItem> MicChoices(IReadOnlyList<AudioDeviceChoice> devices, string selected)
     {
-        var items = new List<DropItem> { new(AudioSettings.DefaultDevice, "Default microphone") };
-        var off = new DropItem(AudioSettings.DisabledMic, "Off");
+        var items = new List<DropItem> { new(AudioSettings.DefaultDevice, Tr.Of("Default microphone", "Micro par défaut")) };
+        var off = new DropItem(AudioSettings.DisabledMic, Tr.Of("Off", "Coupé"));
         AddDevices(items, devices, string.Equals(selected, off.Value, StringComparison.OrdinalIgnoreCase) ? off.Value : selected);
         items.RemoveAll(i => i.Value == off.Value);
         items.Add(off);
@@ -372,7 +380,7 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
         items.AddRange(devices.Select(d => new DropItem(d.Id, d.Name)));
         if (!items.Any(i => i.Value == selected))
         {
-            items.Add(new DropItem(selected, "Unplugged device"));
+            items.Add(new DropItem(selected, Tr.Of("Unplugged device", "Périphérique débranché")));
         }
     }
 
@@ -410,12 +418,12 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
     {
         if (string.IsNullOrWhiteSpace(template))
         {
-            return FieldCheck.Bad(TemplateEmptyError);
+            return FieldCheck.Bad(TemplateEmptyText);
         }
 
         if (template.IndexOfAny(FileNameTemplate.InvalidChars) >= 0)
         {
-            return FieldCheck.Bad(TemplateCharsError);
+            return FieldCheck.Bad(TemplateCharsText);
         }
 
         for (var open = template.IndexOf('{'); open >= 0; open = template.IndexOf('{', open + 1))
@@ -424,7 +432,7 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
             var tag = close < 0 ? template[open..] : template[open..(close + 1)];
             if (!(tag.Equals("{app}", StringComparison.OrdinalIgnoreCase) || tag.Equals("{date}", StringComparison.OrdinalIgnoreCase) || tag.Equals("{time}", StringComparison.OrdinalIgnoreCase)))
             {
-                return FieldCheck.Bad($"Unknown tag {tag}. Use {{app}}, {{date}} or {{time}}");
+                return FieldCheck.Bad(Tr.Format($"Unknown tag {tag}. Use {{app}}, {{date}} or {{time}}", $"Balise {tag} inconnue. Utilise {{app}}, {{date}} ou {{time}}"));
             }
         }
 
@@ -491,8 +499,8 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
     public static FieldCheck CheckAccent(string? text) => AccentColors.Validate(text) switch
     {
         AccentCheck.Valid => FieldCheck.Fine,
-        AccentCheck.TooDark => FieldCheck.Bad(AccentDarkError),
-        _ => FieldCheck.Bad(AccentFormatError),
+        AccentCheck.TooDark => FieldCheck.Bad(AccentDarkText),
+        _ => FieldCheck.Bad(AccentFormatText),
     };
 
     /// <summary>A colour typed by hand: kept and applied only if the check passes.</summary>

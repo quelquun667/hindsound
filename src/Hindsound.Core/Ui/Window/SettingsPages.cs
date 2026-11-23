@@ -10,21 +10,31 @@ internal sealed partial class SettingsScreen
 {
     public static string LegalNote => Tr.Of(
         "Recording a conversation without telling the people in it can be illegal. Let them know before you keep it.",
-        "Enregistrer une conversation sans prévenir les personnes présentes peut être illégal. Prévenez-les avant de la garder.");
-    public const string ShorterBufferNote = "A shorter buffer drops the oldest audio";
+        "Enregistrer une conversation sans prévenir les personnes présentes peut être illégal. Préviens-les avant de la garder.");
+    public static string ShorterBufferNote => Tr.Of("A shorter buffer drops the oldest audio", "Une mémoire plus courte supprime l'audio le plus ancien");
     public static string SoundHelp => Tr.Of(
         "The beep can be heard in your next clip if you capture a specific output.",
-        "Le bip peut s'entendre dans le clip suivant si vous capturez une sortie précise.");
+        "Le bip peut s'entendre dans ton prochain clip si tu captures une sortie précise.");
 
     public static string GitHubNote => Tr.Of(
         "Once a day, Hindsound asks GitHub for the latest version. GitHub sees your IP address and the time, nothing else.",
-        "Une fois par jour, Hindsound demande la dernière version à GitHub. GitHub voit votre adresse IP et l'heure, rien d'autre.");
-    public const string FirstRunUpdatesNote = "Hindsound checks GitHub for updates once a day. GitHub sees your IP address. Change it in Settings > General.";
+        "Une fois par jour, Hindsound demande la dernière version à GitHub. GitHub voit ton adresse IP et l'heure, rien d'autre.");
+    public static string FirstRunUpdatesNote => Tr.Of(
+        "Hindsound checks GitHub for updates once a day. GitHub sees your IP address. Change it in Settings > General.",
+        "Hindsound vérifie les mises à jour sur GitHub une fois par jour. GitHub voit ton adresse IP. Change ça dans Réglages > Général.");
     public const string ClipBusyNote = "A clip is still being saved";
-    public const string DesktopKeysNote = "Your desktop sets these keys. To change one, use the shortcut settings of your desktop.";
-    public const string CommandIntro = "This desktop has no global shortcut for apps. In its keyboard settings, bind this command to a key:";
-    public const string CommandNote = "The key then saves a clip, as the Save button does.";
-    public const string CommandGenericIntro = "This desktop has no global shortcut for apps. In its keyboard settings, bind the full path of the Hindsound program followed by --save to a key.";
+    public static string DesktopKeysNote => Tr.Of(
+        "Your desktop sets these keys. To change one, use the shortcut settings of your desktop.",
+        "Ton environnement de bureau définit ces raccourcis. Pour en modifier un, utilise ses réglages de raccourcis clavier.");
+    public static string CommandIntro => Tr.Of(
+        "This desktop has no global shortcut for apps. In its keyboard settings, bind this command to a key:",
+        "Cet environnement de bureau n'a pas de raccourci global pour les applications. Dans ses réglages du clavier, associe cette commande à une touche\u00A0:");
+    public static string CommandNote => Tr.Of("The key then saves a clip, as the Save button does.", "La touche enregistre alors un clip, comme le bouton Enregistrer.");
+    public static string CommandGenericIntro => Tr.Of(
+        "This desktop has no global shortcut for apps. In its keyboard settings, bind the full path of the Hindsound program followed by --save to a key.",
+        "Cet environnement de bureau n'a pas de raccourci global pour les applications. Dans ses réglages du clavier, associe à une touche le chemin complet du programme Hindsound suivi de --save.");
+    private static string CopyLabel => Tr.Of("Copy", "Copier");
+    private static string CopiedLabel => Tr.Of("Copied", "Copié");
     public const string FirstRunUpdatesId = "run.updates";
     private const string CardPrefix = "card.";
 
@@ -360,9 +370,9 @@ internal sealed partial class SettingsScreen
 
         return _hotkeyResults.FirstOrDefault(r => r.Action == action)?.Status switch
         {
-            null or HotkeyStatus.Suspended => "Waiting for your desktop",
-            HotkeyStatus.NotSet => "Not set",
-            _ => "Not bound by your desktop",
+            null or HotkeyStatus.Suspended => Tr.Of("Waiting for your desktop", "En attente du bureau"),
+            HotkeyStatus.NotSet => Tr.Of("Not set", "Aucun"),
+            _ => Tr.Of("Not bound by your desktop", "Non associé par le bureau"),
         };
     }
 
@@ -387,7 +397,7 @@ internal sealed partial class SettingsScreen
 
         const float pitch = 37, fieldWidth = 280, fieldHeight = 32, resetHeight = 30;
         var y = BandHeight + 18;
-        Heading("Hotkeys", y);
+        Heading(Tr.Of("Hotkeys", "Raccourcis"), y);
 
         // On the line of the title, at its right end, as the name of the color is on the General page: the seven rows then fit
         // under it, and the button is there with no scrolling. Added after the fields, it comes last in the order of Tab.
@@ -406,8 +416,9 @@ internal sealed partial class SettingsScreen
             y += pitch + (view.Message is not null || view.Listening ? HotkeyField.MessageHeight : 0);
         }
 
-        var width = Button.WidthFor(_canvas, "Reset to defaults");
-        Add(new Button("Reset to defaults", ResetHotkeys) { Id = "hotkey.reset", Bounds = new Box(Right - width, resetTop, width, resetHeight) });
+        var reset = Tr.Of("Reset to defaults", "Réinitialiser");
+        var width = Button.WidthFor(_canvas, reset);
+        Add(new Button(reset, ResetHotkeys) { Id = "hotkey.reset", Bounds = new Box(Right - width, resetTop, width, resetHeight) });
         _contentBottom = y - (pitch - fieldHeight);
     }
 
@@ -419,7 +430,7 @@ internal sealed partial class SettingsScreen
     {
         const float pitch = 37, fieldWidth = 280, fieldHeight = 32;
         var y = BandHeight + 18;
-        Heading("Hotkeys", y);
+        Heading(Tr.Of("Hotkeys", "Raccourcis"), y);
         y += 36;
         foreach (var (action, label) in HotkeyRowsShown)
         {
@@ -461,7 +472,7 @@ internal sealed partial class SettingsScreen
     {
         var command = Features.SaveCommand();
         var y = BandHeight + 18;
-        Heading("Hotkeys", y);
+        Heading(Tr.Of("Hotkeys", "Raccourcis"), y);
         y += 36;
         var introTop = y;
         // A program whose path cannot be written as a command (the notice falls back to words too): the words alone, nothing
@@ -477,8 +488,8 @@ internal sealed partial class SettingsScreen
             return;
         }
 
-        var copyLabel = _commandCopied ? "Copied" : "Copy";
-        var copyWidth = Button.WidthFor(_canvas, "Copied");
+        var copyLabel = _commandCopied ? CopiedLabel : CopyLabel;
+        var copyWidth = CopyButtonWidth();
         var box = new Box(Left, y, Width - copyWidth - 12, 34);
         Add(new Painted((c, _) =>
         {
@@ -495,6 +506,9 @@ internal sealed partial class SettingsScreen
         Add(new Painted((c, _) => c.Wrapped(CommandNote, Face.Body, 13, Left, noteTop, Width, Theme.Muted)));
         _contentBottom = y + WrapLines(_canvas, CommandNote, Face.Body, 13, Width).Count * _canvas.LineHeight(Face.Body, 13);
     }
+
+    /// <summary>The room of the Copy button, whichever of its two words it shows, so that it does not move when it is pressed.</summary>
+    private float CopyButtonWidth() => Math.Max(Button.WidthFor(_canvas, CopiedLabel), Button.WidthFor(_canvas, CopyLabel));
 
     private void CopyCommand()
     {
@@ -514,7 +528,7 @@ internal sealed partial class SettingsScreen
     {
         var settings = Editor.Settings;
         var y = BandHeight + 22;
-        Heading("Clip length", y);
+        Heading(Tr.Of("Clip length", "Durée du clip"), y);
         y += 38;
         Group(
             "durations.clip",
@@ -526,7 +540,7 @@ internal sealed partial class SettingsScreen
         if (_customClipOpen)
         {
             y += 10;
-            RowLabel("Custom length", y);
+            RowLabel(Tr.Of("Custom length", "Durée perso"), y);
             Add(new TextField(_clipField, SettingsEditor.CheckCustomClip, Editor.CommitCustomClip, ClipFieldText)
             {
                 Id = ClipFieldId,
@@ -537,7 +551,7 @@ internal sealed partial class SettingsScreen
         }
 
         y += 28;
-        Heading("Keep in memory", y);
+        Heading(Tr.Of("Keep in memory", "Garder en mémoire"), y);
         y += 38;
         var max = Editor.BufferSliderMax;
         var shown = (int)SliderValue("durations.keep", settings.BufferSeconds);
@@ -561,7 +575,8 @@ internal sealed partial class SettingsScreen
         y += 20;
         if (shown <= Editor.BufferFloor && Editor.BufferFloor > SettingsEditor.BufferSliderMin)
         {
-            var floor = "At least " + NotificationStates.FormatDuration(Editor.BufferFloor) + ": your longest clip";
+            var longest = NotificationStates.FormatDuration(Editor.BufferFloor);
+            var floor = Tr.Format($"At least {longest}: your longest clip", $"Au moins {longest}\u00A0: ton clip le plus long");
             Note(floor, y + 8, color: Theme.Amber);
             y += 20;
         }
@@ -594,28 +609,28 @@ internal sealed partial class SettingsScreen
         const float pitch = 38;
         var audio = Editor.Settings.Audio;
         var y = BandHeight + 18;
-        Heading("Audio", y);
+        Heading(Tr.Of("Audio", "Audio"), y);
         y += 36;
         if (Features.SingleApp)
         {
-            Row("Record", "audio.record", y, () => SettingsEditor.RecordChoices(_apps, Editor.Settings.Audio.SourceApp, _status is { SourceApp: not null, SourceAppMissing: false }, Features.MachineName), () => Editor.Settings.Audio.SourceApp ?? string.Empty, Editor.SetSourceApp);
+            Row(Tr.Of("Record", "Capturer"), "audio.record", y, () => SettingsEditor.RecordChoices(_apps, Editor.Settings.Audio.SourceApp, _status is { SourceApp: not null, SourceAppMissing: false }, Features.MachineName), () => Editor.Settings.Audio.SourceApp ?? string.Empty, Editor.SetSourceApp);
             y += pitch;
         }
 
         // One application is captured wherever it plays, so the output has no say. Where one application cannot be chosen, a name
         // left in the file by hand changes nothing, and the output stays the choice.
-        Row("Output", "audio.output", y, () => SettingsEditor.OutputChoices(_outputs, Editor.Settings.Audio.OutputDeviceId), () => Editor.Settings.Audio.OutputDeviceId, Editor.SetOutput, audio.SourceApp is null || !Features.SingleApp);
+        Row(Tr.Of("Output", "Sortie"), "audio.output", y, () => SettingsEditor.OutputChoices(_outputs, Editor.Settings.Audio.OutputDeviceId), () => Editor.Settings.Audio.OutputDeviceId, Editor.SetOutput, audio.SourceApp is null || !Features.SingleApp);
         y += pitch;
-        Row("Microphone", "audio.mic", y, () => SettingsEditor.MicChoices(_mics, Editor.Settings.Audio.MicDeviceId), () => Editor.Settings.Audio.MicDeviceId, Editor.SetMic);
+        Row(Tr.Of("Microphone", "Micro"), "audio.mic", y, () => SettingsEditor.MicChoices(_mics, Editor.Settings.Audio.MicDeviceId), () => Editor.Settings.Audio.MicDeviceId, Editor.SetMic);
         y += pitch;
-        RowLabel("Mic level", y);
+        RowLabel(Tr.Of("Mic level", "Niveau du micro"), y);
         Add(new MeterBar(() => _meter.Level, MeterCaption) { Bounds = new Box(Right - FieldWidth, y + 9, FieldWidth, 12) });
         y += pitch;
-        SegmentRow("Tracks", "audio.mode", y, ["Mix", "Separate"], () => Editor.Settings.Audio.Mode == "mix" ? 0 : 1, i => Editor.SetMode(i == 0 ? "mix" : "multitrack"));
+        SegmentRow(Tr.Of("Tracks", "Pistes"), "audio.mode", y, [Tr.Of("Mix", "Mixées"), Tr.Of("Separate", "Séparées")], () => Editor.Settings.Audio.Mode == "mix" ? 0 : 1, i => Editor.SetMode(i == 0 ? "mix" : "multitrack"));
         y += pitch;
-        GainRow(Features.MachineName + " sound gain", "audio.systemGain", y, audio.SystemGainDb, Editor.SetSystemGain, true);
+        GainRow(Tr.Format($"{Features.MachineName} sound gain", $"Gain du son du {Features.MachineName}"), "audio.systemGain", y, audio.SystemGainDb, Editor.SetSystemGain, true);
         y += pitch;
-        GainRow("Mic gain", "audio.micGain", y, audio.MicGainDb, Editor.SetMicGain, audio.MicCaptured);
+        GainRow(Tr.Of("Mic gain", "Gain du micro"), "audio.micGain", y, audio.MicGainDb, Editor.SetMicGain, audio.MicCaptured);
         _contentBottom = y + RowHeight;
     }
 
@@ -631,15 +646,15 @@ internal sealed partial class SettingsScreen
     {
         if (!Editor.Settings.Audio.MicCaptured)
         {
-            return "The microphone is off";
+            return Tr.Of("The microphone is off", "Le micro est coupé");
         }
 
         if (_status is null)
         {
-            return "Starting";
+            return Tr.Of("Starting", "Démarrage");
         }
 
-        return _status.MicCapturing ? null : _status.Activity == Audio.CaptureActivity.Paused ? "Capture is paused" : "No microphone found";
+        return _status.MicCapturing ? null : _status.Activity == Audio.CaptureActivity.Paused ? Tr.Of("Capture is paused", "Capture en pause") : Tr.Of("No microphone found", "Aucun micro trouvé");
     }
 
     // ---------------------------------------------------------------- export
@@ -649,12 +664,12 @@ internal sealed partial class SettingsScreen
         const float pitch = 38;
         var export = Editor.Settings.Export;
         var y = BandHeight + 18;
-        Heading("Export", y);
+        Heading(Tr.Of("Export", "Export"), y);
         y += 36;
-        SegmentRow("Format", "export.format", y, ["WAV", "MP3"], () => Editor.Settings.Export.Format == "wav" ? 0 : 1, i => Editor.SetFormat(i == 0 ? "wav" : "mp3"));
+        SegmentRow(Tr.Of("Format", "Format"), "export.format", y, ["WAV", "MP3"], () => Editor.Settings.Export.Format == "wav" ? 0 : 1, i => Editor.SetFormat(i == 0 ? "wav" : "mp3"));
         y += pitch;
         SegmentRow(
-            "MP3 quality",
+            Tr.Of("MP3 quality", "Qualité MP3"),
             "export.bitrate",
             y,
             ["128", "192", "320"],
@@ -663,17 +678,18 @@ internal sealed partial class SettingsScreen
             export.Format != "wav");
         y += pitch;
         SegmentRow(
-            "Volume",
+            Tr.Of("Volume", "Volume"),
             "export.normalization",
             y,
-            ["Off", "Peak", "Loudness"],
+            [Tr.Of("Off", "Aucune"), Tr.Of("Peak", "Pic"), Tr.Of("Loudness", "Loudness")],
             () => Editor.Settings.Export.Normalization switch { "off" => 0, "peak" => 1, _ => 2 },
             i => Editor.SetNormalization(i switch { 0 => "off", 1 => "peak", _ => "loudness" }));
         y += pitch;
 
-        RowLabel("Folder", y);
-        var browse = Button.WidthFor(_canvas, "Browse", 13, 12);
-        Add(new Button("Browse", PickFolder) { Id = "export.browse", FontSize = 13, Bounds = new Box(Right - browse, y, browse, RowHeight) });
+        RowLabel(Tr.Of("Folder", "Dossier"), y);
+        var browseLabel = Tr.Of("Browse", "Parcourir");
+        var browse = Button.WidthFor(_canvas, browseLabel, 13, 12);
+        Add(new Button(browseLabel, PickFolder) { Id = "export.browse", FontSize = 13, Bounds = new Box(Right - browse, y, browse, RowHeight) });
         var folder = Editor.FolderShown;
         var folderBox = new Box(Left + 60, y, Width - 60 - browse - 8, RowHeight);
         var folderError = _folderMessage;
@@ -688,7 +704,7 @@ internal sealed partial class SettingsScreen
         }));
         y += pitch + (folderError is null ? 0 : TextField.MessageHeight);
 
-        RowLabel("File name", y);
+        RowLabel(Tr.Of("File name", "Nom"), y);
         var nameBox = new Box(Left + 80, y, Width - 80, RowHeight);
         Add(new TextField(_templateField, SettingsEditor.CheckTemplate, t => Editor.SetTemplate(t), () => Editor.Settings.Export.FileNameTemplate)
         {
@@ -702,7 +718,7 @@ internal sealed partial class SettingsScreen
         }
 
         y += RowHeight + TextField.MessageHeight + 8;
-        ToggleRow("Copy clip to clipboard", "export.copy", y, () => Editor.Settings.Export.CopyToClipboard, Editor.SetCopyToClipboard);
+        ToggleRow(Tr.Of("Copy clip to clipboard", "Copier le clip dans le presse-papiers"), "export.copy", y, () => Editor.Settings.Export.CopyToClipboard, Editor.SetCopyToClipboard);
         _contentBottom = y + RowHeight;
     }
 
@@ -1042,12 +1058,12 @@ internal sealed partial class SettingsScreen
 
     // ---------------------------------------------------------------- first launch
 
-    private static readonly string[] FirstRunSteps = ["Pick your hotkey", "Check your mic", "Try it"];
+    private static string[] FirstRunSteps => [Tr.Of("Pick your hotkey", "Choisis ton raccourci"), Tr.Of("Check your mic", "Vérifie ton micro"), Tr.Of("Try it", "Essaie")];
 
     // The app has only just started: a clip made at once would hold next to nothing.
-    internal const string FirstRunWait = "Wait a few seconds.";
-    internal const string FirstRunSay = "Say something, then press your hotkey.";
-    internal const string FirstRunSayCommand = "Say something, then press the Save button.";
+    internal static string FirstRunWait => Tr.Of("Wait a few seconds.", "Attends un peu.");
+    internal static string FirstRunSay => Tr.Of("Say something, then press your hotkey.", "Dis un mot, puis appuie sur ton raccourci.");
+    internal static string FirstRunSayCommand => Tr.Of("Say something, then press the Save button.", "Dis un mot, puis appuie sur Enregistrer.");
     internal const float FirstRunNoteGap = 4;
 
     /// <summary>The room of a line in the panel of the card: nothing cuts a note that goes past it.</summary>
@@ -1065,7 +1081,7 @@ internal sealed partial class SettingsScreen
         var mode = Features.Shortcuts();
         Add(new Painted((c, ui) =>
         {
-            c.Text("Welcome to Hindsound", Face.Title, 22, x, BandHeight + 14, Theme.Text);
+            c.Text(Tr.Of("Welcome to Hindsound", "Bienvenue dans Hindsound"), Face.Title, 22, x, BandHeight + 14, Theme.Text);
             for (var i = 0; i < FirstRunSteps.Length; i++)
             {
                 var mid = BandHeight + 72 + i * 44;
@@ -1125,7 +1141,7 @@ internal sealed partial class SettingsScreen
 
                 break;
             case 1:
-                FirstRunNote("Speak: the bar should move. Off if you only want the " + Features.MachineName + " sound.", inner, top);
+                FirstRunNote(Tr.Format($"Speak: the bar should move. Off if you only want the {Features.MachineName} sound.", $"Parle\u00A0: la barre doit bouger. Coupé pour le son du {Features.MachineName} seul."), inner, top);
                 Add(
                     new Dropdown(() => SettingsEditor.MicChoices(_mics, Editor.Settings.Audio.MicDeviceId), () => Editor.Settings.Audio.MicDeviceId, Editor.SetMic, OpenPopup)
                     {
@@ -1171,8 +1187,9 @@ internal sealed partial class SettingsScreen
                     {
                         Add(new Painted((c, _) =>
                         {
-                            c.TextMid("Now paste it anywhere.", Face.Medium, 14, inner, top + 84, Theme.Text);
-                            c.Keycaps(Features.KeyText(Features.PasteGesture), inner + 8 + c.Measure("Now paste it anywhere.", Face.Medium, 14), top + 84);
+                            var paste = Tr.Of("Now paste it anywhere.", "Colle-le maintenant n'importe où.");
+                            c.TextMid(paste, Face.Medium, 14, inner, top + 84, Theme.Text);
+                            c.Keycaps(Features.KeyText(Features.PasteGesture), inner + 8 + c.Measure(paste, Face.Medium, 14), top + 84);
                         }), scrolls: false);
                     }
                 }
@@ -1192,14 +1209,15 @@ internal sealed partial class SettingsScreen
 
         var buttonY = lineY + 104;
         var last = step == FirstRunSteps.Length - 1;
-        var nextLabel = last ? "Done" : "Next";
+        var nextLabel = last ? Tr.Of("Done", "Terminer") : Tr.Of("Next", "Suivant");
+        var backLabel = Tr.Of("Back", "Retour");
         var nextWidth = Button.WidthFor(_canvas, nextLabel, padding: 22);
 
         // The card has no height left: the word about GitHub goes left of the buttons, and stays at every step. A run
         // that cannot update says nothing about it.
         if (_updates?.View.Active == true)
         {
-            var room = panelRight - nextWidth - Button.WidthFor(_canvas, "Back", padding: 22) - 28 - x;
+            var room = panelRight - nextWidth - Button.WidthFor(_canvas, backLabel, padding: 22) - 28 - x;
             var lines = WrapLines(_canvas, FirstRunUpdatesNote, Face.Body, 13, room);
             if (lines.Count > 2)
             {
@@ -1225,8 +1243,8 @@ internal sealed partial class SettingsScreen
 
         if (step > 0)
         {
-            var backWidth = Button.WidthFor(_canvas, "Back", padding: 22);
-            Add(new Button("Back", FirstRunBack) { Id = "run.back", Bounds = new Box(panelRight - nextWidth - 12 - backWidth, buttonY, backWidth, 34) }, scrolls: false);
+            var backWidth = Button.WidthFor(_canvas, backLabel, padding: 22);
+            Add(new Button(backLabel, FirstRunBack) { Id = "run.back", Bounds = new Box(panelRight - nextWidth - 12 - backWidth, buttonY, backWidth, 34) }, scrolls: false);
         }
 
         Add(new Button(nextLabel, FirstRunNext) { Id = "run.next", Accented = true, Bounds = new Box(panelRight - nextWidth, buttonY, nextWidth, 34) }, scrolls: false);
@@ -1274,7 +1292,7 @@ internal sealed partial class SettingsScreen
 
         Add(new Painted((c, _) => c.Wrapped(CommandIntro, Face.Body, 13, x, y, width, Theme.Muted)) { Id = HotkeyNoteId }, scrolls: false);
         var fieldTop = y + WrapLines(_canvas, CommandIntro, Face.Body, 13, width).Count * _canvas.LineHeight(Face.Body, 13) + 8;
-        var copyWidth = Button.WidthFor(_canvas, "Copied");
+        var copyWidth = CopyButtonWidth();
         var box = new Box(x, fieldTop, width - copyWidth - 12, 34);
         Add(
             new Painted((c, _) =>
@@ -1287,7 +1305,7 @@ internal sealed partial class SettingsScreen
                 Bounds = box,
             },
             scrolls: false);
-        Add(new Button(_commandCopied ? "Copied" : "Copy", CopyCommand) { Id = HotkeyCopyId, Bounds = new Box(x + width - copyWidth, fieldTop, copyWidth, 34) }, scrolls: false);
+        Add(new Button(_commandCopied ? CopiedLabel : CopyLabel, CopyCommand) { Id = HotkeyCopyId, Bounds = new Box(x + width - copyWidth, fieldTop, copyWidth, 34) }, scrolls: false);
     }
 
     private void FirstRunNote(string text, float x, float y) =>

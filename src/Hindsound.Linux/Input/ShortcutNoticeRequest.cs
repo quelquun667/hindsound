@@ -15,7 +15,7 @@ internal static class ShortcutNoticeRequest
         ReplacesId: 0,
         Icon: "",
         Summary: "Hindsound",
-        Body: HotkeyChoice.NoShortcutText,
+        Body: HotkeyChoice.NoticeText,
         Actions: [],
         NotificationRequest.NormalUrgency,
         SuppressSound: true,
