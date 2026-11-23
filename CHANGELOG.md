@@ -4,6 +4,12 @@ All notable changes to Hindsound are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- A hotkey `Save and edit`, not set at first, in Settings > Hotkeys under `Save clip`. It saves a clip as `Save clip` does, with the same length, clipboard and notification, then opens the editor on it, and the window comes to the front (in a fullscreen game, that takes you out of the game). If the editor is already open with a change or a save under way, it is not replaced: the window only comes to the front, the new clip is saved as usual, and the log says why the editor did not open. Where Hindsound has no window, the hotkey is not shown.
+
 ## [0.12.0] - 2026-11-23
 
 Hotkeys that follow the keyboard layout on Mac, and a lost sound shown on Linux. On Windows, Hindsound works as in 0.11.0, but gives up sooner on a server that does not answer a check for a new version.

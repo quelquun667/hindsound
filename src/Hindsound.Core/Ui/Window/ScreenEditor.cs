@@ -95,6 +95,12 @@ internal sealed partial class SettingsScreen
         }
 
         _editorPanel = panel;
+
+        // The Hotkeys page is the one the window starts on, built before the app gives it its editor: its row for the editor is drawn now.
+        if (Section == Section.Hotkeys)
+        {
+            Refresh();
+        }
     }
 
     /// <summary>Opens the editor on this clip, on the Library page. Without an editor panel, nothing happens.</summary>

@@ -571,7 +571,8 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         RefreshTray();
     }
 
-    private void OnHotkey(HotkeyAction action)
+    /// <summary>What a pressed shortcut does. Internal for a test that presses one without a hotkey layer.</summary>
+    internal void OnHotkey(HotkeyAction action)
     {
         ReloadSettingsIfChanged();
         switch (action)
@@ -863,10 +864,17 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
             Started = OnClipStarted,
         };
 
-    private void OnClipFinished(ClipOutcome outcome)
+    /// <summary>Internal for a test that gives it the end of a clip it wrote.</summary>
+    internal void OnClipFinished(ClipOutcome outcome)
     {
         OnClipEnded();
         (ShowOutcomeInstead ?? ShowOutcome)(outcome);
+
+        // After what the clip says to the user, so that the window comes up on a clip the notification already told about.
+        if (outcome.Request.EditAfter && outcome.Result is { } written)
+        {
+            OpenEditorOn(written);
+        }
     }
 
     /// <summary>What a clip that ended says to the user, so that a test sees the Library page look again without the notification.</summary>
@@ -905,11 +913,6 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         _lastClipNotice = NotificationStates.ForClip(result, _lastRequested, copyWanted: false, copied: false, Accent);
         _window?.Screen.SetLastClip(LastClipShown());
         _journal.Write($"clip saved: {string.Join(", ", result.Paths)}, {result.Duration.TotalSeconds:F2} s of {outcome.Request.Requested.TotalSeconds:F0} s, {result.SizeBytes} bytes, silent {result.IsSilent}, rescued {result.Rescued}, fell back to WAV {result.FellBackToWav}, {_desktop.Meter.Memory()}");
-        if (outcome.Request.EditAfter)
-        {
-            OpenEditorOn(result);
-        }
-
         if (outcome.Request.CopyWanted)
         {
             _copying++;

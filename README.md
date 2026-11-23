@@ -489,6 +489,8 @@ listed), and of the rescue folder. A folder you filled with music shows that mus
 
 `Edit...`, in the menu of a clip, opens it in place of the list. Nothing changes until you save.
 
+The `Save and edit` hotkey saves a clip as `Save clip` does, then opens the editor on it: the window comes to the front, and in a fullscreen game that takes you out of the game. If the editor is already open with a change or a save under way, it is left as it is and the window only comes to the front, with the new clip saved as usual.
+
 - **The part to keep:** drag the handle on each side of the wave. With a handle focused, the arrow keys move it by a tenth of a
   second, and `Shift` with an arrow by a second. `Start`, `End` and `Kept` say where you are, and `Play` plays the kept part.
 - **Volume:** turn it from -12 to +20 dB, each track on its own for a clip saved as two files. The peaks are held under the
@@ -504,6 +506,7 @@ listed), and of the rescue folder. A folder you filled with music shows that mus
 | Action | Default |
 | --- | --- |
 | `Save clip` (the length set in Durations) | `Ctrl+Shift+F10` |
+| `Save and edit` (saves like `Save clip`, then opens the editor) | Not set |
 | `Save up to 15s` | Not set |
 | `Save up to 1 min` | Not set |
 | `Save up to 5 min` | Not set |
@@ -511,6 +514,7 @@ listed), and of the rescue folder. A folder you filled with music shows that mus
 | `Copy last clip` | Not set |
 
 You can change them all in Settings > Hotkeys. If another app already holds a combination, Hindsound says so.
+Where Hindsound has no window, `Save and edit` is not offered.
 
 ## Settings
 

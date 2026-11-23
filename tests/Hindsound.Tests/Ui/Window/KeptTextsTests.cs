@@ -181,7 +181,7 @@ public class KeptTextsTests
     public void The_hotkeys_page_says_up_to()
     {
         Assert.Equal(
-            ["Save clip", "Save up to 15s", "Save up to 1 min", "Save up to 5 min", "Pause or resume", "Copy last clip"],
+            ["Save clip", "Save and edit", "Save up to 15s", "Save up to 1 min", "Save up to 5 min", "Pause or resume", "Copy last clip"],
             SettingsEditor.HotkeyRows.Select(row => row.Label));
     }
 
