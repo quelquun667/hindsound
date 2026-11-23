@@ -41,10 +41,23 @@ public enum HotkeyStatus
 /// <summary>Outcome of registering one action's shortcut. <see cref="Message"/> is the text for the interface.</summary>
 public sealed record HotkeyResult(HotkeyAction Action, string? Gesture, HotkeyStatus Status, string? Message)
 {
-    public const string InUseMessage = "Hotkey already in use by another app";
-    public const string InvalidMessage = "Invalid hotkey";
-    public const string DuplicateMessage = "Same hotkey as another action";
-    public const string UnavailableMessage = "Hotkeys did not respond in time; try again";
+    public static string InUseMessage => Tr.Of("Hotkey already in use by another app", "Raccourci déjà utilisé par une autre application");
+    public static string InvalidMessage => Tr.Of("Invalid hotkey", "Raccourci invalide");
+    public static string DuplicateMessage => Tr.Of("Same hotkey as another action", "Même raccourci qu'une autre action");
+    public static string UnavailableMessage => Tr.Of("Hotkeys did not respond in time; try again", "Les raccourcis n'ont pas répondu à temps\u00A0; réessaie");
+
+    /// <summary>
+    /// The words for a refusal, in the language of the moment. What a screen keeps is the status, not this text, so that a
+    /// message already on screen follows a change of language.
+    /// </summary>
+    public static string? MessageOf(HotkeyStatus status) => status switch
+    {
+        HotkeyStatus.InUse => InUseMessage,
+        HotkeyStatus.Invalid => InvalidMessage,
+        HotkeyStatus.Duplicate => DuplicateMessage,
+        HotkeyStatus.Unavailable => UnavailableMessage,
+        _ => null,
+    };
 
     public bool Ok => Status is HotkeyStatus.Registered or HotkeyStatus.NotSet or HotkeyStatus.Suspended;
 

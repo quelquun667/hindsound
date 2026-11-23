@@ -116,8 +116,8 @@ internal sealed partial class SettingsScreen : Hindsound.App.IEditorWindowScreen
     private readonly IWindowHost _host;
     private readonly HotkeyCapture _capture = new();
     private readonly MicMeter _meter = new();
-    private readonly Dictionary<HotkeyAction, (string Gesture, string Message)> _attempts = [];
-    private readonly Dictionary<HotkeyAction, string> _hotkeyProblems = [];
+    private readonly Dictionary<HotkeyAction, (string Gesture, HotkeyStatus Status)> _attempts = [];
+    private readonly Dictionary<HotkeyAction, HotkeyStatus> _hotkeyProblems = [];
     private IReadOnlyList<HotkeyResult> _hotkeyResults = [];
     private readonly List<Widget> _chrome = [];
     private readonly List<Widget> _page = [];
@@ -252,7 +252,7 @@ internal sealed partial class SettingsScreen : Hindsound.App.IEditorWindowScreen
         {
             if (!result.Ok && result.Message is not null)
             {
-                _hotkeyProblems[result.Action] = result.Message;
+                _hotkeyProblems[result.Action] = result.Status;
             }
         }
 
@@ -866,7 +866,7 @@ internal sealed partial class SettingsScreen : Hindsound.App.IEditorWindowScreen
         _capture.End();
         if (gesture is not null && Editor.DuplicateOf(action, gesture) is not null)
         {
-            _attempts[action] = (gesture, HotkeyResult.DuplicateMessage);
+            _attempts[action] = (gesture, HotkeyStatus.Duplicate);
             SetHotkeyResults(_backend.ResumeHotkeys());
             return;
         }
@@ -883,7 +883,7 @@ internal sealed partial class SettingsScreen : Hindsound.App.IEditorWindowScreen
         }
         else
         {
-            _attempts[action] = (gesture ?? string.Empty, mine?.Message ?? HotkeyResult.UnavailableMessage);
+            _attempts[action] = (gesture ?? string.Empty, mine?.Status ?? HotkeyStatus.Unavailable);
             SetHotkeyResults(_backend.ApplyHotkeys(Editor.Settings.Hotkeys));
         }
     }
@@ -897,7 +897,7 @@ internal sealed partial class SettingsScreen : Hindsound.App.IEditorWindowScreen
         var main = results.FirstOrDefault(r => r.Action == HotkeyAction.SaveDefault);
         if (main is { Ok: false })
         {
-            _attempts[HotkeyAction.SaveDefault] = (defaults.SaveDefault!, main.Message ?? HotkeyResult.InUseMessage);
+            _attempts[HotkeyAction.SaveDefault] = (defaults.SaveDefault!, main.Status);
             defaults.SaveDefault = Editor.GestureOf(HotkeyAction.SaveDefault);
             results = _backend.ApplyHotkeys(defaults);
         }
@@ -916,10 +916,10 @@ internal sealed partial class SettingsScreen : Hindsound.App.IEditorWindowScreen
 
         if (_attempts.TryGetValue(action, out var attempt))
         {
-            return new HotkeyFieldView(attempt.Gesture.Length > 0 ? Features.KeyText(attempt.Gesture) : null, false, null, attempt.Message, true);
+            return new HotkeyFieldView(attempt.Gesture.Length > 0 ? Features.KeyText(attempt.Gesture) : null, false, null, HotkeyResult.MessageOf(attempt.Status), true);
         }
 
-        _hotkeyProblems.TryGetValue(action, out var problem);
+        var problem = _hotkeyProblems.TryGetValue(action, out var status) ? HotkeyResult.MessageOf(status) : null;
         return new HotkeyFieldView(Editor.GestureOf(action) is { } gesture ? Features.KeyText(gesture) : null, false, null, problem, problem is not null);
     }
 
