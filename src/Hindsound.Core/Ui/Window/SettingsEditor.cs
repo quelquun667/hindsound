@@ -350,7 +350,7 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
         if (!string.IsNullOrEmpty(selected) && !items.Any(i => string.Equals(i.Value, selected, StringComparison.OrdinalIgnoreCase)))
         {
             // An app that has not played anything yet has no session, so it can be running and still not be listed.
-            items.Add(new DropItem(selected, selectedRunning ? AudioAppList.NameOf(selected) : Tr.Of(selected + " (not running)", selected + " (non lancée)")));
+            items.Add(new DropItem(selected, selectedRunning ? AudioAppList.NameOf(selected) : Tr.Of(selected + " (not running)", selected + " (fermée)")));
         }
 
         return items;

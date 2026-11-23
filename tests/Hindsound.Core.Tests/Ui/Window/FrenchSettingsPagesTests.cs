@@ -270,7 +270,7 @@ public sealed unsafe class FrenchSettingsPagesTests
         using var scope = Tr.Use(UiLanguage.French);
         Assert.Equal("Tout le PC", SettingsEditor.RecordChoices([], null)[0].Label);
         Assert.Equal("Tout le Mac", SettingsEditor.RecordChoices([], null, machine: "Mac")[0].Label);
-        Assert.Equal("Discord.exe (non lancée)", SettingsEditor.RecordChoices([], "Discord.exe")[1].Label);
+        Assert.Equal("Discord.exe (fermée)", SettingsEditor.RecordChoices([], "Discord.exe")[1].Label);
         Assert.Equal("Sortie par défaut", SettingsEditor.OutputChoices([], AudioSettings.DefaultDevice)[0].Label);
         Assert.Equal("Périphérique débranché", SettingsEditor.OutputChoices([], "gone")[1].Label);
         var mics = SettingsEditor.MicChoices([], AudioSettings.DefaultDevice);
