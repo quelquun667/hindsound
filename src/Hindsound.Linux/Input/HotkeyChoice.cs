@@ -22,14 +22,11 @@ internal static class HotkeyChoice
     /// Logged, and shown once, when no layer can grab a key. It names the file this copy was launched by: the AppImage puts
     /// nothing on the PATH, so a bare <c>hindsound --save</c> bound to a key would find no program.
     /// </summary>
-    public static string NoShortcutText => NoShortcutTextFor(Launched);
-
-    private static readonly string? Launched = LaunchPaths.Current();
+    public static string NoShortcutText { get; } = NoShortcutTextFor(LaunchPaths.Current());
 
     /// <summary>The notice when the program path cannot be written as a command a person can copy.</summary>
-    public static string NoShortcutGenericText => Tr.Of(
-        "No global shortcut on this desktop. In your keyboard settings, bind the full path of the Hindsound program followed by --save to a key.",
-        "Pas de raccourci global sur cet environnement de bureau. Dans les réglages du clavier, associe à une touche le chemin complet du programme Hindsound suivi de --save.");
+    public const string NoShortcutGenericText =
+        "No global shortcut on this desktop. In your keyboard settings, bind the full path of the Hindsound program followed by --save to a key.";
 
     /// <summary>
     /// The notice for <paramref name="program"/>, the file launched (<see cref="LaunchPaths"/>). An absolute path is written
@@ -40,10 +37,27 @@ internal static class HotkeyChoice
     /// </summary>
     public static string NoShortcutTextFor(string? program) =>
         SaveCommandFor(program) is { } command
+            ? "No global shortcut on this desktop. In your keyboard settings, bind this command to a key: " + command
+            : NoShortcutGenericText;
+
+    /// <summary>
+    /// What the notice shows, in the language of the moment: the words of <see cref="NoShortcutText"/>, which stays English for
+    /// the journal.
+    /// </summary>
+    public static string NoticeText => NoticeTextFor(LaunchPaths.Current());
+
+    /// <summary>The notice when the program path cannot be written as a command, in the language of the moment.</summary>
+    public static string NoticeGenericText => Tr.Of(
+        NoShortcutGenericText,
+        "Pas de raccourci global sur cet environnement de bureau. Dans les réglages du clavier, associe à une touche le chemin complet du programme Hindsound suivi de --save.");
+
+    /// <summary>The notice for <paramref name="program"/>, in the language of the moment: what <see cref="NoShortcutTextFor"/> says, in French when it is.</summary>
+    public static string NoticeTextFor(string? program) =>
+        SaveCommandFor(program) is { } command
             ? Tr.Of(
                 "No global shortcut on this desktop. In your keyboard settings, bind this command to a key: " + command,
-                "Pas de raccourci global sur cet environnement de bureau. Dans les réglages du clavier, associe cette commande à une touche\u00A0: " + command)
-            : NoShortcutGenericText;
+                "Pas de raccourci global sur cet environnement de bureau. Dans les réglages du clavier, associe cette commande à une touche : " + command)
+            : NoticeGenericText;
 
     /// <summary>
     /// The command that saves a clip through <paramref name="program"/>, written as <see cref="NoShortcutTextFor"/> writes
