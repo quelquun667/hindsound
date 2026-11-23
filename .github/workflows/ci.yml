@@ -1624,7 +1624,7 @@ jobs:
   # The capture of one application, on each sound server a desktop runs: PulseAudio, and PipeWire through pipewire-pulse
   # (Ubuntu 24.04: PipeWire 1.0). The job above runs these tests on PulseAudio among all the others; here they run alone, with
   # their measures in the log. PipeWire is started by hand, with no desktop, as a session starts it: pipewire, wireplumber,
-  # then pipewire-pulse. Its logs are printed when a test fails.
+  # then pipewire-pulse, each once the one before answers. Its logs are printed when a part does not answer or a test fails.
   app-capture:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -1664,21 +1664,40 @@ jobs:
         run: |
           mkdir -p "$SERVER_LOGS"
           export XDG_RUNTIME_DIR="$RUNNER_TEMP/xdg"
-          mkdir -p -m 700 "$XDG_RUNTIME_DIR"
+          # The folder pulse is made here, before the servers and pactl. pipewire-pulse 1.0 makes it when its stat finds none,
+          # and pactl, asking for the server at the same moment, makes it too (libpulse makes its runtime folder): on run
+          # 45076546834 the pactl made it between the stat and the mkdir of pipewire-pulse, whose mkdir failed with
+          # "File exists", and pipewire-pulse stopped without listening.
+          mkdir -p -m 700 "$XDG_RUNTIME_DIR" "$XDG_RUNTIME_DIR/pulse"
           dbus-run-session -- bash -uc '
+            # Each part is waited for until it answers, 20 s at most; one that does not answer fails the step, with the logs.
+            fail() {
+              echo "$1"
+              tail -n 60 "$SERVER_LOGS"/*.log
+              exit 1
+            }
+            wait_for() {
+              what=$1
+              shift
+              for attempt in $(seq 1 40); do
+                timeout 5 "$@" > /dev/null 2>&1 && return 0
+                sleep 0.5
+              done
+              fail "$what did not answer within 20 s"
+            }
             if [ "$SERVER" = pipewire ]; then
               pipewire > "$SERVER_LOGS/pipewire.log" 2>&1 &
-              sleep 2
+              wait_for pipewire pw-cli info 0
               wireplumber > "$SERVER_LOGS/wireplumber.log" 2>&1 &
-              sleep 2
+              wait_for "the metadata default of wireplumber" bash -c "pw-cli ls Metadata | grep -q \"metadata.name = .default.\""
               pipewire-pulse > "$SERVER_LOGS/pipewire-pulse.log" 2>&1 &
             else
               pulseaudio --daemonize=yes --exit-idle-time=-1 --log-target="file:$SERVER_LOGS/pulseaudio.log"
             fi
-            for attempt in $(seq 1 40); do pactl info > /dev/null 2>&1 && break; sleep 0.5; done
+            wait_for "the pulse server" pactl info
             pactl info | grep -E "Server (Name|Version)"
-            pactl load-module module-null-sink sink_name=hindsound_null
-            pactl set-default-sink hindsound_null
+            pactl load-module module-null-sink sink_name=hindsound_null || fail "the null sink could not be loaded"
+            pactl set-default-sink hindsound_null || fail "the null sink could not be made the default"
             dotnet test tests/Hindsound.Linux.Tests/Hindsound.Linux.Tests.csproj -c Release --no-build \
               --filter "FullyQualifiedName~PulseAppCaptureOnLinuxTests" --logger "console;verbosity=detailed" \
               || { tail -n 60 "$SERVER_LOGS"/*.log; exit 1; }
