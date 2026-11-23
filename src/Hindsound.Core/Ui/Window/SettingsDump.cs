@@ -274,6 +274,9 @@ internal static unsafe class SettingsDump
                 ShowFocus = focus,
                 NoNativeEdit = true,
                 Clock = () => new DateTime(2026, 11, 6, 14, 32, 5),
+
+                // The system speaks the language of the pictures: "System (English)", "Système (Français)".
+                SystemLanguage = () => Tr.Language,
             };
 
             // Where the desktop binds the keys, it has answered: each action holds the key the settings proposed.

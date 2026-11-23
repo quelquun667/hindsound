@@ -21,6 +21,7 @@ internal static class Program
         var options = AppOptions.Parse(launch.Rest);
         var journal = new Journal(Journal.PathFor(options.SettingsPath));
         LinuxPlatform.Install(journal.Write);
+        Tr.ForProcess();
 
         // Only the log can be done from here: on a thread other than the loop's, the runtime ends the process anyway.
         AppDomain.CurrentDomain.UnhandledException += (_, e) => journal.Write("unhandled exception: " + e.ExceptionObject);
@@ -35,6 +36,7 @@ internal static class Program
             // Not needed to draw, but the log then says whether a window could open here, and where SDL and the fonts come
             // from: the check of the packages reads it.
             LinuxWindowSupport.Available(journal.Write);
+            using var language = Tr.Use(options.DumpLanguage);
             return LinuxDump.Write(options.DumpSettingsFolder, options.DumpScale, journal.Write);
         }
 

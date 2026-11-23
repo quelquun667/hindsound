@@ -30,6 +30,7 @@ internal static class Program
     private static int Main(string[] args)
     {
         WindowsPlatform.Install();
+        Tr.ForProcess();
         var options = AppOptions.Parse(args);
         var journal = new Journal(Journal.PathFor(options.SettingsPath));
         Ui.TextEngine.Log = journal.Write;
@@ -58,6 +59,7 @@ internal static class Program
         {
             try
             {
+                using var language = Tr.Use(options.DumpLanguage);
                 Ui.Window.SettingsDump.Write(options.DumpSettingsFolder, options.DumpScale, (width, height, scale) => new Ui.Window.GdiCanvas(width, height, scale));
                 return Ui.Window.FolderPicker.SelfCheck() ? 0 : 3;
             }

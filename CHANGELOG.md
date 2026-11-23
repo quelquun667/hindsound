@@ -4,6 +4,13 @@ All notable changes to Hindsound are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Hindsound speaks French as well as English: the window, the menu of the icon, the notifications, the first launch and the updates. By default it follows the language of the system, so on a system in French it now shows French. `Language`, on the `General` page, chooses `English` or `Français` instead, and the change shows at once, with no restart. The log and the names of the clips stay in English.
+- `--dump-settings` takes `--lang fr` to draw every page in French.
+
 ## [0.12.0] - 2026-11-23
 
 Hotkeys that follow the keyboard layout on Mac, and a lost sound shown on Linux. On Windows, Hindsound works as in 0.11.0, but gives up sooner on a server that does not answer a check for a new version.

@@ -24,6 +24,9 @@ internal sealed record AppOptions(
     /// <summary><c>--scale n</c>: the scale of <c>--dump-settings</c>, 1 for 100 %, 1.5 for 150 %.</summary>
     public double DumpScale { get; init; } = 1;
 
+    /// <summary><c>--lang en|fr</c>: the language <c>--dump-settings</c> draws the pages in, English by default, whatever the settings and the system say.</summary>
+    public UiLanguage DumpLanguage { get; init; }
+
     /// <summary><c>--selftest-delay seconds</c>: how long the capture runs before the self-test presses save. By default 3 s.</summary>
     public double SelfTestDelaySeconds { get; init; } = 3;
 
@@ -158,6 +161,10 @@ internal sealed record AppOptions(
                         options = options with { DumpScale = scale };
                     }
 
+                    i++;
+                    break;
+                case "--lang" when next is not null:
+                    options = options with { DumpLanguage = next == "fr" ? UiLanguage.French : UiLanguage.English };
                     i++;
                     break;
                 case "--first-run":

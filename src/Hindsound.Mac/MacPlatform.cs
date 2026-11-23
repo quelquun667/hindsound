@@ -50,6 +50,7 @@ internal static class MacPlatform
 
             UnixLibraries.InstallResolver();
             PlatformDefaults.LaunchPath = () => Environment.ProcessPath;
+            PlatformDefaults.SystemLanguages = Interop.MacLanguages.Preferred;
             PlatformDefaults.Features = PlatformFeatures.Mac(() => SaveCommand(Environment.ProcessPath), ShortcutsNow);
             PlatformDefaults.Hotkeys = () => new KeyByKeyHotkeys(CarbonHotkeys.TryOpen(log) ?? throw new NotSupportedException("the Carbon shortcuts need the main thread"));
             PlatformDefaults.UpdateNetwork = () => new UnixHttpTransport(log);

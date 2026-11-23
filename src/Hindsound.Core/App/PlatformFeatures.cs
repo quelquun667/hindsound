@@ -45,7 +45,7 @@ internal sealed record PlatformFeatures
     {
         NotificationLook = false,
         ConfirmSound = false,
-        StartupLabel = "Start with the session",
+        StartupWords = ("Start with the session", "Lancer avec la session"),
         TrashName = "Trash",
         ReservedNameText = "This name is reserved",
         Shortcuts = shortcuts,
@@ -68,7 +68,7 @@ internal sealed record PlatformFeatures
         NotificationLook = true,
         TestNotification = true,
         ConfirmSound = false,
-        StartupLabel = "Open at login",
+        StartupWords = ("Open at login", "Ouvrir à la connexion"),
         MachineName = "Mac",
         TrashName = "Trash",
         ReservedNameText = "This name is reserved",
@@ -94,8 +94,11 @@ internal sealed record PlatformFeatures
     /// <summary>The choice of when the confirmation sound plays. A system that plays nothing has no choice to make.</summary>
     public bool ConfirmSound { get; init; } = true;
 
-    /// <summary>The words of the toggle that starts the app with the user's session.</summary>
-    public string StartupLabel { get; init; } = "Start with Windows";
+    /// <summary>The words of the toggle that starts the app with the user's session, in English and in French.</summary>
+    public (string English, string French) StartupWords { get; init; } = ("Start with Windows", "Lancer avec Windows");
+
+    /// <summary>The words of the toggle that starts the app with the user's session, in the language of the moment.</summary>
+    public string StartupLabel => Tr.Of(StartupWords.English, StartupWords.French);
 
     /// <summary>What the pages call the computer itself, where they tell its sound from a microphone's or an application's: "Whole PC".</summary>
     public string MachineName { get; init; } = "PC";

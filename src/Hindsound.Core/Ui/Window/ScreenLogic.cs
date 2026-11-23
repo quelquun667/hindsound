@@ -136,6 +136,15 @@ internal readonly record struct StatusBand(StatusMark Mark, string Title, string
 
 internal static class StatusText
 {
+    /// <summary>The words of the band's button while the capture runs.</summary>
+    public static string PauseLabel => Tr.Of("Pause", "Pause");
+
+    /// <summary>The words of the band's button while the capture is paused. The longer of the two sets the button's width.</summary>
+    public static string ResumeLabel => Tr.Of("Resume", "Reprendre");
+
+    // French puts a space before a colon; a no-break one, so that the line never starts with the colon.
+    private static string Colon => Tr.Of(": ", "\u00A0: ");
+
     /// <param name="status">The last status of the engine, if any.</param>
     /// <param name="capSeconds">What the setting lets the memory hold; null to show only what it holds.</param>
     public static StatusBand From(AudioEngineStatus? status, int? capSeconds = null)
@@ -143,16 +152,16 @@ internal static class StatusText
         if (status is null)
         {
             // Nothing says the memory is empty yet, and pressing save at this moment gets its own answer: "Nothing to save yet".
-            return new StatusBand(StatusMark.None, "Starting", string.Empty, string.Empty, string.Empty, "Pause", false, true);
+            return new StatusBand(StatusMark.None, Tr.Of("Starting", "Démarrage"), string.Empty, string.Empty, string.Empty, PauseLabel, false, true);
         }
 
         var (mark, title) = Headline(status);
-        var mic = !status.MicEnabled ? "mic off" : status.MicCapturing ? "mic on" : "mic not captured";
+        var mic = !status.MicEnabled ? Tr.Of("mic off", "micro coupé") : status.MicCapturing ? Tr.Of("mic on", "micro actif") : Tr.Of("mic not captured", "micro non capté");
         var paused = status.Activity == CaptureActivity.Paused;
         if (status.Activity == CaptureActivity.NoDevice)
         {
             // A state of error is never cut: with the figures beside it, the title became "No audio d...".
-            return new StatusBand(mark, title, string.Empty, string.Empty, string.Empty, "Pause", true, KeptDuration.CanSave(status.Buffered));
+            return new StatusBand(mark, title, string.Empty, string.Empty, string.Empty, PauseLabel, true, KeptDuration.CanSave(status.Buffered));
         }
 
         return new StatusBand(
@@ -161,7 +170,7 @@ internal static class StatusText
             mic,
             DurationCell(KeptDuration.SecondsOf(status.Buffered), capSeconds),
             Megabytes(status.MemoryBytes),
-            paused ? "Resume" : "Pause",
+            paused ? ResumeLabel : PauseLabel,
             status.Activity != CaptureActivity.Stopped,
             KeptDuration.CanSave(status.Buffered));
     }
@@ -184,24 +193,29 @@ internal static class StatusText
         var app = status.SourceApp is { } exe ? AudioAppList.NameOf(exe) : null;
         return status.Activity switch
         {
-            CaptureActivity.Paused => (StatusMark.Pause, "Paused"),
-            CaptureActivity.NoDevice => (StatusMark.Warning, app is null ? "No audio device" : "Can't capture " + app),
-            CaptureActivity.Capturing when app is null => (StatusMark.Dot, "Capturing"),
+            CaptureActivity.Paused => (StatusMark.Pause, Tr.Of("Paused", "En pause")),
+            CaptureActivity.NoDevice => (StatusMark.Warning, app is null ? Tr.Of("No audio device", "Aucun périphérique audio") : CannotCapture(app)),
+            CaptureActivity.Capturing when app is null => (StatusMark.Dot, Tr.Of("Capturing", "Capture en cours")),
             // The state comes first: a long name gets cut at the end of the title.
-            CaptureActivity.Capturing when status.SourceAppMissing => (StatusMark.Caution, "Not running: " + app),
-            CaptureActivity.Capturing when status.SystemCapturing && status.SourceAppLost => (StatusMark.Warning, "Sound lost: " + app),
-            CaptureActivity.Capturing when status.SystemCapturing => (StatusMark.Dot, "Capturing " + app),
-            CaptureActivity.Capturing => (StatusMark.Warning, "Can't capture " + app),
-            _ => (StatusMark.None, "Not capturing"),
+            CaptureActivity.Capturing when status.SourceAppMissing => (StatusMark.Caution, Tr.Of("Not running", "Pas lancé") + Colon + app),
+            CaptureActivity.Capturing when status.SystemCapturing && status.SourceAppLost => (StatusMark.Warning, Tr.Of("Sound lost", "Son perdu") + Colon + app),
+            CaptureActivity.Capturing when status.SystemCapturing => (StatusMark.Dot, Tr.Of("Capturing ", "Capture de ") + app),
+            CaptureActivity.Capturing => (StatusMark.Warning, CannotCapture(app)),
+            _ => (StatusMark.None, Tr.Of("Not capturing", "Pas de capture")),
         };
     }
 
-    public static string Megabytes(long bytes) =>
-        string.Create(CultureInfo.InvariantCulture, $"~{Math.Round(bytes / 1_000_000.0, MidpointRounding.AwayFromZero):0} MB");
+    private static string CannotCapture(string? app) => Tr.French ? "Capture impossible" + Colon + app : "Can't capture " + app;
 
-    /// <summary>The words of the big button: "30s", "1 min", "1:30". The same at any moment: its width places the Pause button, and "up to" stays true with 0:12 in memory.</summary>
+    public static string Megabytes(long bytes) =>
+        "~" + Tr.Size(Math.Round(bytes / 1_000_000.0, MidpointRounding.AwayFromZero), "0", SizeUnit.MB);
+
+    /// <summary>
+    /// The words of the big button: "30s", "1 min", "1:30". The same at any moment: its width places the Pause button, and "up to"
+    /// stays true with 0:12 in memory. French says the length alone: "jusqu'à" took the room of the title.
+    /// </summary>
     public static string SaveLabel(int clipSeconds) =>
-        "Save up to " + (clipSeconds < 60 ? clipSeconds + "s"
+        Tr.Of("Save up to ", "Enregistrer ") + (clipSeconds < 60 ? clipSeconds + Tr.Of("s", "\u00A0s")
             : clipSeconds % 60 == 0 ? clipSeconds / 60 + " min"
             : NotificationStates.FormatDuration(clipSeconds));
 
@@ -233,15 +247,15 @@ internal static class StatusText
             : $"{restart} The last {NotificationStates.FormatDuration(KeptDuration.Shown(kept, capSeconds))} in memory will be lost.";
     }
 
-    /// <summary>"720 KB", "1.4 MB".</summary>
+    /// <summary>"720 KB", "1.4 MB"; "720 Ko", "1,4 Mo" in French.</summary>
     public static string FileSize(long bytes)
     {
         if (bytes < 1_000_000)
         {
-            return string.Create(CultureInfo.InvariantCulture, $"{Math.Max(1, (long)Math.Round(bytes / 1000.0, MidpointRounding.AwayFromZero))} KB");
+            return Tr.Size(Math.Max(1, (long)Math.Round(bytes / 1000.0, MidpointRounding.AwayFromZero)), "0", SizeUnit.KB);
         }
 
-        return string.Create(CultureInfo.InvariantCulture, $"{bytes / 1_000_000.0:0.0} MB");
+        return Tr.Size(bytes / 1_000_000.0, "0.0", SizeUnit.MB);
     }
 
     public static string GainLabel(double db) =>

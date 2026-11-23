@@ -278,6 +278,16 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
         Refresh();
     }
 
+    /// <summary>
+    /// The language of the interface changed. Every page is made again from <see cref="Tr"/> at each build, so a build is
+    /// all it takes; what a page keeps between two builds in words of its own must be made again here.
+    /// </summary>
+    public void LanguageChanged()
+    {
+        _forceEditText = true;
+        Refresh();
+    }
+
     public void MeterTick(float peak)
     {
         var before = _meter.Level;

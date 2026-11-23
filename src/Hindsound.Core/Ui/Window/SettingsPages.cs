@@ -8,10 +8,17 @@ namespace Hindsound.Ui.Window;
 /// <summary>What is on each page, top to bottom. The sizes are those of the design mockup.</summary>
 internal sealed partial class SettingsScreen
 {
-    public const string LegalNote = "Recording a conversation without telling the people in it can be illegal. Let them know before you keep it.";
+    public static string LegalNote => Tr.Of(
+        "Recording a conversation without telling the people in it can be illegal. Let them know before you keep it.",
+        "Enregistrer une conversation sans prévenir les personnes présentes peut être illégal. Prévenez-les avant de la garder.");
     public const string ShorterBufferNote = "A shorter buffer drops the oldest audio";
-    public const string SoundHelp = "The beep can be heard in your next clip if you capture a specific output.";
-    public const string GitHubNote = "Once a day, Hindsound asks GitHub for the latest version. GitHub sees your IP address and the time, nothing else.";
+    public static string SoundHelp => Tr.Of(
+        "The beep can be heard in your next clip if you capture a specific output.",
+        "Le bip peut s'entendre dans le clip suivant si vous capturez une sortie précise.");
+
+    public static string GitHubNote => Tr.Of(
+        "Once a day, Hindsound asks GitHub for the latest version. GitHub sees your IP address and the time, nothing else.",
+        "Une fois par jour, Hindsound demande la dernière version à GitHub. GitHub voit votre adresse IP et l'heure, rien d'autre.");
     public const string FirstRunUpdatesNote = "Hindsound checks GitHub for updates once a day. GitHub sees your IP address. Change it in Settings > General.";
     public const string ClipBusyNote = "A clip is still being saved";
     public const string DesktopKeysNote = "Your desktop sets these keys. To change one, use the shortcut settings of your desktop.";
@@ -36,6 +43,12 @@ internal sealed partial class SettingsScreen
     private IUpdatesPanel? _updates;
     private float? _updatesTop;
     private string? _cardReturnFocus;
+
+    /// <summary>
+    /// The language the system gives, which the first item of the Language list names. A parameter so a picture or a test does
+    /// not depend on the languages of the PC it runs on.
+    /// </summary>
+    public Func<UiLanguage> SystemLanguage { get; set; } = static () => UiLanguages.FromSystem(PlatformDefaults.SystemLanguages?.Invoke() ?? []) ?? UiLanguage.English;
 
     /// <summary>When the name preview is taken. A parameter so a picture or a test does not depend on the hour.</summary>
     public Func<DateTime> Clock { get; set; } = () => DateTime.Now;
@@ -78,13 +91,13 @@ internal sealed partial class SettingsScreen
         // Where the desktop binds the keys, the button names the key it chose, and none at all when it did not.
         var saveGesture = (capture ? Editor.Settings.Hotkeys.SaveDefault : ShownKey(HotkeyAction.SaveDefault)) ?? string.Empty;
         var saveBox = SaveBox(_canvas, saveLabel, saveGesture);
-        var pauseWidth = Button.WidthFor(_canvas, "Resume", icon: true);
+        var pauseWidth = Button.WidthFor(_canvas, StatusText.ResumeLabel, icon: true);
         var pauseLeft = BandPauseLeft(_canvas, saveLabel, saveGesture);
         Chrome(new Painted((c, ui) => PaintBand(c, ui, band, pauseLeft)) { Bounds = new Box(0, 0, WindowWidth, BandHeight) });
         Chrome(new Button(band.PauseLabel, _backend.TogglePause)
         {
             Id = "band.pause",
-            Icon = band.PauseLabel == "Resume" ? ButtonIcon.Play : ButtonIcon.Pause,
+            Icon = band.PauseLabel == StatusText.ResumeLabel ? ButtonIcon.Play : ButtonIcon.Pause,
             Enabled = band.PauseEnabled,
             Bounds = new Box(pauseLeft, 18, pauseWidth, 36),
         });
@@ -145,7 +158,7 @@ internal sealed partial class SettingsScreen
 
     /// <summary>Where the Pause button starts: the width of the save button decides it.</summary>
     internal static float BandPauseLeft(ICanvas c, string saveLabel, string saveGesture) =>
-        SaveBox(c, saveLabel, saveGesture).X - 20 - Button.WidthFor(c, "Resume", icon: true);
+        SaveBox(c, saveLabel, saveGesture).X - 20 - Button.WidthFor(c, StatusText.ResumeLabel, icon: true);
 
     private static Box SaveBox(ICanvas c, string saveLabel, string saveGesture)
     {
@@ -208,11 +221,12 @@ internal sealed partial class SettingsScreen
             c.FillRect(new Box(0, top, WindowWidth, FootHeight), Theme.Panel);
             c.FillRect(new Box(0, top, WindowWidth, 1), Theme.Line);
             var mid = top + FootHeight / 2;
-            c.TextMid("Last clip", Face.Title, 18, 24, mid, Theme.Muted);
-            var x = 24 + c.Measure("Last clip", Face.Title, 18) + 16;
+            var lastClip = Tr.Of("Last clip", "Dernier clip");
+            c.TextMid(lastClip, Face.Title, 18, 24, mid, Theme.Muted);
+            var x = 24 + c.Measure(lastClip, Face.Title, 18) + 16;
             if (clip is null)
             {
-                c.TextMid("None yet", Face.Body, 13, x, mid, Theme.Muted);
+                c.TextMid(Tr.Of("None yet", "Aucun pour l'instant"), Face.Body, 13, x, mid, Theme.Muted);
                 return;
             }
 
@@ -223,16 +237,18 @@ internal sealed partial class SettingsScreen
             c.TextMid(clip.SizeText, Face.Mono, 13, x, mid, Theme.Muted);
         }));
 
-        var openWidth = Button.WidthFor(_canvas, "Open folder");
-        var copyWidth = Button.WidthFor(_canvas, "Copy");
+        var open = Tr.Of("Open folder", "Ouvrir le dossier");
+        var copy = Tr.Of("Copy", "Copier");
+        var openWidth = Button.WidthFor(_canvas, open);
+        var copyWidth = Button.WidthFor(_canvas, copy);
         var buttonTop = top + (FootHeight - 34) / 2;
-        Chrome(new Button("Copy", _backend.CopyLast)
+        Chrome(new Button(copy, _backend.CopyLast)
         {
             Id = "foot.copy",
             Enabled = clip is not null,
             Bounds = new Box(WindowWidth - 24 - openWidth - 16 - copyWidth, buttonTop, copyWidth, 34),
         });
-        Chrome(new Button("Open folder", _backend.OpenFolder)
+        Chrome(new Button(open, _backend.OpenFolder)
         {
             Id = "foot.open",
             Bounds = new Box(WindowWidth - 24 - openWidth, buttonTop, openWidth, 34),
@@ -687,7 +703,7 @@ internal sealed partial class SettingsScreen
         _updatesTop = null;
         var general = Editor.Settings.General;
         var y = BandHeight + 18;
-        Heading("Accent color", y);
+        Heading(Tr.Of("Accent color", "Couleur d'accent"), y);
         var top = y;
         var name = Editor.AccentName;
         var hex = Editor.AccentHex;
@@ -701,7 +717,7 @@ internal sealed partial class SettingsScreen
 
         var order = SettingsEditor.AccentOrder;
         var colors = order.Select(p => { AccentColors.TryParseHex(AccentColors.Presets[p], out var r, out var g, out var b); return ((uint)r << 16) | ((uint)g << 8) | b; }).ToArray();
-        var names = order.Select(p => p.ToString()).Append("Custom").ToArray();
+        var names = order.Select(SettingsEditor.AccentWord).Append(SettingsEditor.AccentWord(AccentPreset.Custom)).ToArray();
         Add(new SwatchGroup(colors, names, SwatchSelected, PickSwatch)
         {
             Id = SwatchId,
@@ -711,12 +727,12 @@ internal sealed partial class SettingsScreen
 
         if (_customAccentOpen)
         {
-            RowLabel("Color code", y);
+            RowLabel(Tr.Of("Color code", "Code couleur"), y);
             Add(new TextField(_hexField, SettingsEditor.CheckAccent, t => Editor.SetAccentHex(t), () => Editor.AccentHex)
             {
                 Id = HexFieldId,
                 Bounds = new Box(Left + 100, y, 110, RowHeight),
-                Help = "Any bright color works.",
+                Help = Tr.Of("Any bright color works.", "Toute couleur vive convient."),
             });
             y += RowHeight + TextField.MessageHeight + 6;
         }
@@ -737,28 +753,31 @@ internal sealed partial class SettingsScreen
 
         ToggleRow(Features.StartupLabel, "general.startup", y, () => Editor.Settings.General.StartWithWindows, Editor.SetStartWithWindows);
         y += pitch;
-        SegmentRow("Window size", "general.size", y, GeneralSettings.WindowZooms.Select(zoom => $"{zoom}%").ToList(), () => Math.Max(0, Array.IndexOf(GeneralSettings.WindowZooms, Editor.Settings.General.WindowZoom)), i => Editor.SetWindowZoom(GeneralSettings.WindowZooms[i]));
+        var languages = LanguageChoices();
+        Row(Tr.Of("Language", "Langue"), "general.language", y, () => languages, () => Editor.Settings.General.Language, Editor.SetLanguage);
+        y += pitch;
+        SegmentRow(Tr.Of("Window size", "Taille de la fenêtre"), "general.size", y, GeneralSettings.WindowZooms.Select(zoom => $"{zoom}%").ToList(), () => Math.Max(0, Array.IndexOf(GeneralSettings.WindowZooms, Editor.Settings.General.WindowZoom)), i => Editor.SetWindowZoom(GeneralSettings.WindowZooms[i]));
         y += pitch;
         // The choice stays lit when the screen cannot hold it; this says why the window is smaller.
         if (_host.AppliedZoom is > 0 and var applied && applied < Editor.Settings.General.WindowZoom)
         {
-            Note($"This screen fits up to {applied}%", y - pitch + RowHeight + 10);
+            Note(Tr.Format($"This screen fits up to {applied}%", $"Cet écran permet jusqu'à {applied}\u00A0%"), y - pitch + RowHeight + 10);
             y += 18;
         }
 
-        ToggleRow("Save notifications", "general.notifications", y, () => Editor.Settings.General.Notifications, Editor.SetNotifications);
+        ToggleRow(Tr.Of("Save notifications", "Notifications d'enregistrement"), "general.notifications", y, () => Editor.Settings.General.Notifications, Editor.SetNotifications);
         y += pitch;
         if (Features.NotificationLook)
         {
-            SegmentRow("Notification position", "general.position", y, ["Right edge", "Left edge"], () => Editor.Settings.General.NotificationPosition == "left" ? 1 : 0, i => Editor.SetNotificationPosition(i == 1 ? "left" : "right"));
+            SegmentRow(Tr.Of("Notification position", "Position des notifications"), "general.position", y, [Tr.Of("Right edge", "Bord droit"), Tr.Of("Left edge", "Bord gauche")], () => Editor.Settings.General.NotificationPosition == "left" ? 1 : 0, i => Editor.SetNotificationPosition(i == 1 ? "left" : "right"));
             y += pitch;
         }
 
-        Row("In fullscreen games", "general.fullscreen", y, () => FullscreenChoices, () => Editor.Settings.General.FullscreenGames, Editor.SetFullscreenGames);
+        Row(Tr.Of("In fullscreen games", "Jeux en plein écran"), "general.fullscreen", y, () => FullscreenChoices, () => Editor.Settings.General.FullscreenGames, Editor.SetFullscreenGames);
         if (Features.ConfirmSound)
         {
             y += pitch;
-            Row("Confirmation sound", "general.sound", y, () => SoundChoices, () => Editor.Settings.General.ConfirmSound, Editor.SetConfirmSound);
+            Row(Tr.Of("Confirmation sound", "Son de confirmation"), "general.sound", y, () => SoundChoices, () => Editor.Settings.General.ConfirmSound, Editor.SetConfirmSound);
             y += RowHeight + 12;
             Note(SoundHelp, y);
             y += 20;
@@ -770,8 +789,9 @@ internal sealed partial class SettingsScreen
 
         if (Features.TestNotification)
         {
-            var testWidth = Button.WidthFor(_canvas, "Show test notification");
-            Add(new Button("Show test notification", _backend.ShowTestNotification) { Id = "general.test", Bounds = new Box(Left, y, testWidth, 34) });
+            var test = Tr.Of("Show test notification", "Afficher une notification de test");
+            var testWidth = Button.WidthFor(_canvas, test);
+            Add(new Button(test, _backend.ShowTestNotification) { Id = "general.test", Bounds = new Box(Left, y, testWidth, 34) });
             y += 34 + 14;
         }
         if (_updates is { } updates)
@@ -785,11 +805,26 @@ internal sealed partial class SettingsScreen
         _contentBottom = y;
     }
 
-    private static readonly DropItem[] UpdateChoices = [new("auto", "Install automatically"), new("ask", "Ask me"), new("off", "Off")];
+    /// <summary>
+    /// The items of the Language list: the system's language first, named in the words of the moment with the language it
+    /// stands for in its own, then each language in its own words.
+    /// </summary>
+    private DropItem[] LanguageChoices() =>
+    [
+        new(GeneralSettings.LanguageSystem, Tr.Of("System", "Système") + " (" + UiLanguages.OwnName(SystemLanguage()) + ")"),
+        new(GeneralSettings.LanguageEnglish, UiLanguages.OwnName(UiLanguage.English)),
+        new(GeneralSettings.LanguageFrench, UiLanguages.OwnName(UiLanguage.French)),
+    ];
+
+    private static DropItem[] UpdateChoices => [new("auto", Tr.Of("Install automatically", "Installer automatiquement")), new("ask", AskMe), new("off", Off)];
 
     // A copy that only tells cannot install: Install automatically tells, as Ask me does. A saved "auto" is not in this list,
     // and a list shows a value it does not hold as its first item, Ask me: it stays first.
-    private static readonly DropItem[] AnnounceChoices = [new("ask", "Ask me"), new("off", "Off")];
+    private static DropItem[] AnnounceChoices => [new("ask", AskMe), new("off", Off)];
+
+    private static string AskMe => Tr.Of("Ask me", "Me demander");
+
+    private static string Off => Tr.Of("Off", "Désactivé");
 
     /// <summary>The Updates section, under the test button. Returns where the next line starts.</summary>
     private float BuildUpdates(UpdatePanelView view, float y)
@@ -798,7 +833,7 @@ internal sealed partial class SettingsScreen
         Add(new Painted((c, _) => c.FillRect(new Box(Left, divider, Width, 1), Theme.Line)));
         y += 8;
         _updatesTop = y;
-        Heading("Updates", y);
+        Heading(Tr.Of("Updates", "Mises à jour"), y);
         var top = y;
         var version = view.VersionLine;
         Add(new Painted((c, _) => c.TextRight(version, Face.Body, 13, Right, top + 15, Theme.Muted)));
@@ -809,11 +844,11 @@ internal sealed partial class SettingsScreen
         {
             if (view.AnnouncesOnly)
             {
-                Row("When a version is out", "general.updates", y, () => AnnounceChoices, () => Editor.Settings.General.Updates.Mode, Editor.SetUpdateMode);
+                Row(Tr.Of("When a version is out", "Quand une version sort"), "general.updates", y, () => AnnounceChoices, () => Editor.Settings.General.Updates.Mode, Editor.SetUpdateMode);
             }
             else
             {
-                Row("When a version is out", "general.updates", y, () => UpdateChoices, () => Editor.Settings.General.Updates.Mode, Editor.SetUpdateMode);
+                Row(Tr.Of("When a version is out", "Quand une version sort"), "general.updates", y, () => UpdateChoices, () => Editor.Settings.General.Updates.Mode, Editor.SetUpdateMode);
             }
 
             y += RowHeight + 12;
@@ -828,25 +863,25 @@ internal sealed partial class SettingsScreen
         }
 
         y += 20;
-        var buttons = new List<(string Id, string Label, Action Click, bool Enabled)> { ("updates.check", "Check now", CheckNow, view.CheckEnabled) };
+        var buttons = new List<(string Id, string Label, Action Click, bool Enabled)> { ("updates.check", Tr.Of("Check now", "Vérifier maintenant"), CheckNow, view.CheckEnabled) };
         // Where nothing installs, the button opens the page of the release, which the panel opens for What's new.
         if (view.ShowUpdate && view.AnnouncesOnly)
         {
-            buttons.Add(("updates.download", "Download", () => _updates?.WhatsNew(), view.UpdateEnabled));
+            buttons.Add(("updates.download", Tr.Of("Download", "Télécharger"), () => _updates?.WhatsNew(), view.UpdateEnabled));
         }
         else if (view.ShowUpdate)
         {
-            buttons.Add(("updates.now", "Update now", ShowUpdateCard, view.UpdateEnabled));
+            buttons.Add(("updates.now", Tr.Of("Update now", "Mettre à jour"), ShowUpdateCard, view.UpdateEnabled));
         }
 
         if (view.ShowWhatsNew)
         {
-            buttons.Add(("updates.whatsnew", "What's new", () => _updates?.WhatsNew(), true));
+            buttons.Add(("updates.whatsnew", Tr.Of("What's new", "Nouveautés"), () => _updates?.WhatsNew(), true));
         }
 
         if (view.ShowSkip)
         {
-            buttons.Add(("updates.skip", "Skip this version", SkipThisVersion, view.SkipEnabled));
+            buttons.Add(("updates.skip", Tr.Of("Skip this version", "Ignorer cette version"), SkipThisVersion, view.SkipEnabled));
         }
 
         // One line while they fit, which they do at the design's sizes; a wider font puts the last ones under.
@@ -957,9 +992,10 @@ internal sealed partial class SettingsScreen
         Refresh();
     }
 
-    private static readonly DropItem[] FullscreenChoices = [new("auto", "Auto"), new("soundOnly", "Sound only")];
+    private static DropItem[] FullscreenChoices => [new("auto", Tr.Of("Auto", "Auto")), new("soundOnly", Tr.Of("Sound only", "Son seul"))];
 
-    private static readonly DropItem[] SoundChoices = [new("whenNoOverlay", "When no overlay can show"), new("always", "Always"), new("never", "Never")];
+    private static DropItem[] SoundChoices =>
+        [new("whenNoOverlay", Tr.Of("When no overlay can show", "Sans notification visible")), new("always", Tr.Of("Always", "Toujours")), new("never", Tr.Of("Never", "Jamais"))];
 
     private int SwatchSelected()
     {

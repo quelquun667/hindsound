@@ -516,6 +516,8 @@ You can change them all in Settings > Hotkeys. If another app already holds a co
 
 They are in the left column of the window, under `Settings`, or through `Settings` in the menu of the icon. There is no OK button: a change is saved at once, in `%AppData%\Hindsound\settings.json`.
 
+Hindsound speaks English or French. By default it takes the language of the system: French on a system in French, English otherwise. `Language`, on the `General` page, chooses one for good.
+
 `Now`, above the settings in the same column, is not a setting: it draws a wave for the PC sound and one for the microphone, with the part a save would keep in the accent color and `Save: last 0:30` under it. `Record` is on that page too, and it is the same setting as on `Audio`. `Record my voice` is
 there too, next to the `Mic` lane: turned off, the microphone is not opened at all, and turned back on, it uses the microphone you chose.
 
@@ -537,6 +539,7 @@ there too, next to the `Mic` lane: turned off, the microphone is not opened at a
 | General | Accent color | **Lime**, Mint, Cyan, Violet, Pink, White, Custom |
 | General | When a version is out | **Install automatically**, Ask me, Off. See [Updates](#updates). |
 | General | Start with Windows | **Off** |
+| General | Language | **System**, English, Français. The whole window, the menu of the icon and the notifications follow it at once. The log, the names of the clips and this README stay in English. |
 | General | Window size | 100%, **120%**, 140%. If the screen can't hold it, the window takes the largest size that fits, and a line says so. |
 | General | Save notifications | **On** |
 | General | Notification position | **Right edge**, Left edge |

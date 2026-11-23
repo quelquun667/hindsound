@@ -63,6 +63,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     private volatile AudioEngine? _engine;
 
     private AppSettings _settings = new();
+    private string? _languageLine;
     private readonly SettingsFileState _settingsFile = new();
     private readonly NoticeQueue _notices = new();
     private readonly PendingNotices _pending;
@@ -320,6 +321,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         }
 
         _settingsFile.Note(SettingsFileTime());
+        ApplyLanguage();
         TellAboutSettings(start.Notice);
     }
 
@@ -444,6 +446,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         }
 
         _settings = settings;
+        ApplyLanguage();
         ApplyStartupRegistration();
         ApplyHotkeys();
         ApplyEngineOptions();
@@ -454,6 +457,29 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
 
         // The mode may have changed by hand, or the real one replaces the Off of a file that could not be read at first.
         _updates?.SettingsChanged();
+    }
+
+    /// <summary>
+    /// The one place the language of the interface changes: at the start, at each read of the settings file, and when the
+    /// General page changes it. The journal says what it was chosen from whenever that changes. A new language draws the
+    /// window again at once; the tray menu and the notifications are made when they show, and the tray's tip follows at the
+    /// next look at the tray, which both callers make right after.
+    /// </summary>
+    private void ApplyLanguage()
+    {
+        var system = PlatformDefaults.SystemLanguages?.Invoke() ?? [];
+        var chosen = UiLanguages.Resolve(_settings.General.Language, system);
+        var line = UiLanguages.JournalLine(_settings.General.Language, system, chosen);
+        if (line != _languageLine)
+        {
+            _journal.Write(line);
+            _languageLine = line;
+        }
+
+        if (Tr.Set(chosen))
+        {
+            _window?.Screen.LanguageChanged();
+        }
     }
 
     /// <summary>Tells the engine what changed since it was last told, and nothing else.</summary>
@@ -1658,6 +1684,12 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
         if ((change & SettingsChange.WindowSize) != 0)
         {
             _window?.ZoomChanged(_settings.General.WindowZoom);
+        }
+
+        if ((change & SettingsChange.Language) != 0)
+        {
+            ApplyLanguage();
+            RefreshTray();
         }
 
         if ((change & SettingsChange.Updates) != 0)

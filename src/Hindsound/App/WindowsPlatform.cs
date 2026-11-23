@@ -31,6 +31,7 @@ internal static class WindowsPlatform
             PlatformDefaults.ProcessSnapshot = () => new ToolHelpProcessSnapshot();
             PlatformDefaults.RunKey = () => new RegistryRunKey();
             PlatformDefaults.LaunchPath = () => Environment.ProcessPath;
+            PlatformDefaults.SystemLanguages = WindowsLanguages.Preferred;
             // RegisterHotKey grabs one combination at a time; the batch the app binds through is made of it.
             PlatformDefaults.Hotkeys = () => new KeyByKeyHotkeys(new Win32HotkeyNative());
             PlatformDefaults.UpdateNetwork = () => new WinHttpTransport();

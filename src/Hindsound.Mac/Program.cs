@@ -56,6 +56,7 @@ internal static class Program
         var options = AppOptions.Parse(launch.Rest);
         var journal = new Journal(Journal.PathFor(options.SettingsPath));
         MacPlatform.Install(journal.Write);
+        Tr.ForProcess();
 
         AppDomain.CurrentDomain.UnhandledException += (_, e) => journal.Write("unhandled exception: " + e.ExceptionObject);
         TaskScheduler.UnobservedTaskException += (_, e) =>
@@ -73,6 +74,7 @@ internal static class Program
         {
             // The log then says whether a window could open here, and where SDL and the fonts come from.
             MacWindowSupport.Available(journal.Write);
+            using var language = Tr.Use(options.DumpLanguage);
             return UnixDump.Write(options.DumpSettingsFolder, options.DumpScale, MacText.Create, journal.Write);
         }
 

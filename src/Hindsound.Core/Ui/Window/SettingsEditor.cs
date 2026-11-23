@@ -26,6 +26,9 @@ internal enum SettingsChange
 
     /// <summary>The size of the window: it is drawn again at the new zoom.</summary>
     WindowSize = 1024,
+
+    /// <summary>The language of the interface: every text is drawn again in it.</summary>
+    Language = 2048,
 }
 
 /// <summary>Whether a typed value can be kept; if not, the sentence shown next to the field.</summary>
@@ -465,7 +468,19 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
     }
 
     /// <summary>"Lime", or "Custom" for any colour that is not a preset.</summary>
-    public string AccentName => AccentColors.PresetOf(AccentHex).ToString();
+    public string AccentName => AccentWord(AccentColors.PresetOf(AccentHex));
+
+    /// <summary>What the General page calls a preset of the accent color.</summary>
+    public static string AccentWord(AccentPreset preset) => preset switch
+    {
+        AccentPreset.Lime => Tr.Of("Lime", "Citron vert"),
+        AccentPreset.Mint => Tr.Of("Mint", "Menthe"),
+        AccentPreset.Cyan => Tr.Of("Cyan", "Cyan"),
+        AccentPreset.Violet => Tr.Of("Violet", "Violet"),
+        AccentPreset.Pink => Tr.Of("Pink", "Rose"),
+        AccentPreset.White => Tr.Of("White", "Blanc"),
+        _ => Tr.Of("Custom", "Autre"),
+    };
 
     public void SetAccentPreset(AccentPreset preset) => SetAccentValue(AccentColors.Presets[preset]);
 
@@ -511,6 +526,16 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
     public void SetNotificationPosition(string edge) => SetGeneral(Settings.General.NotificationPosition != edge, () => Settings.General.NotificationPosition = edge);
 
     public void SetFullscreenGames(string mode) => SetGeneral(Settings.General.FullscreenGames != mode, () => Settings.General.FullscreenGames = mode);
+
+    /// <summary>"system", "en" or "fr".</summary>
+    public void SetLanguage(string language)
+    {
+        if (language != Settings.General.Language)
+        {
+            Settings.General.Language = language;
+            changed(SettingsChange.Language);
+        }
+    }
 
     public void SetConfirmSound(string mode) => SetGeneral(Settings.General.ConfirmSound != mode, () => Settings.General.ConfirmSound = mode);
 

@@ -1,7 +1,22 @@
 namespace Hindsound.Ui.Window;
 
-/// <summary>One line of the side bar.</summary>
-internal readonly record struct NavRow(Section Section, string Label);
+/// <summary>One line of the side bar. Its words are read at each use, in the language of the moment.</summary>
+/// <param name="Section">The page it shows.</param>
+/// <param name="Words">Words that stay as they are, in place of the section's own; null for the section's.</param>
+internal readonly record struct NavRow(Section Section, string? Words = null)
+{
+    public string Label => Words ?? Section switch
+    {
+        Section.Now => Tr.Of("Now", "Maintenant"),
+        Section.Library => Tr.Of("Library", "Bibliothèque"),
+        Section.Hotkeys => Tr.Of("Hotkeys", "Raccourcis"),
+        Section.Durations => Tr.Of("Durations", "Durées"),
+        Section.Audio => Tr.Of("Audio", "Audio"),
+        Section.Export => Tr.Of("Export", "Export"),
+        Section.General => Tr.Of("General", "Général"),
+        _ => Section.ToString(),
+    };
+}
 
 /// <summary>
 /// The lines of the side bar and where they sit: the views on top, then a caption, then the pages of the settings. One list
@@ -10,7 +25,7 @@ internal readonly record struct NavRow(Section Section, string Label);
 internal sealed class NavRows
 {
     public const float ItemHeight = 36, Gap = 4;
-    public const string Caption = "Settings";
+    public static string Caption => Tr.Of("Settings", "Réglages");
 
     // From the bottom of the last view: the top of the next line, and the middle of the caption, just high enough to stay
     // out of the focus ring of the line under it.
@@ -18,24 +33,24 @@ internal sealed class NavRows
 
     private static readonly NavRow[] SettingsPages =
     [
-        new(Section.Hotkeys, "Hotkeys"),
-        new(Section.Durations, "Durations"),
-        new(Section.Audio, "Audio"),
-        new(Section.Export, "Export"),
-        new(Section.General, "General"),
+        new(Section.Hotkeys),
+        new(Section.Durations),
+        new(Section.Audio),
+        new(Section.Export),
+        new(Section.General),
     ];
 
     /// <summary>The window before it has a Now page.</summary>
     public static readonly NavRows SettingsOnly = new([]);
 
     /// <summary>The window with Now and without Library.</summary>
-    public static readonly NavRows WithViews = new([new(Section.Now, "Now")]);
+    public static readonly NavRows WithViews = new([new(Section.Now)]);
 
     /// <summary>The window of the app.</summary>
-    public static readonly NavRows WithLibrary = new([new(Section.Now, "Now"), new(Section.Library, "Library")]);
+    public static readonly NavRows WithLibrary = new([new(Section.Now), new(Section.Library)]);
 
     /// <summary>The window with Library and without Now.</summary>
-    public static readonly NavRows LibraryOnly = new([new(Section.Library, "Library")]);
+    public static readonly NavRows LibraryOnly = new([new(Section.Library)]);
 
     private readonly int _views;
 

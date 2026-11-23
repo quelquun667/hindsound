@@ -237,8 +237,14 @@ public sealed class GeneralSettings
 
     public UpdateSettings Updates { get; set; } = new();
 
+    public const string LanguageSystem = "system", LanguageEnglish = "en", LanguageFrench = "fr";
+
+    /// <summary>"system" (the language of the system, English when it is neither), "en" or "fr". Anything else follows the system.</summary>
+    public string Language { get; set; } = LanguageSystem;
+
     internal void Normalize()
     {
+        Language = AppSettings.OneOf(Language, LanguageSystem, LanguageSystem, LanguageEnglish, LanguageFrench);
         AccentColor = AccentColors.Resolve(AccentColor);
         NotificationPosition = AppSettings.OneOf(NotificationPosition, "right", "right", "left");
         FullscreenGames = AppSettings.OneOf(FullscreenGames, "auto", "auto", "soundOnly");

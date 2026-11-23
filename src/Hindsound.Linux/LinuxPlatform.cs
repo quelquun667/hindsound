@@ -83,6 +83,7 @@ internal static class LinuxPlatform
             PlatformDefaults.ProcessSnapshot = () => new ProcProcessSnapshot();
             PlatformDefaults.RunKey = () => new AutostartEntry(log);
             PlatformDefaults.LaunchPath = LaunchPaths.Current;
+            PlatformDefaults.SystemLanguages = static () => Hindsound.Ui.UiLanguages.FromLinuxEnvironment(Environment.GetEnvironmentVariable);
             PlatformDefaults.Hotkeys = () =>
             {
                 var hotkeys = new LinuxHotkeys(log);

@@ -50,6 +50,12 @@ internal static class PlatformDefaults
     /// </summary>
     public static Func<string?>? LaunchPath { get; set; }
 
+    /// <summary>
+    /// The languages the user prefers for the interface, first first, as BCP-47 tags (<c>fr-FR</c>, <c>en-US</c>), read again at
+    /// each call. Never from the culture of the process, which is the invariant one on Linux and on a Mac. Null gives none.
+    /// </summary>
+    public static Func<IReadOnlyList<string>>? SystemLanguages { get; set; }
+
     /// <summary>What the system offers the pages of the window, and its words. Null: the installed Windows app's.</summary>
     public static PlatformFeatures? Features { get; set; }
 
