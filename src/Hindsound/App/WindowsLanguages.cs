@@ -25,7 +25,7 @@ internal static unsafe partial class WindowsLanguages
         }
     }
 
-    private static IReadOnlyList<string> FromPreferred()
+    internal static IReadOnlyList<string> FromPreferred()
     {
         uint length = 0;
         if (!GetUserPreferredUILanguages(MuiLanguageName, out _, null, ref length) || length == 0)
@@ -45,7 +45,7 @@ internal static unsafe partial class WindowsLanguages
         return UiLanguages.FromMultiString(buffer.AsSpan(0, (int)Math.Min(length, (uint)buffer.Length)));
     }
 
-    private static IReadOnlyList<string> FromDefault()
+    internal static IReadOnlyList<string> FromDefault()
     {
         var name = stackalloc char[LocaleNameMaxLength];
         var written = LCIDToLocaleName(GetUserDefaultUILanguage(), name, LocaleNameMaxLength, 0);
