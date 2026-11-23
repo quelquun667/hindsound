@@ -135,8 +135,6 @@ internal sealed partial class SettingsScreen
     // The menu sits on the line of the side bar's first entry, and the list starts under it.
     private const float ClipFilterTop = BandHeight + 10, ClipListTop = BandHeight + 46;
 
-    private static string CopyLabel => Tr.Of("Copy", "Copier");
-
     private static readonly LibraryData NoIndex = new();
     private const float FootMargin = 24, FootButtonGap = 12, FootButtonHeight = 34;
 
