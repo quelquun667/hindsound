@@ -350,6 +350,13 @@ internal sealed partial class SettingsScreen
         };
     }
 
+    /// <summary>
+    /// The rows of the Hotkeys page. "Save and edit" has one only where there is an editor to open, as the menu of a clip shows
+    /// Edit only then.
+    /// </summary>
+    private IEnumerable<(HotkeyAction Action, string Label)> HotkeyRowsShown =>
+        _editorPanel is null ? SettingsEditor.HotkeyRows.Where(row => row.Action != HotkeyAction.SaveAndEdit) : SettingsEditor.HotkeyRows;
+
     private void BuildHotkeys()
     {
         switch (Features.Shortcuts())
@@ -366,7 +373,7 @@ internal sealed partial class SettingsScreen
         var y = BandHeight + 18;
         Heading("Hotkeys", y);
         y += 36;
-        foreach (var (action, label) in SettingsEditor.HotkeyRows)
+        foreach (var (action, label) in HotkeyRowsShown)
         {
             RowLabel(label, y, fieldHeight);
             var view = ViewOf(action);
@@ -394,7 +401,7 @@ internal sealed partial class SettingsScreen
         var y = BandHeight + 18;
         Heading("Hotkeys", y);
         y += 36;
-        foreach (var (action, label) in SettingsEditor.HotkeyRows)
+        foreach (var (action, label) in HotkeyRowsShown)
         {
             RowLabel(label, y, fieldHeight);
             var box = new Box(Right - fieldWidth, y, fieldWidth, fieldHeight);

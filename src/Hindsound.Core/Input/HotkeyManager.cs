@@ -66,6 +66,7 @@ public sealed class HotkeyManager : IDisposable
         HotkeyAction.Save5m => settings.Save5m,
         HotkeyAction.TogglePause => settings.TogglePause,
         HotkeyAction.CopyLast => settings.CopyLast,
+        HotkeyAction.SaveAndEdit => settings.SaveAndEdit,
         _ => null,
     };
 
@@ -79,6 +80,7 @@ public sealed class HotkeyManager : IDisposable
         _wanted[HotkeyAction.Save5m] = settings.Save5m;
         _wanted[HotkeyAction.TogglePause] = settings.TogglePause;
         _wanted[HotkeyAction.CopyLast] = settings.CopyLast;
+        _wanted[HotkeyAction.SaveAndEdit] = settings.SaveAndEdit;
         return Sync();
     }
 

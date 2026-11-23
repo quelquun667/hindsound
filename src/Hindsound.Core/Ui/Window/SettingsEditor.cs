@@ -192,6 +192,7 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
     public static readonly (HotkeyAction Action, string Label)[] HotkeyRows =
     [
         (HotkeyAction.SaveDefault, "Save clip"),
+        (HotkeyAction.SaveAndEdit, "Save and edit"),
         (HotkeyAction.Save15s, "Save up to 15s"),
         (HotkeyAction.Save1m, "Save up to 1 min"),
         (HotkeyAction.Save5m, "Save up to 5 min"),
@@ -208,6 +209,7 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
         HotkeyAction.Save1m => hotkeys.Save1m,
         HotkeyAction.Save5m => hotkeys.Save5m,
         HotkeyAction.TogglePause => hotkeys.TogglePause,
+        HotkeyAction.SaveAndEdit => hotkeys.SaveAndEdit,
         _ => hotkeys.CopyLast,
     };
 
@@ -223,6 +225,7 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
             Save5m = current.Save5m,
             TogglePause = current.TogglePause,
             CopyLast = current.CopyLast,
+            SaveAndEdit = current.SaveAndEdit,
         };
         switch (action)
         {
@@ -231,6 +234,7 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
             case HotkeyAction.Save1m: copy.Save1m = gesture; break;
             case HotkeyAction.Save5m: copy.Save5m = gesture; break;
             case HotkeyAction.TogglePause: copy.TogglePause = gesture; break;
+            case HotkeyAction.SaveAndEdit: copy.SaveAndEdit = gesture; break;
             default: copy.CopyLast = gesture; break;
         }
 

@@ -1,3 +1,4 @@
+using Hindsound.Library;
 using Hindsound.Ui;
 using Hindsound.Ui.Window;
 
@@ -15,6 +16,32 @@ internal interface IWindowScreen
     void ShowUpdateCard();
 
     void SelectClip(string path);
+}
+
+/// <summary>A window that can open its editor on a clip, and say whether the editor it shows holds something to keep.</summary>
+internal interface IEditorWindowScreen : IWindowScreen
+{
+    /// <summary>The editor is open with a change or a save under way: opening it on another clip would lose that.</summary>
+    bool EditorHoldsWork { get; }
+
+    /// <summary>Whether the window can open an editor at all.</summary>
+    bool HasEditor { get; }
+
+    /// <summary>Opens the editor on the clip, for a normal edit.</summary>
+    void OpenEditorOn(ClipGroup clip);
+}
+
+/// <summary>What <see cref="WindowGoing.OpenEditor"/> did.</summary>
+internal enum EditorOpening
+{
+    /// <summary>The editor is open on the clip.</summary>
+    Opened,
+
+    /// <summary>The window came to the front on what it shows: the editor, a card or its own business held something to keep.</summary>
+    KeptWhatItShows,
+
+    /// <summary>Nothing opened: the app is leaving, or this system has no editor.</summary>
+    NotOpened,
 }
 
 /// <summary>
@@ -67,6 +94,52 @@ internal sealed class WindowGoing
         {
             shown.SelectClip(clip);
         }
+    }
+
+    /// <summary>
+    /// Opens the editor on a clip that was just saved, bringing the window to the front. What the window already shows is never
+    /// replaced when it holds something to keep: an editor with a change or a save under way, or a card (the first-launch one would
+    /// lose its steps, and the update one is a question being asked). The window then only comes to the front, as for any gesture.
+    /// </summary>
+    public EditorOpening OpenEditor(ClipGroup clip)
+    {
+        if (!_mayOpen())
+        {
+            _journal("editor not opened: the app is leaving");
+            return EditorOpening.NotOpened;
+        }
+
+        if (_current() is { } open)
+        {
+            if (open is not IEditorWindowScreen { HasEditor: true } editable)
+            {
+                _journal("editor not opened: this window has no editor");
+                return EditorOpening.NotOpened;
+            }
+
+            var why = editable.EditorHoldsWork
+                ? "the editor holds changes or a save in progress"
+                : editable.Section is Section.FirstRun or Section.UpdateCard ? "the window shows a card" : null;
+            _bringBack();
+            if (why is not null)
+            {
+                _journal($"editor not opened: {why}; the window came to the front on what it shows");
+                return EditorOpening.KeptWhatItShows;
+            }
+
+            editable.OpenEditorOn(clip);
+            return EditorOpening.Opened;
+        }
+
+        _create(Section.Library);
+        if (_current() is IEditorWindowScreen { HasEditor: true } made)
+        {
+            made.OpenEditorOn(clip);
+            return EditorOpening.Opened;
+        }
+
+        _journal("editor not opened: no window with an editor on this system");
+        return EditorOpening.NotOpened;
     }
 
     /// <summary>Only one at a time: an open window is brought back and moved to the page, a closed one is made.</summary>

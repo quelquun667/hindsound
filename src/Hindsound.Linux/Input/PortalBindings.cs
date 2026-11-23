@@ -49,6 +49,7 @@ internal sealed class PortalBindings
         HotkeyAction.Save5m => "save-5m",
         HotkeyAction.TogglePause => "pause",
         HotkeyAction.CopyLast => "copy-last",
+        HotkeyAction.SaveAndEdit => "save-edit",
         _ => throw new ArgumentOutOfRangeException(nameof(action)),
     };
 
@@ -76,6 +77,7 @@ internal sealed class PortalBindings
         HotkeyAction.Save5m => "Save the last 5 minutes",
         HotkeyAction.TogglePause => "Pause or resume",
         HotkeyAction.CopyLast => "Copy the last clip",
+        HotkeyAction.SaveAndEdit => "Save a clip and edit it",
         _ => throw new ArgumentOutOfRangeException(nameof(action)),
     };
 

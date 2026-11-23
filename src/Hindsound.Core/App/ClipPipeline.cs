@@ -111,6 +111,9 @@ internal sealed record ClipRequest(TimeSpan Requested, ExportOptions Options, st
 {
     /// <summary>Where the answer goes when it does not go to the active screen: the screen of a click on the tray menu.</summary>
     public Hindsound.Ui.ScreenInfo? Screen { get; init; }
+
+    /// <summary>The clip, once written, is opened in the editor: "Save and edit".</summary>
+    public bool EditAfter { get; init; }
 }
 
 internal enum ClipFailure
