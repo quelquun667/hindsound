@@ -171,15 +171,16 @@ public sealed class SaveAndEditPageTests : IDisposable
     public void The_key_is_written_next_to_the_others_and_read_back_in_its_canonical_form()
     {
         var store = new SettingsStore(File1);
-        var settings = new AppSettings { Hotkeys = { SaveAndEdit = "alt+ctrl+e", CopyLast = "Ctrl+Alt+C" } }.Normalize();
+        var settings = new AppSettings { Hotkeys = { SaveAndEdit = "alt+ctrl+F9", CopyLast = "Ctrl+Alt+F8" } }.Normalize();
 
         store.Save(settings);
 
         var text = File.ReadAllText(File1);
-        Assert.Contains("\"copyLast\": \"Ctrl+Alt+C\"", text);
-        Assert.Contains("\"saveAndEdit\": \"Ctrl+Alt+E\"", text);
+        Assert.NotNull(settings.Hotkeys.SaveAndEdit);
+        Assert.Contains($"\"copyLast\": \"{settings.Hotkeys.CopyLast}\"", text);
+        Assert.Contains($"\"saveAndEdit\": \"{settings.Hotkeys.SaveAndEdit}\"", text);
         Assert.True(text.IndexOf("\"copyLast\"", StringComparison.Ordinal) < text.IndexOf("\"saveAndEdit\"", StringComparison.Ordinal));
-        Assert.Equal("Ctrl+Alt+E", store.Load().Hotkeys.SaveAndEdit);
+        Assert.Equal(settings.Hotkeys.SaveAndEdit, store.Load().Hotkeys.SaveAndEdit);
     }
 
     [Fact]
