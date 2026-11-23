@@ -140,7 +140,7 @@ public sealed class LibraryFrenchTests
         Assert.Equal("Recommencer sans collection\u00A0? Tes clips restent.", NameBoxState.StartOverQuestion);
 
         Assert.Equal("Supprimer la collection «\u00A0pets\u00A0»\u00A0? Tes clips restent.", NameBox.DeleteQuestion(canvas, "pets"));
-        Assert.Equal("Déplacer «\u00A0a.mp3\u00A0» dans la Corbeille\u00A0?", NameBox.ClipDeleteQuestion(canvas, "a.mp3"));
+        Assert.Equal("Déplacer «\u00A0a.mp3\u00A0» vers la Corbeille\u00A0?", NameBox.ClipDeleteQuestion(canvas, "a.mp3"));
 
         var clip = NameBoxState.ForClipRename(FakeLibrary.Clip("a.mp3"), "x", _ => ClipRenameOutcome.Taken);
         Assert.Equal("Renommer le clip", clip.Title);
@@ -152,6 +152,20 @@ public sealed class LibraryFrenchTests
         Assert.Equal("Un nom ne peut pas finir par _system ou _mic", NameBoxState.ClipRefusalText(ClipRenameOutcome.TrackSuffix));
         Assert.StartsWith("La Corbeille", NameBoxState.CannotRecycleShown);
         Assert.Contains("la Corbeille", NameBoxState.TwoFilesText);
+    }
+
+    [Fact]
+    public void The_two_files_sentence_names_the_computer_of_the_system_in_French_only()
+    {
+        using (Tr.Use(UiLanguage.French))
+        {
+            Assert.Contains("le son du PC et le micro", NameBoxState.TwoFilesText);
+            Assert.Contains("le son du Mac et le micro", NameBoxState.TwoFilesTextOf("Mac"));
+            Assert.DoesNotContain("PC", NameBoxState.TwoFilesTextOf("Mac"));
+        }
+
+        Assert.Equal(NameBoxState.TwoFilesTextOf("PC"), NameBoxState.TwoFilesTextOf("Mac"));
+        Assert.Contains("the system sound and the microphone", NameBoxState.TwoFilesTextOf("Mac"));
     }
 
     [Theory]

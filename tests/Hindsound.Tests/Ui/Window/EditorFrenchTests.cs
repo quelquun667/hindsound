@@ -131,7 +131,25 @@ public sealed class EditorFrenchTests : IDisposable
         Assert.Equal("5,23" + Nb + "s", SettingsScreen.KeptText(EditorSelection.SoundboardMs + 30));
         Assert.Equal("Pics sous -1" + Nb + "dB", SettingsScreen.HeldText(-1));
         Assert.Equal("Pics sous -0,5" + Nb + "dB", SettingsScreen.HeldText(-0.5));
-        Assert.Equal("0:03.2", SettingsScreen.EditClock(3_200));
+        Assert.Equal("0:03,2", SettingsScreen.EditClock(3_200));
+        Assert.Equal("1:00,0", SettingsScreen.EditClock(59_960));
+        using (Tr.Use(UiLanguage.English))
+        {
+            Assert.Equal("0:03.2", SettingsScreen.EditClock(3_200));
+        }
+    }
+
+    [Fact]
+    public void The_default_name_of_an_edited_copy_ends_in_its_own_word_of_each_language()
+    {
+        Assert.Equal(" (cut)", EditLimits.CutSuffix);
+        using (Tr.Use(UiLanguage.French))
+        {
+            Assert.Equal(" (modifié)", EditLimits.CutSuffix);
+        }
+
+        // The soundboard copy keeps its English word in both languages.
+        Assert.Equal(" (soundboard)", Soundboard.CopySuffix);
     }
 
     [Fact]
@@ -160,7 +178,7 @@ public sealed class EditorFrenchTests : IDisposable
         Click(SettingsScreen.EditorSaveId);
         var drawn = Painted();
 
-        foreach (var word in new[] { "Enregistrer ta modification", "Nom de la copie", "L'original reste tel quel.", "Annuler", "Remplacer l'original", "Enregistrer une copie", "Gardé de 0:00.0 à 0:30.0 (30,0" + Nb + "s), volume +6" + Nb + "dB" })
+        foreach (var word in new[] { "Enregistrer ta modification", "Nom de la copie", "L'original reste tel quel.", "Annuler", "Remplacer l'original", "Enregistrer une copie", "Gardé de 0:00,0 à 0:30,0 (30,0" + Nb + "s), volume +6" + Nb + "dB" })
         {
             Assert.Contains(word, drawn);
         }
@@ -170,8 +188,8 @@ public sealed class EditorFrenchTests : IDisposable
             Assert.DoesNotContain(word, drawn);
         }
 
-        // The name of the copy is a file name: its suffix stays English.
-        Assert.Equal(Name + " (cut)", Screen.EditorDialog!.Name.Draft);
+        // The suffix of the copy's name is its own word in each language (it is only appended, never read back).
+        Assert.Equal(Name + " (modifié)", Screen.EditorDialog!.Name.Draft);
     }
 
     [Fact]
@@ -286,7 +304,7 @@ public sealed class EditorFrenchTests : IDisposable
         Click(SettingsScreen.EditorSaveId);
         Screen.EditorSaved(new EditSaveResult(EditSaveOutcome.Saved, [@"C:\Clips\clip0002.mp3"]));
         var drawn = PaintedFlat();
-        Assert.Contains("Dans Discord" + Nb + ": Paramètres du serveur > Soundboard > Importer un son", drawn);
+        Assert.Contains("Dans Discord" + Nb + ": Paramètres du serveur > Soundboard", drawn);
         Assert.DoesNotContain("In Discord", drawn);
     }
 

@@ -23,7 +23,7 @@ internal static class Soundboard
     public const string DiscordUri = "discord://";
     public static string FitsText => Tr.Of("Fits the Discord soundboard (5.2 s max)", "Compatible avec la soundboard de Discord (5,2\u00A0s max)");
     public static string TooLongText => Tr.Of("Too long for the soundboard: 5.2 s max", "Trop long pour la soundboard\u00A0: 5,2\u00A0s max");
-    public static string UploadHint => Tr.Of("In Discord: Server Settings > Soundboard > Upload Sound", "Dans Discord\u00A0: Paramètres du serveur > Soundboard > Importer un son");
+    public static string UploadHint => Tr.Of("In Discord: Server Settings > Soundboard > Upload Sound", "Dans Discord\u00A0: Paramètres du serveur > Soundboard");
 }
 
 /// <summary>The bounds of an edit.</summary>
@@ -32,7 +32,8 @@ internal static class EditLimits
     public const double MinSelectionSeconds = 0.2;
     public const double NudgeSeconds = 0.1, BigNudgeSeconds = 1;
     public const double MinGainDb = -12, MaxGainDb = 20, GainStepDb = 1;
-    public const string CutSuffix = " (cut)";
+    /// <summary>Added to the name of an edited copy. Only appended, never read back, so each language has its own word.</summary>
+    public static string CutSuffix => Tr.Of(" (cut)", " (modifié)");
 }
 
 /// <summary>A file that can't be decoded: absent, damaged, or in a format the system can't read.</summary>

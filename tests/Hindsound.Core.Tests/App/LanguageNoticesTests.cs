@@ -94,7 +94,7 @@ public sealed class LanguageNoticesTests
         Assert.Equal("Hindsound - Aucun périphérique audio", StatusTransitions.TrayOf(null, [], false, engineFailed: true).Tip);
         Assert.Equal("Hindsound - Un clip a un problème", StatusTransitions.TrayOf(null, [], true).Tip);
         Assert.Equal("Hindsound - Fichier de réglages non lu" + Nbsp + ": valeurs par défaut, micro coupé", StatusTransitions.TrayOf(null, [], false, onDefaults: true).Tip);
-        Assert.Equal("Hindsound - un clip s'enregistre, puis fermeture", StatusTransitions.TrayOf(null, [], false, closingAfterClip: true).Tip);
+        Assert.Equal("Hindsound - enregistrement du clip, puis fermeture", StatusTransitions.TrayOf(null, [], false, closingAfterClip: true).Tip);
         var refused = new[] { new Hindsound.Input.HotkeyResult(Hindsound.Input.HotkeyAction.SaveDefault, "Ctrl+Shift+F10", Hindsound.Input.HotkeyStatus.InUse, "taken") };
         Assert.Equal("Raccourci déjà pris", StatusTransitions.SaveHotkeyProblem(refused));
         Assert.Equal("Jusqu'à 0:30 en mémoire. Raccourci déjà pris", StatusTransitions.CaptureOnNow(new Hindsound.Settings.AppSettings { BufferSeconds = 30 }, refused).Body);

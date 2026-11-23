@@ -61,9 +61,12 @@ internal sealed class NameBoxState
     // every system.
     public const string CannotRecycleText = "The Recycle Bin can't take this clip. It stays where it is.";
     public static string CannotRecycleShown => Tr.Of(CannotRecycleText, "La Corbeille ne peut pas prendre ce clip. Il reste où il est.");
-    public static string TwoFilesText => Tr.Of(
+    public static string TwoFilesText => TwoFilesTextOf("PC");
+
+    /// <summary>The same sentence for the computer of this system: the French names it ("le son du Mac"), the English does not.</summary>
+    public static string TwoFilesTextOf(string machine) => Tr.Of(
         "This clip is 2 files, the system sound and the microphone. Both files go to the Recycle Bin.",
-        "Ce clip fait 2 fichiers\u00A0: le son du PC et le micro. Les deux fichiers vont dans la Corbeille.");
+        $"Ce clip fait 2 fichiers\u00A0: le son du {machine} et le micro. Les deux fichiers vont dans la Corbeille.");
 
     /// <summary>The words of the system the box is shown on: the sentences above are the Windows ones.</summary>
     public PlatformFeatures Features { get; set; } = PlatformFeatures.Windows;
@@ -355,7 +358,7 @@ internal static class NameBox
                 var used = canvas.Wrapped(state.Features.Words(ClipDeleteQuestion(canvas, state.Name)), Face.Body, TextSize, box.X + Inset, box.Y + 22, inner, Theme.Text);
                 if (state.Clip!.Files.Count > 1)
                 {
-                    canvas.Wrapped(state.Features.Words(NameBoxState.TwoFilesText), Face.Body, 13, box.X + Inset, box.Y + 22 + used + 6, inner, Theme.Muted);
+                    canvas.Wrapped(state.Features.Words(NameBoxState.TwoFilesTextOf(state.Features.MachineName)), Face.Body, 13, box.X + Inset, box.Y + 22 + used + 6, inner, Theme.Muted);
                 }
             }
             else if (isDelete)
@@ -439,7 +442,7 @@ internal static class NameBox
 
     /// <summary>The question before a clip goes to the Recycle Bin, its name with its extension.</summary>
     public static string ClipDeleteQuestion(ICanvas c, string name) =>
-        Tr.Format($"Move \"{c.Fit(name, Face.Body, TextSize, ClipNameWidth)}\" to the Recycle Bin?", $"Déplacer «\u00A0{c.Fit(name, Face.Body, TextSize, ClipNameWidth)}\u00A0» dans la Corbeille\u00A0?");
+        Tr.Format($"Move \"{c.Fit(name, Face.Body, TextSize, ClipNameWidth)}\" to the Recycle Bin?", $"Déplacer «\u00A0{c.Fit(name, Face.Body, TextSize, ClipNameWidth)}\u00A0» vers la Corbeille\u00A0?");
 }
 
 /// <summary>

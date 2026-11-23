@@ -130,8 +130,8 @@ public sealed unsafe class LanguageNowTests
     {
         using var scope = Tr.Use(UiLanguage.French);
 
-        Assert.Equal("Enregistre jusqu'à 30\u00A0secondes, de partout, même en jeu.", StatusText.FirstRunHotkeyNote(30));
-        Assert.Equal("Enregistre jusqu'à 2\u00A0minutes, de partout, même en jeu.", StatusText.FirstRunHotkeyNote(120));
+        Assert.Equal("Enregistre jusqu'à 30\u00A0secondes, où que tu sois, même en jeu.", StatusText.FirstRunHotkeyNote(30));
+        Assert.Equal("Enregistre jusqu'à 2\u00A0minutes, où que tu sois, même en jeu.", StatusText.FirstRunHotkeyNote(120));
         Assert.Equal("1\u00A0seconde", StatusText.ClipWords(1));
         Assert.Equal("1:30", StatusText.ClipWords(90));
         Assert.Equal("La mise à jour redémarre Hindsound. Ce qui est gardé en mémoire (5:00) sera perdu.", StatusText.UpdateCardBody(Status(), 300));
@@ -162,7 +162,7 @@ public sealed unsafe class LanguageNowTests
         Assert.Equal("Hindsound - Un clip a un problème", StatusTransitions.TrayOf(Status(), none, true).Tip);
         Assert.Equal("Hindsound - Fichier de réglages non lu\u00A0: valeurs par défaut, micro coupé", StatusTransitions.TrayOf(Status(), none, false, onDefaults: true).Tip);
         Assert.Equal("Hindsound - Micro non capté", StatusTransitions.TrayOf(Status(micCapturing: false), none, false).Tip);
-        Assert.Equal("Hindsound - un clip s'enregistre, puis fermeture", StatusTransitions.TrayOf(Status(), none, false, closingAfterClip: true).Tip);
+        Assert.Equal("Hindsound - enregistrement du clip, puis fermeture", StatusTransitions.TrayOf(Status(), none, false, closingAfterClip: true).Tip);
         Assert.Equal("Raccourci déjà pris", StatusTransitions.SaveHotkeyProblem(Refused(HotkeyStatus.InUse)));
         Assert.Equal("Raccourci inactif", StatusTransitions.SaveHotkeyProblem(Refused(HotkeyStatus.Unavailable)));
 

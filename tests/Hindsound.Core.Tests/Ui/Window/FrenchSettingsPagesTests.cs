@@ -198,7 +198,7 @@ public sealed unsafe class FrenchSettingsPagesTests
             ["Clip length", "Keep in memory", "of RAM", "shorter buffer", "Custom"]);
         Reads(
             "durations-custom@100",
-            ["Durée perso", "Utilise m:ss ou des secondes, de 0:01 à 30:00"],
+            ["Autre durée", "Utilise m:ss ou des secondes, de 0:01 à 30:00"],
             ["Custom length", "Use m:ss"]);
     }
 
@@ -217,7 +217,7 @@ public sealed unsafe class FrenchSettingsPagesTests
     {
         Reads(
             "export@100",
-            ["Format", "Qualité MP3", "Volume", "Aucune", "Pic", "Loudness", "Dossier", "Parcourir", "Nom", "Copier le clip dans le presse-papiers"],
+            ["Format", "Qualité MP3", "Volume", "Inchangé", "Pic", "Loudness", "Dossier", "Parcourir", "Nom du fichier", "Copier le clip dans le presse-papiers"],
             ["MP3 quality", "Folder", "Browse", "File name", "Copy clip to clipboard", "Peak"]);
     }
 
@@ -230,7 +230,7 @@ public sealed unsafe class FrenchSettingsPagesTests
             ["Welcome to", "Pick your hotkey", "Check your mic", "Try it", "Next", "Let them know"]);
         Reads(
             "firstrun-2@100",
-            ["Parle\u00A0: la barre doit bouger. Coupé pour le son du PC seul.", "Retour", "Suivant"],
+            ["Parle\u00A0: la barre doit bouger. Choisis Coupé pour le son du PC seul.", "Retour", "Suivant"],
             ["Speak:", "Back"]);
         Reads(
             "firstrun-3-done@100",

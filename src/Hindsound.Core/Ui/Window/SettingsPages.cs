@@ -542,7 +542,7 @@ internal sealed partial class SettingsScreen
         if (_customClipOpen)
         {
             y += 10;
-            RowLabel(Tr.Of("Custom length", "Durée perso"), y);
+            RowLabel(Tr.Of("Custom length", "Autre durée"), y);
             Add(new TextField(_clipField, SettingsEditor.CheckCustomClip, Editor.CommitCustomClip, ClipFieldText)
             {
                 Id = ClipFieldId,
@@ -683,7 +683,7 @@ internal sealed partial class SettingsScreen
             Tr.Of("Volume", "Volume"),
             "export.normalization",
             y,
-            [Tr.Of("Off", "Aucune"), Tr.Of("Peak", "Pic"), Tr.Of("Loudness", "Loudness")],
+            [Tr.Of("Off", "Inchangé"), Tr.Of("Peak", "Pic"), Tr.Of("Loudness", "Loudness")],
             () => Editor.Settings.Export.Normalization switch { "off" => 0, "peak" => 1, _ => 2 },
             i => Editor.SetNormalization(i switch { 0 => "off", 1 => "peak", _ => "loudness" }));
         y += pitch;
@@ -706,7 +706,7 @@ internal sealed partial class SettingsScreen
         }));
         y += pitch + (folderError is null ? 0 : TextField.MessageHeight);
 
-        RowLabel(Tr.Of("File name", "Nom"), y);
+        RowLabel(Tr.Of("File name", "Nom du fichier"), y);
         var nameBox = new Box(Left + 80, y, Width - 80, RowHeight);
         Add(new TextField(_templateField, SettingsEditor.CheckTemplate, t => Editor.SetTemplate(t), () => Editor.Settings.Export.FileNameTemplate)
         {
@@ -785,7 +785,7 @@ internal sealed partial class SettingsScreen
         var languages = LanguageChoices();
         Row(Tr.Of("Language", "Langue"), "general.language", y, () => languages, () => Editor.Settings.General.Language, Editor.SetLanguage);
         y += pitch;
-        SegmentRow(Tr.Of("Window size", "Taille de la fenêtre"), "general.size", y, GeneralSettings.WindowZooms.Select(zoom => $"{zoom}%").ToList(), () => Math.Max(0, Array.IndexOf(GeneralSettings.WindowZooms, Editor.Settings.General.WindowZoom)), i => Editor.SetWindowZoom(GeneralSettings.WindowZooms[i]));
+        SegmentRow(Tr.Of("Window size", "Taille de la fenêtre"), "general.size", y, GeneralSettings.WindowZooms.Select(zoom => Tr.Format($"{zoom}%", $"{zoom}\u00A0%")).ToList(), () => Math.Max(0, Array.IndexOf(GeneralSettings.WindowZooms, Editor.Settings.General.WindowZoom)), i => Editor.SetWindowZoom(GeneralSettings.WindowZooms[i]));
         y += pitch;
         // The choice stays lit when the screen cannot hold it; this says why the window is smaller.
         if (_host.AppliedZoom is > 0 and var applied && applied < Editor.Settings.General.WindowZoom)
@@ -1149,7 +1149,7 @@ internal sealed partial class SettingsScreen
 
                 break;
             case 1:
-                FirstRunNote(Tr.Format($"Speak: the bar should move. Off if you only want the {Features.MachineName} sound.", $"Parle\u00A0: la barre doit bouger. Coupé pour le son du {Features.MachineName} seul."), inner, top);
+                FirstRunNote(Tr.Format($"Speak: the bar should move. Off if you only want the {Features.MachineName} sound.", $"Parle\u00A0: la barre doit bouger. Choisis Coupé pour le son du {Features.MachineName} seul."), inner, top);
                 Add(
                     new Dropdown(() => SettingsEditor.MicChoices(_mics, Editor.Settings.Audio.MicDeviceId), () => Editor.Settings.Audio.MicDeviceId, Editor.SetMic, OpenPopup)
                     {

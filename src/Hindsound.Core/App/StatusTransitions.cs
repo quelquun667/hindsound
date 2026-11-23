@@ -258,7 +258,7 @@ internal static class StatusTransitions
             : hotkeys.FirstOrDefault(result => !result.Ok) is { } other ? Describe(other)
             : null;
         var state = refused is not null || importantClipWaiting || onDefaults ? TrayState.Error : TrayStateOf(activity);
-        return (state, closingAfterClip ? Tr.Of(ClosingTip, "Hindsound - un clip s'enregistre, puis fermeture") : problem is null ? "Hindsound" : "Hindsound - " + problem);
+        return (state, closingAfterClip ? Tr.Of(ClosingTip, "Hindsound - enregistrement du clip, puis fermeture") : problem is null ? "Hindsound" : "Hindsound - " + problem);
     }
 
     // The words are made now from the status, not taken from the result made when the hotkey was registered, so that a

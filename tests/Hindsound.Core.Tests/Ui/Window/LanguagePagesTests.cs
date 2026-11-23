@@ -138,14 +138,14 @@ public sealed unsafe class LanguagePagesTests
     [
         "Maintenant", "Bibliothèque", "Réglages", "Raccourcis", "Durées", "Audio", "Export", "Général",
         "micro actif", "Pause", "Enregistrer 30\u00A0s", "~87\u00A0Mo",
-        "Couleur d'accent", "Lancer avec Windows", "Langue", "Système (Français)", "Taille de la fenêtre", "Notifications d'enregistrement",
+        "Couleur d'accent", "Lancer avec Windows", "Langue", "Système (Français)", "Taille de la fenêtre", "100\u00A0%", "120\u00A0%", "Notifications d'enregistrement",
         "Dernier clip", "720\u00A0Ko", "Copier", "Ouvrir le dossier",
     ];
 
     private static readonly string[] EnglishPilot =
     [
         "Now", "Library", "Settings", "Hotkeys", "Durations", "General", "Capturing", "mic on", "Save up to 30s", "~87\u00A0MB",
-        "Accent color", "Start with Windows", "Language", "System (English)", "Window size", "Save notifications", "Last clip", "Copy", "Open folder",
+        "Accent color", "Start with Windows", "Language", "System (English)", "Window size", "100%", "120%", "Save notifications", "Last clip", "Copy", "Open folder",
     ];
 
     [Fact]

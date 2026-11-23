@@ -551,11 +551,12 @@ internal sealed partial class SettingsScreen
 
     // ---------------------------------------------------------------- texts
 
-    /// <summary>Minutes, seconds and tenths. The tenths are rounded first, so that 59.96 s carries over to 1:00.0.</summary>
+    /// <summary>Minutes, seconds and tenths. The tenths are rounded first, so that 59.96 s carries over to 1:00.0.
+    /// French writes the tenths after a comma (0:03,2), like the sizes and lengths around it.</summary>
     internal static string EditClock(long ms)
     {
         var tenths = (ms + 50) / 100;
-        return string.Create(CultureInfo.InvariantCulture, $"{tenths / 600}:{tenths % 600 / 10.0:00.0}");
+        return (tenths / 600).ToString(CultureInfo.InvariantCulture) + ":" + Tr.Number(tenths % 600 / 10.0, "00.0");
     }
 
     internal static string KeptText(long ms) => EditorSelection.KeptText(ms);
