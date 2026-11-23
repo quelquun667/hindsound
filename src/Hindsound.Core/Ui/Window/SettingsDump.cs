@@ -608,6 +608,33 @@ internal static unsafe class SettingsDump
             s.SelectClip(chosenClip);
             s.Key(Vk.Enter, 0);
         });
+
+        // The search, typed the way the keyboard reaches it: the clip chosen stays chosen while a row still holds the words.
+        Shot("library-recherche", (s, _) =>
+        {
+            ShowClips(s, SampleLibrary.Labeled(clips));
+            s.SelectClip(chosenClip);
+            s.TabTo(SettingsScreen.ClipSearchId);
+            s.EditChanged("discord 11-08");
+        }, focus: true);
+        Shot("library-recherche-vide", (s, _) =>
+        {
+            ShowClips(s, SampleLibrary.Labeled(clips));
+            s.TabTo(SettingsScreen.ClipSearchId);
+            s.EditChanged("zebra");
+        }, focus: true);
+
+        // The menu of the first collection, the way the keyboard reaches its "..." button; the line of Rename... is lit.
+        Shot("library-collection-menu", (s, _) =>
+        {
+            ShowClips(s, SampleLibrary.Labeled(clips));
+            s.TabTo(SettingsScreen.ClipFilterId);
+            s.Key(Vk.Down, 0);
+            s.Key(Vk.Down, 0);
+            s.SelectClip(chosenClip);
+            s.TabTo(CollectionActions.MoreId);
+            s.Key(Vk.Enter, 0);
+        }, focus: true);
         Shot("library-collection-vide", (s, _) =>
         {
             ShowClips(s, SampleLibrary.Labeled(clips));

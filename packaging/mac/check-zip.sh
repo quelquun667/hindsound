@@ -10,7 +10,7 @@
 #     names it);
 #   - what each Mach-O links: the system and the bundle only, nothing of Homebrew (/opt/homebrew, /usr/local);
 #   - the app started for real: --prove-mp3 (one second of a sine as an MP3 through the path of a clip, read back) with
-#     the LAME of the bundle, then --dump-settings (the 81 pages of the window, off screen) with the SDL, FreeType and
+#     the LAME of the bundle, then --dump-settings (the 84 pages of the window, off screen) with the SDL, FreeType and
 #     HarfBuzz of the bundle and its fonts, the microphone, the clipboard and the shortcuts off.
 #
 # Usage: check-zip.sh ZIP VERSION WORK_DIR [CERTIFICATE_SHA1]
@@ -26,7 +26,7 @@ zip="$1"
 version="$2"
 work="$3"
 certificate="$(tr 'A-F' 'a-f' <<< "${4:-}")"
-readonly PAGES=81
+readonly PAGES=84
 fail() { echo "check-zip: $*" >&2; exit 1; }
 
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "the version '$version' is not x.y.z"
