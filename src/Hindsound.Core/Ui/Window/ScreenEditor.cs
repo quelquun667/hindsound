@@ -577,7 +577,7 @@ internal sealed partial class SettingsScreen
         : Tr.Of("Volume", "Volume");
 
     internal static string HeldText(double ceilingDb) =>
-        Tr.Format($"Peaks held under {ceilingDb:0.#} dB", $"Pics maintenus sous {Tr.Number(ceilingDb, "0.#")}\u00A0dB");
+        Tr.Format($"Peaks held under {ceilingDb:0.#} dB", $"Pics sous {Tr.Number(ceilingDb, "0.#")}\u00A0dB");
 
     private string SaveSummary()
     {
@@ -825,6 +825,12 @@ internal sealed partial class SettingsScreen
             cancel.Paint(c, still);
             save.Paint(c, still);
         }));
+
+        // A refusal under the name is made of words: said again in the language of now, for as long as the name is still refused.
+        if (dialog.Name.Message is not null && dialog.Refusal(dialog.Name.Draft) is { } refusal)
+        {
+            dialog.Name.Message = refusal;
+        }
 
         // The dialog, last of all so that it dims what is under it; the band and the side bar only to be seen.
         foreach (var widget in EditorSaveDialog.Build(_canvas, dialog, SaveSummary(), SendSaveDialog, SendReplace, CloseSaveDialog))
