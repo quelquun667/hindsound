@@ -162,9 +162,9 @@ public sealed unsafe class LanguageNowTests
         Assert.Equal("Hindsound - Un clip a un problème", StatusTransitions.TrayOf(Status(), none, true).Tip);
         Assert.Equal("Hindsound - Fichier de réglages non lu : valeurs par défaut, micro coupé", StatusTransitions.TrayOf(Status(), none, false, onDefaults: true).Tip);
         Assert.Equal("Hindsound - Micro non capté", StatusTransitions.TrayOf(Status(micCapturing: false), none, false).Tip);
-        Assert.Equal("Hindsound - fin du clip en cours, puis fermeture", StatusTransitions.TrayOf(Status(), none, false, closingAfterClip: true).Tip);
-        Assert.Equal("Raccourci d'enregistrement déjà pris", StatusTransitions.SaveHotkeyProblem(Refused(HotkeyStatus.InUse)));
-        Assert.Equal("Raccourci d'enregistrement inutilisable", StatusTransitions.SaveHotkeyProblem(Refused(HotkeyStatus.Unavailable)));
+        Assert.Equal("Hindsound - un clip s'enregistre, puis fermeture", StatusTransitions.TrayOf(Status(), none, false, closingAfterClip: true).Tip);
+        Assert.Equal("Raccourci déjà pris", StatusTransitions.SaveHotkeyProblem(Refused(HotkeyStatus.InUse)));
+        Assert.Equal("Raccourci inactif", StatusTransitions.SaveHotkeyProblem(Refused(HotkeyStatus.Unavailable)));
 
         // The journal line is written in English whatever the language of the screen.
         using (Tr.Use(UiLanguage.English))

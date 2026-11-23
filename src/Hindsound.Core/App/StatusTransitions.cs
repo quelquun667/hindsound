@@ -199,8 +199,8 @@ internal static class StatusTransitions
     public static string? SaveHotkeyProblem(IReadOnlyList<HotkeyResult> hotkeys) => RefusedSave(hotkeys)?.Status switch
     {
         null => null,
-        HotkeyStatus.InUse or HotkeyStatus.Duplicate => Tr.Of("Save hotkey is taken", "Raccourci d'enregistrement déjà pris"),
-        _ => Tr.Of("Save hotkey doesn't work", "Raccourci d'enregistrement inutilisable"),
+        HotkeyStatus.InUse or HotkeyStatus.Duplicate => Tr.Of("Save hotkey is taken", "Raccourci déjà pris"),
+        _ => Tr.Of("Save hotkey doesn't work", "Raccourci inactif"),
     };
 
     /// <summary>"Capture on", with the length and the keys of now: the settings are read again while it waits for its turn.</summary>
@@ -258,7 +258,7 @@ internal static class StatusTransitions
             : hotkeys.FirstOrDefault(result => !result.Ok) is { } other ? Describe(other)
             : null;
         var state = refused is not null || importantClipWaiting || onDefaults ? TrayState.Error : TrayStateOf(activity);
-        return (state, closingAfterClip ? Tr.Of(ClosingTip, "Hindsound - fin du clip en cours, puis fermeture") : problem is null ? "Hindsound" : "Hindsound - " + problem);
+        return (state, closingAfterClip ? Tr.Of(ClosingTip, "Hindsound - un clip s'enregistre, puis fermeture") : problem is null ? "Hindsound" : "Hindsound - " + problem);
     }
 
     private static string Describe(HotkeyResult result) => Tr.Format($"{result.Gesture}: {result.Message}", $"{result.Gesture} : {result.Message}");

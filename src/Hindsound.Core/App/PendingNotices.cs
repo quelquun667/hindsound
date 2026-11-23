@@ -48,7 +48,7 @@ internal sealed class PendingNotices(Action<string> journal)
         {
             if (_importantClip is { } older)
             {
-                journal($"notification {older.Kind} replaced while waiting for the desktop: {older.Title} / {older.Body}");
+                journal($"notification {older.Kind} replaced while waiting for the desktop");
             }
 
             _importantClip = content;

@@ -47,6 +47,8 @@ internal static class Program
 
         if (options.DumpNotificationsFolder is not null)
         {
+            // The same --lang as the pages: the states are drawn in the language asked for, English by default.
+            using var notificationLanguage = Tr.Use(options.DumpLanguage);
             return NotificationDump.Write(options.DumpNotificationsFolder, journal);
         }
 
