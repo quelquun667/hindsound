@@ -180,7 +180,7 @@ internal sealed class NameBoxState
     public static string? ClipRefusalText(ClipRenameOutcome outcome, PlatformFeatures features) => outcome switch
     {
         ClipRenameOutcome.Empty => ClipEmptyShown,
-        ClipRenameOutcome.BadCharacters => SettingsEditor.TemplateCharsError,
+        ClipRenameOutcome.BadCharacters => SettingsEditor.TemplateCharsText,
         ClipRenameOutcome.Reserved => features.ReservedNameText,
         ClipRenameOutcome.TrailingDotOrSpace => ClipTrailingShown,
         ClipRenameOutcome.TooLong => ClipTooLongShown,
