@@ -54,6 +54,22 @@ public sealed class SaveAndEditPageTests : IDisposable
     }
 
     [Fact]
+    public void Seven_rows_scroll_and_Reset_to_defaults_comes_fully_into_view_at_the_end()
+    {
+        Screen.SetEditor(new FakeEditorPanel());
+        Screen.ShowSection(Section.Now);
+        Screen.ShowSection(Section.Hotkeys);
+        Assert.True(Screen.MaxScroll > 0);
+
+        _rig.Wheel(-50);
+        Assert.Equal(Screen.MaxScroll, Screen.Scroll);
+
+        var reset = Screen.WidgetById("hotkey.reset")!.Bounds;
+        Assert.True(reset.Y - Screen.Scroll >= SettingsScreen.BandHeight);
+        Assert.True(reset.Bottom - Screen.Scroll <= SettingsScreen.ViewBottom);
+    }
+
+    [Fact]
     public void Without_an_editor_the_row_is_not_shown_and_the_six_others_are()
     {
         Screen.ShowSection(Section.Hotkeys);
