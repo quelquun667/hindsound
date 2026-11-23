@@ -24,6 +24,9 @@ internal interface IEditorWindowScreen : IWindowScreen
     /// <summary>The editor is open with a change or a save under way: opening it on another clip would lose that.</summary>
     bool EditorHoldsWork { get; }
 
+    /// <summary>A box is open on the Library: a name being typed or a question being asked, which opening the editor would drop.</summary>
+    bool BoxOpen { get; }
+
     /// <summary>Whether the window can open an editor at all.</summary>
     bool HasEditor { get; }
 
@@ -117,9 +120,11 @@ internal sealed class WindowGoing
                 return EditorOpening.NotOpened;
             }
 
-            var why = editable.EditorHoldsWork
-                ? "the editor holds changes or a save in progress"
-                : editable.Section is Section.FirstRun or Section.UpdateCard ? "the window shows a card" : null;
+            var why = editable.BoxOpen
+                ? "a box is open on the Library"
+                : editable.EditorHoldsWork
+                    ? "the editor holds changes or a save in progress"
+                    : editable.Section is Section.FirstRun or Section.UpdateCard ? "the window shows a card" : null;
             _bringBack();
             if (why is not null)
             {

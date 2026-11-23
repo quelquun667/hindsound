@@ -115,6 +115,12 @@ internal sealed partial class SettingsScreen
         }
 
         _library?.StopPlaying();
+        if (_editing is not null)
+        {
+            // An editor that is replaced plays for the clip it leaves: its sound stops, and its answers no longer reach this screen.
+            panel.Close();
+        }
+
         ResetEditor();
         _editing = (clip, mode);
         _editorReturnId = returnId;
@@ -122,6 +128,9 @@ internal sealed partial class SettingsScreen
         panel.Load(clip);
         if (Section == Section.Library)
         {
+            // A menu or a list left open on the page would stay over the editor, and a list open takes the keys it needs.
+            DropLibraryOverlays();
+            ClosePopup();
             Refresh();
         }
         else

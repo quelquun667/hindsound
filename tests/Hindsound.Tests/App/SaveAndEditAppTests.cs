@@ -225,6 +225,23 @@ public sealed class SaveAndEditAppTests : IDisposable
     }
 
     [Fact]
+    public void A_clip_saved_as_two_files_opens_with_the_system_file_first_and_the_mic_second()
+    {
+        var app = Built();
+        var system = Path.Combine(Clips, "two_system.mp3");
+        var mic = Path.Combine(Clips, "two_mic.mp3");
+        File.WriteAllBytes(system, new byte[2000]);
+        File.WriteAllBytes(mic, new byte[1000]);
+
+        var opening = app.OpenEditorOn(new ClipResult([system, mic], TimeSpan.FromSeconds(30), 3000, false, [0.5f], false));
+
+        Assert.Equal(EditorOpening.Opened, opening);
+        var clip = _rig.Screen.Editing!.Value.Clip;
+        Assert.Equal([system, mic], clip.Files.Select(file => file.Path));
+        Assert.Equal(system, clip.Main.Path);
+    }
+
+    [Fact]
     public void A_clip_whose_files_are_gone_opens_nothing_and_the_journal_says_so()
     {
         var app = Built();

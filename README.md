@@ -489,8 +489,6 @@ listed), and of the rescue folder. A folder you filled with music shows that mus
 
 `Edit...`, in the menu of a clip, opens it in place of the list. Nothing changes until you save.
 
-The `Save and edit` hotkey saves a clip as `Save clip` does, then opens the editor on it: the window comes to the front, and in a fullscreen game that takes you out of the game. If the editor is already open with a change or a save under way, it is left as it is and the window only comes to the front, with the new clip saved as usual.
-
 - **The part to keep:** drag the handle on each side of the wave. With a handle focused, the arrow keys move it by a tenth of a
   second, and `Shift` with an arrow by a second. `Start`, `End` and `Kept` say where you are, and `Play` plays the kept part.
 - **Volume:** turn it from -12 to +20 dB, each track on its own for a clip saved as two files. The peaks are held under the
@@ -501,6 +499,8 @@ The `Save and edit` hotkey saves a clip as `Save clip` does, then opens the edit
 - **Discord soundboard:** `Send to soundboard...` opens the same page for at most 5.2 seconds, the longest a soundboard sound
   can be. Its save writes a short copy named after the clip with ` (soundboard)`, opens Discord if it is installed and shows
   the file in its folder. In Discord, add it from the settings of your server: `Soundboard`, then `Upload Sound`.
+
+The `Save and edit` hotkey saves a clip as `Save clip` does, then opens the editor on it: the window comes to the front, and in a fullscreen game that takes you out of the game. If the editor is already open with a change or a save under way, or a box of the `Library` is open for a name, it is left as it is and the window only comes to the front, with the new clip saved as usual.
 
 ### Hotkeys
 | Action | Default |
@@ -514,7 +514,7 @@ The `Save and edit` hotkey saves a clip as `Save clip` does, then opens the edit
 | `Copy last clip` | Not set |
 
 You can change them all in Settings > Hotkeys. If another app already holds a combination, Hindsound says so.
-Where Hindsound has no window, `Save and edit` is not offered.
+On Linux and on the Mac, when the window cannot be drawn (SDL 3 or the text libraries and fonts it needs are missing, and the log says which), `Save and edit` is not offered.
 
 ## Settings
 

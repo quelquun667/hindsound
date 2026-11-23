@@ -151,6 +151,123 @@ public sealed class SaveAndEditPageTests : IDisposable
         Assert.False(Screen.EditorHoldsWork);
     }
 
+    private static EditorLoad Loaded() =>
+        new(EditorLoadOutcome.Loaded, TimeSpan.FromSeconds(30), [new float[600]], Hindsound.Export.ExportFormat.Mp3);
+
+    [Fact]
+    public void A_volume_changed_alone_holds_work_with_the_part_kept_where_it_was()
+    {
+        Screen.SetEditor(new FakeEditorPanel());
+        Screen.ShowSection(Section.Library);
+        Screen.OpenEditor(AClip, EditorMode.Normal);
+        Screen.EditorLoaded(Loaded());
+        Assert.False(Screen.EditorHoldsWork);
+
+        _rig.FocusOn(SettingsScreen.EditorVolumePrefix + "0");
+        _rig.Press(Vk.Right, Vk.Right);
+
+        Assert.NotEqual(0, Screen.EditorGains[0]);
+        Assert.False(Screen.EditorSelection!.Moved);
+        Assert.True(Screen.EditorHoldsWork);
+    }
+
+    /// <summary>A panel that says in what order it was asked for what.</summary>
+    private sealed class OrderedPanel : IEditorPanel
+    {
+        public List<string> Calls { get; } = [];
+
+        public void Load(ClipGroup clip) => Calls.Add("load " + clip.Main.Path);
+
+        public long EstimateBytes(EditRequest request) => 0;
+
+        public void Play(EditRequest request) => Calls.Add("play");
+
+        public void StopPlaying() => Calls.Add("stop");
+
+        public void Save(EditRequest request, EditSave save) => Calls.Add("save");
+
+        public void HandToDiscord(string path)
+        {
+        }
+
+        public void Close() => Calls.Add("close");
+    }
+
+    [Fact]
+    public void An_editor_that_changes_clip_closes_the_old_one_first_so_that_its_preview_stops()
+    {
+        var panel = new OrderedPanel();
+        Screen.SetEditor(panel);
+        Screen.ShowSection(Section.Library);
+        Screen.OpenEditor(AClip, EditorMode.Normal);
+        Screen.EditorLoaded(Loaded());
+        Screen.EditorPreviewChanged(PreviewState.Playing);
+        var other = new ClipGroup([new ClipFile(@"C:\Clips\b.mp3", 1000, default)]);
+
+        Screen.OpenEditorOn(other);
+
+        Assert.Equal([@"load C:\Clips\a.mp3", "close", @"load C:\Clips\b.mp3"], panel.Calls);
+        Assert.Equal(other.Main.Path, Screen.Editing!.Value.Clip.Main.Path);
+    }
+
+    // ---------------------------------------------------------------- what the Library has open
+
+    private sealed record Front(WindowGoing Going, List<string> Journal, Func<int> BroughtBack);
+
+    private Front GoingOnTheScreen()
+    {
+        var journal = new List<string>();
+        var brought = 0;
+        var going = new WindowGoing(() => true, () => Screen, () => brought++, _ => { }, journal.Add);
+        return new Front(going, journal, () => brought);
+    }
+
+    private SettingsScreen LibraryWithClips()
+    {
+        Screen.UpdateStatus(ScreenRig.Capturing());
+        Screen.SetLibrary(new ActingLibrary(5));
+        Screen.SetEditor(new FakeEditorPanel());
+        Screen.ShowSection(Section.Library);
+        Screen.SelectClip(FakeLibrary.PathOf(1));
+        return Screen;
+    }
+
+    [Fact]
+    public void A_box_open_on_the_Library_is_kept_the_window_only_comes_to_the_front_and_the_journal_says_why()
+    {
+        LibraryWithClips();
+        Screen.TabTo(SettingsScreen.ClipListId);
+        Screen.Key(ClipKeys.F2, 0);
+        Assert.True(Screen.BoxOpen);
+        var front = GoingOnTheScreen();
+
+        var opening = front.Going.OpenEditor(AClip);
+
+        Assert.Equal(EditorOpening.KeptWhatItShows, opening);
+        Assert.Equal(1, front.BroughtBack());
+        Assert.True(Screen.BoxOpen);
+        Assert.False(Screen.EditorOpen);
+        Assert.Contains(front.Journal, line => line.StartsWith("editor not opened: a box is open on the Library", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_menu_of_a_clip_open_on_the_Library_is_dropped_and_the_editor_opens()
+    {
+        LibraryWithClips();
+        var more = Screen.WidgetById(SettingsScreen.ClipMoreId)!.Bounds;
+        Screen.MouseDown(more.MidX, more.MidY);
+        Screen.MouseUp(more.MidX, more.MidY);
+        Assert.NotNull(Screen.OpenClipMenu);
+        var front = GoingOnTheScreen();
+
+        var opening = front.Going.OpenEditor(AClip);
+
+        Assert.Equal(EditorOpening.Opened, opening);
+        Assert.Null(Screen.OpenClipMenu);
+        Assert.False(Screen.PopupOpen);
+        Assert.True(Screen.EditorOpen);
+    }
+
     // ---------------------------------------------------------------- the settings file
 
     private string File1 => Path.Combine(_folder, "settings.json");
@@ -254,6 +371,8 @@ public sealed class SaveAndEditPageTests : IDisposable
         public bool EditorHoldsWork => holds;
 
         public bool HasEditor => hasEditor;
+
+        public bool BoxOpen => false;
 
         public void ShowSection(Section section) => Section = section;
 
