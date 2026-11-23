@@ -1,4 +1,5 @@
 using System.Globalization;
+using Hindsound.App;
 
 namespace Hindsound.Updates;
 
@@ -119,7 +120,7 @@ internal sealed record UpdatePanelFacts
 /// <summary>The Updates section as text and switches, with no window: every line of it is tested from fixed facts.</summary>
 internal static class UpdatePanel
 {
-    public const string NotInstalled = "This copy was not installed, so it does not update itself.";
+    public static string NotInstalled => Tr.Of("This copy was not installed, so it does not update itself.", "Cette copie n'a pas été installée\u00A0: elle ne se met pas à jour toute seule.");
 
     public static UpdatePanelView Inactive(UpdateVersion installed) =>
         new(VersionLine(installed), NotInstalled, Active: false, CheckEnabled: false, Offered: null,
@@ -163,7 +164,7 @@ internal static class UpdatePanel
     {
         var known = offered is not null;
         var status = known && !IsSkipped(offered!.Value, facts.Skipped) && facts.Pass == UpdatePassKind.None && facts.Problem == UpdateProblem.None
-            ? $"Version {offered} is available."
+            ? Tr.Format($"Version {offered} is available.", $"La version {offered} est disponible.")
             : StatusLine(facts, offered);
         return new UpdatePanelView(VersionLine(facts.Installed), status, Active: true, CheckEnabled: idle, offered,
             UpdateEnabled: known, ShowWhatsNew: false, ShowSkip: known, ShowUpdate: known)
@@ -205,12 +206,18 @@ internal static class UpdatePanel
     /// <summary>SetupChanged also means locked (UpdateRunner): the line never says the file was changed.</summary>
     public static string RunMessage(RunStatus status) => status switch
     {
-        RunStatus.SetupChanged => "Couldn't open the update file. Try again in a moment.",
-        RunStatus.SetupMissing => "The update file is gone. Use Check now.",
-        RunStatus.StateNotSaved => "Couldn't write the update state. Nothing changed.",
-        RunStatus.StartFailed => "Windows refused to start the update.",
-        _ => "Starting the update...",
+        RunStatus.SetupChanged => Tr.Of("Couldn't open the update file. Try again in a moment.", "Impossible d'ouvrir le fichier de mise à jour. Réessaie dans un instant."),
+        RunStatus.SetupMissing => Tr.Of("The update file is gone. Use Check now.", "Le fichier de mise à jour a disparu. Utilise Vérifier maintenant."),
+        RunStatus.StateNotSaved => Tr.Of("Couldn't write the update state. Nothing changed.", "Impossible d'écrire l'état de la mise à jour. Rien n'a changé."),
+        RunStatus.StartFailed => StartRefused(),
+        _ => Tr.Of("Starting the update...", "Lancement de la mise à jour..."),
     };
+
+    // Only the installed Windows app starts a Setup, but the sentence must be true wherever it is read: any other system is named "the system".
+    private static string StartRefused() =>
+        PlatformDefaults.Features is { } system && system.StartupWords != PlatformFeatures.Windows.StartupWords
+            ? Tr.Of("The system refused to start the update.", "Le système a refusé de lancer la mise à jour.")
+            : Tr.Of("Windows refused to start the update.", "Windows a refusé de lancer la mise à jour.");
 
     private static string VersionLine(UpdateVersion installed) => $"Version {installed}";
 
@@ -219,9 +226,9 @@ internal static class UpdatePanel
         switch (f.Pass)
         {
             case UpdatePassKind.Check:
-                return "Checking...";
+                return Tr.Of("Checking...", "Vérification...");
             case UpdatePassKind.Download:
-                return $"Downloading {f.PassVersion}...";
+                return Tr.Format($"Downloading {f.PassVersion}...", $"Téléchargement de {f.PassVersion}...");
         }
 
         if (f.Run is { } run && run != RunStatus.Started)
@@ -237,12 +244,12 @@ internal static class UpdatePanel
         switch (f.Problem)
         {
             case UpdateProblem.Paused:
-                return "Paused by a game or a clip. It will try again later.";
+                return Tr.Of("Paused by a game or a clip. It will try again later.", "Mise en pause par un jeu ou un clip. Nouvel essai plus tard.");
             case UpdateProblem.DownloadFailed:
-                return "Download failed. It will try again tomorrow.";
+                return Tr.Of("Download failed. It will try again tomorrow.", "Échec du téléchargement. Nouvel essai demain.");
             case UpdateProblem.CheckFailed:
                 // Off has no next check: only the button tries again.
-                return f.Mode == UpdateMode.Off ? "Couldn't check." : "Couldn't check. It will try again tomorrow.";
+                return f.Mode == UpdateMode.Off ? Tr.Of("Couldn't check.", "Vérification impossible.") : Tr.Of("Couldn't check. It will try again tomorrow.", "Vérification impossible. Nouvel essai demain.");
         }
 
         if (offered is { } available)
@@ -252,37 +259,43 @@ internal static class UpdatePanel
 
         if (f.LastCheck is not { } last)
         {
-            return f.Mode == UpdateMode.Off ? "Updates are off." : "Not checked yet.";
+            return f.Mode == UpdateMode.Off ? Tr.Of("Updates are off.", "Mises à jour désactivées.") : Tr.Of("Not checked yet.", "Pas encore vérifié.");
         }
 
         // The manifest does not outlive a restart, the floor does: "Up to date" would be wrong for up to 24 hours.
         if (f.HighestSeen is { } seen && seen > f.Installed)
         {
-            return IsSkipped(seen, f.Skipped) ? $"Version {seen} is skipped." : $"Version {seen} is available. Use Check now.";
+            return IsSkipped(seen, f.Skipped)
+                ? Tr.Format($"Version {seen} is skipped.", $"La version {seen} est ignorée.")
+                : Tr.Format($"Version {seen} is available. Use Check now.", $"La version {seen} est disponible. Utilise Vérifier maintenant.");
         }
 
-        return "Up to date. " + Checked(last, f.Now);
+        return Tr.Of("Up to date. ", "À jour. ") + Checked(last, f.Now);
     }
 
     private static string OfferedLine(UpdatePanelFacts f, UpdateVersion version, bool onDisk)
     {
         if (IsSkipped(version, f.Skipped))
         {
-            return $"Version {version} is skipped.";
+            return Tr.Format($"Version {version} is skipped.", $"La version {version} est ignorée.");
         }
 
         if (f.Attempts is not null && f.Attempts.TryGetValue(version.ToString(), out var attempts) && attempts >= UpdateDecider.MaxAttemptsPerVersion)
         {
-            return $"Update to {version} failed {UpdateDecider.MaxAttemptsPerVersion} times. Use Update now to try again.";
+            return Tr.Format($"Update to {version} failed {UpdateDecider.MaxAttemptsPerVersion} times. Use Update now to try again.", $"La mise à jour vers {version} a échoué {UpdateDecider.MaxAttemptsPerVersion} fois. Utilise Mettre à jour pour réessayer.");
         }
 
         if (onDisk)
         {
-            return f.Mode == UpdateMode.Auto ? $"Version {version} is ready. It installs when Hindsound closes." : $"Version {version} is ready.";
+            return f.Mode == UpdateMode.Auto
+                ? Tr.Format($"Version {version} is ready. It installs when Hindsound closes.", $"La version {version} est prête. Elle s'installe à la fermeture de Hindsound.")
+                : Tr.Format($"Version {version} is ready.", $"La version {version} est prête.");
         }
 
         // The decider downloads nothing in Off.
-        return f.Mode == UpdateMode.Off ? $"Version {version} is available. Switch to Ask me to download it." : $"Version {version} is available.";
+        return f.Mode == UpdateMode.Off
+            ? Tr.Format($"Version {version} is available. Switch to Ask me to download it.", $"La version {version} est disponible. Choisis Me demander pour la télécharger.")
+            : Tr.Format($"Version {version} is available.", $"La version {version} est disponible.");
     }
 
     // InvariantGlobalization is on in the published exe: digits only, no month names.
@@ -291,25 +304,25 @@ internal static class UpdatePanel
         var local = last.ToOffset(now.Offset);
         if (local.Date == now.Date)
         {
-            return "Checked today " + local.ToString("HH:mm", CultureInfo.InvariantCulture);
+            return Tr.Of("Checked today ", "Vérifié aujourd'hui ") + local.ToString("HH:mm", CultureInfo.InvariantCulture);
         }
 
         return local.Date == now.Date.AddDays(-1)
-            ? "Checked yesterday " + local.ToString("HH:mm", CultureInfo.InvariantCulture)
-            : "Checked " + local.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            ? Tr.Of("Checked yesterday ", "Vérifié hier ") + local.ToString("HH:mm", CultureInfo.InvariantCulture)
+            : Tr.Of("Checked ", "Vérifié le ") + local.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
     }
 
     private static string? CardLine(UpdatePanelFacts f)
     {
         if (f.ClickStands && f.Pass == UpdatePassKind.Download)
         {
-            return $"Downloading {f.PassVersion}...";
+            return Tr.Format($"Downloading {f.PassVersion}...", $"Téléchargement de {f.PassVersion}...");
         }
 
         return f.Card switch
         {
-            UpdateCardNote.NotNow => "Not now: a game or a clip is running.",
-            UpdateCardNote.DownloadFailed => "Download failed. Nothing changed.",
+            UpdateCardNote.NotNow => Tr.Of("Not now: a game or a clip is running.", "Pas maintenant\u00A0: un jeu ou un clip est en cours."),
+            UpdateCardNote.DownloadFailed => Tr.Of("Download failed. Nothing changed.", "Échec du téléchargement. Rien n'a changé."),
             UpdateCardNote.NotStarted when f.Run is { } run => RunMessage(run),
             _ => null,
         };

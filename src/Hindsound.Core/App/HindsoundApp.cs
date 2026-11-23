@@ -1373,7 +1373,7 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
     // moment they are made: kept apart from the windows so a test can look at the wiring itself.
     internal IReadOnlyList<TrayMenuItem> MenuItemsNow() => !_shell.HasWindow
         ? TrayMenu.WindowlessItemsFor(_lastStatus, _settings.General.StartWithWindows, _settings.ClipSeconds, _leave.Waiting)
-        : TrayMenu.ItemsFor(_lastStatus, _lastClip is not null, _leave.Waiting, _updates?.MenuVersion is { } version ? $"Update to {version}..." : null);
+        : TrayMenu.ItemsFor(_lastStatus, _lastClip is not null, _leave.Waiting, _updates?.MenuVersion is { } version ? Tr.Format($"Update to {version}...", $"Mettre à jour vers {version}...") : null);
 
     internal NotificationContent FreshNow(NotificationContent waited) =>
         StatusTransitions.FreshFrom(waited, _settings, _hotkeyResults, _updatedTo, _lastStatus);
@@ -2395,10 +2395,10 @@ internal sealed class HindsoundApp : IClipBackend, ISettingsBackend, IUpdateHost
             var view = _updates?.View ?? UpdatePanel.Inactive(UpdateWiring.InstalledVersion());
             if (_saveThenUpdate.Waiting)
             {
-                return view with { CardLine = "Saving your clip, then updating...", CardBusy = true };
+                return view with { CardLine = Tr.Of("Saving your clip, then updating...", "Enregistrement du clip, puis mise à jour..."), CardBusy = true };
             }
 
-            return _saveThenUpdate.ClipFailed ? view with { CardLine = "The clip was not saved. Nothing was updated." } : view;
+            return _saveThenUpdate.ClipFailed ? view with { CardLine = Tr.Of("The clip was not saved. Nothing was updated.", "Le clip n'a pas été enregistré. Rien n'a été mis à jour.") } : view;
         }
     }
 

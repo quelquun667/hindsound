@@ -57,9 +57,9 @@ internal sealed record UpdateChannel(string ManifestName, UpdateDelivery Deliver
 /// <summary>The words of a new version on a platform that does not install it: the click opens the release page.</summary>
 internal static class ReleaseNotice
 {
-    public const string Body = "Click to download it.";
+    public static string Body => Tr.Of("Click to download it.", "Clique pour la télécharger.");
 
-    public static string Title(UpdateVersion version) => $"Hindsound {version} is out";
+    public static string Title(UpdateVersion version) => Tr.Format($"Hindsound {version} is out", $"Hindsound {version} est disponible");
 
     /// <summary>
     /// Of the kind of the other announcements, so it waits for the desktop, is shown once, and counts as made when on screen.

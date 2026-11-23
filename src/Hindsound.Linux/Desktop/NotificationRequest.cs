@@ -39,10 +39,10 @@ internal sealed record NotificationRequest(
 
     public const string ShowFolderAction = "show-folder";
 
-    public const string ShowFolderLabel = "Show in folder";
+    public static string ShowFolderLabel => Tr.Of("Show in folder", "Afficher dans le dossier");
 
     /// <summary>Most servers never show the label of the default action; some read it out.</summary>
-    public const string DefaultLabel = "Open";
+    public static string DefaultLabel => Tr.Of("Open", "Ouvrir");
 
     /// <summary>
     /// The urgency of every notification of the app (the levels of the specification are 0 low, 1 normal, 2 critical). GNOME and

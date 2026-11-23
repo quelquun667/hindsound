@@ -88,7 +88,7 @@ internal sealed class LeaveFlow
 /// </summary>
 internal sealed class SessionEndBlock
 {
-    public const string Reason = "Saving your clip";
+    public static string Reason => Tr.Of("Saving your clip", "Enregistrement de ton clip");
 
     /// <summary>The clips get this much in all at the end of a session: Windows does not wait long.</summary>
     public static readonly TimeSpan ClipsLimit = TimeSpan.FromSeconds(15);

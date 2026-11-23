@@ -87,8 +87,14 @@ internal static class NotificationPalette
 internal static class NotificationStates
 {
     // The folder is named by the separator of the system, as the user sees it in a file manager.
-    public static readonly string RescuedBody = "Clip kept in " + Path.Combine("Hindsound", "Rescued");
-    public static readonly string RescuedNotCopiedBody = "Kept in " + Path.Combine("Hindsound", "Rescued") + ". Not copied";
+    // Properties, read at each use: a text kept in a field would keep the language of the first use.
+    public static string RescuedBody => Tr.Format($"Clip kept in {RescuedFolder}", $"Clip gardé dans {RescuedFolder}");
+
+    public static string RescuedNotCopiedBody => Tr.Format($"Kept in {RescuedFolder}. Not copied", $"Gardé dans {RescuedFolder}. Non copié");
+
+    private static string RescuedFolder => Path.Combine("Hindsound", "Rescued");
+
+    private const char NoBreakSpace = '\u00A0';
 
     private static readonly string[] PasteKeys = ["Ctrl", "V"];
     private static readonly BarColumn[] NoBars = [];
@@ -111,43 +117,45 @@ internal static class NotificationStates
         var copyFailed = copyWanted && !copied;
         if (result.Rescued)
         {
-            return Icon(NotificationKind.Rescued, "Output folder not writable", copyFailed ? RescuedNotCopiedBody : RescuedBody, NotificationPalette.Hot, NotificationVisual.Triangle, NotificationPalette.Hot);
+            return Icon(NotificationKind.Rescued, Tr.Of("Output folder not writable", "Dossier de sortie inaccessible"), copyFailed ? RescuedNotCopiedBody : RescuedBody, NotificationPalette.Hot, NotificationVisual.Triangle, NotificationPalette.Hot);
         }
 
         var seconds = WholeSeconds(result.Duration);
         var requestedSeconds = WholeSeconds(requested);
         var partial = seconds < requestedSeconds;
+        var length = FormatDuration(seconds);
+        var asked = FormatDuration(requestedSeconds);
         var title = partial
-            ? $"Clip saved ({FormatDuration(seconds)} of {FormatDuration(requestedSeconds)})"
-            : $"Clip saved ({FormatDuration(seconds)})";
+            ? Tr.Format($"Clip saved ({length} of {asked})", $"Clip enregistré ({length} sur {asked})")
+            : Tr.Format($"Clip saved ({length})", $"Clip enregistré ({length})");
         var bars = BarLayout.Arrange(result.Bars, result.Duration, requested, result.IsSilent);
 
         if (result.IsSilent)
         {
-            return new NotificationContent(NotificationKind.Silent, title, copyFailed ? "It's silent, and not copied" : "It's silent. Check Settings > Audio.", [], NotificationPalette.Amber,
+            return new NotificationContent(NotificationKind.Silent, title, copyFailed ? Tr.Of("It's silent, and not copied", "Il est silencieux, et non copié") : Tr.Of("It's silent. Check Settings > Audio.", "Il est silencieux. Vérifie Réglages > Audio."), [], NotificationPalette.Amber,
                 NotificationVisual.Bars, accent, bars);
         }
 
         if (copyFailed)
         {
             // The sentence needs the wider text area, so the triangle takes the place of the bars.
-            return new NotificationContent(NotificationKind.CopyFailed, title, "Couldn't copy. Use tray > Copy last clip.", [], NotificationPalette.Amber,
+            return new NotificationContent(NotificationKind.CopyFailed, title, Tr.Of("Couldn't copy. Use tray > Copy last clip.", "Copie impossible. Utilise l'icône > Copier le dernier clip."), [], NotificationPalette.Amber,
                 NotificationVisual.Triangle, NotificationPalette.Amber, NoBars);
         }
 
         if (result.FellBackToWav)
         {
-            return new NotificationContent(NotificationKind.WavFallback, title, copied ? "Saved as WAV. Paste" : "Saved as WAV. MP3 failed.", copied ? pasteKeys : [],
+            return new NotificationContent(NotificationKind.WavFallback, title, copied ? Tr.Of("Saved as WAV. Paste", "Enregistré en WAV. Colle") : Tr.Of("Saved as WAV. MP3 failed.", "Enregistré en WAV. Échec du MP3."), copied ? pasteKeys : [],
                 NotificationPalette.Amber, NotificationVisual.Bars, accent, bars);
         }
 
         if (!copyWanted)
         {
-            return new NotificationContent(NotificationKind.NotCopied, title, "In your clips folder.", [], partial ? NotificationPalette.Amber : accent,
+            return new NotificationContent(NotificationKind.NotCopied, title, Tr.Of("In your clips folder.", "Dans ton dossier de clips."), [], partial ? NotificationPalette.Amber : accent,
                 NotificationVisual.Bars, accent, bars);
         }
 
-        return new NotificationContent(partial ? NotificationKind.Partial : NotificationKind.Saved, title, "Copied. Paste", pasteKeys,
+        return new NotificationContent(partial ? NotificationKind.Partial : NotificationKind.Saved, title, Tr.Of("Copied. Paste", "Copié. Colle"), pasteKeys,
             partial ? NotificationPalette.Amber : accent, NotificationVisual.Bars, accent, bars);
     }
 
@@ -156,11 +164,14 @@ internal static class NotificationStates
         content.Keys.Count > 0 && content.Kind is NotificationKind.Saved or NotificationKind.Partial or NotificationKind.WavFallback;
 
     public static NotificationContent NoDevice() =>
-        Icon(NotificationKind.NoDevice, "No audio device", "Nothing is being captured", NotificationPalette.Hot, NotificationVisual.Triangle, NotificationPalette.Hot);
+        Icon(NotificationKind.NoDevice, Tr.Of("No audio device", "Aucun périphérique audio"), Tr.Of("Nothing is being captured", "Rien n'est capturé"), NotificationPalette.Hot, NotificationVisual.Triangle, NotificationPalette.Hot);
 
     /// <param name="keptSeconds">What the memory holds: it stays there during the pause, and can still be saved.</param>
     public static NotificationContent Paused(int keptSeconds = 0) =>
-        Icon(NotificationKind.Paused, "Capture paused", keptSeconds >= 1 ? $"{FormatDuration(keptSeconds)} kept. Nothing new is recorded" : "Nothing new is being recorded",
+        Icon(NotificationKind.Paused, Tr.Of("Capture paused", "Capture en pause"),
+            keptSeconds >= 1
+                ? Tr.Format($"{FormatDuration(keptSeconds)} kept. Nothing new is recorded", $"{FormatDuration(keptSeconds)} en mémoire. Rien de nouveau n'est enregistré")
+                : Tr.Of("Nothing new is being recorded", "Rien de nouveau n'est enregistré"),
             NotificationPalette.Muted, NotificationVisual.Pause, NotificationPalette.Muted);
 
     /// <param name="bufferSeconds">How much can be kept.</param>
@@ -171,7 +182,7 @@ internal static class NotificationStates
     /// <param name="features">The system, whose words name the keys; the one installed when not given, Windows when none is.</param>
     public static NotificationContent CaptureOn(int bufferSeconds, string? saveGesture, string? saveHotkeyProblem = null, string? updatedTo = null, int? keptSeconds = null, PlatformFeatures? features = null)
     {
-        var title = updatedTo is null ? "Capture on" : $"Updated to {updatedTo}";
+        var title = updatedTo is null ? Tr.Of("Capture on", "Capture active") : Tr.Format($"Updated to {updatedTo}", $"Mis à jour vers {updatedTo}");
         var kept = KeptLine(bufferSeconds, keptSeconds);
         if (saveHotkeyProblem is not null)
         {
@@ -183,7 +194,7 @@ internal static class NotificationStates
         }
 
         var keys = string.IsNullOrWhiteSpace(saveGesture) ? [] : (features ?? PlatformDefaults.Features ?? PlatformFeatures.Windows).KeyText(saveGesture).Split('+');
-        var body = keys.Length == 0 ? kept : $"{kept}. Save:";
+        var body = keys.Length == 0 ? kept : Tr.Format($"{kept}. Save:", $"{kept}. Enregistre{NoBreakSpace}:");
         return new NotificationContent(NotificationKind.CaptureOn, title, body, keys, NotificationPalette.Hot, NotificationVisual.Dot, NotificationPalette.Hot, NoBars);
     }
 
@@ -192,80 +203,86 @@ internal static class NotificationStates
         var length = FormatDuration(cap);
         if (kept is not { } seconds)
         {
-            return $"Keeping up to {length}";
+            return Tr.Format($"Keeping up to {length}", $"Garde jusqu'à {length}");
         }
 
         return KeptDuration.StateOf(seconds, cap) switch
         {
-            KeptState.Full => $"Keeping the last {length}",
-            KeptState.Starting => $"Filling, up to {length}",
-            _ => $"{FormatDuration(seconds)} of {length} kept",
+            KeptState.Full => Tr.Format($"Keeping the last {length}", $"Garde {length} en mémoire"),
+            KeptState.Starting => Tr.Format($"Filling, up to {length}", $"Remplissage, jusqu'à {length}"),
+            _ => Tr.Format($"{FormatDuration(seconds)} of {length} kept", $"{FormatDuration(seconds)} sur {length} en mémoire"),
         };
     }
 
     public static NotificationContent DeviceChanged(string deviceName) =>
-        Icon(NotificationKind.DeviceChanged, "Audio device changed", "Now capturing " + deviceName, NotificationPalette.Muted, NotificationVisual.Headset, NotificationPalette.Muted);
+        Icon(NotificationKind.DeviceChanged, Tr.Of("Audio device changed", "Périphérique audio changé"), Tr.Format($"Now capturing {deviceName}", $"Capture sur {deviceName}"), NotificationPalette.Muted, NotificationVisual.Headset, NotificationPalette.Muted);
 
     public static NotificationContent Saving(TimeSpan requested) =>
-        Icon(NotificationKind.Saving, $"Saving clip ({FormatDuration(WholeSeconds(requested))})", "One moment", NotificationPalette.Muted, NotificationVisual.Pending, NotificationPalette.Muted);
+        Icon(NotificationKind.Saving, Tr.Format($"Saving clip ({FormatDuration(WholeSeconds(requested))})", $"Enregistrement du clip ({FormatDuration(WholeSeconds(requested))})"), Tr.Of("One moment", "Un instant"), NotificationPalette.Muted, NotificationVisual.Pending, NotificationPalette.Muted);
 
     public static NotificationContent ClosingAfterClip() =>
-        Icon(NotificationKind.ClosingAfterClip, "Saving your clip", "Hindsound closes when it's done", NotificationPalette.Muted, NotificationVisual.Pending, NotificationPalette.Muted);
+        Icon(NotificationKind.ClosingAfterClip, Tr.Of("Saving your clip", "Enregistrement de ton clip"), Tr.Of("Hindsound closes when it's done", "Hindsound se ferme quand c'est fini"), NotificationPalette.Muted, NotificationVisual.Pending, NotificationPalette.Muted);
 
     public static NotificationContent NothingToSave() =>
-        Icon(NotificationKind.NothingToSave, "Nothing to save yet", "No sound has been captured so far", NotificationPalette.Amber, NotificationVisual.Triangle, NotificationPalette.Amber);
+        Icon(NotificationKind.NothingToSave, Tr.Of("Nothing to save yet", "Rien à enregistrer pour l'instant"), Tr.Of("No sound has been captured so far", "Aucun son n'a encore été capturé"), NotificationPalette.Amber, NotificationVisual.Triangle, NotificationPalette.Amber);
 
     public static NotificationContent SaveFailed() =>
-        Icon(NotificationKind.SaveFailed, "Couldn't save the clip", "The reason is in hindsound.log", NotificationPalette.Hot, NotificationVisual.Triangle, NotificationPalette.Hot);
+        Icon(NotificationKind.SaveFailed, Tr.Of("Couldn't save the clip", "Clip non enregistré"), Tr.Of("The reason is in hindsound.log", "La raison est dans hindsound.log"), NotificationPalette.Hot, NotificationVisual.Triangle, NotificationPalette.Hot);
 
     public static NotificationContent StillSaving() =>
-        Icon(NotificationKind.StillSaving, "Still saving your last clip", "Try again in a moment", NotificationPalette.Amber, NotificationVisual.Triangle, NotificationPalette.Amber);
+        Icon(NotificationKind.StillSaving, Tr.Of("Still saving your last clip", "Ton dernier clip s'enregistre encore"), Tr.Of("Try again in a moment", "Réessaie dans un instant"), NotificationPalette.Amber, NotificationVisual.Triangle, NotificationPalette.Amber);
 
     public static NotificationContent LastClipGone() =>
-        Icon(NotificationKind.LastClipGone, "Last clip is gone", "It was moved or deleted", NotificationPalette.Amber, NotificationVisual.Triangle, NotificationPalette.Amber);
+        Icon(NotificationKind.LastClipGone, Tr.Of("Last clip is gone", "Dernier clip introuvable"), Tr.Of("It was moved or deleted", "Il a été déplacé ou supprimé"), NotificationPalette.Amber, NotificationVisual.Triangle, NotificationPalette.Amber);
 
     public static NotificationContent MicLost() =>
-        Icon(NotificationKind.MicLost, "Microphone lost", "Clips have no voice until it's back", NotificationPalette.Amber, NotificationVisual.Triangle, NotificationPalette.Amber);
+        Icon(NotificationKind.MicLost, Tr.Of("Microphone lost", "Micro perdu"), Tr.Of("Clips have no voice until it's back", "Les clips sont sans voix jusqu'à son retour"), NotificationPalette.Amber, NotificationVisual.Triangle, NotificationPalette.Amber);
 
     public static NotificationContent MicBack() =>
-        Icon(NotificationKind.MicBack, "Microphone back", "Clips have your voice again", NotificationPalette.Muted, NotificationVisual.Headset, NotificationPalette.Muted);
+        Icon(NotificationKind.MicBack, Tr.Of("Microphone back", "Micro de retour"), Tr.Of("Clips have your voice again", "Les clips ont de nouveau ta voix"), NotificationPalette.Muted, NotificationVisual.Headset, NotificationPalette.Muted);
 
     /// <summary>A new version is downloaded, and installs by itself when the app leaves.</summary>
     public static NotificationContent UpdateReady(string version, uint accent) =>
-        Icon(NotificationKind.UpdateReady, $"Update ready ({version})", "Installs when Hindsound closes. Click for details.", accent, NotificationVisual.Pending, accent)
+        Icon(NotificationKind.UpdateReady, Tr.Format($"Update ready ({version})", $"Mise à jour prête ({version})"), Tr.Of("Installs when Hindsound closes. Click for details.", "S'installe à la fermeture de Hindsound. Clique pour les détails."), accent, NotificationVisual.Pending, accent)
             with { ClickShowsUpdates = true };
 
     /// <summary>A new version is known, and nothing installs until the user says so: "installs when it closes" would be false.</summary>
     public static NotificationContent UpdateAvailable(string version, uint accent) =>
-        Icon(NotificationKind.UpdateReady, $"Update available ({version})", "Click to see what's new.", accent, NotificationVisual.Pending, accent)
+        Icon(NotificationKind.UpdateReady, Tr.Format($"Update available ({version})", $"Mise à jour disponible ({version})"), Tr.Of("Click to see what's new.", "Clique pour voir les nouveautés."), accent, NotificationVisual.Pending, accent)
             with { ClickShowsUpdates = true };
 
     /// <summary>Setup did not install the new version, and the app came back on the one it had.</summary>
     /// <param name="installed">The version that runs.</param>
     /// <param name="willRetry">Something tries again by itself; otherwise only the button can.</param>
     public static NotificationContent UpdateFailed(string installed, bool willRetry) =>
-        Problem(NotificationKind.UpdateFailed, "Update failed",
-            willRetry ? $"Still on {installed}. It will try again later." : $"Still on {installed}. Update from Settings > General.")
+        Problem(NotificationKind.UpdateFailed, Tr.Of("Update failed", "Mise à jour échouée"),
+            willRetry
+                ? Tr.Format($"Still on {installed}. It will try again later.", $"Toujours en {installed}. Nouvel essai plus tard.")
+                : Tr.Format($"Still on {installed}. Update from Settings > General.", $"Toujours en {installed}. Mets à jour depuis Réglages > Général."))
             with { ClickShowsUpdates = true };
 
     /// <summary>The start found a broken settings file.</summary>
     /// <param name="copyKept">A copy of it exists; otherwise it stayed in its place.</param>
     public static NotificationContent SettingsDamaged(bool copyKept) =>
-        Problem(NotificationKind.SettingsDamaged, "Settings file was damaged", copyKept ? "Defaults restored, mic off. Copy kept as .bak" : "Defaults restored, mic off");
+        Problem(NotificationKind.SettingsDamaged, Tr.Of("Settings file was damaged", "Fichier de réglages endommagé"),
+            copyKept ? Tr.Of("Defaults restored, mic off. Copy kept as .bak", "Valeurs par défaut rétablies, micro coupé. Copie gardée en .bak") : Tr.Of("Defaults restored, mic off", "Valeurs par défaut rétablies, micro coupé"));
 
     public static NotificationContent SettingsUnreadable() =>
-        Problem(NotificationKind.SettingsUnreadable, "Can't read the settings file", "Using defaults, mic off, until it can be read");
+        Problem(NotificationKind.SettingsUnreadable, Tr.Of("Can't read the settings file", "Fichier de réglages illisible"), Tr.Of("Using defaults, mic off, until it can be read", "Valeurs par défaut et micro coupé, jusqu'à sa lecture"));
 
     public static NotificationContent SettingsHasError() =>
-        Problem(NotificationKind.SettingsHasError, "Settings file has an error", "Keeping the current settings");
+        Problem(NotificationKind.SettingsHasError, Tr.Of("Settings file has an error", "Erreur dans le fichier de réglages"), Tr.Of("Keeping the current settings", "Les réglages actuels sont gardés"));
 
     public static NotificationContent SettingsNotSaved() =>
-        Problem(NotificationKind.SettingsNotSaved, "Couldn't save your settings", "This change is lost at the next start");
+        Problem(NotificationKind.SettingsNotSaved, Tr.Of("Couldn't save your settings", "Réglages non enregistrés"), Tr.Of("This change is lost at the next start", "Ce changement sera perdu au prochain démarrage"));
 
     /// <summary>Named as the toggle is on this system: "Start with Windows", or "Start with the session" on Linux.</summary>
     /// <param name="features">The words of the system; the running one's when left out.</param>
     public static NotificationContent StartupNotChanged(PlatformFeatures? features = null) =>
-        Problem(NotificationKind.StartupNotChanged, "Couldn't change " + (features ?? PlatformDefaults.Features ?? PlatformFeatures.Windows).StartupLabel, "It stays as it was");
+        Problem(NotificationKind.StartupNotChanged, StartupChangeTitle((features ?? PlatformDefaults.Features ?? PlatformFeatures.Windows).StartupLabel), Tr.Of("It stays as it was", "Rien n'a changé"));
+
+    private static string StartupChangeTitle(string label) =>
+        Tr.Format($"Couldn't change {label}", $"Impossible de changer «{NoBreakSpace}{label}{NoBreakSpace}»");
 
     /// <summary><c>m:ss</c>.</summary>
     public static string FormatDuration(int seconds) => $"{seconds / 60}:{seconds % 60:00}";

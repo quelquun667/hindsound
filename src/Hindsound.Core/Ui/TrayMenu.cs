@@ -86,22 +86,22 @@ internal static class TrayMenu
     {
         if (closingAfterClip)
         {
-            return [new(TrayCommand.Quit, "Quit")];
+            return [new(TrayCommand.Quit, Tr.Of("Quit", "Quitter"))];
         }
 
         List<TrayMenuItem> items =
         [
-            new(TrayCommand.OpenHindsound, "Open Hindsound"),
-            new(TrayCommand.Library, "Library"),
-            SaveItem(TrayCommand.Save30s, "Save up to 30s", 30, buffered),
-            SaveItem(TrayCommand.Save15s, "Save up to 15s", 15, buffered),
-            SaveItem(TrayCommand.Save1m, "Save up to 1 min", 60, buffered),
-            SaveItem(TrayCommand.Save5m, "Save up to 5 min", 300, buffered),
+            new(TrayCommand.OpenHindsound, Tr.Of("Open Hindsound", "Ouvrir Hindsound")),
+            new(TrayCommand.Library, Tr.Of("Library", "Bibliothèque")),
+            SaveItem(TrayCommand.Save30s, Tr.Of("Save up to 30s", "Enregistrer 30\u00A0s"), 30, buffered),
+            SaveItem(TrayCommand.Save15s, Tr.Of("Save up to 15s", "Enregistrer 15\u00A0s"), 15, buffered),
+            SaveItem(TrayCommand.Save1m, Tr.Of("Save up to 1 min", "Enregistrer 1\u00A0min"), 60, buffered),
+            SaveItem(TrayCommand.Save5m, Tr.Of("Save up to 5 min", "Enregistrer 5\u00A0min"), 300, buffered),
             new(TrayCommand.None),
-            new(TrayCommand.CopyLast, "Copy last clip", hasLastClip),
-            new(TrayCommand.TogglePause, paused ? "Resume capture" : "Pause capture"),
-            new(TrayCommand.OpenFolder, "Open clips folder"),
-            new(TrayCommand.Settings, "Settings"),
+            new(TrayCommand.CopyLast, Tr.Of("Copy last clip", "Copier le dernier clip"), hasLastClip),
+            new(TrayCommand.TogglePause, paused ? Tr.Of("Resume capture", "Reprendre la capture") : Tr.Of("Pause capture", "Mettre la capture en pause")),
+            new(TrayCommand.OpenFolder, Tr.Of("Open clips folder", "Ouvrir le dossier des clips")),
+            new(TrayCommand.Settings, Tr.Of("Settings", "Réglages")),
             new(TrayCommand.None),
         ];
 
@@ -110,7 +110,7 @@ internal static class TrayMenu
             items.Add(new(TrayCommand.UpdateNow, updateText));
         }
 
-        items.Add(new(TrayCommand.Quit, "Quit"));
+        items.Add(new(TrayCommand.Quit, Tr.Of("Quit", "Quitter")));
         return items;
     }
 
@@ -124,18 +124,18 @@ internal static class TrayMenu
     {
         if (closingAfterClip)
         {
-            return [new(TrayCommand.Quit, "Quit")];
+            return [new(TrayCommand.Quit, Tr.Of("Quit", "Quitter"))];
         }
 
         return
         [
-            SaveItem(TrayCommand.SaveDefault, "Save clip", clipSeconds, buffered),
+            SaveItem(TrayCommand.SaveDefault, Tr.Of("Save clip", "Enregistrer un clip"), clipSeconds, buffered),
             new(TrayCommand.None),
-            new(TrayCommand.TogglePause, paused ? "Resume capture" : "Pause capture"),
-            new(TrayCommand.OpenFolder, "Open clips folder"),
-            new(TrayCommand.StartWithSession, "Start with the session", Checked: startsWithSession),
+            new(TrayCommand.TogglePause, paused ? Tr.Of("Resume capture", "Reprendre la capture") : Tr.Of("Pause capture", "Mettre la capture en pause")),
+            new(TrayCommand.OpenFolder, Tr.Of("Open clips folder", "Ouvrir le dossier des clips")),
+            new(TrayCommand.StartWithSession, Tr.Of("Start with the session", "Lancer avec la session"), Checked: startsWithSession),
             new(TrayCommand.None),
-            new(TrayCommand.Quit, "Quit"),
+            new(TrayCommand.Quit, Tr.Of("Quit", "Quitter")),
         ];
     }
 
@@ -163,7 +163,7 @@ internal static class TrayMenu
         var kept = KeptDuration.SecondsOf(held);
         return new(
             command,
-            seconds - kept > 1 && KeptDuration.CanSave(held) ? $"{text} (only {NotificationStates.FormatDuration(kept)})" : text,
+            seconds - kept > 1 && KeptDuration.CanSave(held) ? Tr.Format($"{text} (only {NotificationStates.FormatDuration(kept)})", $"{text} (seulement {NotificationStates.FormatDuration(kept)})") : text,
             KeptDuration.CanSave(held));
     }
 }

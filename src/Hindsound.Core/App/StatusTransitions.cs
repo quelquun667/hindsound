@@ -199,8 +199,8 @@ internal static class StatusTransitions
     public static string? SaveHotkeyProblem(IReadOnlyList<HotkeyResult> hotkeys) => RefusedSave(hotkeys)?.Status switch
     {
         null => null,
-        HotkeyStatus.InUse or HotkeyStatus.Duplicate => "Save hotkey is taken",
-        _ => "Save hotkey doesn't work",
+        HotkeyStatus.InUse or HotkeyStatus.Duplicate => Tr.Of("Save hotkey is taken", "Raccourci d'enregistrement déjà pris"),
+        _ => Tr.Of("Save hotkey doesn't work", "Raccourci d'enregistrement inactif"),
     };
 
     /// <summary>"Capture on", with the length and the keys of now: the settings are read again while it waits for its turn.</summary>
@@ -232,7 +232,7 @@ internal static class StatusTransitions
         StatusNotice.CaptureOn => CaptureOnNow(settings, hotkeys, updatedTo, KeptSecondsOf(status)),
         StatusNotice.Paused => NotificationStates.Paused(KeptSecondsOf(status) ?? 0),
         StatusNotice.NoDevice => NotificationStates.NoDevice(),
-        StatusNotice.DeviceChanged => NotificationStates.DeviceChanged(status.SystemDeviceName ?? "the default output"),
+        StatusNotice.DeviceChanged => NotificationStates.DeviceChanged(status.SystemDeviceName ?? Tr.Of("the default output", "la sortie par défaut")),
         _ => null,
     };
 
@@ -252,13 +252,13 @@ internal static class StatusTransitions
         var refused = RefusedSave(hotkeys);
         var problem = activity == CaptureActivity.NoDevice ? Tr.Of("No audio device", "Aucun périphérique audio")
             : refused is not null ? Describe(refused)
-            : importantClipWaiting ? "A clip has a problem"
-            : onDefaults ? OnDefaultsProblem
-            : status is { Activity: CaptureActivity.Capturing, MicEnabled: true, MicCapturing: false } ? "Microphone not captured"
+            : importantClipWaiting ? Tr.Of("A clip has a problem", "Un clip a un problème")
+            : onDefaults ? Tr.Of(OnDefaultsProblem, "Fichier de réglages non lu : valeurs par défaut, micro coupé")
+            : status is { Activity: CaptureActivity.Capturing, MicEnabled: true, MicCapturing: false } ? Tr.Of("Microphone not captured", "Micro non capté")
             : hotkeys.FirstOrDefault(result => !result.Ok) is { } other ? Describe(other)
             : null;
         var state = refused is not null || importantClipWaiting || onDefaults ? TrayState.Error : TrayStateOf(activity);
-        return (state, closingAfterClip ? ClosingTip : problem is null ? "Hindsound" : "Hindsound - " + problem);
+        return (state, closingAfterClip ? Tr.Of(ClosingTip, "Hindsound - un clip s'enregistre, puis fermeture") : problem is null ? "Hindsound" : "Hindsound - " + problem);
     }
 
     private static string Describe(HotkeyResult result) => $"{result.Gesture}: {result.Message}";
