@@ -64,8 +64,8 @@ internal sealed class NameBoxState
     public static string TwoFilesText => TwoFilesTextOf("PC");
 
     /// <summary>The same sentence for the computer of this system: the French names it ("le son du Mac"), the English does not.</summary>
-    public static string TwoFilesTextOf(string machine) => Tr.Of(
-        "This clip is 2 files, the system sound and the microphone. Both files go to the Recycle Bin.",
+    public static string TwoFilesTextOf(string machine) => Tr.Format(
+        $"This clip is 2 files, the system sound and the microphone. Both files go to the Recycle Bin.",
         $"Ce clip fait 2 fichiers\u00A0: le son du {machine} et le micro. Les deux fichiers vont dans la Corbeille.");
 
     /// <summary>The words of the system the box is shown on: the sentences above are the Windows ones.</summary>
