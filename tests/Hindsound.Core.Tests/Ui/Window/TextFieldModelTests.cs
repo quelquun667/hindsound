@@ -172,6 +172,25 @@ public class TextFieldModelTests
         Assert.Equal("af", field.Text);
     }
 
+    // The native box of Windows deletes from the start of this word to its caret on Ctrl+Backspace, with the same word rule as Ctrl+Left.
+    [Theory]
+    [InlineData("", 0, 0)]
+    [InlineData("goal", 4, 0)]
+    [InlineData("goal replay", 11, 5)]
+    [InlineData("goal replay", 5, 0)]
+    [InlineData("goal replay", 7, 5)]
+    [InlineData("goal   replay  ", 15, 7)]
+    [InlineData("goal   ", 7, 0)]
+    [InlineData("   ", 3, 0)]
+    [InlineData("goal replay", 0, 0)]
+    [InlineData("goal replay", 99, 5)]
+    [InlineData("goal replay", -3, 0)]
+    public void The_word_before_the_caret_starts_where_Ctrl_left_would_go(string text, int caret, int start)
+    {
+        Assert.Equal(start, TextFieldModel.WordStartBefore(text, caret));
+        Assert.Equal(start, Field(text, Math.Clamp(caret, 0, text.Length)).WordBefore(Math.Clamp(caret, 0, text.Length)));
+    }
+
     [Fact]
     public void Ctrl_backspace_and_ctrl_delete_take_a_word()
     {
