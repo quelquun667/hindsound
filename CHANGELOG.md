@@ -4,20 +4,26 @@ All notable changes to Hindsound are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.13.0] - 2026-11-23
+
+Hindsound in French, a search field in the Library, and a hotkey that saves a clip and opens it in the editor. After the update, a system in French sees Hindsound in French, and `Language` on the `General` page goes back to English. Recording and saving work as in 0.12.0.
 
 ### Added
 
-- Hindsound speaks French as well as English: the window, the menu of the icon, the notifications, the first launch and the updates. By default it follows the language of the system, so on a system in French it now shows French. `Language`, on the `General` page, chooses `English` or `Français` instead, and the change shows at once, with no restart. The log and the names of the clips stay in English.
-- `--dump-settings` takes `--lang fr` to draw every page in French.
+- Hindsound speaks French as well as English: the window, the menu of the icon, the notifications, the first launch and the updates. By default it follows the language of the system (the first of its preferred languages that is English or French), so on a system in French, Hindsound now shows French after the update. `Language`, on the `General` page, chooses `English` or `Français` instead, and the change shows at once, with no restart. The log stays in English, and so do the names of the clips, except the end of the name of an edited copy, which is ` (modifié)` in French and ` (cut)` in English.
+- `--dump-settings` and `--dump-notifications` take `--lang fr` to draw every page and every notification in French.
 - The Library has a search field, at the right of the menu. It keeps the clips whose name holds every word typed, in any order, ignoring capitals and accents (`cafe` finds a clip named with an accent), inside `All clips`, `Favorites` or a collection. `Ctrl+F` (`Control+F` on a Mac) goes to it, `Esc` empties it, and `Down` or `Enter` goes to the list. When it finds nothing, the list says so, and when the list holds only the 2,000 most recent clips, the end of the list says that only those, and the clips with a star or a collection, are searched.
-- A hotkey `Save and edit`, not set at first, in Settings > Hotkeys under `Save clip`. It saves a clip as `Save clip` does, with the same length, clipboard and notification, then opens the editor on it, and the window comes to the front (in a fullscreen game, that takes you out of the game). If the editor is already open with a change or a save under way, it is not replaced: the window only comes to the front, the new clip is saved as usual, and the log says why the editor did not open. Where Hindsound has no window, the hotkey is not shown.
+- A hotkey `Save and edit`, not set at first, in Settings > Hotkeys under `Save clip`. It saves a clip as `Save clip` does, with the same length, clipboard and notification, then opens the editor on it, and the window comes to the front (in a fullscreen game, that takes you out of the game). If the editor is already open with a change or a save under way, or a box of the Library is open for a name, or a card is shown, it is left as it is: the window only comes to the front, the new clip is saved as usual, and the log says why the editor did not open. Where Hindsound has no window, the hotkey is not shown.
 
 ### Changed
 
 - In the Library, `Rename` and `Delete` of a collection are now `Rename...` and `Delete...` in the menu of a `...` button next to the menu of collections, to leave room for the search field.
 - In the Library, `Playback can end up in your next clip on this setup.` is now said at the bottom, in place of the name of the chosen clip, and no longer takes the place of the buttons of the collection.
 - In Settings > Hotkeys, `Reset to defaults` is now at the right of the title, so that the seven hotkeys fit with no scrolling.
+
+### Fixed
+
+- On Windows, in a text field of the settings window, `Ctrl+Backspace` deletes the word before the caret, or the selection. Before, it wrote an invisible character. `Ctrl+F` no longer beeps there.
 
 ## [0.12.0] - 2026-11-23
 
