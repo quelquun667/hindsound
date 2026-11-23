@@ -47,7 +47,18 @@ internal static class EditorSaveDialog
 {
     public const float BoxWidth = 460, BoxHeight = 230, Inset = 24, ButtonHeight = 34, Gap = 12;
 
-    public static Box BoxOf => new((SettingsScreen.WindowWidth - BoxWidth) / 2, (SettingsScreen.WindowHeight - BoxHeight) / 2, BoxWidth, BoxHeight);
+    private static string CancelLabel => Tr.Of("Cancel", "Annuler");
+
+    /// <summary>
+    /// The box is <see cref="BoxWidth"/> wide, and wider when its three buttons with their gaps and the usual padding need more,
+    /// as the French words do on a large scale.
+    /// </summary>
+    public static Box BoxOf(ICanvas c)
+    {
+        var buttons = Button.WidthFor(c, EditorSaveDialogState.CopyLabel) + Button.WidthFor(c, EditorSaveDialogState.ReplaceLabel) + Button.WidthFor(c, CancelLabel) + 2 * Gap;
+        var width = MathF.Max(BoxWidth, buttons + 2 * Inset);
+        return new Box((SettingsScreen.WindowWidth - width) / 2, (SettingsScreen.WindowHeight - BoxHeight) / 2, width, BoxHeight);
+    }
 
     /// <param name="c">What the labels are measured with.</param>
     /// <param name="state">The dialog.</param>
@@ -57,7 +68,7 @@ internal static class EditorSaveDialog
     /// <param name="cancel">Back to the editor.</param>
     public static List<Widget> Build(ICanvas c, EditorSaveDialogState state, string summary, Action copy, Action replace, Action cancel)
     {
-        var box = BoxOf;
+        var box = BoxOf(c);
         var inner = box.W - 2 * Inset;
         var widgets = new List<Widget>
         {
@@ -81,7 +92,7 @@ internal static class EditorSaveDialog
 
         var copyWidth = Button.WidthFor(c, EditorSaveDialogState.CopyLabel);
         var replaceWidth = Button.WidthFor(c, EditorSaveDialogState.ReplaceLabel);
-        var cancelLabel = Tr.Of("Cancel", "Annuler");
+        var cancelLabel = CancelLabel;
         var cancelWidth = Button.WidthFor(c, cancelLabel);
         var top = box.Bottom - 20 - ButtonHeight;
         var copyLeft = box.Right - Inset - copyWidth;

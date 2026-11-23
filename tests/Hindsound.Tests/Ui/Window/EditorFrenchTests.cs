@@ -88,7 +88,7 @@ public sealed class EditorFrenchTests : IDisposable
         using var scope = Tr.Use(UiLanguage.French);
         Open(EditorMode.Soundboard);
         var drawn = Painted();
-        Assert.Contains("Envoyer vers la soundboard", drawn);
+        Assert.Contains("Vers la soundboard", drawn);
         Assert.DoesNotContain("Send to soundboard", drawn);
         Assert.Contains("Compatible avec la soundboard de Discord (5,2" + Nb + "s max)", drawn);
         Assert.DoesNotContain("Fits the Discord", drawn);
@@ -252,7 +252,7 @@ public sealed class EditorFrenchTests : IDisposable
         Screen.LanguageChanged();
         var drawn = Painted();
         Assert.Contains("Trop gros pour la soundboard", drawn);
-        Assert.Contains("Envoyer vers la soundboard", drawn);
+        Assert.Contains("Vers la soundboard", drawn);
         Assert.DoesNotContain("Too big", drawn);
     }
 

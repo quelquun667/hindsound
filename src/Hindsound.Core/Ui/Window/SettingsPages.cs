@@ -706,7 +706,7 @@ internal sealed partial class SettingsScreen
         }));
         y += pitch + (folderError is null ? 0 : TextField.MessageHeight);
 
-        RowLabel(Tr.Of("File name", "Nom du fichier"), y);
+        RowLabel(Tr.Of("File name", "Nom"), y);
         var nameBox = new Box(Left + 80, y, Width - 80, RowHeight);
         Add(new TextField(_templateField, SettingsEditor.CheckTemplate, t => Editor.SetTemplate(t), () => Editor.Settings.Export.FileNameTemplate)
         {

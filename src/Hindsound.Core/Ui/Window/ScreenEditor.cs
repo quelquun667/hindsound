@@ -30,7 +30,7 @@ internal sealed partial class SettingsScreen
     public const string EditorFailed = "Can't save the edit. The original is as it was.";
 
     public static string EditorTitle => Tr.Of("Edit clip", "Modifier le clip");
-    public static string EditorSoundboardTitle => Tr.Of("Send to soundboard", "Envoyer vers la soundboard");
+    public static string EditorSoundboardTitle => Tr.Of("Send to soundboard", "Vers la soundboard");
     public static string EditorNothingChanges => Tr.Of("Nothing changes until you save", "Rien ne change tant que tu n'as pas enregistré");
     public static string EditorCantRead => Tr.Of("Can't read this clip", "Impossible de lire ce clip");
     public static string EditorReading => Tr.Of("Reading the clip...", "Chargement du clip...");
@@ -839,8 +839,8 @@ internal sealed partial class SettingsScreen
             Chrome(widget);
         }
 
-        var box = EditorSaveDialog.BoxOf;
+        var box = EditorSaveDialog.BoxOf(_canvas);
         _chrome.Insert(0, new EditorShield { Id = "edit.shield.band", Bounds = new Box(0, 0, WindowWidth, BandHeight) });
-        _chrome.Insert(1, new EditorShield { Id = "edit.shield.side", Bounds = new Box(0, BandHeight, box.X, WindowHeight - BandHeight) });
+        _chrome.Insert(1, new EditorShield { Id = "edit.shield.side", Bounds = new Box(0, BandHeight, MathF.Max(box.X, NavWidth), WindowHeight - BandHeight) });
     }
 }

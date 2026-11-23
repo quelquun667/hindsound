@@ -217,7 +217,7 @@ public sealed unsafe class FrenchSettingsPagesTests
     {
         Reads(
             "export@100",
-            ["Format", "Qualité MP3", "Volume", "Inchangé", "Pic", "Loudness", "Dossier", "Parcourir", "Nom du fichier", "Copier le clip dans le presse-papiers"],
+            ["Format", "Qualité MP3", "Volume", "Inchangé", "Pic", "Loudness", "Dossier", "Parcourir", "Nom", "Copier le clip dans le presse-papiers"],
             ["MP3 quality", "Folder", "Browse", "File name", "Copy clip to clipboard", "Peak"]);
     }
 
