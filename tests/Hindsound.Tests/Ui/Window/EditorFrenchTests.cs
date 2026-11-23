@@ -218,6 +218,7 @@ public sealed class EditorFrenchTests : IDisposable
         var box = EditorSaveDialog.BoxOf(_rig.Canvas);
         var navRight = 12 + SettingsScreen.NavWidth - 25;
         Assert.True(box.X + 1 < navRight && cancel.X < SettingsScreen.NavWidth, "the French buttons must widen the dialog over the rows of the side bar for this test to mean anything");
+        Assert.True(box.W > EditorSaveDialog.BoxWidth && cancel.X >= box.X + EditorSaveDialog.Inset, "the dialog grows with its buttons and keeps them inside its padding");
 
         // Above the dialog, on a row of the side bar, where the box has widened: nothing happens.
         Screen.MouseDown(box.X + 1, SettingsScreen.BandHeight + 35);

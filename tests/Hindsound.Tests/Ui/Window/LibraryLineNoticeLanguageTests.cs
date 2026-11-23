@@ -42,4 +42,39 @@ public sealed class LibraryLineNoticeLanguageTests
         Assert.Contains("La Corbeille ne peut pas prendre ce clip.", french);
         Assert.DoesNotContain("Recycle Bin", french);
     }
+
+    [Fact]
+    public void The_answer_of_a_collection_on_the_line_follows_a_change_of_language()
+    {
+        using var scope = Tr.Use(UiLanguage.English);
+        using var rig = new ScreenRig();
+        var clip = LabeledLibrary.Folder + "Goal replay.mp3";
+        var library = new LabeledLibrary
+        {
+            Lines = new ClipLines([new ClipGroup([new ClipFile(clip, 720_000, default)])], 0),
+            Index = new LibraryData { Collections = [new() { Id = "p", Name = "pets" }] },
+        };
+        rig.Screen.UpdateStatus(ScreenRig.Capturing());
+        rig.Screen.SetNow(new FakeNow());
+        rig.Screen.SetLibrary(library);
+        rig.Screen.ShowSection(Section.Library);
+        rig.Screen.SelectClip(clip);
+        rig.Screen.CollectionTickAnswered("p", LibraryOutcome.NotWritten);
+
+        string Painted()
+        {
+            rig.Canvas.Drawn.Clear();
+            rig.Screen.Paint(rig.Canvas);
+            return string.Join(" | ", rig.Canvas.Drawn);
+        }
+
+        Assert.Contains("Couldn't save that. Nothing changed.", Painted());
+
+        Tr.Set(UiLanguage.French);
+        rig.Screen.LanguageChanged();
+        var french = Painted();
+
+        Assert.Contains("Impossible d'enregistrer. Rien n'a changé.", french);
+        Assert.DoesNotContain("Couldn't save", french);
+    }
 }
