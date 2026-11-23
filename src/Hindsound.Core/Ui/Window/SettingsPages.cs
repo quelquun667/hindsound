@@ -369,9 +369,14 @@ internal sealed partial class SettingsScreen
                 return;
         }
 
-        const float pitch = 37, fieldWidth = 280, fieldHeight = 32;
+        const float pitch = 37, fieldWidth = 280, fieldHeight = 32, resetHeight = 30;
         var y = BandHeight + 18;
         Heading("Hotkeys", y);
+
+        // On the line of the title, at its right end, as the name of the color is on the General page: the seven rows then fit
+        // under it, and the button is there with no scrolling. Added after the fields, it comes last in the order of Tab.
+        var titleMid = y + 13;
+        var resetTop = titleMid - resetHeight / 2;
         y += 36;
         foreach (var (action, label) in HotkeyRowsShown)
         {
@@ -385,10 +390,9 @@ internal sealed partial class SettingsScreen
             y += pitch + (view.Message is not null || view.Listening ? HotkeyField.MessageHeight : 0);
         }
 
-        y += 6;
         var width = Button.WidthFor(_canvas, "Reset to defaults");
-        Add(new Button("Reset to defaults", ResetHotkeys) { Id = "hotkey.reset", Bounds = new Box(Right - width, y, width, 34) });
-        _contentBottom = y + 34;
+        Add(new Button("Reset to defaults", ResetHotkeys) { Id = "hotkey.reset", Bounds = new Box(Right - width, resetTop, width, resetHeight) });
+        _contentBottom = y - (pitch - fieldHeight);
     }
 
     /// <summary>

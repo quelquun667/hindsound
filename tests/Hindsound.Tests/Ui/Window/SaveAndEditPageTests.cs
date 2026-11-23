@@ -54,19 +54,23 @@ public sealed class SaveAndEditPageTests : IDisposable
     }
 
     [Fact]
-    public void Seven_rows_scroll_and_Reset_to_defaults_comes_fully_into_view_at_the_end()
+    public void Seven_rows_fit_with_no_scrolling_and_Reset_to_defaults_is_fully_visible_on_the_line_of_the_title()
     {
         Screen.SetEditor(new FakeEditorPanel());
         Screen.ShowSection(Section.Now);
         Screen.ShowSection(Section.Hotkeys);
-        Assert.True(Screen.MaxScroll > 0);
-
-        _rig.Wheel(-50);
-        Assert.Equal(Screen.MaxScroll, Screen.Scroll);
+        Assert.Equal(0, Screen.MaxScroll);
 
         var reset = Screen.WidgetById("hotkey.reset")!.Bounds;
         Assert.True(reset.Y - Screen.Scroll >= SettingsScreen.BandHeight);
         Assert.True(reset.Bottom - Screen.Scroll <= SettingsScreen.ViewBottom);
+
+        // Above the first field, on the line of the title, at the right end like the fields.
+        var first = Screen.WidgetById("hotkey." + HotkeyAction.SaveDefault)!.Bounds;
+        var last = Screen.WidgetById("hotkey." + HotkeyAction.CopyLast)!.Bounds;
+        Assert.True(reset.Bottom <= first.Y);
+        Assert.Equal(first.Right, reset.Right);
+        Assert.True(last.Bottom <= SettingsScreen.ViewBottom);
     }
 
     [Fact]
