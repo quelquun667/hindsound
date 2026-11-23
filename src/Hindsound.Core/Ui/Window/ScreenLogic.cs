@@ -33,7 +33,7 @@ internal readonly record struct CaptureStep(CaptureStepKind Kind, string? Gestur
 internal sealed class HotkeyCapture
 {
     public static string Prompt => Tr.Of("Press your combo...", "Appuie sur ta combinaison...");
-    public static string CannotClearMain => Tr.Of("The main save hotkey can't be empty", "Le raccourci principal ne peut pas être vide");
+    public static string CannotClearMain => Tr.Of("The main save hotkey can't be empty", "Le raccourci principal d'enregistrement ne peut pas être vide");
 
     /// <summary>The action being set, while listening.</summary>
     public HotkeyAction? Action { get; private set; }
