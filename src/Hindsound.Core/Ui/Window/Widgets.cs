@@ -512,9 +512,24 @@ internal sealed class TextField(FieldState state, Func<string, FieldCheck> check
     /// <summary>The room the suffix takes from the right of the field, with its gap to the text. The caller measures it.</summary>
     public float SuffixWidth { get; init; }
 
-    private float Room => Suffix is null ? 0 : SuffixWidth;
+    /// <summary>A magnifier at the left of the field, drawn with shapes: the look of a search field.</summary>
+    public bool Magnifier { get; init; }
 
-    public Box TextBox => new(Bounds.X + 8, Bounds.Y + 2, Bounds.W - 16 - Room, Bounds.H - 4);
+    /// <summary>Muted text in the frame while the field is empty and the native box is not over it.</summary>
+    public string? Placeholder { get; init; }
+
+    /// <summary>An x at the right while the field holds text. A press on it calls this, and the field is the caller's to empty.</summary>
+    public Action? Clear { get; init; }
+
+    private const float IconRoom = 26;
+
+    private float LeftRoom => Magnifier ? IconRoom : 0;
+
+    private float Room => (Suffix is null ? 0 : SuffixWidth) + (Clear is null ? 0 : IconRoom);
+
+    private Box ClearBox => new(Bounds.Right - IconRoom - 2, Bounds.Y, IconRoom, Bounds.H);
+
+    public Box TextBox => new(Bounds.X + 8 + LeftRoom, Bounds.Y + 2, Bounds.W - 16 - LeftRoom - Room, Bounds.H - 4);
 
     public override bool CanFocus => Enabled;
 
@@ -558,6 +573,31 @@ internal sealed class TextField(FieldState state, Func<string, FieldCheck> check
         state.Message = null;
     }
 
+    public override void OnPress(float x, float y)
+    {
+        if (Clear is { } clear && state.Draft.Length > 0 && ClearBox.Contains(x, y))
+        {
+            clear();
+        }
+    }
+
+    // A lens and its handle, a little left of the text, with the same strokes as the other icons of the window.
+    private static void PaintMagnifier(ICanvas c, Box box)
+    {
+        var x = box.X + 10;
+        c.Ring(new Box(x, box.MidY - 6, 10, 10), 5, 1.6f, Theme.Muted);
+        c.Stroke(x + 8.5f, box.MidY + 2.5f, x + 13, box.MidY + 7, 1.8f, Theme.Muted);
+    }
+
+    private void PaintClear(ICanvas c, UiState ui)
+    {
+        var area = ClearBox;
+        var lit = area.Contains(ui.MouseX, ui.LocalY(this));
+        var color = lit ? Theme.Text : Theme.Muted;
+        c.Stroke(area.MidX - 4, area.MidY - 4, area.MidX + 4, area.MidY + 4, 1.8f, color);
+        c.Stroke(area.MidX - 4, area.MidY + 4, area.MidX + 4, area.MidY - 4, 1.8f, color);
+    }
+
     public override void Paint(ICanvas c, UiState ui)
     {
         var box = Bounds;
@@ -565,7 +605,24 @@ internal sealed class TextField(FieldState state, Func<string, FieldCheck> check
         c.Frame(box, 4, Theme.Raised, bad ? Theme.Hot : Theme.Control);
         if (ui.EditingId != Id)
         {
-            c.TextMid(c.Fit(state.Draft, Face, Size, box.W - 16 - Room), Face, Size, box.X + 8, box.MidY, Theme.Text);
+            if (state.Draft.Length == 0 && Placeholder is not null)
+            {
+                c.TextMid(Placeholder, Face, Size, box.X + 8 + LeftRoom, box.MidY, Theme.Muted);
+            }
+            else
+            {
+                c.TextMid(c.Fit(state.Draft, Face, Size, box.W - 16 - LeftRoom - Room), Face, Size, box.X + 8 + LeftRoom, box.MidY, Theme.Text);
+            }
+        }
+
+        if (Magnifier)
+        {
+            PaintMagnifier(c, box);
+        }
+
+        if (Clear is not null && state.Draft.Length > 0)
+        {
+            PaintClear(c, ui);
         }
 
         if (Suffix is not null)

@@ -199,7 +199,7 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
 
     public bool Listening => _capture.Listening;
 
-    public bool PopupOpen => _popup is not null || _moreList is not null || _clipMenu is not null;
+    public bool PopupOpen => _popup is not null || _moreList is not null || _menu is not null;
 
     public bool WantsMeter =>
         (Section == Section.Audio || (Section == Section.FirstRun && _firstRunStep == 1)) && Editor.Settings.Audio.MicCaptured && _status?.MicCapturing == true;
@@ -458,8 +458,8 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
         {
             // A foot button of the Library that goes dim hands the focus back to its list: from the side bar, the next arrow would leave the page.
             var backToList = _focusId is ClipMoreId or ClipCopyId or ClipShowId or ClipPlayId && Section == Section.Library && Find(ClipListId) is { CanFocus: true };
-            // Rename and Delete give way to the sentence of the playback: the focus goes to the menu beside them, not to the side bar.
-            var backToMenu = _focusId is CollectionActions.RenameId or CollectionActions.DeleteId && Section == Section.Library && Find(ClipFilterId) is { CanFocus: true };
+            // The button of a collection goes with the collection: the focus goes to the menu beside it, not to the side bar.
+            var backToMenu = _focusId is CollectionActions.MoreId && Section == Section.Library && Find(ClipFilterId) is { CanFocus: true };
             _focusId = IsCard ? CardStops().FirstOrDefault() : backToList ? ClipListId : backToMenu ? ClipFilterId : NavId;
         }
 
@@ -738,6 +738,11 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
 
     private bool FieldKey(TextField field, uint vk)
     {
+        if (field.Id == ClipSearchId && SearchKey(vk) is { } searched)
+        {
+            return searched;
+        }
+
         switch (vk)
         {
             case Vk.Enter:
@@ -783,6 +788,12 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
                 TemplateFieldId => t => Editor.SetTemplate(t),
                 _ => null,
             });
+            if (field.Id == ClipSearchId)
+            {
+                // Each key changes the rows, and the list starts again from its top.
+                ApplyChoice(toTop: true);
+            }
+
             Refresh();
         }
     }
@@ -929,10 +940,10 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
         CancelCapture();
         KeepSlider();
         _moreList?.Close();
-        if (_popup is not null || _clipMenu is not null)
+        if (_popup is not null || _menu is not null)
         {
             _popup = null;
-            _clipMenu = null;
+            _menu = null;
             _host.Invalidate();
         }
     }
@@ -984,7 +995,7 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
             return;
         }
 
-        if (_clipMenu is { } menu)
+        if (_menu is { } menu)
         {
             if (menu.Hover(x, y))
             {
@@ -1041,9 +1052,9 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
             return;
         }
 
-        if (_clipMenu is { } menu)
+        if (_menu is { } menu)
         {
-            ClipMenuPress(menu, x, y);
+            MenuPress(menu, x, y);
             return;
         }
 
@@ -1129,7 +1140,7 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
         }
 
         // The rows would move under a menu that acts on one of them.
-        if (_clipMenu is not null || _box is not null || !OverPage(x, y))
+        if (_menu is not null || _box is not null || !OverPage(x, y))
         {
             return;
         }
@@ -1398,7 +1409,7 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
     public void Paint(ICanvas c)
     {
         var accent = Editor.AccentRgb;
-        var hover = _popup is null && _moreList is null && _clipMenu is null ? Find(_hoverId) : null;
+        var hover = _popup is null && _moreList is null && _menu is null ? Find(_hoverId) : null;
         var ui = new UiState(accent, Focus, Find(_pressedId), hover, _mouseX, _mouseY, _scroll, ShowFocus && !_capture.Listening, NoNativeEdit ? null : _editId);
         c.SetOrigin(0);
         c.FillRect(new Box(0, 0, WindowWidth, WindowHeight), Theme.Base);
@@ -1434,6 +1445,6 @@ internal sealed partial class SettingsScreen : Hindsound.App.IWindowScreen
 
         _popup?.Paint(c, accent);
         _moreList?.Paint(c, accent);
-        _clipMenu?.Paint(c, accent);
+        _menu?.Paint(c, accent);
     }
 }

@@ -6,8 +6,8 @@ namespace Hindsound.Ui.Window;
 /// <summary>The actions on one clip of the Library: its menu, renaming it, and sending it to the Recycle Bin.</summary>
 internal sealed partial class SettingsScreen
 {
-    /// <summary>The menu of a clip, over the page. Null when it is closed.</summary>
-    private ClipMenu? _clipMenu;
+    /// <summary>The menu over the page, the one of a clip or the one of a collection. Null when it is closed.</summary>
+    private ActionMenu? _menu;
 
     /// <summary>A key is being handed to the focused widget: what it opens was opened by the keyboard.</summary>
     private bool _byKey;
@@ -16,7 +16,7 @@ internal sealed partial class SettingsScreen
     private (ClipLines Lines, HashSet<string> Paths)? _listedPaths;
 
     /// <summary>The menu of a clip on screen. Null when it is closed.</summary>
-    internal ClipMenu? OpenClipMenu => _clipMenu;
+    internal ClipMenu? OpenClipMenu => _menu as ClipMenu;
 
     /// <summary>The right button went down here. On a clip of the list, its menu opens; anywhere else, nothing happens.</summary>
     public void RightClick(float x, float y)
@@ -27,11 +27,11 @@ internal sealed partial class SettingsScreen
         }
 
         // A list already open closes, as any press outside it does, and the press does nothing else.
-        if (_popup is not null || _moreList is not null || _clipMenu is not null)
+        if (_popup is not null || _moreList is not null || _menu is not null)
         {
             _popup = null;
             _moreList?.Close();
-            _clipMenu = null;
+            _menu = null;
             _host.Invalidate();
             return;
         }
@@ -54,7 +54,7 @@ internal sealed partial class SettingsScreen
         Refresh();
         if (ActionableClip is { } line)
         {
-            _clipMenu = ClipMenu.AtPoint(line, ClipMenu.ItemsFor(_editorPanel is not null), x, y);
+            _menu = ClipMenu.AtPoint(line, ClipMenu.ItemsFor(_editorPanel is not null), x, y);
             _host.Invalidate();
         }
     }
@@ -125,9 +125,16 @@ internal sealed partial class SettingsScreen
         Refresh();
     }
 
-    /// <summary>A key on the Library page, before the widgets have it: F2 and Delete. Null when this does not want it.</summary>
+    /// <summary>A key on the Library page, before the widgets have it: Ctrl+F, F2 and Delete. Null when this does not want it.</summary>
     private bool? LibraryKey(uint vk, uint modifiers)
     {
+        // Under a box nothing behind it takes a key; a menu has already kept its own.
+        if (modifiers == HotkeyGesture.ModControl && vk == SearchFindKey && _library is not null && _box is null)
+        {
+            FocusSearch();
+            return true;
+        }
+
         if (modifiers != 0 || vk is not (ClipKeys.F2 or ClipKeys.Delete))
         {
             return null;
@@ -159,12 +166,12 @@ internal sealed partial class SettingsScreen
         }
 
         _focusId = ClipMoreId;
-        _clipMenu = ClipMenu.Above(line, ClipMenu.ItemsFor(_editorPanel is not null), button, _byKey);
+        _menu = ClipMenu.Above(line, ClipMenu.ItemsFor(_editorPanel is not null), button, _byKey);
         Refresh();
     }
 
-    /// <summary>A key while the menu is open: it keeps them all, but those it does not know go on to Windows.</summary>
-    private bool ClipMenuKey(ClipMenu menu, uint vk, uint modifiers)
+    /// <summary>A key while a menu is open: it keeps them all, but those it does not know go on to Windows.</summary>
+    private bool MenuKey(ActionMenu menu, uint vk, uint modifiers)
     {
         if ((modifiers & (HotkeyGesture.ModControl | HotkeyGesture.ModAlt | HotkeyGesture.ModWin)) != 0)
         {
@@ -174,7 +181,7 @@ internal sealed partial class SettingsScreen
         switch (vk)
         {
             case Vk.Escape:
-                CloseClipMenu();
+                CloseMenu();
                 return true;
             case Vk.Tab:
                 // The keyboard stays in the menu, as in a menu of Windows: Tab goes round its lines.
@@ -192,17 +199,17 @@ internal sealed partial class SettingsScreen
                 break;
             case Vk.Enter:
             case Vk.Space:
-                if (menu.Current is { } item)
+                if (menu.Index >= 0)
                 {
-                    PickFromMenu(menu, item);
+                    PickFromMenu(menu, menu.Index);
                 }
 
                 return true;
-            case ClipKeys.F2:
-                PickFromMenu(menu, ClipMenuItem.Rename);
+            case ClipKeys.F2 when menu is ClipMenu clipMenu:
+                PickFromClipMenu(clipMenu, ClipMenuItem.Rename);
                 return true;
-            case ClipKeys.Delete:
-                PickFromMenu(menu, ClipMenuItem.Delete);
+            case ClipKeys.Delete when menu is ClipMenu clipMenu:
+                PickFromClipMenu(clipMenu, ClipMenuItem.Delete);
                 return true;
             default:
                 return false;
@@ -212,28 +219,41 @@ internal sealed partial class SettingsScreen
         return true;
     }
 
-    /// <summary>A press while the menu is open: on a line it acts, anywhere else it only closes the menu.</summary>
-    private void ClipMenuPress(ClipMenu menu, float x, float y)
+    /// <summary>A press while a menu is open: on a line it acts, anywhere else it only closes the menu.</summary>
+    private void MenuPress(ActionMenu menu, float x, float y)
     {
         var index = menu.ItemAt(x, y);
         if (index < 0)
         {
-            CloseClipMenu();
+            CloseMenu();
             return;
         }
 
-        PickFromMenu(menu, menu.Items[index]);
+        PickFromMenu(menu, index);
     }
 
-    private void CloseClipMenu()
+    private void CloseMenu()
     {
-        _clipMenu = null;
+        _menu = null;
         _host.Invalidate();
     }
 
-    private void PickFromMenu(ClipMenu menu, ClipMenuItem item)
+    private void PickFromMenu(ActionMenu menu, int index)
     {
-        _clipMenu = null;
+        switch (menu)
+        {
+            case ClipMenu clipMenu:
+                PickFromClipMenu(clipMenu, clipMenu.Items[index]);
+                break;
+            case CollectionMenu collectionMenu:
+                PickFromCollectionMenu(collectionMenu, collectionMenu.Items[index]);
+                break;
+        }
+    }
+
+    private void PickFromClipMenu(ClipMenu menu, ClipMenuItem item)
+    {
+        _menu = null;
         Act(item, menu.Clip, _focusId ?? ClipListId);
     }
 

@@ -730,7 +730,9 @@ internal static unsafe class SettingsDump
             s.Key(Vk.Down, 0);
             s.Key(Vk.Down, 0);
             s.SelectClip(chosenClip);
-            s.TabTo(CollectionActions.DeleteId);
+            s.TabTo(CollectionActions.MoreId);
+            s.Key(Vk.Enter, 0);
+            s.Key(Vk.Down, 0);
             s.Key(Vk.Enter, 0);
         }, focus: true);
         Shot("library-erreur-fichier", (s, _) => Chosen(s, InTrouble(clips, Library.LibraryStatus.Corrupt)));

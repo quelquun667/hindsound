@@ -494,7 +494,7 @@ internal sealed unsafe class UnixSettingsWindow : IWindowHost, ISettingsWindow
     {
         var vk = SdlKeys.VirtualKey((uint)key.Scancode, key.Key, key.Mod);
         var modifiers = SdlKeys.Modifiers(key.Mod);
-        if (vk == 0 || _field.KeyDown(vk, modifiers))
+        if (vk == 0 || (!Screen.TakesKeyFromField(vk, modifiers) && _field.KeyDown(vk, modifiers)))
         {
             return;
         }

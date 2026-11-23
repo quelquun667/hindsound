@@ -865,6 +865,11 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
             case WindowNative.WM_KEYDOWN when (uint)wParam is Vk.Tab or Vk.Enter or Vk.Escape:
                 Screen.Key((uint)wParam, HeldModifiers(), KeyRepeat.FromLParam(lParam));
                 return 0;
+
+            // Down and Ctrl+F in the search field are the screen's too: a single-line box has nothing to do with them.
+            case WindowNative.WM_KEYDOWN when Screen.TakesKeyFromField((uint)wParam, HeldModifiers()):
+                Screen.Key((uint)wParam, HeldModifiers(), KeyRepeat.FromLParam(lParam));
+                return 0;
             case WindowNative.WM_KEYDOWN when wParam == 'A' && HeldModifiers() == HotkeyGesture.ModControl:
                 WindowNative.SendMessageW(_edit, WindowNative.EM_SETSEL, 0, -1);
                 return 0;
