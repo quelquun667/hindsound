@@ -261,7 +261,13 @@ internal static class StatusTransitions
         return (state, closingAfterClip ? Tr.Of(ClosingTip, "Hindsound - un clip s'enregistre, puis fermeture") : problem is null ? "Hindsound" : "Hindsound - " + problem);
     }
 
-    private static string Describe(HotkeyResult result) => Tr.Format($"{result.Gesture}: {result.Message}", $"{result.Gesture} : {result.Message}");
+    // The words are made now from the status, not taken from the result made when the hotkey was registered, so that a
+    // change of language reaches the tray tip.
+    private static string Describe(HotkeyResult result)
+    {
+        var message = HotkeyResult.MessageOf(result.Status) ?? result.Message;
+        return Tr.Format($"{result.Gesture}: {message}", $"{result.Gesture} : {message}");
+    }
 
     public static TrayState TrayStateOf(CaptureActivity activity) => activity switch
     {
