@@ -17,11 +17,11 @@ internal static class Program
 
     private static int Main(string[] args)
     {
+        AppStartup.Begin();
         var launch = LinuxLaunch.Read(args);
         var options = AppOptions.Parse(launch.Rest);
         var journal = new Journal(Journal.PathFor(options.SettingsPath));
         LinuxPlatform.Install(journal.Write);
-        Tr.ForProcess();
 
         // Only the log can be done from here: on a thread other than the loop's, the runtime ends the process anyway.
         AppDomain.CurrentDomain.UnhandledException += (_, e) => journal.Write("unhandled exception: " + e.ExceptionObject);

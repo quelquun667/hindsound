@@ -27,6 +27,7 @@ internal static class Program
 
     private static int Main(string[] args)
     {
+        AppStartup.Begin();
         if (MacNotificationProof.Folder(args) is { } notificationProof)
         {
             return MacNotificationProof.Run(notificationProof, Console.WriteLine);
@@ -56,7 +57,6 @@ internal static class Program
         var options = AppOptions.Parse(launch.Rest);
         var journal = new Journal(Journal.PathFor(options.SettingsPath));
         MacPlatform.Install(journal.Write);
-        Tr.ForProcess();
 
         AppDomain.CurrentDomain.UnhandledException += (_, e) => journal.Write("unhandled exception: " + e.ExceptionObject);
         TaskScheduler.UnobservedTaskException += (_, e) =>

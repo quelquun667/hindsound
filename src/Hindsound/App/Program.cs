@@ -29,8 +29,8 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        AppStartup.Begin();
         WindowsPlatform.Install();
-        Tr.ForProcess();
         var options = AppOptions.Parse(args);
         var journal = new Journal(Journal.PathFor(options.SettingsPath));
         Ui.TextEngine.Log = journal.Write;
