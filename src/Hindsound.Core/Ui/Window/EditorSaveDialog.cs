@@ -9,8 +9,11 @@ internal sealed class EditorSaveDialogState(ClipGroup clip)
 {
     public const string Prefix = "edit.box.";
     public const string NameId = Prefix + "name", CancelId = Prefix + "cancel", ReplaceId = Prefix + "replace", CopyId = Prefix + "copy";
-    public const string Title = "Save your edit", NameCaption = "Name of the copy";
-    public const string CopyLabel = "Save as a copy", CopyHelp = "The original stays as it is.", ReplaceLabel = "Replace the original";
+    public static string Title => Tr.Of("Save your edit", "Enregistrer ta modification");
+    public static string NameCaption => Tr.Of("Name of the copy", "Nom de la copie");
+    public static string CopyLabel => Tr.Of("Save as a copy", "Enregistrer une copie");
+    public static string CopyHelp => Tr.Of("The original stays as it is.", "L'original reste tel quel.");
+    public static string ReplaceLabel => Tr.Of("Replace the original", "Remplacer l'original");
 
     public ClipGroup Clip => clip;
 
@@ -29,13 +32,13 @@ internal sealed class EditorSaveDialogState(ClipGroup clip)
 
     public static string MessageOf(ClipRenameOutcome outcome, PlatformFeatures features) => outcome switch
     {
-        ClipRenameOutcome.Empty => "Type a name.",
-        ClipRenameOutcome.BadCharacters => "A name can't hold \\ / : * ? \" < > |",
+        ClipRenameOutcome.Empty => Tr.Of("Type a name.", "Tape un nom."),
+        ClipRenameOutcome.BadCharacters => Tr.Of("A name can't hold \\ / : * ? \" < > |", "Un nom ne peut pas contenir \\ / : * ? \" < > |"),
         ClipRenameOutcome.Reserved => features.ReservedNameText + ".",
-        ClipRenameOutcome.TrailingDotOrSpace => "A name can't end with a dot or a space.",
-        ClipRenameOutcome.TooLong => "This name is too long.",
+        ClipRenameOutcome.TrailingDotOrSpace => Tr.Of("A name can't end with a dot or a space.", "Un nom ne peut pas finir par un point ou un espace."),
+        ClipRenameOutcome.TooLong => Tr.Of("This name is too long.", "Ce nom est trop long."),
         ClipRenameOutcome.TrackSuffix => ClipNames.TrackSuffixText,
-        _ => "Can't use this name.",
+        _ => Tr.Of("Can't use this name.", "Impossible d'utiliser ce nom."),
     };
 }
 
@@ -78,11 +81,12 @@ internal static class EditorSaveDialog
 
         var copyWidth = Button.WidthFor(c, EditorSaveDialogState.CopyLabel);
         var replaceWidth = Button.WidthFor(c, EditorSaveDialogState.ReplaceLabel);
-        var cancelWidth = Button.WidthFor(c, "Cancel");
+        var cancelLabel = Tr.Of("Cancel", "Annuler");
+        var cancelWidth = Button.WidthFor(c, cancelLabel);
         var top = box.Bottom - 20 - ButtonHeight;
         var copyLeft = box.Right - Inset - copyWidth;
         var replaceLeft = copyLeft - Gap - replaceWidth;
-        widgets.Add(new Button("Cancel", cancel) { Id = EditorSaveDialogState.CancelId, Bounds = new Box(replaceLeft - Gap - cancelWidth, top, cancelWidth, ButtonHeight) });
+        widgets.Add(new Button(cancelLabel, cancel) { Id = EditorSaveDialogState.CancelId, Bounds = new Box(replaceLeft - Gap - cancelWidth, top, cancelWidth, ButtonHeight) });
         widgets.Add(new Button(EditorSaveDialogState.ReplaceLabel, replace) { Id = EditorSaveDialogState.ReplaceId, Bounds = new Box(replaceLeft, top, replaceWidth, ButtonHeight) });
         widgets.Add(new Button(EditorSaveDialogState.CopyLabel, copy)
         {

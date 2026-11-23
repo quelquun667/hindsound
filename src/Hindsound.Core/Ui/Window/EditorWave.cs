@@ -52,7 +52,12 @@ internal static class EditorWave
     public const float Top = 112, Height = 128, Gutter = 68, GripWidth = 18, GripHeight = 48, AxisGap = 11;
 
     /// <summary>The name of a lane of a clip in two files, in the order of its files: the sound of the computer, then the microphone.</summary>
-    public static string LaneName(int index, string machine) => index switch { 0 => "Whole " + machine, 1 => "Mic", _ => "" };
+    public static string LaneName(int index, string machine) => index switch
+    {
+        0 => Tr.Format($"Whole {machine}", $"Son du {machine}"),
+        1 => Tr.Of("Mic", "Micro"),
+        _ => "",
+    };
 
     /// <summary>
     /// How far into the panel the name of a lane starts: 12 px, or further left for a name too wide to end before the wave, which

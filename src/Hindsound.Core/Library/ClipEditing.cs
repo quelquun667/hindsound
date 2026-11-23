@@ -21,9 +21,9 @@ internal static class Soundboard
     public const int MinNameLength = 2, MaxNameLength = 32;
     public const string CopySuffix = " (soundboard)";
     public const string DiscordUri = "discord://";
-    public const string FitsText = "Fits the Discord soundboard (5.2 s max)";
-    public const string TooLongText = "Too long for the soundboard: 5.2 s max";
-    public const string UploadHint = "In Discord: Server Settings > Soundboard > Upload Sound";
+    public static string FitsText => Tr.Of("Fits the Discord soundboard (5.2 s max)", "Compatible avec la soundboard de Discord (5,2\u00A0s max)");
+    public static string TooLongText => Tr.Of("Too long for the soundboard: 5.2 s max", "Trop long pour la soundboard\u00A0: 5,2\u00A0s max");
+    public static string UploadHint => Tr.Of("In Discord: Server Settings > Soundboard > Upload Sound", "Dans Discord\u00A0: Paramètres du serveur > Soundboard > Importer un son");
 }
 
 /// <summary>The bounds of an edit.</summary>

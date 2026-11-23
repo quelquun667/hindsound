@@ -6,20 +6,54 @@ using Hindsound.Library;
 
 namespace Hindsound.Ui.Window;
 
+/// <summary>What the amber sentence of the foot of the editor is about.</summary>
+internal enum EditorProblem
+{
+    CantRecycle,
+    TooBig,
+    SourceGone,
+    Failed,
+    CantPlay,
+}
+
 /// <summary>The editor of a clip: a page in place of the list of the Library, with Cancel and Save in the foot.</summary>
 internal sealed partial class SettingsScreen
 {
-    public const string EditorTitle = "Edit clip", EditorSoundboardTitle = "Send to soundboard", EditorCancelId = "foot.cancel", EditorSaveId = "foot.save";
+    public const string EditorCancelId = "foot.cancel", EditorSaveId = "foot.save";
     public const string EditorStartId = "edit.start", EditorEndId = "edit.end", EditorPlayId = "edit.play", EditorVolumePrefix = "edit.vol";
-    public const string EditorNothingChanges = "Nothing changes until you save", EditorCantRead = "Can't read this clip", EditorReading = "Reading the clip...";
+
+    // The four sentences a save can fail with stay constants in English, the text of the attributes of the tests that list them:
+    // what is shown goes through EditorProblemText, with its French beside.
     public const string EditorCantRecycle = "The Recycle Bin can't take the original. Nothing changed.";
     public const string EditorTooBig = "Too big for the soundboard: 512 KB max. Nothing was saved.";
     public const string EditorSourceGone = "The clip is no longer there. Nothing was saved.";
     public const string EditorFailed = "Can't save the edit. The original is as it was.";
-    public const string EditorSavedAside = "The original is in the Recycle Bin. The edit was saved as a new clip.";
-    public const string EditorNotReplaced = "The original could not be replaced. The edit was saved as a new clip.";
-    public const string EditorAsideLost = "The original is in the Recycle Bin. The edit could not be kept.";
-    public const string EditorCantPlay = "Can't play the selection.", EditorSaving = "Saving...";
+
+    public static string EditorTitle => Tr.Of("Edit clip", "Modifier le clip");
+    public static string EditorSoundboardTitle => Tr.Of("Send to soundboard", "Envoyer vers la soundboard");
+    public static string EditorNothingChanges => Tr.Of("Nothing changes until you save", "Rien ne change tant que tu n'as pas enregistré");
+    public static string EditorCantRead => Tr.Of("Can't read this clip", "Impossible de lire ce clip");
+    public static string EditorReading => Tr.Of("Reading the clip...", "Chargement du clip...");
+    public static string EditorSavedAside => Tr.Of("The original is in the Recycle Bin. The edit was saved as a new clip.", "L'original est dans la Corbeille. La modification a été enregistrée comme nouveau clip.");
+    public static string EditorNotReplaced => Tr.Of("The original could not be replaced. The edit was saved as a new clip.", "L'original n'a pas pu être remplacé. La modification a été enregistrée comme nouveau clip.");
+    public static string EditorAsideLost => Tr.Of("The original is in the Recycle Bin. The edit could not be kept.", "L'original est dans la Corbeille. La modification n'a pas pu être gardée.");
+    public static string EditorCantPlay => Tr.Of("Can't play the selection.", "Impossible de lire la sélection.");
+    public static string EditorSaving => Tr.Of("Saving...", "Enregistrement...");
+
+    /// <summary>What the amber sentence of the foot says, in the language of the moment: the page keeps which problem it was, never its words.</summary>
+    internal static string EditorProblemText(EditorProblem problem) => problem switch
+    {
+        EditorProblem.CantRecycle => Tr.Of(EditorCantRecycle, "La Corbeille ne peut pas prendre l'original. Rien n'a changé."),
+        EditorProblem.TooBig => Tr.Of(EditorTooBig, "Trop gros pour la soundboard\u00A0: 512\u00A0Ko max. Rien n'a été enregistré."),
+        EditorProblem.SourceGone => Tr.Of(EditorSourceGone, "Le clip n'est plus là. Rien n'a été enregistré."),
+        EditorProblem.CantPlay => EditorCantPlay,
+        _ => Tr.Of(EditorFailed, "Impossible d'enregistrer la modification. L'original n'a pas changé."),
+    };
+
+    private static string EditorPlayLabel => Tr.Of("Play", "Lire");
+    private static string EditorStopLabel => Tr.Of("Stop", "Arrêter");
+    private static string EditorSaveLabel => Tr.Of("Save", "Enregistrer");
+    private static string EditorCancelLabel => Tr.Of("Cancel", "Annuler");
 
     private const float EditorRowTop = EditorWave.Top + EditorWave.Height + 24, EditorVolumePitch = 30;
     private static readonly long EditorClockBase = Stopwatch.GetTimestamp();
@@ -34,7 +68,7 @@ internal sealed partial class SettingsScreen
     private bool _editSaving;
     private string? _savingClipPath;
     private EditorMode _savingMode;
-    private string? _editorProblem;
+    private EditorProblem? _editorProblem;
     private PreviewState _editPreview;
     private TimeSpan _playStartedAt;
     private long _playFromMs, _playToMs;
@@ -67,7 +101,10 @@ internal sealed partial class SettingsScreen
     internal EditorSaveDialogState? EditorDialog => _saveDialog;
 
     /// <summary>The amber sentence of the foot: the last save or playback that went wrong. Null when all is well.</summary>
-    internal string? EditorProblem => _editorProblem;
+    internal string? EditorProblemNow => _editorProblem is { } problem ? ProblemSentence(problem) : null;
+
+    /// <summary>The sentence of a problem with the words of this system for the place the original went to.</summary>
+    private string ProblemSentence(EditorProblem problem) => Features.Words(EditorProblemText(problem));
 
     /// <summary>The path of the clip chosen in the list, which a save chooses.</summary>
     internal string? EditorChosenPath => ChosenClip?.Main.Path;
@@ -208,9 +245,9 @@ internal sealed partial class SettingsScreen
 
         if (state == PreviewState.Error)
         {
-            _editorProblem = EditorCantPlay;
+            _editorProblem = EditorProblem.CantPlay;
         }
-        else if (_editorProblem == EditorCantPlay && EditorPlaying)
+        else if (_editorProblem == EditorProblem.CantPlay && EditorPlaying)
         {
             _editorProblem = null;
         }
@@ -232,10 +269,10 @@ internal sealed partial class SettingsScreen
         {
             var problem = result.Outcome switch
             {
-                EditSaveOutcome.CannotRecycle => Features.Words(EditorCantRecycle),
-                EditSaveOutcome.TooBig => EditorTooBig,
-                EditSaveOutcome.SourceGone => EditorSourceGone,
-                _ => EditorFailed,
+                EditSaveOutcome.CannotRecycle => EditorProblem.CantRecycle,
+                EditSaveOutcome.TooBig => EditorProblem.TooBig,
+                EditSaveOutcome.SourceGone => EditorProblem.SourceGone,
+                _ => EditorProblem.Failed,
             };
             if (wasOpen)
             {
@@ -243,7 +280,7 @@ internal sealed partial class SettingsScreen
             }
             else
             {
-                SayOnLine(edited, problem);
+                SayOnLine(edited, ProblemSentence(problem));
             }
 
             Refresh();
@@ -523,14 +560,24 @@ internal sealed partial class SettingsScreen
 
     internal static string KeptText(long ms) => EditorSelection.KeptText(ms);
 
-    internal static string SizeText(long bytes) => bytes < 1_000_000
-        ? string.Create(CultureInfo.InvariantCulture, $"about {Math.Max(1, Math.Round(bytes / 1000.0)):0} KB")
-        : string.Create(CultureInfo.InvariantCulture, $"about {bytes / 1_000_000.0:0.0} MB");
+    internal static string SizeText(long bytes)
+    {
+        if (bytes < 1_000_000)
+        {
+            var kilobytes = Math.Max(1, Math.Round(bytes / 1000.0));
+            return Tr.Format($"about {kilobytes:0} KB", $"environ {Tr.Number(kilobytes, "0")}\u00A0Ko");
+        }
 
-    internal static string VolumeLabel(int index, int count, string machine = "PC") => count > 1 ? (index == 0 ? machine + " volume" : "Mic volume") : "Volume";
+        var megabytes = bytes / 1_000_000.0;
+        return Tr.Format($"about {megabytes:0.0} MB", $"environ {Tr.Number(megabytes, "0.0")}\u00A0Mo");
+    }
+
+    internal static string VolumeLabel(int index, int count, string machine = "PC") => count > 1
+        ? (index == 0 ? Tr.Format($"{machine} volume", $"Volume du {machine}") : Tr.Of("Mic volume", "Volume du micro"))
+        : Tr.Of("Volume", "Volume");
 
     internal static string HeldText(double ceilingDb) =>
-        string.Create(CultureInfo.InvariantCulture, $"Peaks held under {ceilingDb:0.#} dB");
+        Tr.Format($"Peaks held under {ceilingDb:0.#} dB", $"Pics maintenus sous {Tr.Number(ceilingDb, "0.#")}\u00A0dB");
 
     private string SaveSummary()
     {
@@ -539,13 +586,21 @@ internal sealed partial class SettingsScreen
             return "";
         }
 
-        var summary = $"Kept {EditClock(selection.StartMs)} to {EditClock(selection.EndMs)} ({KeptText(selection.KeptMs)})";
+        var summary = Tr.Format(
+            $"Kept {EditClock(selection.StartMs)} to {EditClock(selection.EndMs)} ({KeptText(selection.KeptMs)})",
+            $"Gardé de {EditClock(selection.StartMs)} à {EditClock(selection.EndMs)} ({KeptText(selection.KeptMs)})");
         for (var i = 0; i < _editGains.Length; i++)
         {
             if (Math.Abs(_editGains[i]) >= 0.5)
             {
-                var name = _editGains.Length > 1 ? (i == 0 ? Features.MachineName : "mic") : "volume";
-                summary += ", " + name + " " + StatusText.GainLabel(_editGains[i]);
+                var gain = StatusText.GainLabel(_editGains[i]);
+                var machine = Features.MachineName;
+                var part = _editGains.Length == 1
+                    ? Tr.Format($"volume {gain}", $"volume {gain}")
+                    : i == 0
+                        ? Tr.Format($"{machine} {gain}", $"son du {machine} {gain}")
+                        : Tr.Format($"mic {gain}", $"micro {gain}");
+                summary += ", " + part;
             }
         }
 
@@ -632,8 +687,8 @@ internal sealed partial class SettingsScreen
 
         // The times, and the button that plays the part kept.
         var playing = EditorPlaying;
-        var playWidth = MathF.Max(Button.WidthFor(_canvas, "Play", icon: true), Button.WidthFor(_canvas, "Stop"));
-        EditorWidget(new Button(playing ? "Stop" : "Play", EditorPlayOrStop)
+        var playWidth = MathF.Max(Button.WidthFor(_canvas, EditorPlayLabel, icon: true), Button.WidthFor(_canvas, EditorStopLabel));
+        EditorWidget(new Button(playing ? EditorStopLabel : EditorPlayLabel, EditorPlayOrStop)
         {
             Id = EditorPlayId,
             Icon = playing ? ButtonIcon.None : ButtonIcon.Play,
@@ -646,10 +701,10 @@ internal sealed partial class SettingsScreen
             var tooLong = mode == EditorMode.Normal && selection.TooLongForSoundboard;
             var cells = new (string Caption, string Value, float Width, uint Color)[]
             {
-                ("Start", EditClock(selection.StartMs), 92, Theme.Text),
-                ("End", EditClock(selection.EndMs), 92, Theme.Text),
-                ("Kept", KeptText(selection.KeptMs), 92, tooLong ? Theme.Amber : ui.Accent),
-                ("Size", size, 140, Theme.Muted),
+                (Tr.Of("Start", "Début"), EditClock(selection.StartMs), 92, Theme.Text),
+                (Tr.Of("End", "Fin"), EditClock(selection.EndMs), 92, Theme.Text),
+                (Tr.Of("Kept", "Gardé"), KeptText(selection.KeptMs), 92, tooLong ? Theme.Amber : ui.Accent),
+                (Tr.Of("Size", "Taille"), size, 140, Theme.Muted),
             };
             var x = after;
             foreach (var cell in cells)
@@ -725,7 +780,7 @@ internal sealed partial class SettingsScreen
     private void BuildEditorFoot()
     {
         var top = WindowHeight - FootHeight;
-        var problem = _editorProblem;
+        var problem = EditorProblemNow;
         var saving = _editSaving;
         Chrome(new Painted((c, _) =>
         {
@@ -741,16 +796,16 @@ internal sealed partial class SettingsScreen
             }
         }));
 
-        var saveWidth = Button.WidthFor(_canvas, "Save");
-        var cancelWidth = Button.WidthFor(_canvas, "Cancel");
+        var saveWidth = Button.WidthFor(_canvas, EditorSaveLabel);
+        var cancelWidth = Button.WidthFor(_canvas, EditorCancelLabel);
         var buttonTop = top + (FootHeight - FootButtonHeight) / 2;
-        var cancel = new Button("Cancel", CloseEditor)
+        var cancel = new Button(EditorCancelLabel, CloseEditor)
         {
             Id = EditorCancelId,
             Enabled = !_editSaving,
             Bounds = new Box(WindowWidth - FootMargin - saveWidth - FootButtonGap - cancelWidth, buttonTop, cancelWidth, FootButtonHeight),
         };
-        var save = new Button("Save", EditorSaveClicked)
+        var save = new Button(EditorSaveLabel, EditorSaveClicked)
         {
             Id = EditorSaveId,
             Accented = EditorReady,
