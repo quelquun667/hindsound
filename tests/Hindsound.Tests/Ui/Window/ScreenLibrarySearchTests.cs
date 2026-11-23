@@ -418,6 +418,30 @@ public sealed class ScreenLibrarySearchTests : IDisposable
         Assert.Equal(string.Empty, Screen.SearchText);
     }
 
+    [Fact]
+    public void A_clip_renamed_to_a_name_the_search_hides_empties_the_search_when_the_reading_brings_it_and_stays_chosen()
+    {
+        var library = Open(Named());
+        Type("goal");
+        Screen.SelectClip(Clip(Goal));
+        Screen.TabTo(SettingsScreen.ClipListId);
+        Screen.Key(ClipKeys.F2, 0);
+        Screen.EditChanged("Best moment");
+        Screen.Key(Vk.Enter, 0);
+        var line = library.Lines!.Lines.Single(row => row.Main.Path == Clip(Goal));
+
+        // The words were typed before the clip was renamed: they are not the person moving on, and stay until the reading.
+        Screen.ClipRenameAnswered(line, ClipRenameOutcome.Done);
+        Assert.Equal("goal", Screen.SearchText);
+
+        var renamed = Clip("Best moment");
+        library.Lines = new ClipLines([.. library.Lines.Lines.Where(row => row != line), new ClipGroup([new ClipFile(renamed, 720_000, default)])], 0);
+        Screen.LibraryReadingArrived();
+
+        Assert.Equal(string.Empty, Screen.SearchText);
+        Assert.Equal(renamed, Screen.EditorChosenPath);
+    }
+
     // ---------------------------------------------------------------- nothing found
 
     [Fact]

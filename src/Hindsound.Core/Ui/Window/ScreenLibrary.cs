@@ -455,8 +455,9 @@ internal sealed partial class SettingsScreen
         ApplyChoice(toTop: false);
         if (_wantedClip is { } path)
         {
-            // The clip just saved is in the reading, and the words typed since hide it: it is the search that gives way, as in SelectClip.
-            // Only when the menu's choice lists it: in another choice, the person has moved on, and a search is theirs to keep.
+            // The clip waiting is in the reading, and words typed before it was asked for hide it (a clip renamed to a name the
+            // search does not hold): it is the search that gives way, as in SelectClip. Words typed after the asking, or another
+            // choice of the menu, have already given the clip up. Only when the menu's choice lists it.
             var found = _clips.SelectPath(path);
             if (!found && SearchActive && RowsOfChoice().Any(line => string.Equals(line.Main.Path, path, Library.PathRules.Comparison)))
             {
