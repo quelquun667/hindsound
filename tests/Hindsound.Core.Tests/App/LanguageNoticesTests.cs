@@ -59,8 +59,8 @@ public sealed class LanguageNoticesTests
         using var scope = Tr.Use(UiLanguage.French);
 
         Says(NotificationStates.NoDevice(), "Aucun périphérique audio", "Rien n'est capturé");
-        Says(NotificationStates.Paused(), "Capture en pause", "Rien de nouveau n'est enregistré");
-        Says(NotificationStates.Paused(75), "Capture en pause", "1:15 en mémoire. Rien de nouveau n'est enregistré");
+        Says(NotificationStates.Paused(), "Capture en pause", "Plus rien n'est capturé");
+        Says(NotificationStates.Paused(75), "Capture en pause", "1:15 en mémoire. Plus rien n'est capturé");
         Says(NotificationStates.DeviceChanged("Casque"), "Périphérique audio changé", "Capture sur Casque");
         Says(NotificationStates.Saving(Thirty), "Enregistrement du clip (0:30)", "Un instant");
         Says(NotificationStates.ClosingAfterClip(), "Enregistrement de ton clip", "Hindsound se ferme quand c'est fini");
@@ -105,11 +105,11 @@ public sealed class LanguageNoticesTests
     {
         using var scope = Tr.Use(UiLanguage.French);
 
-        Says(NotificationStates.SettingsDamaged(true), "Fichier de réglages endommagé", "Par défaut, micro coupé. Copie gardée en .bak");
-        Says(NotificationStates.SettingsDamaged(false), "Fichier de réglages endommagé", "Valeurs par défaut rétablies, micro coupé");
+        Says(NotificationStates.SettingsDamaged(true), "Fichier de réglages endommagé", "Valeurs par défaut, micro coupé. Copie en .bak");
+        Says(NotificationStates.SettingsDamaged(false), "Fichier de réglages endommagé", "Valeurs par défaut, micro coupé");
         Says(NotificationStates.SettingsUnreadable(), "Fichier de réglages illisible", "Par défaut et micro coupé, jusqu'à sa lecture");
         Says(NotificationStates.SettingsHasError(), "Erreur dans le fichier de réglages", "Les réglages actuels sont gardés");
-        Says(NotificationStates.SettingsNotSaved(), "Réglages non enregistrés", "Ce changement sera perdu au prochain démarrage");
+        Says(NotificationStates.SettingsNotSaved(), "Réglages non enregistrés", "Changement perdu au prochain démarrage");
         Says(NotificationStates.StartupNotChanged(), "Changement impossible", "«" + Nbsp + "Lancer avec Windows" + Nbsp + "» reste comme avant");
         Says(NotificationStates.UpdateReady("0.2.0", 0), "Mise à jour prête (0.2.0)", "S'installe à la fermeture. Clique pour voir.");
         Says(NotificationStates.UpdateAvailable("0.2.0", 0), "Mise à jour disponible (0.2.0)", "Clique pour voir les nouveautés.");

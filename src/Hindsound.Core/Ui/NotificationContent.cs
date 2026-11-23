@@ -170,8 +170,8 @@ internal static class NotificationStates
     public static NotificationContent Paused(int keptSeconds = 0) =>
         Icon(NotificationKind.Paused, Tr.Of("Capture paused", "Capture en pause"),
             keptSeconds >= 1
-                ? Tr.Format($"{FormatDuration(keptSeconds)} kept. Nothing new is recorded", $"{FormatDuration(keptSeconds)} en mémoire. Rien de nouveau n'est enregistré")
-                : Tr.Of("Nothing new is being recorded", "Rien de nouveau n'est enregistré"),
+                ? Tr.Format($"{FormatDuration(keptSeconds)} kept. Nothing new is recorded", $"{FormatDuration(keptSeconds)} en mémoire. Plus rien n'est capturé")
+                : Tr.Of("Nothing new is being recorded", "Plus rien n'est capturé"),
             NotificationPalette.Muted, NotificationVisual.Pause, NotificationPalette.Muted);
 
     /// <param name="bufferSeconds">How much can be kept.</param>
@@ -265,7 +265,7 @@ internal static class NotificationStates
     /// <param name="copyKept">A copy of it exists; otherwise it stayed in its place.</param>
     public static NotificationContent SettingsDamaged(bool copyKept) =>
         Problem(NotificationKind.SettingsDamaged, Tr.Of("Settings file was damaged", "Fichier de réglages endommagé"),
-            copyKept ? Tr.Of("Defaults restored, mic off. Copy kept as .bak", "Par défaut, micro coupé. Copie gardée en .bak") : Tr.Of("Defaults restored, mic off", "Valeurs par défaut rétablies, micro coupé"));
+            copyKept ? Tr.Of("Defaults restored, mic off. Copy kept as .bak", "Valeurs par défaut, micro coupé. Copie en .bak") : Tr.Of("Defaults restored, mic off", "Valeurs par défaut, micro coupé"));
 
     public static NotificationContent SettingsUnreadable() =>
         Problem(NotificationKind.SettingsUnreadable, Tr.Of("Can't read the settings file", "Fichier de réglages illisible"), Tr.Of("Using defaults, mic off, until it can be read", "Par défaut et micro coupé, jusqu'à sa lecture"));
@@ -274,7 +274,7 @@ internal static class NotificationStates
         Problem(NotificationKind.SettingsHasError, Tr.Of("Settings file has an error", "Erreur dans le fichier de réglages"), Tr.Of("Keeping the current settings", "Les réglages actuels sont gardés"));
 
     public static NotificationContent SettingsNotSaved() =>
-        Problem(NotificationKind.SettingsNotSaved, Tr.Of("Couldn't save your settings", "Réglages non enregistrés"), Tr.Of("This change is lost at the next start", "Ce changement sera perdu au prochain démarrage"));
+        Problem(NotificationKind.SettingsNotSaved, Tr.Of("Couldn't save your settings", "Réglages non enregistrés"), Tr.Of("This change is lost at the next start", "Changement perdu au prochain démarrage"));
 
     /// <summary>Named as the toggle is on this system: "Start with Windows", or "Start with the session" on Linux.</summary>
     /// <param name="features">The words of the system; the running one's when left out.</param>
