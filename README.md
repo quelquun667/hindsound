@@ -52,15 +52,15 @@ window, comes with the releases after 0.5.0, and the releases after 0.7.0 add it
 
 | Now: what the memory holds | Library: your clips |
 | --- | --- |
-| <img src="assets/screenshots/now.png" alt="Now page: a wave for the PC sound and one for the microphone, the last 0:30 bright, and Save: last 0:30 under the wave" width="400"> | <img src="assets/screenshots/library.png" alt="Library page: the clips newest first, each with its length, one of them chosen, and Copy, Show in folder and Play at the bottom" width="400"> |
+| <img src="assets/screenshots/now.png" alt="Now page: a wave for the PC sound and one for the microphone, the last 0:30 bright, and Save: last 0:30 under the wave" width="400"> | <img src="assets/screenshots/library.png" alt="Library page: a menu of collections and a search field above the clips, newest first, each with its length, one of them chosen, and the ... button, Copy, Show in folder and Play at the bottom" width="400"> |
 
 | Hotkeys | Durations and memory |
 | --- | --- |
-| <img src="assets/screenshots/settings-hotkeys.png" alt="Settings, Hotkeys page: Save clip is Ctrl+Shift+F10, the five others are not set" width="400"> | <img src="assets/screenshots/settings-durations.png" alt="Settings, Durations page: clip length 30s, 5:00 kept in memory, about 87 MB of RAM" width="400"> |
+| <img src="assets/screenshots/settings-hotkeys.png" alt="Settings, Hotkeys page: Save clip is Ctrl+Shift+F10, the six others, Save and edit among them, are not set" width="400"> | <img src="assets/screenshots/settings-durations.png" alt="Settings, Durations page: clip length 30s, 5:00 kept in memory, about 87 MB of RAM" width="400"> |
 
 | Recording one application | Accent color and notifications |
 | --- | --- |
-| <img src="assets/screenshots/settings-audio-one-app.png" alt="Settings, Audio page: Record is set to Discord, the band says Capturing Discord, Output is greyed out" width="400"> | <img src="assets/screenshots/settings-general.png" alt="Settings, General page: accent color swatches, a notification preview, and the first toggles" width="400"> |
+| <img src="assets/screenshots/settings-audio-one-app.png" alt="Settings, Audio page: Record is set to Discord, the band says Capturing Discord, Output is greyed out" width="400"> | <img src="assets/screenshots/settings-general.png" alt="Settings, General page: accent color swatches, a notification preview, and the first rows, Language among them" width="400"> |
 
 <sub>Drawn by the app itself on sample values: no real clip, device or application list is shown.</sub>
 
