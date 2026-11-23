@@ -1,4 +1,3 @@
-using System.Globalization;
 using Hindsound.Library;
 
 namespace Hindsound.Ui.Window;
@@ -63,9 +62,17 @@ internal sealed class EditorSelection
     /// A time kept as the page shows it, to the tenth. Just past the soundboard's limit the tenth would read as the limit
     /// itself, beside the warning that the selection is over it: there it goes to the hundredth, rounded up.
     /// </summary>
-    public static string KeptText(long ms) => ms > SoundboardMs && ms <= SoundboardMs + 50
-        ? string.Create(CultureInfo.InvariantCulture, $"{Math.Ceiling(ms / 10.0) / 100:0.00} s")
-        : string.Create(CultureInfo.InvariantCulture, $"{ms / 1000.0:0.0} s");
+    public static string KeptText(long ms)
+    {
+        if (ms > SoundboardMs && ms <= SoundboardMs + 50)
+        {
+            var hundredths = Math.Ceiling(ms / 10.0) / 100;
+            return Tr.Format($"{hundredths:0.00} s", $"{Tr.Number(hundredths, "0.00")} s");
+        }
+
+        var seconds = ms / 1000.0;
+        return Tr.Format($"{seconds:0.0} s", $"{Tr.Number(seconds, "0.0")} s");
+    }
 
     /// <summary>Moves one end by this much, by the same rules as a drag.</summary>
     public void Nudge(EditorEnd end, long byMs) => Move(end, At(end) + byMs);
