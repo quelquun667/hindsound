@@ -216,13 +216,13 @@ internal static class StatusText
     /// </summary>
     public static string SaveLabel(int clipSeconds) =>
         Tr.Of("Save up to ", "Enregistrer ") + (clipSeconds < 60 ? clipSeconds + Tr.Of("s", "\u00A0s")
-            : clipSeconds % 60 == 0 ? clipSeconds / 60 + Tr.Of(" min", " min")
+            : clipSeconds % 60 == 0 ? clipSeconds / 60 + Tr.Of(" min", "\u00A0min")
             : NotificationStates.FormatDuration(clipSeconds));
 
     /// <summary>The same length in a sentence: "30 seconds", "1 minute", "1:30".</summary>
     public static string ClipWords(int clipSeconds) =>
-        clipSeconds < 60 ? Tr.Plural(clipSeconds, "{0} second", "{0} seconds", "{0} seconde", "{0} secondes")
-        : clipSeconds % 60 == 0 ? Tr.Plural(clipSeconds / 60, "{0} minute", "{0} minutes", "{0} minute", "{0} minutes")
+        clipSeconds < 60 ? Tr.Plural(clipSeconds, "{0} second", "{0} seconds", "{0}\u00A0seconde", "{0}\u00A0secondes")
+        : clipSeconds % 60 == 0 ? Tr.Plural(clipSeconds / 60, "{0} minute", "{0} minutes", "{0}\u00A0minute", "{0}\u00A0minutes")
         : NotificationStates.FormatDuration(clipSeconds);
 
     /// <summary>The first step of the first-launch card.</summary>
@@ -266,7 +266,7 @@ internal static class StatusText
     }
 
     public static string GainLabel(double db) =>
-        string.Create(CultureInfo.InvariantCulture, $"{(db > 0 ? "+" : string.Empty)}{Math.Round(db):0}") + Tr.Of(" dB", " dB");
+        string.Create(CultureInfo.InvariantCulture, $"{(db > 0 ? "+" : string.Empty)}{Math.Round(db):0}") + Tr.Of(" dB", "\u00A0dB");
 }
 
 /// <summary>What the foot of the window shows about the last clip.</summary>

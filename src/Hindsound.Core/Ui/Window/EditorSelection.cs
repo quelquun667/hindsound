@@ -67,11 +67,11 @@ internal sealed class EditorSelection
         if (ms > SoundboardMs && ms <= SoundboardMs + 50)
         {
             var hundredths = Math.Ceiling(ms / 10.0) / 100;
-            return Tr.Format($"{hundredths:0.00} s", $"{Tr.Number(hundredths, "0.00")} s");
+            return Tr.Format($"{hundredths:0.00} s", $"{Tr.Number(hundredths, "0.00")}\u00A0s");
         }
 
         var seconds = ms / 1000.0;
-        return Tr.Format($"{seconds:0.0} s", $"{Tr.Number(seconds, "0.0")} s");
+        return Tr.Format($"{seconds:0.0} s", $"{Tr.Number(seconds, "0.0")}\u00A0s");
     }
 
     /// <summary>Moves one end by this much, by the same rules as a drag.</summary>

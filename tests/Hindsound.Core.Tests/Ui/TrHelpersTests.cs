@@ -14,7 +14,7 @@ public sealed class TrHelpersTests
     [InlineData(UiLanguage.French, 0, "0 fichier")]
     [InlineData(UiLanguage.French, 1, "1 fichier")]
     [InlineData(UiLanguage.French, 2, "2 fichiers")]
-    [InlineData(UiLanguage.French, 2000, "2 000 fichiers")]
+    [InlineData(UiLanguage.French, 2000, "2\u00A0000 fichiers")]
     public void A_count_takes_the_singular_of_its_language(UiLanguage language, long count, string expected)
     {
         using var scope = Tr.Use(language);
@@ -49,8 +49,8 @@ public sealed class TrHelpersTests
     }
 
     [Theory]
-    [InlineData(UiLanguage.English, "87 MB")]
-    [InlineData(UiLanguage.French, "87 Mo")]
+    [InlineData(UiLanguage.English, "87\u00A0MB")]
+    [InlineData(UiLanguage.French, "87\u00A0Mo")]
     public void A_size_never_parts_its_number_from_its_unit(UiLanguage language, string expected)
     {
         using var scope = Tr.Use(language);

@@ -68,7 +68,7 @@ internal sealed class ClipPreview(IPreviewPlayer player, Action<PreviewChange> c
 
     public const string CanEndUpInClipText = "Playback can end up in your next clip on this setup.";
 
-    public static string CanEndUpInClipShown => Tr.Of(CanEndUpInClipText, "Avec ce réglage, la lecture peut se retrouver dans ton prochain clip.");
+    public static string CanEndUpInClipShown => Tr.Of(CanEndUpInClipText, "Ici, la lecture peut finir dans ton prochain clip.");
 
     /// <summary>How often the end is looked for. It only decides how late the state says it, not when the sound ends.</summary>
     internal const int PollMs = 250;

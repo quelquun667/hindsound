@@ -287,7 +287,7 @@ internal static class WaveView
     public static string SaveLine(int clipSeconds, in WaveFacts facts, PlatformFeatures? features = null)
     {
         var (kept, before) = SaveSeconds(clipSeconds, facts);
-        var line = Tr.Of("Save: last ", "Enregistrement : dernières ") + NotificationStates.FormatDuration(kept);
+        var line = Tr.Of("Save: last ", "Prochain clip\u00A0: ") + NotificationStates.FormatDuration(kept);
         if (kept < clipSeconds)
         {
             line += Tr.Of(" of ", " sur ") + NotificationStates.FormatDuration(clipSeconds);
@@ -297,7 +297,7 @@ internal static class WaveView
         {
             var past = NotificationStates.FormatDuration(before);
             var source = SourceName(LastChange(facts)!.Value.App, features);
-            line += Tr.Format($" ({past} from before {source})", $" ({past} d'avant {source})");
+            line += Tr.Format($" ({past} from before {source})", $" (dont {past} avant {source})");
         }
 
         return line;

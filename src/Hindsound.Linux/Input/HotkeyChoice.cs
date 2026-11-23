@@ -56,7 +56,7 @@ internal static class HotkeyChoice
         SaveCommandFor(program) is { } command
             ? Tr.Of(
                 "No global shortcut on this desktop. In your keyboard settings, bind this command to a key: " + command,
-                "Pas de raccourci global sur ce bureau. Dans les réglages du clavier, associe cette commande à une touche : " + command)
+                "Pas de raccourci global sur ce bureau. Dans les réglages du clavier, associe cette commande à une touche\u00A0: " + command)
             : NoticeGenericText;
 
     /// <summary>

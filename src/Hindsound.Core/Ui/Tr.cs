@@ -61,7 +61,7 @@ public enum SizeUnit
 internal static class Tr
 {
     // A no-break space: the plain one, which Segoe UI and the fonts of the Unix builds all draw.
-    private const char NoBreakSpace = ' ';
+    private const char NoBreakSpace = '\u00A0';
 
     private static readonly AsyncLocal<Scope?> Scoped = new();
     private static int _process;

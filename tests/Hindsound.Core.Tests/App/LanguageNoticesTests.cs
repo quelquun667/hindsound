@@ -13,7 +13,7 @@ namespace Hindsound.Tests.App;
 /// </summary>
 public sealed class LanguageNoticesTests
 {
-    private const string Nbsp = " ";
+    private const string Nbsp = "\u00A0";
     private static readonly TimeSpan Thirty = TimeSpan.FromSeconds(30);
 
     private static NotificationContent Clip(double seconds = 30, bool silent = false, bool rescued = false, bool wav = false, bool copyWanted = true, bool copied = true) =>
@@ -38,8 +38,8 @@ public sealed class LanguageNoticesTests
         Says(Clip(copied: false), "Clip enregistré (0:30)", "Non copié. Icône > Copier le dernier clip.");
         Says(Clip(wav: true), "Clip enregistré (0:30)", "Enregistré en WAV. Colle");
         Says(Clip(wav: true, copyWanted: false, copied: false), "Clip enregistré (0:30)", "Enregistré en WAV. Échec du MP3.");
-        Says(Clip(silent: true), "Clip enregistré (0:30)", "Silence. Vérifie Réglages > Audio.");
-        Says(Clip(silent: true, copied: false), "Clip enregistré (0:30)", "Clip silencieux, et non copié");
+        Says(Clip(silent: true), "Clip enregistré (0:30)", "Aucun son. Vérifie Réglages > Audio.");
+        Says(Clip(silent: true, copied: false), "Clip enregistré (0:30)", "Aucun son, et non copié");
     }
 
     [Fact]
@@ -78,9 +78,9 @@ public sealed class LanguageNoticesTests
         using var scope = Tr.Use(UiLanguage.French);
 
         var full = NotificationStates.CaptureOn(300, "Ctrl+Shift+F10", keptSeconds: 300);
-        Says(full, "Capture active", "Garde 5:00 en mémoire. Enregistre" + Nbsp + ":");
+        Says(full, "Capture active", "5:00 en mémoire. Enregistre" + Nbsp + ":");
         Assert.Equal(["Ctrl", "Shift", "F10"], full.Keys);
-        Assert.Equal("Garde jusqu'à 5:00", NotificationStates.CaptureOn(300, null).Body);
+        Assert.Equal("Jusqu'à 5:00 en mémoire", NotificationStates.CaptureOn(300, null).Body);
         Assert.Equal("Remplissage, jusqu'à 5:00", NotificationStates.CaptureOn(300, null, keptSeconds: 0).Body);
         Assert.Equal("2:00 sur 5:00 en mémoire", NotificationStates.CaptureOn(300, null, keptSeconds: 120).Body);
         Assert.Equal("Mis à jour vers 0.2.0", NotificationStates.CaptureOn(300, null, updatedTo: "0.2.0").Title);
@@ -97,7 +97,7 @@ public sealed class LanguageNoticesTests
         Assert.Equal("Hindsound - un clip s'enregistre, puis fermeture", StatusTransitions.TrayOf(null, [], false, closingAfterClip: true).Tip);
         var refused = new[] { new Hindsound.Input.HotkeyResult(Hindsound.Input.HotkeyAction.SaveDefault, "Ctrl+Shift+F10", Hindsound.Input.HotkeyStatus.InUse, "taken") };
         Assert.Equal("Raccourci déjà pris", StatusTransitions.SaveHotkeyProblem(refused));
-        Assert.Equal("Garde jusqu'à 0:30. Raccourci déjà pris", StatusTransitions.CaptureOnNow(new Hindsound.Settings.AppSettings { BufferSeconds = 30 }, refused).Body);
+        Assert.Equal("Jusqu'à 0:30 en mémoire. Raccourci déjà pris", StatusTransitions.CaptureOnNow(new Hindsound.Settings.AppSettings { BufferSeconds = 30 }, refused).Body);
     }
 
     [Fact]
@@ -107,14 +107,14 @@ public sealed class LanguageNoticesTests
 
         Says(NotificationStates.SettingsDamaged(true), "Fichier de réglages endommagé", "Valeurs par défaut, micro coupé. Copie en .bak");
         Says(NotificationStates.SettingsDamaged(false), "Fichier de réglages endommagé", "Valeurs par défaut, micro coupé");
-        Says(NotificationStates.SettingsUnreadable(), "Fichier de réglages illisible", "Par défaut et micro coupé, jusqu'à sa lecture");
+        Says(NotificationStates.SettingsUnreadable(), "Fichier de réglages illisible", "Valeurs par défaut, micro coupé, en attendant");
         Says(NotificationStates.SettingsHasError(), "Erreur dans le fichier de réglages", "Les réglages actuels sont gardés");
         Says(NotificationStates.SettingsNotSaved(), "Réglages non enregistrés", "Changement perdu au prochain démarrage");
         Says(NotificationStates.StartupNotChanged(), "Changement impossible", "«" + Nbsp + "Lancer avec Windows" + Nbsp + "» reste comme avant");
         Says(NotificationStates.UpdateReady("0.2.0", 0), "Mise à jour prête (0.2.0)", "S'installe à la fermeture. Clique pour voir.");
         Says(NotificationStates.UpdateAvailable("0.2.0", 0), "Mise à jour disponible (0.2.0)", "Clique pour voir les nouveautés.");
-        Says(NotificationStates.UpdateFailed("0.1.0", true), "Mise à jour échouée", "Toujours en 0.1.0. Nouvel essai plus tard.");
-        Says(NotificationStates.UpdateFailed("0.1.0", false), "Mise à jour échouée", "Toujours en 0.1.0. Va dans Réglages > Général.");
+        Says(NotificationStates.UpdateFailed("0.1.0", true), "Échec de la mise à jour", "Toujours en 0.1.0. Nouvel essai plus tard.");
+        Says(NotificationStates.UpdateFailed("0.1.0", false), "Échec de la mise à jour", "Toujours en 0.1.0. Va dans Réglages > Général.");
         Says(ReleaseNotice.Content(new UpdateVersion(0, 2, 0), 0), "Hindsound 0.2.0 est disponible", "Clique pour la télécharger.");
     }
 

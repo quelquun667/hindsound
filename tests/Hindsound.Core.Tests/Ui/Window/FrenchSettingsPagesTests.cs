@@ -169,7 +169,7 @@ public sealed unsafe class FrenchSettingsPagesTests
     {
         Reads(
             "hotkeys@100",
-            ["Raccourcis", "Enregistrer un clip", "Enregistrer et modifier", "Enregistrer 15 s", "Enregistrer 1 min", "Enregistrer 5 min", "Pause ou reprise", "Copier le dernier clip", "Réinitialiser"],
+            ["Raccourcis", "Enregistrer un clip", "Enregistrer et modifier", "Enregistrer 15\u00A0s", "Enregistrer 1\u00A0min", "Enregistrer 5\u00A0min", "Pause ou reprise", "Copier le dernier clip", "Réinitialiser"],
             ["Reset to defaults", "Save clip", "Save and edit", "Pause or resume", "Copy last clip", "Save up to"]);
     }
 
@@ -194,7 +194,7 @@ public sealed unsafe class FrenchSettingsPagesTests
     {
         Reads(
             "durations@100",
-            ["Durée du clip", "15 s", "30 s", "1 min", "5 min", "Autre", "Garder en mémoire", "~87 Mo de RAM", "Une mémoire plus courte supprime l'audio le plus ancien"],
+            ["Durée du clip", "15\u00A0s", "30\u00A0s", "1\u00A0min", "5\u00A0min", "Autre", "Garder en mémoire", "~87\u00A0Mo de RAM", "Une mémoire plus courte supprime l'audio le plus ancien"],
             ["Clip length", "Keep in memory", "of RAM", "shorter buffer", "Custom"]);
         Reads(
             "durations-custom@100",
@@ -230,7 +230,7 @@ public sealed unsafe class FrenchSettingsPagesTests
             ["Welcome to", "Pick your hotkey", "Check your mic", "Try it", "Next", "Let them know"]);
         Reads(
             "firstrun-2@100",
-            ["Parle : la barre doit bouger. Coupé pour le son du PC seul.", "Retour", "Suivant"],
+            ["Parle\u00A0: la barre doit bouger. Coupé pour le son du PC seul.", "Retour", "Suivant"],
             ["Speak:", "Back"]);
         Reads(
             "firstrun-3-done@100",
@@ -256,7 +256,7 @@ public sealed unsafe class FrenchSettingsPagesTests
 
         using var scope = Tr.Use(UiLanguage.French);
         Assert.Equal("Utilise un code couleur comme #D4F53C", SettingsEditor.CheckAccent("lime").Message);
-        Assert.Equal("Trop sombre : on ne la verrait pas dans un jeu. Choisis une couleur plus claire.", SettingsEditor.CheckAccent("#202020").Message);
+        Assert.Equal("Trop sombre pour un jeu. Choisis une couleur plus claire.", SettingsEditor.CheckAccent("#202020").Message);
         Assert.Equal("Le nom ne peut pas être vide", SettingsEditor.CheckTemplate("").Message);
         Assert.Equal("Un nom de fichier ne peut pas contenir \\ / : * ? \" < > |", SettingsEditor.CheckTemplate("a/b").Message);
         Assert.Equal("Balise {nope} inconnue. Utilise {app}, {date} ou {time}", SettingsEditor.CheckTemplate("{nope}").Message);
@@ -270,14 +270,14 @@ public sealed unsafe class FrenchSettingsPagesTests
         using var scope = Tr.Use(UiLanguage.French);
         Assert.Equal("Tout le PC", SettingsEditor.RecordChoices([], null)[0].Label);
         Assert.Equal("Tout le Mac", SettingsEditor.RecordChoices([], null, machine: "Mac")[0].Label);
-        Assert.Equal("Discord.exe (fermée)", SettingsEditor.RecordChoices([], "Discord.exe")[1].Label);
+        Assert.Equal("Discord.exe (pas lancé)", SettingsEditor.RecordChoices([], "Discord.exe")[1].Label);
         Assert.Equal("Sortie par défaut", SettingsEditor.OutputChoices([], AudioSettings.DefaultDevice)[0].Label);
         Assert.Equal("Périphérique débranché", SettingsEditor.OutputChoices([], "gone")[1].Label);
         var mics = SettingsEditor.MicChoices([], AudioSettings.DefaultDevice);
         Assert.Equal("Micro par défaut", mics[0].Label);
         Assert.Equal("Coupé", mics[^1].Label);
-        Assert.Equal("~87 Mo de RAM", new SettingsEditor(new AppSettings().Normalize(), _ => { }).RamText(300));
-        Assert.Equal(["15 s", "30 s", "1 min", "2 min", "5 min", "Autre"], SettingsEditor.ClipLabels);
+        Assert.Equal("~87\u00A0Mo de RAM", new SettingsEditor(new AppSettings().Normalize(), _ => { }).RamText(300));
+        Assert.Equal(["15\u00A0s", "30\u00A0s", "1\u00A0min", "2\u00A0min", "5\u00A0min", "Autre"], SettingsEditor.ClipLabels);
     }
 
     [Fact]
@@ -288,7 +288,7 @@ public sealed unsafe class FrenchSettingsPagesTests
         Assert.Equal("Hotkey already in use by another app", english);
         Assert.Equal("Raccourci déjà pris par une autre application", HotkeyResult.MessageOf(HotkeyStatus.InUse));
         Assert.Equal("Raccourci invalide", HotkeyResult.InvalidMessage);
-        Assert.Equal("Les raccourcis n'ont pas répondu à temps ; réessaie", HotkeyResult.UnavailableMessage);
+        Assert.Equal("Les raccourcis n'ont pas répondu à temps\u00A0; réessaie", HotkeyResult.UnavailableMessage);
         Assert.Null(HotkeyResult.MessageOf(HotkeyStatus.Registered));
         Assert.Equal("Appuie sur ta combinaison...", HotkeyCapture.Prompt);
     }
@@ -327,7 +327,7 @@ public sealed unsafe class FrenchSettingsPagesTests
         command.Screen.ShowSection(Section.Hotkeys);
         var page = command.Texts();
         Assert.Contains("Ce bureau n'a pas de raccourci global pour les applications.", page);
-        Assert.Contains("associe cette commande à une touche :", page);
+        Assert.Contains("associe cette commande à une touche\u00A0:", page);
         Assert.Contains("Copier", page);
         Assert.Contains("La touche enregistre alors un clip, comme le bouton Enregistrer.", page);
         Assert.DoesNotContain("This desktop", page);
@@ -367,8 +367,8 @@ public sealed unsafe class FrenchSettingsPagesTests
     {
         Assert.Equal("~87 MB", RamEstimate.Format(300, micActive: true));
         using var scope = Tr.Use(UiLanguage.French);
-        Assert.Equal("~87 Mo", RamEstimate.Format(300, micActive: true));
-        Assert.Equal("~58 Mo", RamEstimate.Format(300, micActive: false));
+        Assert.Equal("~87\u00A0Mo", RamEstimate.Format(300, micActive: true));
+        Assert.Equal("~58\u00A0Mo", RamEstimate.Format(300, micActive: false));
     }
 
     [Fact]

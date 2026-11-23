@@ -64,7 +64,7 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
     public const string TemplateCharsError = "A file name can't contain \\ / : * ? \" < > |";
 
     public static string AccentFormatText => Tr.Of(AccentFormatError, "Utilise un code couleur comme #D4F53C");
-    public static string AccentDarkText => Tr.Of(AccentDarkError, "Trop sombre\u00A0: on ne la verrait pas dans un jeu. Choisis une couleur plus claire.");
+    public static string AccentDarkText => Tr.Of(AccentDarkError, "Trop sombre pour un jeu. Choisis une couleur plus claire.");
     public static string TemplateEmptyText => Tr.Of(TemplateEmptyError, "Le nom ne peut pas être vide");
     public static string TemplateCharsText => Tr.Of(TemplateCharsError, "Un nom de fichier ne peut pas contenir \\ / : * ? \" < > |");
     public static string FolderError => Tr.Of("Pick a full folder path", "Choisis un chemin de dossier complet");
@@ -350,7 +350,7 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
         if (!string.IsNullOrEmpty(selected) && !items.Any(i => string.Equals(i.Value, selected, StringComparison.OrdinalIgnoreCase)))
         {
             // An app that has not played anything yet has no session, so it can be running and still not be listed.
-            items.Add(new DropItem(selected, selectedRunning ? AudioAppList.NameOf(selected) : Tr.Of(selected + " (not running)", selected + " (fermée)")));
+            items.Add(new DropItem(selected, selectedRunning ? AudioAppList.NameOf(selected) : Tr.Of(selected + " (not running)", selected + " (pas lancé)")));
         }
 
         return items;

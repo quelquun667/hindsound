@@ -60,9 +60,9 @@ public sealed class TrTests
     [InlineData(UiLanguage.English, 2000, "2,000")]
     [InlineData(UiLanguage.English, 1234567, "1,234,567")]
     [InlineData(UiLanguage.French, 999, "999")]
-    [InlineData(UiLanguage.French, 2000, "2 000")]
-    [InlineData(UiLanguage.French, 1234567, "1 234 567")]
-    [InlineData(UiLanguage.French, -2000, "-2 000")]
+    [InlineData(UiLanguage.French, 2000, "2\u00A0000")]
+    [InlineData(UiLanguage.French, 1234567, "1\u00A0234\u00A0567")]
+    [InlineData(UiLanguage.French, -2000, "-2\u00A0000")]
     public void A_whole_number_has_the_thousands_separator_of_its_language(UiLanguage language, long value, string expected)
     {
         using var scope = Tr.Use(language);
@@ -76,7 +76,7 @@ public sealed class TrTests
     [InlineData(UiLanguage.French, 720, "0", SizeUnit.KB, "720\u00A0Ko")]
     [InlineData(UiLanguage.English, 2.25, "0.00", SizeUnit.GB, "2.25\u00A0GB")]
     [InlineData(UiLanguage.French, 2.25, "0.00", SizeUnit.GB, "2,25\u00A0Go")]
-    [InlineData(UiLanguage.French, 1500.5, "#,0.0", SizeUnit.MB, "1 500,5\u00A0Mo")]
+    [InlineData(UiLanguage.French, 1500.5, "#,0.0", SizeUnit.MB, "1\u00A0500,5\u00A0Mo")]
     public void A_size_has_the_decimal_mark_and_the_unit_of_its_language(UiLanguage language, double value, string format, SizeUnit unit, string expected)
     {
         using var scope = Tr.Use(language);

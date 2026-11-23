@@ -29,7 +29,7 @@ public sealed class FrenchBetweenAreasTests
 
         var tip = StatusTransitions.TrayOf(null, [taken], false).Tip;
 
-        Assert.Equal("Hindsound - Ctrl+F9 : Raccourci déjà pris par une autre application", tip);
+        Assert.Equal("Hindsound - Ctrl+F9\u00A0: Raccourci déjà pris par une autre application", tip);
     }
 
     [Fact]

@@ -253,7 +253,7 @@ internal static class StatusTransitions
         var problem = activity == CaptureActivity.NoDevice ? Tr.Of("No audio device", "Aucun périphérique audio")
             : refused is not null ? Describe(refused)
             : importantClipWaiting ? Tr.Of("A clip has a problem", "Un clip a un problème")
-            : onDefaults ? Tr.Of(OnDefaultsProblem, "Fichier de réglages non lu : valeurs par défaut, micro coupé")
+            : onDefaults ? Tr.Of(OnDefaultsProblem, "Fichier de réglages non lu\u00A0: valeurs par défaut, micro coupé")
             : status is { Activity: CaptureActivity.Capturing, MicEnabled: true, MicCapturing: false } ? Tr.Of("Microphone not captured", "Micro non capté")
             : hotkeys.FirstOrDefault(result => !result.Ok) is { } other ? Describe(other)
             : null;
@@ -266,7 +266,7 @@ internal static class StatusTransitions
     private static string Describe(HotkeyResult result)
     {
         var message = HotkeyResult.MessageOf(result.Status) ?? result.Message;
-        return Tr.Format($"{result.Gesture}: {message}", $"{result.Gesture} : {message}");
+        return Tr.Format($"{result.Gesture}: {message}", $"{result.Gesture}\u00A0: {message}");
     }
 
     public static TrayState TrayStateOf(CaptureActivity activity) => activity switch

@@ -71,7 +71,7 @@ public sealed unsafe class LanguageNowTests
         var scenes = Dump(UiLanguage.French);
         var page = scenes["now-app-apres-app@100"];
 
-        Assert.All(["Capturer", "Micro", "Capturer ma voix", "maintenant", "Discord, puis Spotify", "Spotify seul à partir d'ici", "Enregistrement : dernières 0:30"], text => Assert.Contains(text, page));
+        Assert.All(["Capturer", "Micro", "Capturer ma voix", "maintenant", "Discord, puis Spotify", "Spotify seul à partir d'ici", "Prochain clip\u00A0: 0:30"], text => Assert.Contains(text, page));
         Assert.All(["Record", "Mic", "Record my voice", "now", "Discord, then Spotify", "Spotify only from here"], text => Assert.DoesNotContain(text, page));
         Assert.DoesNotContain(page, text => text.StartsWith("Save: last", StringComparison.Ordinal));
     }
@@ -106,14 +106,14 @@ public sealed unsafe class LanguageNowTests
         Assert.Equal("Micro non capté", WaveView.MicLaneText(Status(micCapturing: false), hasTrack: false));
         Assert.Equal(new WaveAxis("-5:00", "-2:30", "maintenant"), WaveView.AxisLabels(300, CaptureActivity.Capturing));
         Assert.Equal("en pause", WaveView.AxisLabels(300, CaptureActivity.Paused).Right);
-        Assert.Equal("Enregistrement : dernières 0:30", WaveView.SaveLine(30, Facts(300, 100)));
-        Assert.Equal("Enregistrement : dernières 0:12 sur 0:30", WaveView.SaveLine(30, Facts(300, 12)));
-        Assert.StartsWith("Enregistrement : dernières 0:30 (0:", WaveView.SaveLine(30, moved));
-        Assert.EndsWith(" d'avant Spotify)", WaveView.SaveLine(30, moved));
+        Assert.Equal("Prochain clip\u00A0: 0:30", WaveView.SaveLine(30, Facts(300, 100)));
+        Assert.Equal("Prochain clip\u00A0: 0:12 sur 0:30", WaveView.SaveLine(30, Facts(300, 12)));
+        Assert.StartsWith("Prochain clip\u00A0: 0:30 (dont 0:", WaveView.SaveLine(30, moved));
+        Assert.EndsWith(" avant Spotify)", WaveView.SaveLine(30, moved));
         Assert.Equal("Tout le PC à partir d'ici", WaveView.MarkerText(null));
         Assert.Equal("Discord seul à partir d'ici", WaveView.MarkerText("Discord.exe"));
         Assert.Equal("Discord (pas lancé)", WaveView.SystemLaneTitle(Status() with { SourceApp = "Discord.exe", SourceAppMissing = true }, WaveMarker.None));
-        Assert.Equal("Capture impossible : Discord", WaveView.NoCaptureText(Status(CaptureActivity.NoDevice) with { SourceApp = "Discord.exe" }));
+        Assert.Equal("Capture impossible\u00A0: Discord", WaveView.NoCaptureText(Status(CaptureActivity.NoDevice) with { SourceApp = "Discord.exe" }));
         Assert.Equal("Aucun périphérique audio", WaveView.NoCaptureText(Status(CaptureActivity.NoDevice)));
     }
 
@@ -130,14 +130,14 @@ public sealed unsafe class LanguageNowTests
     {
         using var scope = Tr.Use(UiLanguage.French);
 
-        Assert.Equal("Enregistre jusqu'à 30 secondes, de partout, même en jeu.", StatusText.FirstRunHotkeyNote(30));
-        Assert.Equal("Enregistre jusqu'à 2 minutes, de partout, même en jeu.", StatusText.FirstRunHotkeyNote(120));
-        Assert.Equal("1 seconde", StatusText.ClipWords(1));
+        Assert.Equal("Enregistre jusqu'à 30\u00A0secondes, de partout, même en jeu.", StatusText.FirstRunHotkeyNote(30));
+        Assert.Equal("Enregistre jusqu'à 2\u00A0minutes, de partout, même en jeu.", StatusText.FirstRunHotkeyNote(120));
+        Assert.Equal("1\u00A0seconde", StatusText.ClipWords(1));
         Assert.Equal("1:30", StatusText.ClipWords(90));
         Assert.Equal("La mise à jour redémarre Hindsound. Ce qui est gardé en mémoire (5:00) sera perdu.", StatusText.UpdateCardBody(Status(), 300));
         Assert.Equal("La mise à jour redémarre Hindsound.", StatusText.UpdateCardBody(Status() with { Buffered = TimeSpan.FromSeconds(2) }, 300));
-        Assert.Equal("+3 dB", StatusText.GainLabel(3));
-        Assert.Equal("Enregistrer 5 min", StatusText.SaveLabel(300));
+        Assert.Equal("+3\u00A0dB", StatusText.GainLabel(3));
+        Assert.Equal("Enregistrer 5\u00A0min", StatusText.SaveLabel(300));
     }
 
     [Fact]
@@ -160,7 +160,7 @@ public sealed unsafe class LanguageNowTests
 
         Assert.Equal("Hindsound - Aucun périphérique audio", StatusTransitions.TrayOf(Status(CaptureActivity.NoDevice), none, false).Tip);
         Assert.Equal("Hindsound - Un clip a un problème", StatusTransitions.TrayOf(Status(), none, true).Tip);
-        Assert.Equal("Hindsound - Fichier de réglages non lu : valeurs par défaut, micro coupé", StatusTransitions.TrayOf(Status(), none, false, onDefaults: true).Tip);
+        Assert.Equal("Hindsound - Fichier de réglages non lu\u00A0: valeurs par défaut, micro coupé", StatusTransitions.TrayOf(Status(), none, false, onDefaults: true).Tip);
         Assert.Equal("Hindsound - Micro non capté", StatusTransitions.TrayOf(Status(micCapturing: false), none, false).Tip);
         Assert.Equal("Hindsound - un clip s'enregistre, puis fermeture", StatusTransitions.TrayOf(Status(), none, false, closingAfterClip: true).Tip);
         Assert.Equal("Raccourci déjà pris", StatusTransitions.SaveHotkeyProblem(Refused(HotkeyStatus.InUse)));

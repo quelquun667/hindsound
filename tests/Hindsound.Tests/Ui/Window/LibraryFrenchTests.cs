@@ -59,11 +59,11 @@ public sealed class LibraryFrenchTests
 
         var empty = PaintedLibrary(rig, new FakeLibrary { Lines = new ClipLines([], 0) });
         Assert.Contains("Aucun clip pour l'instant", empty);
-        Assert.Contains("Enregistre un clip avec ton raccourci : il apparaîtra ici.", empty);
+        Assert.Contains("Enregistre un clip avec ton raccourci\u00A0: il apparaîtra ici.", empty);
         Assert.DoesNotContain("No clips yet", empty);
 
         var capped = PaintedLibrary(rig, new FakeLibrary().With(3, leftOut: 5));
-        Assert.Contains("Affichage des 2 000 clips les plus récents.", capped);
+        Assert.Contains("Affichage des 2\u00A0000 clips les plus récents.", capped);
 
         // The line of collections stands under the list once a clip is chosen.
         PaintedLibrary(rig, CollectionLibrary.Sample());
@@ -71,7 +71,7 @@ public sealed class LibraryFrenchTests
         rig.Canvas.Drawn.Clear();
         rig.Screen.Paint(rig.Canvas);
         var withCollections = rig.Canvas.Drawn;
-        Assert.Contains("Clip choisi dans :", withCollections);
+        Assert.Contains("Clip choisi dans\u00A0:", withCollections);
         Assert.Contains("Nouvelle collection...", withCollections);
         Assert.DoesNotContain("Selected clip in:", withCollections);
     }
@@ -99,7 +99,7 @@ public sealed class LibraryFrenchTests
         Assert.Equal("Aucun clip dans cette collection", LibraryFilter.EmptyText(LibraryChoice.Of("c0")).Title);
 
         var none = LibraryFilter.NoMatch("zebra");
-        Assert.Equal("Aucun clip ne correspond à « zebra »", none.Title);
+        Assert.Equal("Aucun clip ne correspond à «\u00A0zebra\u00A0»", none.Title);
         Assert.Equal("Essaie d'autres mots, ou efface la recherche.", none.Body);
     }
 
@@ -137,10 +137,10 @@ public sealed class LibraryFrenchTests
         Assert.Equal("Renommer", rename.ConfirmLabel);
         Assert.Equal("Supprimer", NameBoxState.ForDelete("c1", "pets", CollectionActions.MoreId).ConfirmLabel);
         Assert.Equal("Recommencer", NameBoxState.ForStartOver(SettingsScreen.StartOverId).ConfirmLabel);
-        Assert.Equal("Recommencer sans collection ? Tes clips restent.", NameBoxState.StartOverQuestion);
+        Assert.Equal("Recommencer sans collection\u00A0? Tes clips restent.", NameBoxState.StartOverQuestion);
 
-        Assert.Equal("Supprimer la collection « pets » ? Tes clips restent.", NameBox.DeleteQuestion(canvas, "pets"));
-        Assert.Equal("Déplacer « a.mp3 » dans la Corbeille ?", NameBox.ClipDeleteQuestion(canvas, "a.mp3"));
+        Assert.Equal("Supprimer la collection «\u00A0pets\u00A0»\u00A0? Tes clips restent.", NameBox.DeleteQuestion(canvas, "pets"));
+        Assert.Equal("Déplacer «\u00A0a.mp3\u00A0» dans la Corbeille\u00A0?", NameBox.ClipDeleteQuestion(canvas, "a.mp3"));
 
         var clip = NameBoxState.ForClipRename(FakeLibrary.Clip("a.mp3"), "x", _ => ClipRenameOutcome.Taken);
         Assert.Equal("Renommer le clip", clip.Title);

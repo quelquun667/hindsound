@@ -137,7 +137,7 @@ public sealed unsafe class LanguagePagesTests
     private static readonly string[] FrenchPilot =
     [
         "Maintenant", "Bibliothèque", "Réglages", "Raccourcis", "Durées", "Audio", "Export", "Général",
-        "micro actif", "Pause", "Enregistrer 30 s", "~87\u00A0Mo",
+        "micro actif", "Pause", "Enregistrer 30\u00A0s", "~87\u00A0Mo",
         "Couleur d'accent", "Lancer avec Windows", "Langue", "Système (Français)", "Taille de la fenêtre", "Notifications d'enregistrement",
         "Dernier clip", "720\u00A0Ko", "Copier", "Ouvrir le dossier",
     ];
@@ -176,8 +176,8 @@ public sealed unsafe class LanguagePagesTests
         Assert.Equal("En pause", StatusText.From(capturing with { Activity = CaptureActivity.Paused }, 300).Title);
         Assert.Equal("Reprendre", StatusText.From(capturing with { Activity = CaptureActivity.Paused }, 300).PauseLabel);
         Assert.Equal("Démarrage", StatusText.From(null).Title);
-        Assert.Equal("Enregistrer 30 s", StatusText.SaveLabel(30));
-        Assert.Equal("Enregistrer 2 min", StatusText.SaveLabel(120));
+        Assert.Equal("Enregistrer 30\u00A0s", StatusText.SaveLabel(30));
+        Assert.Equal("Enregistrer 2\u00A0min", StatusText.SaveLabel(120));
         Assert.Equal("Enregistrer 1:30", StatusText.SaveLabel(90));
     }
 

@@ -132,7 +132,7 @@ internal static class NotificationStates
 
         if (result.IsSilent)
         {
-            return new NotificationContent(NotificationKind.Silent, title, copyFailed ? Tr.Of("It's silent, and not copied", "Clip silencieux, et non copié") : Tr.Of("It's silent. Check Settings > Audio.", "Silence. Vérifie Réglages > Audio."), [], NotificationPalette.Amber,
+            return new NotificationContent(NotificationKind.Silent, title, copyFailed ? Tr.Of("It's silent, and not copied", "Aucun son, et non copié") : Tr.Of("It's silent. Check Settings > Audio.", "Aucun son. Vérifie Réglages > Audio."), [], NotificationPalette.Amber,
                 NotificationVisual.Bars, accent, bars);
         }
 
@@ -203,12 +203,12 @@ internal static class NotificationStates
         var length = FormatDuration(cap);
         if (kept is not { } seconds)
         {
-            return Tr.Format($"Keeping up to {length}", $"Garde jusqu'à {length}");
+            return Tr.Format($"Keeping up to {length}", $"Jusqu'à {length} en mémoire");
         }
 
         return KeptDuration.StateOf(seconds, cap) switch
         {
-            KeptState.Full => Tr.Format($"Keeping the last {length}", $"Garde {length} en mémoire"),
+            KeptState.Full => Tr.Format($"Keeping the last {length}", $"{length} en mémoire"),
             KeptState.Starting => Tr.Format($"Filling, up to {length}", $"Remplissage, jusqu'à {length}"),
             _ => Tr.Format($"{FormatDuration(seconds)} of {length} kept", $"{FormatDuration(seconds)} sur {length} en mémoire"),
         };
@@ -255,7 +255,7 @@ internal static class NotificationStates
     /// <param name="installed">The version that runs.</param>
     /// <param name="willRetry">Something tries again by itself; otherwise only the button can.</param>
     public static NotificationContent UpdateFailed(string installed, bool willRetry) =>
-        Problem(NotificationKind.UpdateFailed, Tr.Of("Update failed", "Mise à jour échouée"),
+        Problem(NotificationKind.UpdateFailed, Tr.Of("Update failed", "Échec de la mise à jour"),
             willRetry
                 ? Tr.Format($"Still on {installed}. It will try again later.", $"Toujours en {installed}. Nouvel essai plus tard.")
                 : Tr.Format($"Still on {installed}. Update from Settings > General.", $"Toujours en {installed}. Va dans Réglages > Général."))
@@ -268,7 +268,7 @@ internal static class NotificationStates
             copyKept ? Tr.Of("Defaults restored, mic off. Copy kept as .bak", "Valeurs par défaut, micro coupé. Copie en .bak") : Tr.Of("Defaults restored, mic off", "Valeurs par défaut, micro coupé"));
 
     public static NotificationContent SettingsUnreadable() =>
-        Problem(NotificationKind.SettingsUnreadable, Tr.Of("Can't read the settings file", "Fichier de réglages illisible"), Tr.Of("Using defaults, mic off, until it can be read", "Par défaut et micro coupé, jusqu'à sa lecture"));
+        Problem(NotificationKind.SettingsUnreadable, Tr.Of("Can't read the settings file", "Fichier de réglages illisible"), Tr.Of("Using defaults, mic off, until it can be read", "Valeurs par défaut, micro coupé, en attendant"));
 
     public static NotificationContent SettingsHasError() =>
         Problem(NotificationKind.SettingsHasError, Tr.Of("Settings file has an error", "Erreur dans le fichier de réglages"), Tr.Of("Keeping the current settings", "Les réglages actuels sont gardés"));
