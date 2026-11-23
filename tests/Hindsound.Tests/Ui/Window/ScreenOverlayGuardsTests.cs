@@ -111,7 +111,7 @@ public sealed class ScreenOverlayGuardsTests : IDisposable
         Assert.Contains("clip0000", before);
         Assert.DoesNotContain("clip0009", before);
 
-        ClickOn(CollectionActions.DeleteId);
+        CollectionMenuClicks.Pick(Screen, CollectionMenuItem.Delete);
         Assert.Equal(NameBox.CancelId, Screen.FocusId);
         var withTheBox = Painted();
         Screen.Key(Vk.PageDown, 0);
@@ -131,7 +131,7 @@ public sealed class ScreenOverlayGuardsTests : IDisposable
     public void Behind_a_Delete_box_the_wheel_moves_no_row()
     {
         OpenOnAFullCollection();
-        ClickOn(CollectionActions.DeleteId);
+        CollectionMenuClicks.Pick(Screen, CollectionMenuItem.Delete);
         Screen.Paint(_rig.Canvas);
         var before = Painted();
         Assert.Contains("clip0000", before);
@@ -163,12 +163,12 @@ public sealed class ScreenOverlayGuardsTests : IDisposable
     {
         var library = Open(CollectionLibrary.Sample(), chosen: null);
         ChooseCollection("c1");
-        ClickOn(CollectionActions.RenameId);
+        CollectionMenuClicks.Pick(Screen, CollectionMenuItem.Rename);
         Assert.True(Screen.BoxOpen);
 
-        // A clip outside Sam is chosen from elsewhere (a notification): the menu goes back to every clip, and Rename with it.
+        // A clip outside Sam is chosen from elsewhere (a notification): the menu goes back to every clip, and the button of the collection with it.
         Screen.SelectClip(CollectionLibrary.PathOf(3));
-        Assert.Null(Screen.WidgetById(CollectionActions.RenameId));
+        Assert.Null(Screen.WidgetById(CollectionActions.MoreId));
         Screen.Key(Vk.Escape, 0);
 
         Assert.False(Screen.BoxOpen);

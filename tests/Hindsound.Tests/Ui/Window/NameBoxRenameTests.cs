@@ -9,7 +9,7 @@ public sealed class NameBoxRenameTests
     private static readonly string TooLong = new('a', 41);
 
     private static NameBoxState Rename(string name) =>
-        NameBoxState.ForRename("c1", name, CollectionActions.RenameId, () => [new LibraryCollection { Id = "c1", Name = name }]);
+        NameBoxState.ForRename("c1", name, CollectionActions.MoreId, () => [new LibraryCollection { Id = "c1", Name = name }]);
 
     [Theory]
     [InlineData("Favorites", NameBoxState.TakenText)]
@@ -60,6 +60,6 @@ public sealed class NameBoxRenameTests
     public void A_creation_and_a_deletion_open_with_nothing_said()
     {
         Assert.Null(NameBoxState.ForCreate(ChipLine.NewId, () => []).Field.Message);
-        Assert.Null(NameBoxState.ForDelete("c1", "Favorites", CollectionActions.DeleteId).Field.Message);
+        Assert.Null(NameBoxState.ForDelete("c1", "Favorites", CollectionActions.MoreId).Field.Message);
     }
 }

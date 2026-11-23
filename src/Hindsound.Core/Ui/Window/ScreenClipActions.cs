@@ -18,6 +18,9 @@ internal sealed partial class SettingsScreen
     /// <summary>The menu of a clip on screen. Null when it is closed.</summary>
     internal ClipMenu? OpenClipMenu => _menu as ClipMenu;
 
+    /// <summary>The menu of the collection on screen. Null when it is closed.</summary>
+    internal CollectionMenu? OpenCollectionMenu => _menu as CollectionMenu;
+
     /// <summary>The right button went down here. On a clip of the list, its menu opens; anywhere else, nothing happens.</summary>
     public void RightClick(float x, float y)
     {

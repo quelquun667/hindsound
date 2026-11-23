@@ -11,9 +11,9 @@ public sealed class NameBoxTests
 
     private static NameBoxState Create() => NameBoxState.ForCreate(ChipLine.NewId, () => Taken);
 
-    private static NameBoxState Rename() => NameBoxState.ForRename("c1", "pets", CollectionActions.RenameId, () => Taken);
+    private static NameBoxState Rename() => NameBoxState.ForRename("c1", "pets", CollectionActions.MoreId, () => Taken);
 
-    private static NameBoxState Delete() => NameBoxState.ForDelete("c2", "Sam", CollectionActions.DeleteId);
+    private static NameBoxState Delete() => NameBoxState.ForDelete("c2", "Sam", CollectionActions.MoreId);
 
     /// <summary>Types in the field as the screen does: the field of the moment, then the widgets made again.</summary>
     private static void Type(NameBoxState state, string text)
@@ -442,17 +442,17 @@ public sealed class NameBoxTests
     public void Cancelling_goes_back_to_the_stop_that_opened_the_box()
     {
         Assert.Equal(ChipLine.NewId, Create().FocusAfter(null));
-        Assert.Equal(CollectionActions.RenameId, Rename().FocusAfter(null));
-        Assert.Equal(CollectionActions.DeleteId, Delete().FocusAfter(null));
+        Assert.Equal(CollectionActions.MoreId, Rename().FocusAfter(null));
+        Assert.Equal(CollectionActions.MoreId, Delete().FocusAfter(null));
     }
 
     [Fact]
     public void After_the_action_the_focus_goes_where_a_stop_still_is()
     {
         Assert.Equal(ChipLine.NewId, Create().FocusAfter(LibraryOutcome.Done));
-        Assert.Equal(CollectionActions.RenameId, Rename().FocusAfter(LibraryOutcome.Done));
+        Assert.Equal(CollectionActions.MoreId, Rename().FocusAfter(LibraryOutcome.Done));
         Assert.Equal(NameBox.AfterDeleteId, Delete().FocusAfter(LibraryOutcome.Done));
-        Assert.Equal(CollectionActions.DeleteId, Delete().FocusAfter(LibraryOutcome.NotWritten));
+        Assert.Equal(CollectionActions.MoreId, Delete().FocusAfter(LibraryOutcome.NotWritten));
         Assert.Equal(NameBox.AfterDeleteId, Delete().FocusAfter(LibraryOutcome.UnknownCollection));
         Assert.Equal(NameBox.AfterDeleteId, Rename().FocusAfter(LibraryOutcome.UnknownCollection));
     }
@@ -468,47 +468,44 @@ public sealed class NameBoxTests
         Assert.Equal("mem", field.State.Draft);
     }
 
-    // ---------------------------------------------------------------- Rename and Delete, next to the menu
+    // ---------------------------------------------------------------- the ... button, next to the menu
 
     [Theory]
     [InlineData(1.0)]
     [InlineData(1.25)]
     [InlineData(1.5)]
     [InlineData(2.0)]
-    public void Rename_and_Delete_sit_on_the_line_of_the_menu_and_stay_in_the_page(double scale)
+    public void The_button_of_a_collection_sits_on_the_line_of_the_menu_and_leaves_the_search_field_at_least_200_wide(double scale)
     {
         using var canvas = new GdiCanvas((int)(760 * scale), (int)(488 * scale), scale);
         var filter = new Box(200, 82, 220, 30);
 
-        var buttons = CollectionActions.Build(canvas, filter, () => { }, () => { });
+        var button = CollectionActions.Build(filter, () => { });
+        var searchLeft = CollectionActions.SearchLeft(filter);
 
-        Assert.Equal([CollectionActions.RenameId, CollectionActions.DeleteId], buttons.Select(b => b.Id));
-        Assert.All(buttons, b =>
-        {
-            Assert.Equal(filter.Y, b.Bounds.Y);
-            Assert.Equal(filter.H, b.Bounds.H);
-        });
-        Assert.True(buttons[0].Bounds.X > filter.Right);
-        Assert.True(buttons[1].Bounds.X > buttons[0].Bounds.Right);
-        Assert.True(buttons[1].Bounds.Right <= 728);
-        Assert.True(canvas.Measure("Rename", Face.Medium, 13) < buttons[0].Bounds.W);
-        Assert.True(canvas.Measure("Delete", Face.Medium, 13) < buttons[1].Bounds.W);
+        Assert.Equal(CollectionActions.MoreId, button.Id);
+        Assert.Equal(filter.Y, button.Bounds.Y);
+        Assert.Equal(filter.H, button.Bounds.H);
+        Assert.True(button.Bounds.X > filter.Right);
+        Assert.True(button.Bounds.Right < searchLeft);
+        Assert.Equal(488, searchLeft);
+        Assert.True(728 - searchLeft >= 200);
+        Assert.True(canvas.Measure(CollectionActions.MoreLabel, Face.Medium, 14) < button.Bounds.W);
     }
 
     [Fact]
-    public void Rename_and_Delete_do_what_they_say()
+    public void The_button_of_a_collection_opens_its_menu_by_key_and_by_click_and_only_inside()
     {
-        var renamed = 0;
-        var deleted = 0;
+        var opened = 0;
 
-        var buttons = CollectionActions.Build(new FakeCanvas(), new Box(200, 82, 220, 30), () => renamed++, () => deleted++);
-        buttons[0].OnKey(Vk.Enter);
-        buttons[1].OnRelease(inside: true);
-        buttons[1].OnRelease(inside: false);
+        var button = CollectionActions.Build(new Box(200, 82, 220, 30), () => opened++);
+        button.OnKey(Vk.Enter);
+        button.OnRelease(inside: true);
+        button.OnRelease(inside: false);
 
-        Assert.Equal(1, renamed);
-        Assert.Equal(1, deleted);
+        Assert.Equal(2, opened);
     }
+
 
     // ---------------------------------------------------------------- what lies behind
 

@@ -305,33 +305,92 @@ public sealed class ScreenLibraryFilterTests : IDisposable
         Assert.Equal(SettingsScreen.ClipFilterId, Screen.FocusId);
     }
 
-    // ---------------------------------------------------------------- Rename and Delete
+    // ---------------------------------------------------------------- the button of a collection, Rename... and Delete...
 
     [Fact]
-    public void Rename_and_Delete_are_there_only_for_a_collection()
+    public void The_button_of_a_collection_is_there_only_for_a_collection_and_the_search_does_not_move()
     {
         Open(LabeledLibrary.Sample());
-        Assert.Null(Screen.WidgetById(CollectionActions.RenameId));
+        Assert.Null(Screen.WidgetById(CollectionActions.MoreId));
+        var search = Screen.WidgetById(SettingsScreen.ClipSearchId)!.Bounds;
 
         Filter.PickValue(LibraryChoice.Favorites.Value);
-        Assert.Null(Screen.WidgetById(CollectionActions.DeleteId));
+        Assert.Null(Screen.WidgetById(CollectionActions.MoreId));
+        Assert.Equal(search, Screen.WidgetById(SettingsScreen.ClipSearchId)!.Bounds);
 
         Filter.PickValue(LibraryChoice.Of("s").Value);
-        Assert.NotNull(Screen.WidgetById(CollectionActions.RenameId));
-        Assert.NotNull(Screen.WidgetById(CollectionActions.DeleteId));
-        Assert.True(Screen.WidgetById(CollectionActions.RenameId)!.Bounds.X > Filter.Bounds.Right);
+        var more = Screen.WidgetById(CollectionActions.MoreId)!.Bounds;
+        Assert.True(more.X > Filter.Bounds.Right);
+        Assert.True(more.Right < search.X);
+        Assert.Equal(search, Screen.WidgetById(SettingsScreen.ClipSearchId)!.Bounds);
+        Assert.Null(Screen.WidgetById("lib.rename"));
+        Assert.Null(Screen.WidgetById("lib.delete"));
     }
 
     [Fact]
-    public void Rename_and_Delete_open_the_box_of_the_collection_shown()
+    public void The_button_opens_a_menu_of_Rename_and_Delete_under_it_which_Esc_and_a_click_outside_close()
     {
         Open(LabeledLibrary.Sample());
         Filter.PickValue(LibraryChoice.Of("p").Value);
 
-        ClickOn(CollectionActions.RenameId);
+        var menu = CollectionMenuClicks.OpenFrom(Screen);
+
+        Assert.Equal([CollectionMenuItem.Rename, CollectionMenuItem.Delete], menu.Items);
+        Assert.Equal("p", menu.CollectionId);
+        Assert.Equal(CollectionMenu.RenameLabel, CollectionMenu.LabelOf(CollectionMenuItem.Rename));
+        Assert.Equal("Delete...", CollectionMenu.LabelOf(CollectionMenuItem.Delete));
+        var button = Screen.WidgetById(CollectionActions.MoreId)!.Bounds;
+        Assert.True(menu.Bounds.Y >= button.Bottom);
+        Assert.Equal(button.X, menu.Bounds.X);
+        Assert.True(Screen.PopupOpen);
+        Assert.False(Screen.BoxOpen);
+        Assert.Equal(CollectionActions.MoreId, Screen.FocusId);
+
+        Screen.Key(Vk.Escape, 0);
+        Assert.Null(Screen.OpenCollectionMenu);
+        Assert.Equal(CollectionActions.MoreId, Screen.FocusId);
+
+        CollectionMenuClicks.OpenFrom(Screen);
+        Screen.MouseDown(600, 400);
+        Assert.Null(Screen.OpenCollectionMenu);
+        Assert.False(Screen.BoxOpen);
+    }
+
+    [Fact]
+    public void The_menu_of_the_collection_follows_the_keys_of_the_menu_of_a_clip()
+    {
+        Open(LabeledLibrary.Sample());
+        Filter.PickValue(LibraryChoice.Of("p").Value);
+        Screen.TabTo(CollectionActions.MoreId);
+
+        Screen.Key(Vk.Enter, 0);
+        Assert.Equal(CollectionMenuItem.Rename, Screen.OpenCollectionMenu!.Current);
+        Screen.Key(Vk.Down, 0);
+        Assert.Equal(CollectionMenuItem.Delete, Screen.OpenCollectionMenu!.Current);
+        Screen.Key(Vk.Down, 0);
+        Assert.Equal(CollectionMenuItem.Rename, Screen.OpenCollectionMenu!.Current);
+        Screen.Key(Vk.Up, 0);
+        Assert.Equal(CollectionMenuItem.Delete, Screen.OpenCollectionMenu!.Current);
+        Screen.Key(Vk.Home, 0);
+        Assert.Equal(CollectionMenuItem.Rename, Screen.OpenCollectionMenu!.Current);
+        Screen.Key(Vk.End, 0);
+        Assert.Equal(CollectionMenuItem.Delete, Screen.OpenCollectionMenu!.Current);
+
+        Screen.Key(Vk.Enter, 0);
+        Assert.Null(Screen.OpenCollectionMenu);
+        Assert.Equal(NameBoxKind.Delete, Screen.OpenBoxState!.Kind);
+    }
+
+    [Fact]
+    public void Rename_and_Delete_of_the_menu_open_the_box_of_the_collection_shown()
+    {
+        Open(LabeledLibrary.Sample());
+        Filter.PickValue(LibraryChoice.Of("p").Value);
+
+        CollectionMenuClicks.Pick(Screen, CollectionMenuItem.Rename);
         var rename = Screen.OpenBoxState!;
         Screen.Key(Vk.Escape, 0);
-        ClickOn(CollectionActions.DeleteId);
+        CollectionMenuClicks.Pick(Screen, CollectionMenuItem.Delete);
         var delete = Screen.OpenBoxState!;
 
         Assert.Equal((NameBoxKind.Rename, "p", "pets"), (rename.Kind, rename.CollectionId, rename.Name));
@@ -339,24 +398,38 @@ public sealed class ScreenLibraryFilterTests : IDisposable
     }
 
     [Fact]
-    public void Tab_goes_from_the_menu_to_Rename_and_Delete_then_to_the_list()
+    public void The_menu_of_the_collection_goes_when_its_collection_is_gone()
+    {
+        var library = Open(LabeledLibrary.Sample());
+        Filter.PickValue(LibraryChoice.Of("p").Value);
+        CollectionMenuClicks.OpenFrom(Screen);
+
+        library.Index!.Collections.RemoveAll(c => c.Id == "p");
+        Screen.LibraryReadingArrived();
+
+        Assert.Null(Screen.OpenCollectionMenu);
+        Assert.Equal(LibraryChoice.All, Screen.ClipChoice);
+    }
+
+    [Fact]
+    public void Tab_goes_from_the_menu_to_the_button_the_search_and_the_list()
     {
         Open(LabeledLibrary.Sample());
         Filter.PickValue(LibraryChoice.Of("p").Value);
         Screen.SelectClip(LabeledLibrary.PathOf(1));
 
         Assert.Equal(
-            ["band.pause", "band.save", "nav", SettingsScreen.ClipFilterId, CollectionActions.RenameId, CollectionActions.DeleteId, SettingsScreen.ClipListId, ChipLine.ChipsId, ChipLine.NewId, SettingsScreen.ClipMoreId, SettingsScreen.ClipCopyId, SettingsScreen.ClipShowId, SettingsScreen.ClipPlayId],
+            ["band.pause", "band.save", "nav", SettingsScreen.ClipFilterId, CollectionActions.MoreId, SettingsScreen.ClipSearchId, SettingsScreen.ClipListId, ChipLine.ChipsId, ChipLine.NewId, SettingsScreen.ClipMoreId, SettingsScreen.ClipCopyId, SettingsScreen.ClipShowId, SettingsScreen.ClipPlayId],
             Screen.StopIds());
     }
 
     [Fact]
-    public void An_empty_collection_keeps_Rename_and_Delete_and_the_list_is_no_stop()
+    public void An_empty_collection_keeps_its_button_and_the_list_is_no_stop()
     {
         Open(LabeledLibrary.Sample());
         Filter.PickValue(LibraryChoice.Of("s").Value);
 
-        Assert.Equal(["band.pause", "band.save", "nav", SettingsScreen.ClipFilterId, CollectionActions.RenameId, CollectionActions.DeleteId], Screen.StopIds());
+        Assert.Equal(["band.pause", "band.save", "nav", SettingsScreen.ClipFilterId, CollectionActions.MoreId, SettingsScreen.ClipSearchId], Screen.StopIds());
     }
 
     // ---------------------------------------------------------------- the stars

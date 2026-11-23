@@ -620,7 +620,7 @@ internal sealed partial class SettingsScreen
 
     private const uint SearchFindKey = 'F';
 
-    private void OpenCollectionMenu(string collectionId, Box button)
+    private void OpenMenuOfCollection(string collectionId, Box button)
     {
         _focusId = CollectionActions.MoreId;
         _menu = CollectionMenu.Below(collectionId, button, _byKey);
@@ -677,7 +677,7 @@ internal sealed partial class SettingsScreen
         if (LibraryFilter.NameOf(_clipChoice, ClipIndex) is not null && _clipChoice.CollectionId is { } id)
         {
             var more = CollectionActions.MoreBox(filter);
-            Add(CollectionActions.Build(filter, () => OpenCollectionMenu(id, more)), scrolls: false);
+            Add(CollectionActions.Build(filter, () => OpenMenuOfCollection(id, more)), scrolls: false);
         }
 
         // Always at the same place: the button comes and goes in front of it, and nothing moves.

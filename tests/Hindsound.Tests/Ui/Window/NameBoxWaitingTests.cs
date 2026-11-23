@@ -40,7 +40,7 @@ public sealed class NameBoxWaitingTests
     [Fact]
     public void A_deletion_waiting_swallows_escape_too()
     {
-        var state = Waiting(NameBoxState.ForDelete("c1", "pets", CollectionActions.DeleteId));
+        var state = Waiting(NameBoxState.ForDelete("c1", "pets", CollectionActions.MoreId));
 
         Assert.Equal(NameBoxKey.Ignore, state.Key(Vk.Escape, plain: true, NameBox.CancelId));
     }

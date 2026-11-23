@@ -57,8 +57,6 @@ public sealed class CollectionScenesTests
 
         public string? Notice { get; init; }
 
-        public string? Note { get; init; }
-
         public bool OpenPlus { get; init; }
 
         public NameBoxState? Box { get; init; }
@@ -77,16 +75,15 @@ public sealed class CollectionScenesTests
         new("no-collection", []),
         new("file-damaged", Three) { Notice = ChipLine.ReadOnlyMessage(LibraryStatus.Corrupt) },
         new("file-unreadable", Three) { Notice = ChipLine.ReadOnlyMessage(LibraryStatus.Unreadable) },
-        new("filter-collection-actions", Three) { Filter = "pets", Actions = true, Focus = CollectionActions.RenameId },
+        new("filter-collection-actions", Three) { Filter = "pets", Actions = true, Focus = CollectionActions.MoreId },
         new("filter-empty-collection", []) { Filter = "Alex", Actions = true, NoClips = true },
-        new("filter-actions-with-note", Three) { Filter = "pets", Actions = true, Note = "Playback can end up in your next clip on this setup." },
         new("box-new", Three) { Box = NameBoxState.ForCreate(ChipLine.NewId, () => Taken), Typed = "memes", Focus = NameBox.NameId },
         new("box-empty", Three) { Box = NameBoxState.ForCreate(ChipLine.NewId, () => Taken), Focus = NameBox.NameId },
         new("box-taken", Three) { Box = NameBoxState.ForCreate(ChipLine.NewId, () => Taken), Typed = "pets", Focus = NameBox.NameId },
         new("box-too-long", Three) { Box = NameBoxState.ForCreate(ChipLine.NewId, () => Taken), Typed = new string('a', 41), Focus = NameBox.NameId },
-        new("box-rename", Three) { Box = NameBoxState.ForRename("c1", "pets", CollectionActions.RenameId, () => Taken), Focus = NameBox.NameId },
-        new("box-delete", Three) { Box = NameBoxState.ForDelete("c2", "Sam", CollectionActions.DeleteId), Focus = NameBox.CancelId },
-        new("box-delete-long-name", Three) { Box = NameBoxState.ForDelete("c2", new string('W', 40), CollectionActions.DeleteId), Focus = NameBox.CancelId },
+        new("box-rename", Three) { Box = NameBoxState.ForRename("c1", "pets", CollectionActions.MoreId, () => Taken), Focus = NameBox.NameId },
+        new("box-delete", Three) { Box = NameBoxState.ForDelete("c2", "Sam", CollectionActions.MoreId), Focus = NameBox.CancelId },
+        new("box-delete-long-name", Three) { Box = NameBoxState.ForDelete("c2", new string('W', 40), CollectionActions.MoreId), Focus = NameBox.CancelId },
     ];
 
     public static TheoryData<string, double> SceneNames()
@@ -176,13 +173,7 @@ public sealed class CollectionScenesTests
         widgets.Add(filter);
         if (scene.Actions)
         {
-            widgets.AddRange(CollectionActions.Build(c, Filter, () => { }, () => { }));
-        }
-
-        if (scene.Note is { } note)
-        {
-            var x = (scene.Actions ? widgets[^1].Bounds.Right : Filter.Right) + 16;
-            widgets.Add(new Painted((canvas, _) => canvas.Wrapped(note, Face.Body, 12, x, 82, Right - x, Theme.Muted)));
+            widgets.Add(CollectionActions.Build(Filter, () => { }));
         }
 
         CollectionChips? line = null;
