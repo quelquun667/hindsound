@@ -41,7 +41,7 @@ public enum HotkeyStatus
 /// <summary>Outcome of registering one action's shortcut. <see cref="Message"/> is the text for the interface.</summary>
 public sealed record HotkeyResult(HotkeyAction Action, string? Gesture, HotkeyStatus Status, string? Message)
 {
-    public static string InUseMessage => Tr.Of("Hotkey already in use by another app", "Raccourci déjà utilisé par une autre application");
+    public static string InUseMessage => Tr.Of("Hotkey already in use by another app", "Raccourci déjà pris par une autre application");
     public static string InvalidMessage => Tr.Of("Invalid hotkey", "Raccourci invalide");
     public static string DuplicateMessage => Tr.Of("Same hotkey as another action", "Même raccourci qu'une autre action");
     public static string UnavailableMessage => Tr.Of("Hotkeys did not respond in time; try again", "Les raccourcis n'ont pas répondu à temps\u00A0; réessaie");

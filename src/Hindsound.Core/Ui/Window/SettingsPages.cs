@@ -681,7 +681,7 @@ internal sealed partial class SettingsScreen
             Tr.Of("Volume", "Volume"),
             "export.normalization",
             y,
-            [Tr.Of("Off", "Désactivé"), Tr.Of("Peak", "Pic"), Tr.Of("Loudness", "Loudness")],
+            [Tr.Of("Off", "Aucune"), Tr.Of("Peak", "Pic"), Tr.Of("Loudness", "Loudness")],
             () => Editor.Settings.Export.Normalization switch { "off" => 0, "peak" => 1, _ => 2 },
             i => Editor.SetNormalization(i switch { 0 => "off", 1 => "peak", _ => "loudness" }));
         y += pitch;
@@ -704,7 +704,7 @@ internal sealed partial class SettingsScreen
         }));
         y += pitch + (folderError is null ? 0 : TextField.MessageHeight);
 
-        RowLabel(Tr.Of("File name", "Nom du fichier"), y);
+        RowLabel(Tr.Of("File name", "Nom"), y);
         var nameBox = new Box(Left + 80, y, Width - 80, RowHeight);
         Add(new TextField(_templateField, SettingsEditor.CheckTemplate, t => Editor.SetTemplate(t), () => Editor.Settings.Export.FileNameTemplate)
         {
@@ -1061,9 +1061,9 @@ internal sealed partial class SettingsScreen
     private static string[] FirstRunSteps => [Tr.Of("Pick your hotkey", "Choisis ton raccourci"), Tr.Of("Check your mic", "Vérifie ton micro"), Tr.Of("Try it", "Essaie")];
 
     // The app has only just started: a clip made at once would hold next to nothing.
-    internal static string FirstRunWait => Tr.Of("Wait a few seconds.", "Attends quelques secondes.");
-    internal static string FirstRunSay => Tr.Of("Say something, then press your hotkey.", "Dis quelque chose, puis appuie sur ton raccourci.");
-    internal static string FirstRunSayCommand => Tr.Of("Say something, then press the Save button.", "Dis quelque chose, puis appuie sur le bouton Enregistrer.");
+    internal static string FirstRunWait => Tr.Of("Wait a few seconds.", "Attends un peu.");
+    internal static string FirstRunSay => Tr.Of("Say something, then press your hotkey.", "Dis un mot, puis appuie sur ton raccourci.");
+    internal static string FirstRunSayCommand => Tr.Of("Say something, then press the Save button.", "Dis un mot, puis appuie sur Enregistrer.");
     internal const float FirstRunNoteGap = 4;
 
     /// <summary>The room of a line in the panel of the card: nothing cuts a note that goes past it.</summary>
@@ -1141,7 +1141,7 @@ internal sealed partial class SettingsScreen
 
                 break;
             case 1:
-                FirstRunNote(Tr.Format($"Speak: the bar should move. Off if you only want the {Features.MachineName} sound.", $"Parle\u00A0: la barre doit bouger. Coupé si tu veux seulement le son du {Features.MachineName}."), inner, top);
+                FirstRunNote(Tr.Format($"Speak: the bar should move. Off if you only want the {Features.MachineName} sound.", $"Parle\u00A0: la barre doit bouger. Coupé pour le son du {Features.MachineName} seul."), inner, top);
                 Add(
                     new Dropdown(() => SettingsEditor.MicChoices(_mics, Editor.Settings.Audio.MicDeviceId), () => Editor.Settings.Audio.MicDeviceId, Editor.SetMic, OpenPopup)
                     {
