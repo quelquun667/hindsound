@@ -54,7 +54,7 @@ internal static class EditorWave
     /// <summary>The name of a lane of a clip in two files, in the order of its files: the sound of the computer, then the microphone.</summary>
     public static string LaneName(int index, string machine) => index switch
     {
-        0 => Tr.Format($"Whole {machine}", $"Son du {machine}"),
+        0 => PlatformFeatures.MachineTrackOf(machine),
         1 => Tr.Of("Mic", "Micro"),
         _ => "",
     };

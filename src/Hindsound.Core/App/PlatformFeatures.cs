@@ -105,7 +105,16 @@ internal sealed record PlatformFeatures
     public string MachineName { get; init; } = "PC";
 
     /// <summary>The name of the source that records everything the computer plays: "Whole PC", "Whole Mac"; "Tout le PC" in French.</summary>
-    public string WholeMachine => Tr.Of("Whole " + MachineName, "Tout le " + MachineName);
+    public string WholeMachine => WholeMachineOf(MachineName);
+
+    /// <summary>The name of the source that records everything a computer of this name plays, for a page that has only the name.</summary>
+    public static string WholeMachineOf(string machine) => Tr.Format($"Whole {machine}", $"Tout le {machine}");
+
+    /// <summary>
+    /// The name of the lane of the computer's sound in the editor: "Whole PC" in English, as the source; "Son du PC" in French,
+    /// where "Tout le PC" beside "Micro" would read as if the microphone were not part of the PC.
+    /// </summary>
+    public static string MachineTrackOf(string machine) => Tr.Format($"Whole {machine}", $"Son du {machine}");
 
     /// <summary>What the system calls the place deleted files go to, in English and in French.</summary>
     public (string English, string French) TrashWords { get; init; } = WindowsTrash;

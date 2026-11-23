@@ -329,8 +329,17 @@ internal static class WaveView
     }
 
     /// <summary>The words on the line of a change of source.</summary>
-    public static string MarkerText(string? app, PlatformFeatures? features = null) =>
-        app is null ? WholeMachine(features) + Tr.Of(" from here", " à partir d'ici") : AppName(app) + Tr.Of(" only from here", " seul à partir d'ici");
+    public static string MarkerText(string? app, PlatformFeatures? features = null)
+    {
+        if (app is null)
+        {
+            var whole = WholeMachine(features);
+            return Tr.Format($"{whole} from here", $"{whole} à partir d'ici");
+        }
+
+        var name = AppName(app);
+        return Tr.Format($"{name} only from here", $"{name} seul à partir d'ici");
+    }
 
     /// <summary>
     /// What to say when nothing can be captured, or null. The same two cases as the status band: with an application
@@ -348,12 +357,7 @@ internal static class WaveView
 
     private static string SourceName(string? app, PlatformFeatures? features) => app is null ? WholeMachine(features) : AppName(app);
 
-    // The name of the source that records everything the computer plays: "Whole PC", "Tout le PC".
-    private static string WholeMachine(PlatformFeatures? features)
-    {
-        var platform = features ?? PlatformFeatures.Windows;
-        return Tr.Of(platform.WholeMachine, "Tout le " + platform.MachineName);
-    }
+    private static string WholeMachine(PlatformFeatures? features) => (features ?? PlatformFeatures.Windows).WholeMachine;
 
     private static string AppName(string exe) => AudioAppList.NameOf(exe);
 

@@ -345,7 +345,7 @@ internal sealed class SettingsEditor(AppSettings settings, Action<SettingsChange
     /// <summary>The list of the "Record" row. An app chosen earlier and not running now stays listed.</summary>
     public static IReadOnlyList<DropItem> RecordChoices(IReadOnlyList<AudioAppChoice> apps, string? selected, bool selectedRunning = false, string machine = "PC")
     {
-        var items = new List<DropItem> { new(string.Empty, Tr.Of("Whole " + machine, "Tout le " + machine)) };
+        var items = new List<DropItem> { new(string.Empty, PlatformFeatures.WholeMachineOf(machine)) };
         items.AddRange(apps.Select(a => new DropItem(a.ExeName, a.Name)));
         if (!string.IsNullOrEmpty(selected) && !items.Any(i => string.Equals(i.Value, selected, StringComparison.OrdinalIgnoreCase)))
         {
