@@ -25,7 +25,7 @@ public sealed class FrenchShortcutTextsTests
         Assert.StartsWith("No global shortcut on this desktop.", HotkeyChoice.NoShortcutTextFor("/opt/hindsound"));
 
         using var scope = Tr.Use(UiLanguage.French);
-        Assert.EndsWith("associe cette commande à une touche\u00A0: /opt/hindsound", HotkeyChoice.NoShortcutTextFor("/opt/hindsound"));
+        Assert.EndsWith("associe cette commande à une touche\u00A0: " + HotkeyChoice.SaveCommandFor("/opt/hindsound"), HotkeyChoice.NoShortcutTextFor("/opt/hindsound"));
         Assert.Equal(HotkeyChoice.NoShortcutGenericText, HotkeyChoice.NoShortcutTextFor("relative/path"));
         Assert.StartsWith("Pas de raccourci global", HotkeyChoice.NoShortcutGenericText);
     }
