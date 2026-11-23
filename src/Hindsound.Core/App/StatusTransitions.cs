@@ -199,8 +199,8 @@ internal static class StatusTransitions
     public static string? SaveHotkeyProblem(IReadOnlyList<HotkeyResult> hotkeys) => RefusedSave(hotkeys)?.Status switch
     {
         null => null,
-        HotkeyStatus.InUse or HotkeyStatus.Duplicate => Tr.Of("Save hotkey is taken", "Raccourci d'enregistrement déjà pris"),
-        _ => Tr.Of("Save hotkey doesn't work", "Raccourci d'enregistrement inactif"),
+        HotkeyStatus.InUse or HotkeyStatus.Duplicate => Tr.Of("Save hotkey is taken", "Raccourci déjà pris"),
+        _ => Tr.Of("Save hotkey doesn't work", "Raccourci inactif"),
     };
 
     /// <summary>"Capture on", with the length and the keys of now: the settings are read again while it waits for its turn.</summary>

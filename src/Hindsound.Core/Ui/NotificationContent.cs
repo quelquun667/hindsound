@@ -132,14 +132,14 @@ internal static class NotificationStates
 
         if (result.IsSilent)
         {
-            return new NotificationContent(NotificationKind.Silent, title, copyFailed ? Tr.Of("It's silent, and not copied", "Il est silencieux, et non copié") : Tr.Of("It's silent. Check Settings > Audio.", "Il est silencieux. Vérifie Réglages > Audio."), [], NotificationPalette.Amber,
+            return new NotificationContent(NotificationKind.Silent, title, copyFailed ? Tr.Of("It's silent, and not copied", "Clip silencieux, et non copié") : Tr.Of("It's silent. Check Settings > Audio.", "Silence. Vérifie Réglages > Audio."), [], NotificationPalette.Amber,
                 NotificationVisual.Bars, accent, bars);
         }
 
         if (copyFailed)
         {
             // The sentence needs the wider text area, so the triangle takes the place of the bars.
-            return new NotificationContent(NotificationKind.CopyFailed, title, Tr.Of("Couldn't copy. Use tray > Copy last clip.", "Copie impossible. Utilise l'icône > Copier le dernier clip."), [], NotificationPalette.Amber,
+            return new NotificationContent(NotificationKind.CopyFailed, title, Tr.Of("Couldn't copy. Use tray > Copy last clip.", "Non copié. Icône > Copier le dernier clip."), [], NotificationPalette.Amber,
                 NotificationVisual.Triangle, NotificationPalette.Amber, NoBars);
         }
 
@@ -243,7 +243,7 @@ internal static class NotificationStates
 
     /// <summary>A new version is downloaded, and installs by itself when the app leaves.</summary>
     public static NotificationContent UpdateReady(string version, uint accent) =>
-        Icon(NotificationKind.UpdateReady, Tr.Format($"Update ready ({version})", $"Mise à jour prête ({version})"), Tr.Of("Installs when Hindsound closes. Click for details.", "S'installe à la fermeture de Hindsound. Clique pour les détails."), accent, NotificationVisual.Pending, accent)
+        Icon(NotificationKind.UpdateReady, Tr.Format($"Update ready ({version})", $"Mise à jour prête ({version})"), Tr.Of("Installs when Hindsound closes. Click for details.", "S'installe à la fermeture. Clique pour voir."), accent, NotificationVisual.Pending, accent)
             with { ClickShowsUpdates = true };
 
     /// <summary>A new version is known, and nothing installs until the user says so: "installs when it closes" would be false.</summary>
@@ -258,17 +258,17 @@ internal static class NotificationStates
         Problem(NotificationKind.UpdateFailed, Tr.Of("Update failed", "Mise à jour échouée"),
             willRetry
                 ? Tr.Format($"Still on {installed}. It will try again later.", $"Toujours en {installed}. Nouvel essai plus tard.")
-                : Tr.Format($"Still on {installed}. Update from Settings > General.", $"Toujours en {installed}. Mets à jour depuis Réglages > Général."))
+                : Tr.Format($"Still on {installed}. Update from Settings > General.", $"Toujours en {installed}. Va dans Réglages > Général."))
             with { ClickShowsUpdates = true };
 
     /// <summary>The start found a broken settings file.</summary>
     /// <param name="copyKept">A copy of it exists; otherwise it stayed in its place.</param>
     public static NotificationContent SettingsDamaged(bool copyKept) =>
         Problem(NotificationKind.SettingsDamaged, Tr.Of("Settings file was damaged", "Fichier de réglages endommagé"),
-            copyKept ? Tr.Of("Defaults restored, mic off. Copy kept as .bak", "Valeurs par défaut rétablies, micro coupé. Copie gardée en .bak") : Tr.Of("Defaults restored, mic off", "Valeurs par défaut rétablies, micro coupé"));
+            copyKept ? Tr.Of("Defaults restored, mic off. Copy kept as .bak", "Par défaut, micro coupé. Copie gardée en .bak") : Tr.Of("Defaults restored, mic off", "Valeurs par défaut rétablies, micro coupé"));
 
     public static NotificationContent SettingsUnreadable() =>
-        Problem(NotificationKind.SettingsUnreadable, Tr.Of("Can't read the settings file", "Fichier de réglages illisible"), Tr.Of("Using defaults, mic off, until it can be read", "Valeurs par défaut et micro coupé, jusqu'à sa lecture"));
+        Problem(NotificationKind.SettingsUnreadable, Tr.Of("Can't read the settings file", "Fichier de réglages illisible"), Tr.Of("Using defaults, mic off, until it can be read", "Par défaut et micro coupé, jusqu'à sa lecture"));
 
     public static NotificationContent SettingsHasError() =>
         Problem(NotificationKind.SettingsHasError, Tr.Of("Settings file has an error", "Erreur dans le fichier de réglages"), Tr.Of("Keeping the current settings", "Les réglages actuels sont gardés"));
@@ -279,10 +279,13 @@ internal static class NotificationStates
     /// <summary>Named as the toggle is on this system: "Start with Windows", or "Start with the session" on Linux.</summary>
     /// <param name="features">The words of the system; the running one's when left out.</param>
     public static NotificationContent StartupNotChanged(PlatformFeatures? features = null) =>
-        Problem(NotificationKind.StartupNotChanged, StartupChangeTitle((features ?? PlatformDefaults.Features ?? PlatformFeatures.Windows).StartupLabel), Tr.Of("It stays as it was", "Rien n'a changé"));
+        Problem(NotificationKind.StartupNotChanged, StartupChangeTitle((features ?? PlatformDefaults.Features ?? PlatformFeatures.Windows).StartupLabel), StartupChangeBody((features ?? PlatformDefaults.Features ?? PlatformFeatures.Windows).StartupLabel));
 
-    private static string StartupChangeTitle(string label) =>
-        Tr.Format($"Couldn't change {label}", $"Impossible de changer «{NoBreakSpace}{label}{NoBreakSpace}»");
+    // French names the toggle in the sentence under the title: its name is too long for the title of a Linux or Mac toggle.
+    private static string StartupChangeTitle(string label) => Tr.Format($"Couldn't change {label}", $"Changement impossible");
+
+    private static string StartupChangeBody(string label) =>
+        Tr.Format($"It stays as it was", $"«{NoBreakSpace}{label}{NoBreakSpace}» reste comme avant");
 
     /// <summary><c>m:ss</c>.</summary>
     public static string FormatDuration(int seconds) => $"{seconds / 60}:{seconds % 60:00}";
