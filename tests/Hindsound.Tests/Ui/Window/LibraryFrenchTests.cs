@@ -197,7 +197,7 @@ public sealed class LibraryFrenchTests
         Assert.Equal("Ce clip a été déplacé ou supprimé", ChipLine.OutcomeMessage(LibraryOutcome.ClipGone));
         Assert.Equal("Ce nom est déjà utilisé", ChipLine.OutcomeMessage(LibraryOutcome.NameTaken));
         Assert.Equal("Impossible de lire ce fichier", ClipPreview.CantPlayText);
-        Assert.StartsWith("Avec ce réglage", ClipPreview.CanEndUpInClipShown);
+        Assert.Equal("Ici, la lecture peut finir dans ton prochain clip.", ClipPreview.CanEndUpInClipShown);
         Assert.Equal("Ça n'a pas marché. Ton clip n'a pas été touché.", SettingsScreen.ClipFailedShown);
     }
 }
