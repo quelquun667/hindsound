@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [0.13.0] - 2026-11-23
 
-Hindsound in French, a search field in the Library, and a hotkey that saves a clip and opens it in the editor. After the update, a system in French sees Hindsound in French, and `Language` on the `General` page goes back to English. Recording and saving work as in 0.12.0.
+Hindsound in French, a search field in the Library, and a hotkey that saves a clip and opens it in the editor. On a system in French, Hindsound shows French after the update; `Language`, on the `General` page, switches it back to English. Recording and saving work as in 0.12.0.
 
 ### Added
 
