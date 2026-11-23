@@ -147,6 +147,8 @@ public sealed partial class LanguageSourceTests
     [InlineData("var a = Tr.Of(\"a\", Other($\"{x}\"));", 1)]
     [InlineData("// Tr.Of($\"{x}\", \"b\")", 0)]
     [InlineData("var a = Tr.Format($\"a {x}\", $\"b {x}\");", 0)]
+    [InlineData("var a = Tr.Of(@\"C:\\dir\\\", $\"{x}\");", 1)]
+    [InlineData("var a = Tr.Of(@\"say \"\"hi\"\"\", $\"{x}\");", 1)]
     public void The_scan_finds_an_interpolated_text_and_only_that(string source, int expectedLine)
     {
         var found = InterpolatedTexts(source);
