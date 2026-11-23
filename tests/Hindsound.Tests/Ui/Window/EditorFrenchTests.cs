@@ -217,9 +217,9 @@ public sealed class EditorFrenchTests : IDisposable
         var cancel = Screen.WidgetById(EditorSaveDialogState.CancelId)!.Bounds;
         Assert.True(cancel.X < SettingsScreen.NavWidth, "the French buttons must widen the dialog into the side bar for this test to mean anything");
 
-        // Above the dialog, on the side bar: nothing happens.
-        Screen.MouseDown(SettingsScreen.NavWidth - 2, SettingsScreen.BandHeight + 4);
-        Screen.MouseUp(SettingsScreen.NavWidth - 2, SettingsScreen.BandHeight + 4);
+        // Above the dialog, on a row of the side bar, where the box has widened: nothing happens.
+        Screen.MouseDown(cancel.X + 2, SettingsScreen.BandHeight + 35);
+        Screen.MouseUp(cancel.X + 2, SettingsScreen.BandHeight + 35);
         Assert.NotNull(Screen.EditorDialog);
         Assert.Equal(Section.Library, Screen.Section);
 
