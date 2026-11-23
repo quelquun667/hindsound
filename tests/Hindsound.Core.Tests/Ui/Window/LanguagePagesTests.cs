@@ -169,7 +169,7 @@ public sealed unsafe class LanguagePagesTests
         var capturing = new AudioEngineStatus(CaptureActivity.Capturing, true, true, true, "Speakers", "Headset", true, TimeSpan.FromMinutes(5), 86_688_000);
         var band = StatusText.From(capturing, 300);
 
-        Assert.Equal("Capture en cours", band.Title);
+        Assert.Equal("Capture", band.Title);
         Assert.Equal("micro actif", band.Mic);
         Assert.Equal("Pause", band.PauseLabel);
         Assert.Equal("~87 Mo", band.Ram);
