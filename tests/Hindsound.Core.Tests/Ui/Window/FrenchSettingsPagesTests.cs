@@ -177,7 +177,7 @@ public sealed unsafe class FrenchSettingsPagesTests
     public void A_field_with_no_key_says_Aucun_and_one_being_set_asks_in_French()
     {
         Reads("hotkeys@100", ["Aucun"], ["Not set"]);
-        Reads("hotkeys-listening@100", ["Appuie sur ta combinaison...", "Esc annule, Backspace efface"], ["Press your combo", "cancels"]);
+        Reads("hotkeys-listening@100", ["Appuie sur ta combinaison...", "Échap annule, Retour arrière efface"], ["Press your combo", "cancels"]);
     }
 
     [Fact]
@@ -317,7 +317,7 @@ public sealed unsafe class FrenchSettingsPagesTests
         portal.Screen.ShowSection(Section.Hotkeys);
         var waiting = portal.Texts();
         Assert.Contains("En attente du bureau", waiting);
-        Assert.Contains("Ton environnement de bureau définit ces raccourcis.", waiting);
+        Assert.Contains("Ton bureau définit ces raccourcis.", waiting);
         Assert.DoesNotContain("Waiting for your desktop", waiting);
 
         portal.Screen.SetHotkeyResults([.. Enum.GetValues<HotkeyAction>().Select(a => new HotkeyResult(a, null, HotkeyStatus.NotSet, null))]);
@@ -326,7 +326,7 @@ public sealed unsafe class FrenchSettingsPagesTests
         using var command = new Rig(PlatformFeatures.Linux(() => ShortcutMode.Command, () => "hindsound --save"));
         command.Screen.ShowSection(Section.Hotkeys);
         var page = command.Texts();
-        Assert.Contains("Cet environnement de bureau n'a pas de raccourci global pour les applications.", page);
+        Assert.Contains("Ce bureau n'a pas de raccourci global pour les applications.", page);
         Assert.Contains("associe cette commande à une touche :", page);
         Assert.Contains("Copier", page);
         Assert.Contains("La touche enregistre alors un clip, comme le bouton Enregistrer.", page);
@@ -369,5 +369,12 @@ public sealed unsafe class FrenchSettingsPagesTests
         using var scope = Tr.Use(UiLanguage.French);
         Assert.Equal("~87 Mo", RamEstimate.Format(300, micActive: true));
         Assert.Equal("~58 Mo", RamEstimate.Format(300, micActive: false));
+    }
+
+    [Fact]
+    public void The_update_card_is_in_French()
+    {
+        Reads("update-card@100", ["Mettre à jour vers", "Enregistrer, puis mettre à jour", "Mettre à jour", "Annuler"], ["Update to", "Save it, then update", "Cancel"]);
+        Reads("update-card-clip@100", ["Un clip s'enregistre encore"], ["A clip is still being saved"]);
     }
 }
