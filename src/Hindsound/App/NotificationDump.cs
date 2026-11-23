@@ -1,4 +1,5 @@
 using Hindsound.Export;
+using Hindsound.Input;
 using Hindsound.Ui;
 using Hindsound.Updates;
 
@@ -41,6 +42,10 @@ internal static class NotificationDump
             0.14f, 0.23f, 0.35f, 0.44f, 0.36f, 0.35f, 0.78f, 0.84f, 0.88f, 0.59f, 0.8f, 0.8f,
         ];
         var thirty = TimeSpan.FromSeconds(30);
+
+        // The words of a refused save hotkey come from where the app makes them, so the samples say what the app says.
+        var taken = StatusTransitions.SaveHotkeyProblem([new HotkeyResult(HotkeyAction.SaveDefault, "Ctrl+Shift+F10", HotkeyStatus.InUse, null)]);
+        var notWorking = StatusTransitions.SaveHotkeyProblem([new HotkeyResult(HotkeyAction.SaveDefault, "Ctrl+Shift+F10", HotkeyStatus.Unavailable, null)]);
         ClipResult Clip(double seconds, bool silent = false, bool rescued = false, bool wav = false) =>
             new(["clip.mp3"], TimeSpan.FromSeconds(seconds), 1, silent, bars, rescued, wav);
 
@@ -64,10 +69,10 @@ internal static class NotificationDump
             ("on-filling-long", NotificationStates.CaptureOn(1800, "Ctrl+Shift+F10", keptSeconds: 1750)),
             ("on-unknown", NotificationStates.CaptureOn(300, "Ctrl+Shift+F10")),
             ("on-long", NotificationStates.CaptureOn(300, "Ctrl+Alt+Shift+F24", keptSeconds: 300)),
-            ("on-taken", NotificationStates.CaptureOn(300, "Ctrl+Shift+F10", Tr.Of("Save hotkey is taken", "Raccourci déjà pris"), keptSeconds: 300)),
-            ("on-taken-starting", NotificationStates.CaptureOn(300, "Ctrl+Shift+F10", Tr.Of("Save hotkey is taken", "Raccourci déjà pris"), keptSeconds: 0)),
-            ("on-taken-filling", NotificationStates.CaptureOn(300, "Ctrl+Shift+F10", Tr.Of("Save hotkey is taken", "Raccourci déjà pris"), keptSeconds: 130)),
-            ("on-taken-long", NotificationStates.CaptureOn(1800, "Ctrl+Shift+F10", Tr.Of("Save hotkey doesn't work", "Raccourci inactif"), keptSeconds: 1800)),
+            ("on-taken", NotificationStates.CaptureOn(300, "Ctrl+Shift+F10", taken, keptSeconds: 300)),
+            ("on-taken-starting", NotificationStates.CaptureOn(300, "Ctrl+Shift+F10", taken, keptSeconds: 0)),
+            ("on-taken-filling", NotificationStates.CaptureOn(300, "Ctrl+Shift+F10", taken, keptSeconds: 130)),
+            ("on-taken-long", NotificationStates.CaptureOn(1800, "Ctrl+Shift+F10", notWorking, keptSeconds: 1800)),
             ("device", NotificationStates.DeviceChanged("Headset Earphone")),
             ("device-long", NotificationStates.DeviceChanged("Speakers (Realtek High Definition Audio with a very long name)")),
             ("saving", NotificationStates.Saving(thirty)),
