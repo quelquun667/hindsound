@@ -204,18 +204,19 @@ internal static class UpdatePanel
     }
 
     /// <summary>SetupChanged also means locked (UpdateRunner): the line never says the file was changed.</summary>
-    public static string RunMessage(RunStatus status) => status switch
+    /// <param name="features">The system that read the line; the one installed when not given.</param>
+    public static string RunMessage(RunStatus status, PlatformFeatures? features = null) => status switch
     {
         RunStatus.SetupChanged => Tr.Of("Couldn't open the update file. Try again in a moment.", "Impossible d'ouvrir le fichier de mise à jour. Réessaie dans un instant."),
         RunStatus.SetupMissing => Tr.Of("The update file is gone. Use Check now.", "Le fichier de mise à jour a disparu. Utilise Vérifier maintenant."),
         RunStatus.StateNotSaved => Tr.Of("Couldn't write the update state. Nothing changed.", "Impossible d'écrire l'état de la mise à jour. Rien n'a changé."),
-        RunStatus.StartFailed => StartRefused(),
+        RunStatus.StartFailed => StartRefused(features ?? PlatformDefaults.Features),
         _ => Tr.Of("Starting the update...", "Lancement de la mise à jour..."),
     };
 
     // Only the installed Windows app starts a Setup, but the sentence must be true wherever it is read: any other system is named "the system".
-    private static string StartRefused() =>
-        PlatformDefaults.Features is { } system && system.StartupWords != PlatformFeatures.Windows.StartupWords
+    private static string StartRefused(PlatformFeatures? features) =>
+        features is { } system && system.StartupWords != PlatformFeatures.Windows.StartupWords
             ? Tr.Of("The system refused to start the update.", "Le système a refusé de lancer la mise à jour.")
             : Tr.Of("Windows refused to start the update.", "Windows a refusé de lancer la mise à jour.");
 

@@ -28,6 +28,9 @@ internal sealed class ShellRunRig : IDisposable
     /// <summary>The one program the settings record alone, or null for the whole PC. Set before running.</summary>
     public string? SourceApp { get; set; }
 
+    /// <summary>When set, the app pretends an exclusive full-screen game runs for that many seconds, so that notifications wait for the desktop.</summary>
+    public double? PretendGameSeconds { get; set; }
+
     private string LogPath => Path.Combine(_folder, "settings.log");
 
     public void Run(Action<ShellRunRig> whileRunning) => Run(whileRunning, offscreen: true);
@@ -42,6 +45,11 @@ internal sealed class ShellRunRig : IDisposable
              "general":{"startWithWindows":false,"confirmSound":"never"}}
             """);
         string[] args = ["--settings", settings, "--no-mic", "--no-hotkeys", "--no-clipboard"];
+        if (PretendGameSeconds is { } game)
+        {
+            args = [.. args, "--selftest-game", game.ToString(System.Globalization.CultureInfo.InvariantCulture)];
+        }
+
         var options = AppOptions.Parse(offscreen ? [.. args, "--offscreen"] : args);
         Shell.Loop.WhileRunning = () => whileRunning(this);
         var desktop = new DesktopParts(Screens, new RigQuiet(), new RigSound(), new RigOpener(), new RigMeter());
