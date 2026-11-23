@@ -216,7 +216,7 @@ internal static class UpdatePanel
 
     // Only the installed Windows app starts a Setup, but the sentence must be true wherever it is read: any other system is named "the system".
     private static string StartRefused(PlatformFeatures? features) =>
-        features is { } system && system.StartupWords != PlatformFeatures.Windows.StartupWords
+        features is { InstalledWindows: false }
             ? Tr.Of("The system refused to start the update.", "Le système a refusé de lancer la mise à jour.")
             : Tr.Of("Windows refused to start the update.", "Windows a refusé de lancer la mise à jour.");
 
