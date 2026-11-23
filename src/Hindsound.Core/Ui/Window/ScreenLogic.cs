@@ -230,7 +230,7 @@ internal static class StatusText
     public static string FirstRunHotkeyNote(int clipSeconds) =>
         Tr.Format(
             $"Saves up to the last {ClipWords(clipSeconds)}, from anywhere, even in a game.",
-            $"Enregistre ce qui vient de passer, jusqu'à {ClipWords(clipSeconds)}, depuis n'importe où, même en jeu.");
+            $"Enregistre jusqu'à {ClipWords(clipSeconds)}, de partout, même en jeu.");
 
     /// <summary>What the update card says is lost. No figure under a few seconds: there is nothing to warn about.</summary>
     /// <param name="status">The last status of the engine; before any, only the setting can be named.</param>
