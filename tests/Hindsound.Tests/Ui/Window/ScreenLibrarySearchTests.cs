@@ -354,10 +354,10 @@ public sealed class ScreenLibrarySearchTests : IDisposable
     public void A_clip_waiting_to_be_chosen_is_given_up_when_another_choice_of_the_menu_is_picked_and_no_reading_empties_the_search()
     {
         var library = Open(Named());
-        var saved = Clip(Goal + " saved");
+        var saved = Clip("Fresh save");
         Screen.SelectClip(saved);
 
-        // The person moves on before the reading comes: Favorites, then words that the saved clip's name holds.
+        // The person moves on before the reading comes: Favorites, then words that the saved clip's name does not hold.
         Filter.PickValue(LibraryChoice.Favorites.Value);
         Type("goal");
         library.Lines = WithSaved(library, saved);
@@ -377,14 +377,31 @@ public sealed class ScreenLibrarySearchTests : IDisposable
         var saved = Clip("Fresh save");
         Screen.SelectClip(saved);
 
-        Type("fresh");
+        Type("goal");
         library.Lines = WithSaved(library, saved);
         Screen.LibraryReadingArrived();
-        Type("fresh x");
+        Assert.Equal("goal", Screen.SearchText);
+        Type("goal re");
         Screen.LibraryReadingArrived();
 
-        Assert.Equal("fresh x", Screen.SearchText);
+        Assert.Equal("goal re", Screen.SearchText);
         Assert.NotEqual(saved, Screen.EditorChosenPath);
+    }
+
+    [Fact]
+    public void Picking_another_choice_of_the_menu_gives_up_a_clip_waiting_to_be_chosen()
+    {
+        var library = Open(Named());
+        var saved = Clip("Fresh save");
+        Screen.SelectClip(saved);
+
+        Filter.PickValue(LibraryChoice.Favorites.Value);
+        library.Lines = WithSaved(library, saved);
+        library.Labels[saved] = new ClipLabels(true, []);
+        Screen.LibraryReadingArrived();
+
+        Assert.NotEqual(saved, Screen.EditorChosenPath);
+        Assert.Equal(LibraryChoice.Favorites, Screen.ClipChoice);
     }
 
     [Fact]
