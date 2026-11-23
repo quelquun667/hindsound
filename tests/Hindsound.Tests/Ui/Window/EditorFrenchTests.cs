@@ -160,7 +160,7 @@ public sealed class EditorFrenchTests : IDisposable
         Click(SettingsScreen.EditorSaveId);
         var drawn = Painted();
 
-        foreach (var word in new[] { "Enregistrer ta modification", "Nom de la copie", "L'original reste tel quel.", "Annuler", "Remplacer l'original", "Enregistrer une copie", "Gardé de 0:00.0 à 0:30.0 (30,0" + Nb + "s), volume +6 dB" })
+        foreach (var word in new[] { "Enregistrer ta modification", "Nom de la copie", "L'original reste tel quel.", "Annuler", "Remplacer l'original", "Enregistrer une copie", "Gardé de 0:00.0 à 0:30.0 (30,0" + Nb + "s), volume +6" + Nb + "dB" })
         {
             Assert.Contains(word, drawn);
         }
@@ -187,7 +187,7 @@ public sealed class EditorFrenchTests : IDisposable
         }
 
         Click(SettingsScreen.EditorSaveId);
-        Assert.Contains("son du PC +2 dB, micro +2 dB", Painted());
+        Assert.Contains("son du PC +2" + Nb + "dB, micro +2" + Nb + "dB", Painted());
     }
 
     [Fact]
