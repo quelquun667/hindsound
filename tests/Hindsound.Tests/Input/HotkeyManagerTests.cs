@@ -46,10 +46,11 @@ public class HotkeyManagerTests
 
         var results = m.Apply(Keys(s15: "Ctrl+Alt+1", pause: "F9"));
 
-        Assert.Equal(6, results.Count);
+        Assert.Equal(7, results.Count);
         Assert.Equal(HotkeyStatus.Registered, results[(int)HotkeyAction.SaveDefault].Status);
         Assert.Equal(HotkeyStatus.Registered, results[(int)HotkeyAction.Save15s].Status);
         Assert.Equal(HotkeyStatus.NotSet, results[(int)HotkeyAction.Save1m].Status);
+        Assert.Equal(HotkeyStatus.NotSet, results[(int)HotkeyAction.SaveAndEdit].Status);
         Assert.Equal(HotkeyStatus.Registered, results[(int)HotkeyAction.TogglePause].Status);
         Assert.Equal(3, native.Registered.Count);
     }

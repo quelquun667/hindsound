@@ -425,28 +425,23 @@ internal static class NameBox
 }
 
 /// <summary>
-/// Rename and Delete, to the right of the menu, on its line. Only when the menu shows a collection: the other two choices have nothing
-/// to rename, and a line of collections that showed them on every chip would have no room left.
+/// The "..." button of the line of the menu, with the room the search field leaves for it. It stands only when the menu shows a
+/// collection: the other two choices have nothing to rename, and an empty collection still needs a way to be deleted. It opens
+/// <see cref="CollectionMenu"/>.
 /// </summary>
 internal static class CollectionActions
 {
-    public const string RenameId = "lib.rename", DeleteId = "lib.delete";
+    public const string MoreId = "lib.collection.more", MoreLabel = "...";
 
-    private const float Gap = 8, FilterGap = 12, Size = 13, Pad = 12;
+    public const float MoreWidth = 44, Gap = 12;
 
-    /// <param name="c">What the labels are measured with.</param>
+    /// <summary>The button, to the right of the menu, the height of it.</summary>
+    public static Box MoreBox(Box filter) => new(filter.Right + Gap, filter.Y, MoreWidth, filter.H);
+
+    /// <summary>The left edge of the search field: after the menu and the room of the button, whether the button is shown or not.</summary>
+    public static float SearchLeft(Box filter) => MoreBox(filter).Right + Gap;
+
     /// <param name="filter">The menu.</param>
-    /// <param name="rename">Open the box for the name.</param>
-    /// <param name="delete">Open the box that confirms.</param>
-    public static IReadOnlyList<Button> Build(ICanvas c, Box filter, Action rename, Action delete)
-    {
-        var renameWidth = Button.WidthFor(c, "Rename", Size, Pad);
-        var deleteWidth = Button.WidthFor(c, "Delete", Size, Pad);
-        var x = filter.Right + FilterGap;
-        return
-        [
-            new Button("Rename", rename) { Id = RenameId, FontSize = Size, Bounds = new Box(x, filter.Y, renameWidth, filter.H) },
-            new Button("Delete", delete) { Id = DeleteId, FontSize = Size, Bounds = new Box(x + renameWidth + Gap, filter.Y, deleteWidth, filter.H) },
-        ];
-    }
+    /// <param name="open">Open the menu of the collection.</param>
+    public static Button Build(Box filter, Action open) => new(MoreLabel, open) { Id = MoreId, Bounds = MoreBox(filter) };
 }

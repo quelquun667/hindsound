@@ -192,11 +192,16 @@ internal sealed class TextFieldModel
     }
 
     /// <summary>The start of the word the caret is in or after, as Ctrl+Left goes: words are split by white space.</summary>
-    public int WordBefore(int index)
+    public int WordBefore(int index) => WordStartBefore(Text, index);
+
+    /// <summary>
+    /// The same for any text: the native box of Windows has no Ctrl+Backspace of its own, and the window deletes from here to the caret.
+    /// </summary>
+    public static int WordStartBefore(string text, int index)
     {
-        var i = Math.Clamp(index, 0, Text.Length);
-        while (i > 0 && char.IsWhiteSpace(Text[i - 1])) i--;
-        while (i > 0 && !char.IsWhiteSpace(Text[i - 1])) i--;
+        var i = Math.Clamp(index, 0, text.Length);
+        while (i > 0 && char.IsWhiteSpace(text[i - 1])) i--;
+        while (i > 0 && !char.IsWhiteSpace(text[i - 1])) i--;
         return i;
     }
 

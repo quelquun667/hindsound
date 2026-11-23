@@ -611,7 +611,7 @@ public sealed class ScreenLibraryTests : IDisposable
         OpenWith(5);
         Screen.SelectClip(FakeLibrary.PathOf(1));
 
-        Assert.Equal(["band.pause", "band.save", "nav", SettingsScreen.ClipFilterId, SettingsScreen.ClipListId, SettingsScreen.ClipMoreId, SettingsScreen.ClipCopyId, SettingsScreen.ClipShowId, SettingsScreen.ClipPlayId], Screen.StopIds());
+        Assert.Equal(["band.pause", "band.save", "nav", SettingsScreen.ClipFilterId, SettingsScreen.ClipSearchId, SettingsScreen.ClipListId, SettingsScreen.ClipMoreId, SettingsScreen.ClipCopyId, SettingsScreen.ClipShowId, SettingsScreen.ClipPlayId], Screen.StopIds());
     }
 
     [Fact]
@@ -619,7 +619,7 @@ public sealed class ScreenLibraryTests : IDisposable
     {
         OpenWith(5);
 
-        Assert.Equal(["band.pause", "band.save", "nav", SettingsScreen.ClipFilterId, SettingsScreen.ClipListId], Screen.StopIds());
+        Assert.Equal(["band.pause", "band.save", "nav", SettingsScreen.ClipFilterId, SettingsScreen.ClipSearchId, SettingsScreen.ClipListId], Screen.StopIds());
     }
 
     [Fact]
@@ -627,7 +627,7 @@ public sealed class ScreenLibraryTests : IDisposable
     {
         OpenWith(0);
 
-        Assert.Equal(["band.pause", "band.save", "nav", SettingsScreen.ClipFilterId], Screen.StopIds());
+        Assert.Equal(["band.pause", "band.save", "nav", SettingsScreen.ClipFilterId, SettingsScreen.ClipSearchId], Screen.StopIds());
     }
 
     [Fact]

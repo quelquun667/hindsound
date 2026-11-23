@@ -11,7 +11,7 @@ internal static unsafe partial class WindowNative
     public const uint WM_SETICON = 0x0080, WM_GETICON = 0x007F, WM_DESTROY = 0x0002, WM_SIZE = 0x0005, SIZE_MINIMIZED = 1, WM_SETFOCUS = 0x0007, WM_KILLFOCUS = 0x0008, WM_PAINT = 0x000F, WM_ERASEBKGND = 0x0014, WM_ACTIVATE = 0x0006,
         WM_SETFONT = 0x0030, WM_KEYDOWN = 0x0100, WM_KEYUP = 0x0101, WM_CHAR = 0x0102, WM_SYSKEYDOWN = 0x0104, WM_SYSKEYUP = 0x0105, WM_SYSCHAR = 0x0106,
         WM_COMMAND = 0x0111, WM_CTLCOLOREDIT = 0x0133, WM_MOUSEMOVE = 0x0200, WM_LBUTTONDOWN = 0x0201, WM_LBUTTONUP = 0x0202, WM_LBUTTONDBLCLK = 0x0203, WM_RBUTTONDOWN = 0x0204, CS_DBLCLKS = 0x0008, WM_MOUSEWHEEL = 0x020A,
-        WM_CAPTURECHANGED = 0x0215, WM_MOUSELEAVE = 0x02A3, WM_DPICHANGED = 0x02E0, EM_SETSEL = 0x00B1, EM_SETLIMITTEXT = 0x00C5, EN_CHANGE = 0x0300, TME_LEAVE = 0x0002;
+        WM_CAPTURECHANGED = 0x0215, WM_MOUSELEAVE = 0x02A3, WM_DPICHANGED = 0x02E0, EM_GETSEL = 0x00B0, EM_SETSEL = 0x00B1, EM_REPLACESEL = 0x00C2, EM_SETLIMITTEXT = 0x00C5, EN_CHANGE = 0x0300, TME_LEAVE = 0x0002;
 
     public const uint WS_OVERLAPPED = 0, WS_CAPTION = 0x00C00000, WS_SYSMENU = 0x00080000, WS_MINIMIZEBOX = 0x00020000, WS_CLIPCHILDREN = 0x02000000,
         WS_CHILD = 0x40000000, ES_AUTOHSCROLL = 0x0080, SRCCOPY = 0x00CC0020, SWP_NOZORDER = 0x0004;
@@ -857,6 +857,26 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
         return new string(buffer, 0, read);
     }
 
+    // What a selection holds goes as Backspace would take it; with none, the text from the start of the word before the caret to the caret.
+    private void DeleteWordBeforeCaret()
+    {
+        uint start = 0, end = 0;
+        WindowNative.SendMessageW(_edit, WindowNative.EM_GETSEL, (nuint)(&start), (nint)(&end));
+        if (start == end)
+        {
+            var from = TextFieldModel.WordStartBefore(EditText(), (int)end);
+            if (from == end)
+            {
+                return;
+            }
+
+            WindowNative.SendMessageW(_edit, WindowNative.EM_SETSEL, (nuint)from, (nint)end);
+        }
+
+        char none = '\0';
+        WindowNative.SendMessageW(_edit, WindowNative.EM_REPLACESEL, 1, (nint)(&none));
+    }
+
     // Tab, Enter and Escape belong to the window. A single-line EDIT would only beep at them.
     private nint HandleEdit(nint hwnd, uint message, nuint wParam, nint lParam)
     {
@@ -865,12 +885,23 @@ internal sealed unsafe class SettingsWindow : IWindowHost, ISettingsWindow
             case WindowNative.WM_KEYDOWN when (uint)wParam is Vk.Tab or Vk.Enter or Vk.Escape:
                 Screen.Key((uint)wParam, HeldModifiers(), KeyRepeat.FromLParam(lParam));
                 return 0;
+
+            // Down and Ctrl+F in the search field are the screen's too: a single-line box has nothing to do with them.
+            case WindowNative.WM_KEYDOWN when Screen.TakesKeyFromField((uint)wParam, HeldModifiers()):
+                Screen.Key((uint)wParam, HeldModifiers(), KeyRepeat.FromLParam(lParam));
+                return 0;
             case WindowNative.WM_KEYDOWN when wParam == 'A' && HeldModifiers() == HotkeyGesture.ModControl:
                 WindowNative.SendMessageW(_edit, WindowNative.EM_SETSEL, 0, -1);
                 return 0;
 
-            // Ctrl+A arrives as character 1. The other three would only beep.
-            case WindowNative.WM_CHAR when wParam is 1 or 9 or 13 or 27:
+            // The box has no Ctrl+Backspace: it would put character 127, which no one sees, in the text. The word before the caret goes instead.
+            case WindowNative.WM_KEYDOWN when wParam == Vk.Back && HeldModifiers() == HotkeyGesture.ModControl:
+                DeleteWordBeforeCaret();
+                return 0;
+
+            // Ctrl+A arrives as character 1, and Ctrl+F as 6, which the screen took on the key. Tab, Enter and Escape come as 9, 13 and 27,
+            // and Ctrl+Backspace as 127. The box would only beep at them, or write them.
+            case WindowNative.WM_CHAR when wParam is 1 or 6 or 9 or 13 or 27 or 127:
                 return 0;
             default:
                 return WindowNative.CallWindowProcW(_editOriginal, hwnd, message, wParam, lParam);

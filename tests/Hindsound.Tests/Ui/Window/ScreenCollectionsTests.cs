@@ -192,7 +192,7 @@ public sealed class ScreenCollectionsTests : IDisposable
         Open(CollectionLibrary.Sample());
 
         Assert.Equal(
-            ["band.pause", "band.save", "nav", SettingsScreen.ClipFilterId, SettingsScreen.ClipListId, ChipLine.ChipsId, ChipLine.NewId, SettingsScreen.ClipMoreId, SettingsScreen.ClipCopyId, SettingsScreen.ClipShowId, SettingsScreen.ClipPlayId],
+            ["band.pause", "band.save", "nav", SettingsScreen.ClipFilterId, SettingsScreen.ClipSearchId, SettingsScreen.ClipListId, ChipLine.ChipsId, ChipLine.NewId, SettingsScreen.ClipMoreId, SettingsScreen.ClipCopyId, SettingsScreen.ClipShowId, SettingsScreen.ClipPlayId],
             Screen.StopIds());
     }
 
@@ -404,17 +404,17 @@ public sealed class ScreenCollectionsTests : IDisposable
     }
 
     [Fact]
-    public void Esc_closes_a_rename_with_nothing_asked_and_the_focus_goes_back_to_Rename()
+    public void Esc_closes_a_rename_with_nothing_asked_and_the_focus_goes_back_to_the_button_of_the_collection()
     {
         var library = Open(CollectionLibrary.Sample());
         ((Dropdown)Screen.WidgetById(SettingsScreen.ClipFilterId)!).PickValue(LibraryChoice.Of("c0").Value);
 
-        ClickOn(CollectionActions.RenameId);
+        CollectionMenuClicks.Pick(Screen, CollectionMenuItem.Rename);
         Assert.Equal("pets", Screen.OpenBoxState!.Field.Draft);
         Screen.Key(Vk.Escape, 0);
 
         Assert.False(Screen.BoxOpen);
-        Assert.Equal(CollectionActions.RenameId, Screen.FocusId);
+        Assert.Equal(CollectionActions.MoreId, Screen.FocusId);
         Assert.Empty(library.Asked);
     }
 
@@ -423,7 +423,7 @@ public sealed class ScreenCollectionsTests : IDisposable
     {
         var library = Open(CollectionLibrary.Sample());
         ((Dropdown)Screen.WidgetById(SettingsScreen.ClipFilterId)!).PickValue(LibraryChoice.Of("c0").Value);
-        ClickOn(CollectionActions.RenameId);
+        CollectionMenuClicks.Pick(Screen, CollectionMenuItem.Rename);
 
         Screen.EditChanged("dogs");
         ClickOn(NameBox.ConfirmId);
@@ -437,14 +437,14 @@ public sealed class ScreenCollectionsTests : IDisposable
         var library = Open(CollectionLibrary.Sample());
         ((Dropdown)Screen.WidgetById(SettingsScreen.ClipFilterId)!).PickValue(LibraryChoice.Of("c0").Value);
 
-        ClickOn(CollectionActions.DeleteId);
+        CollectionMenuClicks.Pick(Screen, CollectionMenuItem.Delete);
         Assert.Equal(NameBox.CancelId, Screen.FocusId);
         Assert.Contains("Delete collection \"pets\"? Your clips stay.", Painted());
         Screen.Key(Vk.Enter, 0);
         Assert.False(Screen.BoxOpen);
         Assert.Empty(library.Asked);
 
-        ClickOn(CollectionActions.DeleteId);
+        CollectionMenuClicks.Pick(Screen, CollectionMenuItem.Delete);
         Screen.Key(Vk.Tab, 0);
         Screen.Key(Vk.Enter, 0);
         Assert.Equal(["delete c0"], library.Asked);

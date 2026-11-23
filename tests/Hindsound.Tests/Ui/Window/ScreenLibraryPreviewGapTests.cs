@@ -75,17 +75,17 @@ public sealed class ScreenLibraryPreviewGapTests : IDisposable
     }
 
     [Fact]
-    public void Rename_or_Delete_replaced_by_the_sentence_while_focused_hands_the_focus_to_the_menu()
+    public void The_button_of_the_collection_keeps_the_focus_when_the_sentence_comes()
     {
         Assert.True(Screen.TabTo(SettingsScreen.ClipFilterId));
         _rig.Press(Vk.Down, Vk.Down);
         Click(RowX, RowY(0));
         Screen.PreviewChanged(new PreviewChange(PreviewState.Playing, Row(0)));
-        Assert.True(Screen.TabTo(CollectionActions.RenameId));
+        Assert.True(Screen.TabTo(CollectionActions.MoreId));
 
         Screen.UpdateStatus(ScreenRig.Capturing() with { OwnSoundsExcluded = false });
 
-        Assert.Null(Screen.WidgetById(CollectionActions.RenameId));
-        Assert.Equal(SettingsScreen.ClipFilterId, Screen.FocusId);
+        Assert.NotNull(Screen.WidgetById(CollectionActions.MoreId));
+        Assert.Equal(CollectionActions.MoreId, Screen.FocusId);
     }
 }

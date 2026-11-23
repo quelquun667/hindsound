@@ -111,6 +111,11 @@ internal sealed partial class SettingsScreen
     public const string PlayLabel = "Play", StopLabel = "Stop";
     public const string NoClipsTitle = "No clips yet", NoClipsBody = "Save a clip with your shortcut, and it shows up here.";
     public const string ClipsCappedNote = "Showing the 2,000 most recent clips.";
+    public const string ClipsCappedSearchNote = "Searching the 2,000 most recent clips, and any with a star or collection.";
+
+    /// <summary>The same while the collections file cannot be read: no star or collection is known, so none is searched on top of the cap.</summary>
+    public const string ClipsCappedSearchPlainNote = "Searching the 2,000 most recent clips.";
+    public const string ClipSearchId = "lib.search", SearchPlaceholder = "Search";
     public const string SelectedClipCaption = "Selected clip", NothingSelected = "Nothing selected", ShowInFolderLabel = "Show in folder";
     public const string ClipGoneMessage = "This clip was moved or deleted", ClipFailedMessage = "That didn't work. Your clip is untouched.";
     public const string ClipFilterId = NameBox.AfterDeleteId;
@@ -134,6 +139,10 @@ internal sealed partial class SettingsScreen
     private IReadOnlyList<ClipGroup> _clipRows = [];
     private IReadOnlyList<DropItem> _filterItems = [];
     private LibraryChoice _clipChoice = LibraryChoice.All;
+
+    /// <summary>What the search field holds. It outlives the page: the window keeps it until a new panel or a clip it hides.</summary>
+    private readonly FieldState _searchField = new(string.Empty);
+
     private bool _clipsRead;
     private string? _wantedClip;
     private string? _failedClip;
@@ -164,6 +173,7 @@ internal sealed partial class SettingsScreen
         _library = panel;
         _clips = new RowListState { ViewRows = ClipRowsShown };
         _clipChoice = LibraryChoice.All;
+        ClearSearchText();
         _wantedClip = null;
         _preview = default;
         DropLibraryOverlays();
@@ -215,10 +225,11 @@ internal sealed partial class SettingsScreen
     public void SelectClip(string path)
     {
         var found = _clips.SelectPath(path);
-        if (!found && _clipChoice.Kind != LibraryFilterKind.All)
+        if (!found && (_clipChoice.Kind != LibraryFilterKind.All || SearchActive))
         {
-            // A clip just saved has no label yet: only the whole list can show it.
+            // A clip just saved has no label yet, and its name may not hold the words: only the whole list can show it.
             _clipChoice = LibraryChoice.All;
+            ClearSearchText();
             ApplyChoice(toTop: true);
             found = _clips.SelectPath(path);
         }
@@ -442,23 +453,38 @@ internal sealed partial class SettingsScreen
         }
 
         ApplyChoice(toTop: false);
-        if (_wantedClip is { } path && _clips.SelectPath(path))
+        if (_wantedClip is { } path)
         {
-            _wantedClip = null;
+            // The clip waiting is in the reading, and words typed before it was asked for hide it (a clip renamed to a name the
+            // search does not hold): it is the search that gives way, as in SelectClip. Words typed after the asking, or another
+            // choice of the menu, have already given the clip up. Only when the menu's choice lists it.
+            var found = _clips.SelectPath(path);
+            if (!found && SearchActive && RowsOfChoice().Any(line => string.Equals(line.Main.Path, path, Library.PathRules.Comparison)))
+            {
+                ClearSearchText();
+                ApplyChoice(toTop: true);
+                found = _clips.SelectPath(path);
+            }
+
+            if (found)
+            {
+                _wantedClip = null;
+            }
         }
 
-        // The menu of a clip the reading no longer lists has nothing left to act on.
-        if (_clipMenu is { } menu && !_clipRows.Any(row => string.Equals(row.Main.Path, menu.Clip.Main.Path, Library.PathRules.Comparison)))
+        // The menu of a clip the reading no longer lists, or of a collection that is gone, has nothing left to act on.
+        if (_menu is ClipMenu clipMenu && !_clipRows.Any(row => string.Equals(row.Main.Path, clipMenu.Clip.Main.Path, Library.PathRules.Comparison))
+            || _menu is CollectionMenu collectionMenu && LibraryFilter.NameOf(LibraryChoice.Of(collectionMenu.CollectionId), index) is null)
         {
-            _clipMenu = null;
+            _menu = null;
         }
     }
 
     /// <summary>The rows of the menu's choice, out of the latest reading. The chosen clip stays chosen while it is still a row.</summary>
     private void ApplyChoice(bool toTop)
     {
-        var lines = _clipLines?.Lines ?? [];
-        var rows = _clipChoice.Kind == LibraryFilterKind.All || _library is not { } panel ? lines : Kept(lines, panel, _clipChoice);
+        // The search works on the rows of the choice: inside Favorites or a collection as much as in All clips.
+        var rows = LibraryFilter.Search(RowsOfChoice(), SearchText, ListRow.NameOf);
         _clipRows = rows;
 
         // A local, not the field: the state holds on to this until the next reading.
@@ -467,6 +493,13 @@ internal sealed partial class SettingsScreen
         {
             _clips.ScrollTo(0);
         }
+    }
+
+    /// <summary>The lines the menu's choice keeps out of the latest reading, before any search.</summary>
+    private IReadOnlyList<ClipGroup> RowsOfChoice()
+    {
+        var lines = _clipLines?.Lines ?? [];
+        return _clipChoice.Kind == LibraryFilterKind.All || _library is not { } panel ? lines : Kept(lines, panel, _clipChoice);
     }
 
     private static List<ClipGroup> Kept(IReadOnlyList<ClipGroup> lines, ILibraryPanel panel, LibraryChoice choice)
@@ -491,10 +524,133 @@ internal sealed partial class SettingsScreen
             return;
         }
 
-        // Another view starts at its head, as a new list would.
+        // Another view starts at its head, as a new list would. A clip still waiting to be chosen is given up: the person moved on.
         _clipChoice = choice;
+        _wantedClip = null;
         ApplyChoice(toTop: true);
         Refresh();
+    }
+
+    /// <summary>What the search field holds, as typed.</summary>
+    internal string SearchText => _searchField.Draft;
+
+    /// <summary>The field holds a word to find: with only white space in it, every row stays.</summary>
+    internal bool SearchActive => LibrarySearch.IsActive(_searchField.Draft);
+
+    /// <summary>Empties the field with no other change: the rows are the caller's to make again.</summary>
+    private void ClearSearchText()
+    {
+        _searchField.Draft = string.Empty;
+        _searchField.Message = null;
+        _searchField.Entered = null;
+
+        // The native box keeps its own copy of the text while it has the keyboard.
+        if (_focusId == ClipSearchId)
+        {
+            _forceEditText = true;
+        }
+    }
+
+    /// <summary>The x of the field, or Escape in it: every clip of the choice is back, from the top.</summary>
+    private void ClearSearch()
+    {
+        ClearSearchText();
+        ApplyChoice(toTop: true);
+        Refresh();
+    }
+
+    /// <summary>The empty view of a search: the text typed, cut so that the sentence stays on one line.</summary>
+    private LibraryEmptyText NoMatchText()
+    {
+        var room = Width - 48 - _canvas.Measure(LibraryFilter.NoMatchStart, Face.Title, 22) - _canvas.Measure(LibraryFilter.NoMatchEnd, Face.Title, 22);
+        return LibraryFilter.NoMatch(_canvas.Fit(SearchText.Trim(), Face.Title, 22, room));
+    }
+
+    /// <summary>Ctrl+F: the keyboard goes to the field, with its text selected.</summary>
+    private void FocusSearch()
+    {
+        if (_focusId == ClipSearchId)
+        {
+            // Already there: the native box is told to select it all again.
+            _forceEditText = true;
+            Refresh();
+            return;
+        }
+
+        SetFocus(ClipSearchId);
+    }
+
+    /// <summary>Down or Enter in the field: the keyboard goes to the list, on its first row if none is chosen.</summary>
+    private void FocusListFromSearch()
+    {
+        if (ClipList is not { CanFocus: true })
+        {
+            return;
+        }
+
+        if (_clips.Selected < 0)
+        {
+            _wantedClip = null;
+            _clips.Select(0);
+        }
+
+        SetFocus(ClipListId);
+    }
+
+    /// <summary>What a key means in the search field, before the field has it. Null if the key is the field's own.</summary>
+    private bool? SearchKey(uint vk)
+    {
+        switch (vk)
+        {
+            case Vk.Escape:
+                // An empty field has nothing to give up: Escape does what it does anywhere else on the page.
+                if (_searchField.Draft.Length == 0)
+                {
+                    return false;
+                }
+
+                ClearSearch();
+                return true;
+            case Vk.Enter:
+            case Vk.Down:
+                FocusListFromSearch();
+                return true;
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>
+    /// A key the window gives to the screen although a text field has the keyboard, where the native box or the drawn one would
+    /// have kept it: Down and Ctrl+F in the search field.
+    /// </summary>
+    public bool TakesKeyFromField(uint vk, uint modifiers) =>
+        Section == Section.Library && _focusId == ClipSearchId && _box is null && _menu is null && !EditorOpen
+        && (modifiers == 0 && vk == Vk.Down || modifiers == HotkeyGesture.ModControl && vk == SearchFindKey);
+
+    private const uint SearchFindKey = 'F';
+
+    private void OpenMenuOfCollection(string collectionId, Box button)
+    {
+        _focusId = CollectionActions.MoreId;
+        _menu = CollectionMenu.Below(collectionId, button, _byKey);
+        Refresh();
+    }
+
+    private void PickFromCollectionMenu(CollectionMenu menu, CollectionMenuItem item)
+    {
+        _menu = null;
+
+        // The file may have changed while the menu was open: the name is the one it holds now.
+        if (LibraryFilter.NameOf(LibraryChoice.Of(menu.CollectionId), ClipIndex) is not { } name)
+        {
+            _host.Invalidate();
+            return;
+        }
+
+        OpenBox(item == CollectionMenuItem.Rename
+            ? NameBoxState.ForRename(menu.CollectionId, name, CollectionActions.MoreId, () => ClipIndex.Collections)
+            : NameBoxState.ForDelete(menu.CollectionId, name, CollectionActions.MoreId));
     }
 
     /// <summary>The star on screen: the one asked for, until a reading says how the file has it.</summary>
@@ -527,34 +683,39 @@ internal sealed partial class SettingsScreen
         var filter = new Box(Left, ClipFilterTop, FieldWidth, RowHeight);
         Add(new Dropdown(() => _filterItems, () => _clipChoice.Value, PickClipFilter, OpenPopup) { Id = ClipFilterId, Bounds = filter }, scrolls: false);
 
-        // While something plays where the capture can hear it, the sentence takes the place of Rename and Delete, which come back
-        // once it ends: both would not fit on the line.
-        if (SaysPreviewCanEndUpInClip)
+        // Only a collection has a name to change, and an empty one still needs a way to be deleted: its menu has Rename... and Delete....
+        if (LibraryFilter.NameOf(_clipChoice, ClipIndex) is not null && _clipChoice.CollectionId is { } id)
         {
-            var x = filter.Right + 16;
-            Add(new Painted((c, _) => c.TextMid(c.Fit(ClipPreview.CanEndUpInClipText, Face.Body, 12, Right - x), Face.Body, 12, x, filter.MidY, Theme.Muted)), scrolls: false);
+            var more = CollectionActions.MoreBox(filter);
+            Add(CollectionActions.Build(filter, () => OpenMenuOfCollection(id, more)), scrolls: false);
         }
 
-        // Only a collection has a name to change, and an empty one still needs a way to be deleted.
-        else if (LibraryFilter.NameOf(_clipChoice, ClipIndex) is { } name && _clipChoice.CollectionId is { } id)
-        {
-            var rename = () => OpenBox(NameBoxState.ForRename(id, name, CollectionActions.RenameId, () => ClipIndex.Collections));
-            var delete = () => OpenBox(NameBoxState.ForDelete(id, name, CollectionActions.DeleteId));
-            foreach (var button in CollectionActions.Build(_canvas, filter, rename, delete))
+        // Always at the same place: the button comes and goes in front of it, and nothing moves.
+        var searchLeft = CollectionActions.SearchLeft(filter);
+        Add(
+            new TextField(_searchField, _ => FieldCheck.Fine, null, () => string.Empty)
             {
-                Add(button, scrolls: false);
-            }
-        }
+                Id = ClipSearchId,
+                Face = Face.Body,
+                Size = 13,
+                Magnifier = true,
+                Placeholder = SearchPlaceholder,
+                Clear = ClearSearch,
+                Bounds = new Box(searchLeft, filter.Y, Right - searchLeft, filter.H),
+            },
+            scrolls: false);
 
         // Nothing is said of a filter over labels that could not be read: the amber line under the list already says why.
-        var empty = IndexUnread && _clipChoice.Kind != LibraryFilterKind.All ? new LibraryEmptyText(string.Empty) : LibraryFilter.EmptyText(_clipChoice);
+        var empty = IndexUnread && _clipChoice.Kind != LibraryFilterKind.All ? new LibraryEmptyText(string.Empty)
+            : SearchActive ? NoMatchText()
+            : LibraryFilter.EmptyText(_clipChoice);
         Add(
             new RowList(_clips, new Box(Left, ClipListTop, WindowWidth - Left, ClipRowsShown * RowListState.RowHeight), ClipRowAt, ClipChosen, _host.Invalidate)
             {
                 Id = ClipListId,
                 RowPressed = () => _wantedClip = null,
                 StarPressed = StarPressed,
-                EndNote = _clipChoice.Kind == LibraryFilterKind.All ? ClipsCappedNote : null,
+                EndNote = _clipChoice.Kind != LibraryFilterKind.All ? null : SearchActive ? _canvas.Fit(IndexUnread ? ClipsCappedSearchPlainNote : ClipsCappedSearchNote, Face.Body, 13, Width - 56) : ClipsCappedNote,
                 EmptyTitle = _clipsRead ? empty.Title : string.Empty,
                 EmptyBody = _clipsRead ? empty.Body : null,
                 EmptyArea = new Box(Left, BandHeight, Width, ViewBottom - BandHeight),
@@ -750,9 +911,9 @@ internal sealed partial class SettingsScreen
     /// <summary>A key while the box or the list of +N is open. Null if the key goes on as anywhere else.</summary>
     private bool? OverlayKey(uint vk, uint modifiers)
     {
-        if (_clipMenu is { } menu)
+        if (_menu is { } menu)
         {
-            return ClipMenuKey(menu, vk, modifiers);
+            return MenuKey(menu, vk, modifiers);
         }
 
         if (_moreList is { } more)
@@ -801,7 +962,7 @@ internal sealed partial class SettingsScreen
     private void DropLibraryOverlays()
     {
         _box = null;
-        _clipMenu = null;
+        _menu = null;
         if (_moreList is not null)
         {
             _moreList = null;
@@ -896,7 +1057,8 @@ internal sealed partial class SettingsScreen
         c.FillRect(new Box(0, top, WindowWidth, 1), Theme.Line);
         var mid = top + FootHeight / 2;
         var x = FootMargin + c.Measure(SelectedClipCaption, Face.Title, 18) + 16;
-        if (chosen is null)
+        var says = SaysPreviewCanEndUpInClip;
+        if (chosen is null && !says)
         {
             c.TextMid(SelectedClipCaption, Face.Title, 18, FootMargin, mid, Theme.Muted);
             c.TextMid(NothingSelected, Face.Body, 13, x, mid, Theme.Muted);
@@ -907,6 +1069,14 @@ internal sealed partial class SettingsScreen
         var first = mid - 12;
         var second = mid + 13;
         c.TextMid(SelectedClipCaption, Face.Title, 18, FootMargin, first, Theme.Muted);
+        if (chosen is null)
+        {
+            // Something plays with nothing chosen: the sentence still needs its line.
+            c.TextMid(NothingSelected, Face.Body, 13, x, first, Theme.Muted);
+            c.TextMid(c.Fit(ClipPreview.CanEndUpInClipText, Face.Body, 12, nameWidth), Face.Body, 12, FootMargin, second, Theme.Muted);
+            return;
+        }
+
         if (_library?.LengthOf(chosen) is { } length)
         {
             var duration = NotificationStates.FormatDuration(NotificationStates.WholeSeconds(length));
@@ -926,6 +1096,11 @@ internal sealed partial class SettingsScreen
         else if (ClipPreview.ErrorTextFor(_preview, chosen) is { } cantPlay)
         {
             Message.Error(c, cantPlay, FootMargin, second);
+        }
+        else if (says)
+        {
+            // Said in the place of the name while it is true, and after what went wrong, which matters more.
+            c.TextMid(c.Fit(ClipPreview.CanEndUpInClipText, Face.Body, 12, nameWidth), Face.Body, 12, FootMargin, second, Theme.Muted);
         }
         else
         {

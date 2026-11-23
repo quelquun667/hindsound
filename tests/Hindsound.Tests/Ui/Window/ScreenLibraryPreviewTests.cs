@@ -231,7 +231,7 @@ public sealed class ScreenLibraryPreviewTests : IDisposable
     {
         Click(RowX, RowY(1));
         ShowFirstCollection();
-        ClickOn(CollectionActions.DeleteId);
+        CollectionMenuClicks.Pick(Screen, CollectionMenuItem.Delete);
         Assert.True(Screen.BoxOpen);
         Screen.MouseDoubleClick(RowX, RowY(0));
         Screen.MouseUp(RowX, RowY(0));
@@ -271,25 +271,26 @@ public sealed class ScreenLibraryPreviewTests : IDisposable
     }
 
     [Fact]
-    public void While_the_sentence_shows_it_takes_the_place_of_Rename_and_Delete_which_come_back_at_the_end()
+    public void While_the_sentence_shows_the_button_of_the_collection_and_the_search_stay_where_they_are()
     {
         Screen.UpdateStatus(ScreenRig.Capturing() with { OwnSoundsExcluded = false });
         ShowFirstCollection();
         Click(RowX, RowY(0));
-        Assert.Contains(CollectionActions.RenameId, Screen.StopIds());
-        Assert.Contains(CollectionActions.DeleteId, Screen.StopIds());
+        var more = Screen.WidgetById(CollectionActions.MoreId)!.Bounds;
+        var search = Screen.WidgetById(SettingsScreen.ClipSearchId)!.Bounds;
+        Assert.Contains(CollectionActions.MoreId, Screen.StopIds());
+        Assert.Contains(SettingsScreen.ClipSearchId, Screen.StopIds());
 
         Screen.PreviewChanged(new PreviewChange(PreviewState.Playing, Row(1)));
         Assert.True(SaysSentence());
-        Assert.Null(Screen.WidgetById(CollectionActions.RenameId));
-        Assert.Null(Screen.WidgetById(CollectionActions.DeleteId));
+        Assert.Equal(more, Screen.WidgetById(CollectionActions.MoreId)!.Bounds);
+        Assert.Equal(search, Screen.WidgetById(SettingsScreen.ClipSearchId)!.Bounds);
         var stops = Screen.StopIds().ToList();
-        Assert.Equal(SettingsScreen.ClipFilterId, stops[stops.IndexOf(SettingsScreen.ClipListId) - 1]);
+        Assert.Equal([SettingsScreen.ClipFilterId, CollectionActions.MoreId, SettingsScreen.ClipSearchId, SettingsScreen.ClipListId], stops.GetRange(stops.IndexOf(SettingsScreen.ClipFilterId), 4));
 
         Screen.PreviewChanged(new PreviewChange(PreviewState.Ended, Row(1)));
         Assert.False(SaysSentence());
-        Assert.NotNull(Screen.WidgetById(CollectionActions.RenameId));
-        Assert.NotNull(Screen.WidgetById(CollectionActions.DeleteId));
+        Assert.Equal(more, Screen.WidgetById(CollectionActions.MoreId)!.Bounds);
     }
 
     [Fact]

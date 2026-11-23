@@ -47,19 +47,18 @@ public sealed class ScreenLibraryPreviewOpeningTests : IDisposable
     }
 
     [Fact]
-    public void While_a_preview_is_opening_the_sentence_is_said_and_takes_the_place_of_Rename_and_Delete()
+    public void While_a_preview_is_opening_the_sentence_is_said_in_the_foot_and_the_button_of_the_collection_stays()
     {
         Assert.True(Screen.TabTo(SettingsScreen.ClipFilterId));
         _rig.Press(Vk.Down, Vk.Down);
         Click(RowX, RowY(0));
-        Assert.NotNull(Screen.WidgetById(CollectionActions.RenameId));
+        Assert.NotNull(Screen.WidgetById(CollectionActions.MoreId));
 
         Screen.PreviewChanged(new PreviewChange(PreviewState.Opening, Row(1)));
 
         Assert.True(Screen.SaysPreviewCanEndUpInClip);
         Assert.Contains(Painted(), text => text.StartsWith("Playback can end up", StringComparison.Ordinal));
-        Assert.Null(Screen.WidgetById(CollectionActions.RenameId));
-        Assert.Null(Screen.WidgetById(CollectionActions.DeleteId));
+        Assert.NotNull(Screen.WidgetById(CollectionActions.MoreId));
     }
 
     [Fact]

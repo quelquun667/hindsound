@@ -28,7 +28,11 @@ internal sealed class EditorSelection
         Mode = mode;
         StartMs = 0;
         EndMs = mode == EditorMode.Soundboard ? Math.Min(SoundboardMs, DurationMs) : DurationMs;
+        _startEndMs = EndMs;
     }
+
+    // Where the selection stood when the clip was read: what "moved" is measured from.
+    private readonly long _startEndMs;
 
     public long DurationMs { get; }
 
@@ -39,6 +43,9 @@ internal sealed class EditorSelection
     public long EndMs { get; private set; }
 
     public long KeptMs => EndMs - StartMs;
+
+    /// <summary>Either end is not where the clip was read: the user moved it.</summary>
+    public bool Moved => StartMs != 0 || EndMs != _startEndMs;
 
     /// <summary>The shortest selection: the clip itself when it is shorter than the rule.</summary>
     private long Shortest => Math.Min(MinMs, DurationMs);
